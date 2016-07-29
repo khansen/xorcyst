@@ -750,7 +750,7 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
             eval_recursive(u, e->op_expr.lhs, &lhs_result);
             eval_recursive(u, e->op_expr.rhs, &rhs_result);
             /* If either side is unresolved, then result is unresolved. */
-            if ((lhs_result.type == -1) || (rhs_result.type == -1)) {
+            if (((int)lhs_result.type == -1) || ((int)rhs_result.type == -1)) {
                 result->type = -1;
             }
             /* If both sides are integer, then result is integer. */
@@ -823,7 +823,7 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
             /* Evaluate the single operand */
             eval_recursive(u, e->op_expr.lhs, &lhs_result);
             /* If operand is unresolved then result is unresolved. */
-            if (lhs_result.type == -1) {
+            if ((int)lhs_result.type == -1) {
                 result->type = -1;
             }
             /* If operand is integer then result is integer. */

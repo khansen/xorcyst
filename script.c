@@ -119,7 +119,7 @@ static int is_valid_command_arg(xlnk_command_type type, const char *candidate_ar
         { XLNK_PAD_COMMAND,      pad_args }
     };
     /* Find arg array for command */
-    for (i=0; ok_args[i].type != -1; i++) {
+    for (i=0; (int)ok_args[i].type != -1; i++) {
         if (ok_args[i].type == type) {
             /* Now go through array of valid args for command */
             args = ok_args[i].args;
