@@ -1,0 +1,12 @@
+.DS_Store
+.deps
+autom4te.cache
+cov
+*.o
+config.h
+config.log
+config.status
+Makefile
+xasm
+xlnk
+
