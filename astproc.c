@@ -385,7 +385,7 @@ static int globalize_macro_expanded_local(astnode *n, void *arg, astnode **next)
         char str[16];
         int count;
         /* Make it global by appending the macro expansion counter to the id */
-        count = (int)arg;
+        count = (int)(long int)arg;
         snprintf(str, sizeof (str), "#%d", count);
         if (astnode_is_type(n, LOCAL_LABEL_NODE)) {
             /* LOCAL_LABEL_NODE, use label field */
@@ -417,7 +417,7 @@ static void globalize_macro_expanded_locals(astnode *exp_body, int count)
         { 0, NULL }
     };
     /* Do the walk. */
-    astproc_walk(exp_body, (void *)count, map);
+    astproc_walk(exp_body, (void *)(long int)count, map);
 }
 
 /**
