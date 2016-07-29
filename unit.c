@@ -109,7 +109,7 @@ static void get_const(FILE *fp, xasm_unit *u, int i)
     xasm_constant *cnst = &u->constants[i];
     cnst->name = get_str_8(fp);
     cnst->type = get_1(fp);
-    switch (cnst->type) {
+    switch ((int)cnst->type) {
         case XASM_INT_8: cnst->integer = get_1(fp);  cnst->type = XASM_INTEGER_CONSTANT;  break;
         case XASM_INT_16:    cnst->integer = get_2(fp);  cnst->type = XASM_INTEGER_CONSTANT;  break;
         case XASM_INT_24:    cnst->integer = get_3(fp);  cnst->type = XASM_INTEGER_CONSTANT;  break;
