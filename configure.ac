@@ -1,8 +1,9 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT(parser.y)
+AC_INIT([xorcyst], [1.5.2])
 
+AC_CONFIG_SRCDIR([astnode.c])
 AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(xorcyst, 1.5.2)
+AM_INIT_AUTOMAKE
 
 AC_TYPE_SIZE_T
 AC_C_CONST
