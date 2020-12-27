@@ -219,6 +219,7 @@ LOCATION_STEP (yylloc);
 "-"{2,8}        { yylval.ident = yytext; return(BACKWARD_BRANCH); }
 "::"            { return(SCOPE_OP); }
 "."         { return('.'); }
+".W"        { return(WIDE_MODIFIER); }
 \n          { LOCATION_LINES (yylloc, yyleng); LOCATION_STEP (yylloc); return('\n'); }
 ","         { return(','); }
 ":"         { return(':'); }

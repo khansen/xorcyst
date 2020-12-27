@@ -1,3 +1,7 @@
+Version 1.6.0:
+- Added support for .w ("wide") mnemonic suffix to force 16-bit address encoding. This can
+  be used to disable the default zero page optimization of instructions. Example:
+  lda.w $006B
 Version 1.5.2:
 - Fixed a bunch of issues
 Version 1.5.0:

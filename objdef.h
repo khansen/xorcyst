@@ -97,7 +97,7 @@
 #define XASM_CMD_DSI8    0xFB    /* Operands: 8-bit count */
 #define XASM_CMD_DSI16   0xFC    /* Operands: 16-bit count */
 #define XASM_CMD_DSB     0xFD    /* Operands: 16-bit expression ID */
-#define XASM_CMD_RSV1    0xFE    /* Reserved 1 */
+#define XASM_CMD_WIDE_INSTR    0xFE    /* Operands: 6502 opcode, 16-bit expression ID */
 #define XASM_CMD_RSV2    0xFF    /* Reserved 2 */
 
 /* Bitmasks for CMD_LABEL flag byte */

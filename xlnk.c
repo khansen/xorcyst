@@ -133,7 +133,7 @@ static int str_to_int(const char *s)
 /*--------------------------------------------------------------------------*/
 /* Argument parsing stuff. */
 
-static char program_version[] = "xlnk 1.5.2";
+static char program_version[] = "xlnk 1.6.0";
 
 struct tag_xlnk_arguments {
     const char *input_file;
@@ -687,6 +687,7 @@ static void bytecode_walk(const unsigned char *bytes, xasm_bytecodeproc *handler
             case XASM_CMD_DSI8:  i += 1; break;  /* Skip 8-bit count */
             case XASM_CMD_DSI16: i += 2; break;  /* Skip 16-bit count */
             case XASM_CMD_DSB:   i += 2; break;  /* Skip 16-bit expr id */
+            case XASM_CMD_WIDE_INSTR: i += 3; break;  /* Skip 6502 opcode and 16-bit expr id */
 
             default:
             err("invalid bytecode");
@@ -1055,14 +1056,12 @@ static void inc_pc_dsb(const unsigned char *b, void *arg)
     finalize_constant(&c);
 }
 
-/**
- * Increments PC according to the length of this instruction.
- */
-static void inc_pc_instr(const unsigned char *b, void *arg)
+static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
 {
     xasm_constant c;
     unsigned char op, t;
     int exid;
+    addressing_mode mode;
     calc_address_args *args = (calc_address_args *)arg;
     /* Get opcode */
     int i = 1;
@@ -1072,10 +1071,11 @@ static void inc_pc_instr(const unsigned char *b, void *arg)
     /* Evaluate it */
     eval_expression(args->xu, exid, &c);
     /* Handle the result */
-    if (c.type == XASM_INTEGER_CONSTANT) {
+    if (c.type == XASM_INTEGER_CONSTANT && !wide) {
+	mode = opcode_addressing_mode(op);
         /* See if it can be reduced to ZP instruction */
         if ((c.integer < 0x100) &&
-        ((t = opcode_zp_equiv(op)) != 0xFF)) {
+        ((t = opcode_zp_equiv(op, mode)) != 0xFF)) {
             /* replace op by ZP-version */
             op = t;
             ((unsigned char*)b)[1] = t;
@@ -1090,6 +1090,22 @@ static void inc_pc_instr(const unsigned char *b, void *arg)
     }
     /* Advance PC */
     inc_pc( opcode_length(op), arg );
+}
+
+/**
+ * Increments PC according to the length of this instruction.
+ */
+static void inc_pc_instr(const unsigned char *b, void *arg)
+{
+    inc_pc_instr_impl(b, arg, 0);
+}
+
+/**
+ * Increments PC according to the length of this instruction.
+ */
+static void inc_pc_wide_instr(const unsigned char *b, void *arg)
+{
+    inc_pc_instr_impl(b, arg, 1);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1342,7 +1358,8 @@ static void write_as_binary(FILE *fp, xunit *u)
         write_dx,   /* CMD_DD */
         write_dsi8, /* CMD_DSI8 */
         write_dsi16,    /* CMD_DSI16 */
-        write_dsb   /* CMD_DSB */
+        write_dsb,   /* CMD_DSB */
+        write_instr /* CMD_WIDE_INSTR */
     };
     /* Fill in args */
     args.xu = u;
@@ -1474,6 +1491,9 @@ static void asm_write_instr(const unsigned char *b, void *arg)
         case ABSOLUTE_MODE:
         case ABSOLUTE_X_MODE:
         case ABSOLUTE_Y_MODE:
+        case ABSOLUTE_WIDE_MODE:
+        case ABSOLUTE_X_WIDE_MODE:
+        case ABSOLUTE_Y_WIDE_MODE:
         fprintf(args->fp, " $");
         break;
         case PREINDEXED_INDIRECT_MODE:
@@ -1502,11 +1522,14 @@ static void asm_write_instr(const unsigned char *b, void *arg)
         fprintf(args->fp, ",Y");
 	break;
         case ABSOLUTE_MODE:
+        case ABSOLUTE_WIDE_MODE:
 	break;
         case ABSOLUTE_X_MODE:
+        case ABSOLUTE_X_WIDE_MODE:
         fprintf(args->fp, ",X");
 	break;
         case ABSOLUTE_Y_MODE:
+        case ABSOLUTE_Y_WIDE_MODE:
         fprintf(args->fp, ",Y");
         break;
         case PREINDEXED_INDIRECT_MODE:
@@ -1659,7 +1682,8 @@ static void write_as_assembly(FILE *fp, xunit *u)
         asm_write_dx,   /* CMD_DD */
         asm_write_dsi8, /* CMD_DSI8 */
         asm_write_dsi16,    /* CMD_DSI16 */
-        asm_write_dsb   /* CMD_DSB */
+        asm_write_dsb,   /* CMD_DSB */
+        asm_write_instr /* CMD_WIDE_INSTR */
     };
     /* Fill in args */
     args.xu = u;
@@ -1703,6 +1727,7 @@ static const char *bytecode_to_string(unsigned char cmd)
         case XASM_CMD_DSI8:  return "CMD_DSI8";
         case XASM_CMD_DSI16: return "CMD_DSI16";
         case XASM_CMD_DSB:   return "CMD_DSB";
+        case XASM_CMD_WIDE_INSTR: return "CMD_WIDE_INSTR";
     }
     return "bytecode_to_string: invalid bytecode";
 }
@@ -1815,7 +1840,8 @@ static int count_locals(const unsigned char *b)
         NULL,   /* CMD_DD */
         NULL,   /* CMD_DSI8 */
         NULL,   /* CMD_DSI16 */
-        NULL    /* CMD_DSB */
+        NULL,   /* CMD_DSB */
+        NULL    /* CMD_WIDE_INSTR */
     };
     count = 0;
     bytecode_walk(b, handlers, (void *)&count);
@@ -1900,7 +1926,8 @@ static void register_locals(const unsigned char *b, local_array *la, xunit *xu)
         NULL,   /* CMD_DD */
         NULL,   /* CMD_DSI8 */
         NULL,   /* CMD_DSI16 */
-        NULL    /* CMD_DSB */
+        NULL,   /* CMD_DSB */
+        NULL    /* CMD_WIDE_INSTR */
     };
     /* Create array of locals */
     create_local_array(count_locals(b), la);
@@ -2006,7 +2033,8 @@ static void calc_data_addresses(xunit *u)
         NULL,       /* CMD_DD */
         inc_pc_count8,  /* CMD_DSI8 */
         inc_pc_count16, /* CMD_DSI16 */
-        inc_pc_dsb  /* CMD_DSB */
+        inc_pc_dsb, /* CMD_DSB */
+        NULL        /* CMD_WIDE_INSTR */
     };
     /* Fill in args */
     args.xu = u;
@@ -2193,7 +2221,8 @@ static void calc_code_addresses(xunit *u)
         inc_pc_4,   /* CMD_DD */
         inc_pc_count8,  /* CMD_DSI8 */
         inc_pc_count16, /* CMD_DSI16 */
-        inc_pc_dsb  /* CMD_DSB */
+        inc_pc_dsb, /* CMD_DSB */
+        inc_pc_wide_instr /* CMD_WIDE_INSTR */
     };
     /* Fill in args */
     args.xu = u;

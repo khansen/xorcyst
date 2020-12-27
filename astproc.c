@@ -3532,14 +3532,14 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
         absolute mode to zeropage mode */
         if ((astnode_is_type(o, INTEGER_NODE)) &&
         ((unsigned long)o->integer < 256) &&
-        ((c = opcode_zp_equiv(instr->instr.opcode)) != 0xFF)) {
+        ((c = opcode_zp_equiv(instr->instr.opcode, instr->instr.mode)) != 0xFF)) {
             /* Switch to the zeromode version */
             instr->instr.opcode = c;
             switch (instr->instr.mode) {
                 case ABSOLUTE_MODE: instr->instr.mode = ZEROPAGE_MODE;  break;
                 case ABSOLUTE_X_MODE:   instr->instr.mode = ZEROPAGE_X_MODE; break;
                 case ABSOLUTE_Y_MODE:   instr->instr.mode = ZEROPAGE_Y_MODE; break;
-                default: /* Impossible to get here, right? */ break;
+                default: break;
             }
         }
         /* If the operand is a constant, make sure it fits */
@@ -3561,6 +3561,9 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
                 case ABSOLUTE_MODE:
                 case ABSOLUTE_X_MODE:
                 case ABSOLUTE_Y_MODE:
+                case ABSOLUTE_WIDE_MODE:
+                case ABSOLUTE_X_WIDE_MODE:
+                case ABSOLUTE_Y_WIDE_MODE:
                 case INDIRECT_MODE:
                 /* Operand must fit in 16 bits */
                 if ((unsigned long)o->integer >= 0x10000) {
@@ -3890,7 +3893,7 @@ static int inc_pc_by_instruction(astnode *instr, void *arg, astnode **next)
     assert(!in_dataseg);
     if (LHS(instr)) {
         /* Has operand */
-        unsigned char zp_op = opcode_zp_equiv(instr->instr.opcode);
+        unsigned char zp_op = opcode_zp_equiv(instr->instr.opcode, instr->instr.mode);
         if (zp_op != 0xFF) {
             /* See if we can optimize this to a ZP-instruction */
             astnode *operand = eval_expression(LHS(instr));

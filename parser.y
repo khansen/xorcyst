@@ -75,7 +75,7 @@ void handle_incbin(astnode *);  /* See below */
     astnode *node;
 };
 
-%error-verbose
+%define parse.error verbose
 
 %token <integer> INTEGER_LITERAL
 %token <string> STRING_LITERAL
@@ -103,6 +103,7 @@ void handle_incbin(astnode *);  /* See below */
 %token '[' ']'
 %left ','
 %token '.'
+%token WIDE_MODIFIER
 %right '#'
 %right LO_OP HI_OP
 %left '|'
@@ -303,6 +304,9 @@ instruction:
     | MNEMONIC expression { $$ = astnode_create_instruction($1, ABSOLUTE_MODE, $2, @$); }
     | MNEMONIC expression ',' 'X' { $$ = astnode_create_instruction($1, ABSOLUTE_X_MODE, $2, @$); }
     | MNEMONIC expression ',' 'Y' { $$ = astnode_create_instruction($1, ABSOLUTE_Y_MODE, $2, @$); }
+    | MNEMONIC WIDE_MODIFIER expression { $$ = astnode_create_instruction($1, ABSOLUTE_WIDE_MODE, $3, @$); }
+    | MNEMONIC WIDE_MODIFIER expression ',' 'X' { $$ = astnode_create_instruction($1, ABSOLUTE_X_WIDE_MODE, $3, @$); }
+    | MNEMONIC WIDE_MODIFIER expression ',' 'Y' { $$ = astnode_create_instruction($1, ABSOLUTE_Y_WIDE_MODE, $3, @$); }
     | MNEMONIC '[' expression ',' 'X' ']' { $$ = astnode_create_instruction($1, PREINDEXED_INDIRECT_MODE, $3, @$); }
     | MNEMONIC '[' expression ']' ',' 'Y' { $$ = astnode_create_instruction($1, POSTINDEXED_INDIRECT_MODE, $3, @$); }
     | MNEMONIC '[' expression ']' { $$ = astnode_create_instruction($1, INDIRECT_MODE, $3, @$); }
@@ -372,7 +376,6 @@ field_initializer_list:
 
 field_initializer:
     extended_expression { $$ = $1; }
-    | { $$ = astnode_create_null(@$); }
     ;
 
 local_id:

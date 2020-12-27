@@ -13,7 +13,6 @@
 - .local
   - local labels in macros currently behave strangely
 - interpretation of $ (current pc) used in dataseg?
-- a way to specify if ZP or absolute addressing mode should be used?
 - variable-number-of-argument macros
 - -W flag allowing more fine-grained control of warnings
 - inlining function calls?

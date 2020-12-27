@@ -108,6 +108,9 @@ const char *addressing_mode_to_string(addressing_mode am)
         case POSTINDEXED_INDIRECT_MODE: return "POSTINDEXED_INDIRECT_MODE";
         case INDIRECT_MODE:     return "INDIRECT_MODE";
         case RELATIVE_MODE:     return "RELATIVE_MODE";
+        case ABSOLUTE_WIDE_MODE: return "ABSOLUTE_WIDE_MODE";
+        case ABSOLUTE_X_WIDE_MODE:  return "ABSOLUTE_X_WIDE_MODE";
+        case ABSOLUTE_Y_WIDE_MODE:  return "ABSOLUTE_Y_WIDE_MODE";
         case INVALID_MODE: assert(0); break;
     }
     return "addressing_mode_to_string: invalid addressing mode";

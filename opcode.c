@@ -943,6 +943,12 @@ unsigned char opcode_get(instr_mnemonic mnc, addressing_mode amode)
     }
     };
     /* */
+    if (amode == ABSOLUTE_WIDE_MODE)
+        amode = ABSOLUTE_MODE;
+    else if (amode == ABSOLUTE_X_WIDE_MODE)
+        amode = ABSOLUTE_X_MODE;
+    else if (amode == ABSOLUTE_Y_WIDE_MODE)
+        amode = ABSOLUTE_Y_MODE;
     return opcode_lookup[mnc][amode];
 }
 
@@ -982,8 +988,16 @@ int opcode_length(unsigned char op)
  * @param op Opcode
  * @return Equivalent opcode, or 0xFF if one does not exist
  */
-unsigned char opcode_zp_equiv(unsigned char op)
+unsigned char opcode_zp_equiv(unsigned char op, addressing_mode mode)
 {
+    switch (mode) {
+        default:
+        return 0xFF;
+        case ABSOLUTE_MODE:
+        case ABSOLUTE_X_MODE:
+        case ABSOLUTE_Y_MODE:
+        break;
+    }
     switch (op) {
         case 0x6D:  return 0x65;    /* ADC oper */
         case 0x7D:  return 0x75;    /* ADC oper,X */
