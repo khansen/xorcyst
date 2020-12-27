@@ -1491,9 +1491,6 @@ static void asm_write_instr(const unsigned char *b, void *arg)
         case ABSOLUTE_MODE:
         case ABSOLUTE_X_MODE:
         case ABSOLUTE_Y_MODE:
-        case ABSOLUTE_WIDE_MODE:
-        case ABSOLUTE_X_WIDE_MODE:
-        case ABSOLUTE_Y_WIDE_MODE:
         fprintf(args->fp, " $");
         break;
         case PREINDEXED_INDIRECT_MODE:
@@ -1522,14 +1519,11 @@ static void asm_write_instr(const unsigned char *b, void *arg)
         fprintf(args->fp, ",Y");
 	break;
         case ABSOLUTE_MODE:
-        case ABSOLUTE_WIDE_MODE:
 	break;
         case ABSOLUTE_X_MODE:
-        case ABSOLUTE_X_WIDE_MODE:
         fprintf(args->fp, ",X");
 	break;
         case ABSOLUTE_Y_MODE:
-        case ABSOLUTE_Y_WIDE_MODE:
         fprintf(args->fp, ",Y");
         break;
         case PREINDEXED_INDIRECT_MODE:

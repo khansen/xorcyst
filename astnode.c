@@ -108,9 +108,6 @@ const char *addressing_mode_to_string(addressing_mode am)
         case POSTINDEXED_INDIRECT_MODE: return "POSTINDEXED_INDIRECT_MODE";
         case INDIRECT_MODE:     return "INDIRECT_MODE";
         case RELATIVE_MODE:     return "RELATIVE_MODE";
-        case ABSOLUTE_WIDE_MODE: return "ABSOLUTE_WIDE_MODE";
-        case ABSOLUTE_X_WIDE_MODE:  return "ABSOLUTE_X_WIDE_MODE";
-        case ABSOLUTE_Y_WIDE_MODE:  return "ABSOLUTE_Y_WIDE_MODE";
         case INVALID_MODE: assert(0); break;
     }
     return "addressing_mode_to_string: invalid addressing mode";
@@ -348,7 +345,7 @@ void astnode_print(const astnode *n, int level)
         case INSTRUCTION_NODE:
         printf(
             "(%s,%s,%.2X)",
-            instr_mnemonic_to_string(n->instr.mnemonic),
+            instr_mnemonic_to_string(n->instr.mnemonic.value),
             addressing_mode_to_string(n->instr.mode),
             n->instr.opcode
         );
@@ -823,7 +820,8 @@ int astnode_equal(const astnode *n1, const astnode *n2)
         case TOMBSTONE_NODE:    if (n1->param != n2->param) return 0;   break;
 
         case INSTRUCTION_NODE:
-            if ( (n1->instr.mnemonic != n2->instr.mnemonic)
+            if ( (n1->instr.mnemonic.value != n2->instr.mnemonic.value)
+                 || (n1->instr.mnemonic.wide != n2->instr.mnemonic.wide)
                  || (n1->instr.mode != n2->instr.mode) ) {
                 return 0;
             }
@@ -947,7 +945,7 @@ astnode *astnode_create_null(location loc)
  * @param operand The instruction operand (an expression) (can be <code>NULL</code>)
  * @param loc File location
  */
-astnode *astnode_create_instruction(int mnemonic, addressing_mode mode, astnode *operand, location loc)
+astnode *astnode_create_instruction(instruction_mnemonic mnemonic, addressing_mode mode, astnode *operand, location loc)
 {
     astnode *n = astnode_create(INSTRUCTION_NODE, loc);
     /* Store the mnemonic and addressing mode */

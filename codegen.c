@@ -472,7 +472,7 @@ static void put_statement(FILE *fp, const astnode *n, location *loc)
                 /* Flush binary buffer to file */
                 buf_flush(fp);
                 /* Output 4-byte sequence: CMD_INSTR [opcode] [expr-id] */
-                if (n->instr.mode == ABSOLUTE_WIDE_MODE || n->instr.mode == ABSOLUTE_X_WIDE_MODE || n->instr.mode == ABSOLUTE_Y_WIDE_MODE) {
+                if (n->instr.mnemonic.wide) {
                     put_1(fp, XASM_CMD_WIDE_INSTR);
                 }
                 else {

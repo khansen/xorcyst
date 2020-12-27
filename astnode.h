@@ -97,9 +97,6 @@ enum tag_addressing_mode {
     POSTINDEXED_INDIRECT_MODE,
     INDIRECT_MODE,
     RELATIVE_MODE,
-    ABSOLUTE_WIDE_MODE,
-    ABSOLUTE_X_WIDE_MODE,
-    ABSOLUTE_Y_WIDE_MODE,
     INVALID_MODE
 };
 
@@ -277,11 +274,18 @@ enum tag_arithmetic_operator {
 
 typedef enum tag_arithmetic_operator arithmetic_operator;
 
+struct tag_instruction_mnemonic {
+    instr_mnemonic value;
+    int wide;
+};
+
+typedef struct tag_instruction_mnemonic instruction_mnemonic;
+
 /**
  * Instruction attributes.
  */
 struct tag_instruction_attribs {
-    int mnemonic;
+    instruction_mnemonic mnemonic;
     addressing_mode mode;
     unsigned char opcode;
 };
@@ -361,7 +365,7 @@ const char *astnode_type_to_string(astnode_type);
 #define astnode_is_type(n, t) (astnode_get_type(n) == (t))
 
 astnode *astnode_create_null(location);
-astnode *astnode_create_instruction(int, addressing_mode, astnode *, location);
+astnode *astnode_create_instruction(instruction_mnemonic, addressing_mode, astnode *, location);
 astnode *astnode_create_identifier(const char *, location);
 astnode *astnode_create_integer(int, location);
 astnode *astnode_create_string(const char *, location);

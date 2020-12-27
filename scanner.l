@@ -62,6 +62,24 @@ const char *maybe_ignorecase(char *);
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+
+static int mnemonic_impl(instr_mnemonic mnc, int wide)
+{
+    yylval.mnemonic.value = mnc;
+    yylval.mnemonic.wide = wide;
+    return MNEMONIC;
+}
+
+static int mnemonic(instr_mnemonic mnc)
+{
+    return mnemonic_impl(mnc, 0);
+}
+
+static int mnemonic_wide(instr_mnemonic mnc)
+{
+    return mnemonic_impl(mnc, 1);
+}
+
 /* Each time we match a string, move the end cursor to its end. */
 #define YY_USER_ACTION  yylloc.last_column += yyleng;
 %}
@@ -95,64 +113,86 @@ LOCATION_STEP (yylloc);
 {hex_literal3}"H"   { yylval.integer = strtol(yytext, NULL, 16); return(INTEGER_LITERAL); }
 {hex_literal2}"H"   { yylval.integer = strtol(yytext, NULL, 16); return(INTEGER_LITERAL); }
 "'"."'"         { yylval.integer = yytext[1]; return(INTEGER_LITERAL); }
-"ADC"           { yylval.mnemonic = ADC_MNEMONIC; return(MNEMONIC); }
-"AND"           { yylval.mnemonic = AND_MNEMONIC; return(MNEMONIC); }
-"ASL"           { yylval.mnemonic = ASL_MNEMONIC; return(MNEMONIC); }
-"BCC"           { yylval.mnemonic = BCC_MNEMONIC; return(MNEMONIC); }
-"BCS"           { yylval.mnemonic = BCS_MNEMONIC; return(MNEMONIC); }
-"BLT"           { yylval.mnemonic = BCC_MNEMONIC; return(MNEMONIC); }
-"BGE"           { yylval.mnemonic = BCS_MNEMONIC; return(MNEMONIC); }
-"BEQ"           { yylval.mnemonic = BEQ_MNEMONIC; return(MNEMONIC); }
-"BIT"           { yylval.mnemonic = BIT_MNEMONIC; return(MNEMONIC); }
-"BMI"           { yylval.mnemonic = BMI_MNEMONIC; return(MNEMONIC); }
-"BNE"           { yylval.mnemonic = BNE_MNEMONIC; return(MNEMONIC); }
-"BPL"           { yylval.mnemonic = BPL_MNEMONIC; return(MNEMONIC); }
-"BRK"           { yylval.mnemonic = BRK_MNEMONIC; return(MNEMONIC); }
-"BVC"           { yylval.mnemonic = BVC_MNEMONIC; return(MNEMONIC); }
-"BVS"           { yylval.mnemonic = BVS_MNEMONIC; return(MNEMONIC); }
-"CLC"           { yylval.mnemonic = CLC_MNEMONIC; return(MNEMONIC); }
-"CLD"           { yylval.mnemonic = CLD_MNEMONIC; return(MNEMONIC); }
-"CLI"           { yylval.mnemonic = CLI_MNEMONIC; return(MNEMONIC); }
-"CLV"           { yylval.mnemonic = CLV_MNEMONIC; return(MNEMONIC); }
-"CMP"           { yylval.mnemonic = CMP_MNEMONIC; return(MNEMONIC); }
-"CPX"           { yylval.mnemonic = CPX_MNEMONIC; return(MNEMONIC); }
-"CPY"           { yylval.mnemonic = CPY_MNEMONIC; return(MNEMONIC); }
-"DEC"           { yylval.mnemonic = DEC_MNEMONIC; return(MNEMONIC); }
-"DEX"           { yylval.mnemonic = DEX_MNEMONIC; return(MNEMONIC); }
-"DEY"           { yylval.mnemonic = DEY_MNEMONIC; return(MNEMONIC); }
-"EOR"           { yylval.mnemonic = EOR_MNEMONIC; return(MNEMONIC); }
-"INC"           { yylval.mnemonic = INC_MNEMONIC; return(MNEMONIC); }
-"INX"           { yylval.mnemonic = INX_MNEMONIC; return(MNEMONIC); }
-"INY"           { yylval.mnemonic = INY_MNEMONIC; return(MNEMONIC); }
-"JMP"           { yylval.mnemonic = JMP_MNEMONIC; return(MNEMONIC); }
-"JSR"           { yylval.mnemonic = JSR_MNEMONIC; return(MNEMONIC); }
-"LDA"           { yylval.mnemonic = LDA_MNEMONIC; return(MNEMONIC); }
-"LDX"           { yylval.mnemonic = LDX_MNEMONIC; return(MNEMONIC); }
-"LDY"           { yylval.mnemonic = LDY_MNEMONIC; return(MNEMONIC); }
-"LSR"           { yylval.mnemonic = LSR_MNEMONIC; return(MNEMONIC); }
-"NOP"           { yylval.mnemonic = NOP_MNEMONIC; return(MNEMONIC); }
-"ORA"           { yylval.mnemonic = ORA_MNEMONIC; return(MNEMONIC); }
-"PHA"           { yylval.mnemonic = PHA_MNEMONIC; return(MNEMONIC); }
-"PHP"           { yylval.mnemonic = PHP_MNEMONIC; return(MNEMONIC); }
-"PLA"           { yylval.mnemonic = PLA_MNEMONIC; return(MNEMONIC); }
-"PLP"           { yylval.mnemonic = PLP_MNEMONIC; return(MNEMONIC); }
-"ROL"           { yylval.mnemonic = ROL_MNEMONIC; return(MNEMONIC); }
-"ROR"           { yylval.mnemonic = ROR_MNEMONIC; return(MNEMONIC); }
-"RTI"           { yylval.mnemonic = RTI_MNEMONIC; return(MNEMONIC); }
-"RTS"           { yylval.mnemonic = RTS_MNEMONIC; return(MNEMONIC); }
-"SBC"           { yylval.mnemonic = SBC_MNEMONIC; return(MNEMONIC); }
-"SEC"           { yylval.mnemonic = SEC_MNEMONIC; return(MNEMONIC); }
-"SED"           { yylval.mnemonic = SED_MNEMONIC; return(MNEMONIC); }
-"SEI"           { yylval.mnemonic = SEI_MNEMONIC; return(MNEMONIC); }
-"STA"           { yylval.mnemonic = STA_MNEMONIC; return(MNEMONIC); }
-"STX"           { yylval.mnemonic = STX_MNEMONIC; return(MNEMONIC); }
-"STY"           { yylval.mnemonic = STY_MNEMONIC; return(MNEMONIC); }
-"TAX"           { yylval.mnemonic = TAX_MNEMONIC; return(MNEMONIC); }
-"TAY"           { yylval.mnemonic = TAY_MNEMONIC; return(MNEMONIC); }
-"TSX"           { yylval.mnemonic = TSX_MNEMONIC; return(MNEMONIC); }
-"TXA"           { yylval.mnemonic = TXA_MNEMONIC; return(MNEMONIC); }
-"TXS"           { yylval.mnemonic = TXS_MNEMONIC; return(MNEMONIC); }
-"TYA"           { yylval.mnemonic = TYA_MNEMONIC; return(MNEMONIC); }
+"ADC"           { return mnemonic(ADC_MNEMONIC); }
+"ADC.W"         { return mnemonic_wide(ADC_MNEMONIC); }
+"AND"           { return mnemonic(AND_MNEMONIC); }
+"AND.W"         { return mnemonic_wide(AND_MNEMONIC); }
+"ASL"           { return mnemonic(ASL_MNEMONIC); }
+"ASL.W"         { return mnemonic_wide(ASL_MNEMONIC); }
+"BCC"           { return mnemonic(BCC_MNEMONIC); }
+"BCS"           { return mnemonic(BCS_MNEMONIC); }
+"BLT"           { return mnemonic(BCC_MNEMONIC); }
+"BGE"           { return mnemonic(BCS_MNEMONIC); }
+"BEQ"           { return mnemonic(BEQ_MNEMONIC); }
+"BIT"           { return mnemonic(BIT_MNEMONIC); }
+"BIT.W"         { return mnemonic_wide(BIT_MNEMONIC); }
+"BMI"           { return mnemonic(BMI_MNEMONIC); }
+"BNE"           { return mnemonic(BNE_MNEMONIC); }
+"BPL"           { return mnemonic(BPL_MNEMONIC); }
+"BRK"           { return mnemonic(BRK_MNEMONIC); }
+"BVC"           { return mnemonic(BVC_MNEMONIC); }
+"BVS"           { return mnemonic(BVS_MNEMONIC); }
+"CLC"           { return mnemonic(CLC_MNEMONIC); }
+"CLD"           { return mnemonic(CLD_MNEMONIC); }
+"CLI"           { return mnemonic(CLI_MNEMONIC); }
+"CLV"           { return mnemonic(CLV_MNEMONIC); }
+"CMP"           { return mnemonic(CMP_MNEMONIC); }
+"CMP.W"         { return mnemonic_wide(CMP_MNEMONIC); }
+"CPX"           { return mnemonic(CPX_MNEMONIC); }
+"CPX.W"         { return mnemonic_wide(CPX_MNEMONIC); }
+"CPY"           { return mnemonic(CPY_MNEMONIC); }
+"CPY.W"         { return mnemonic_wide(CPY_MNEMONIC); }
+"DEC"           { return mnemonic(DEC_MNEMONIC); }
+"DEC.W"         { return mnemonic_wide(DEC_MNEMONIC); }
+"DEX"           { return mnemonic(DEX_MNEMONIC); }
+"DEX.W"         { return mnemonic_wide(DEX_MNEMONIC); }
+"DEY"           { return mnemonic(DEY_MNEMONIC); }
+"EOR"           { return mnemonic(EOR_MNEMONIC); }
+"EOR.W"         { return mnemonic_wide(EOR_MNEMONIC); }
+"INC"           { return mnemonic(INC_MNEMONIC); }
+"INC.W"         { return mnemonic_wide(INC_MNEMONIC); }
+"INX"           { return mnemonic(INX_MNEMONIC); }
+"INY"           { return mnemonic(INY_MNEMONIC); }
+"JMP"           { return mnemonic(JMP_MNEMONIC); }
+"JSR"           { return mnemonic(JSR_MNEMONIC); }
+"LDA"           { return mnemonic(LDA_MNEMONIC); }
+"LDA.W"         { return mnemonic_wide(LDA_MNEMONIC); }
+"LDX"           { return mnemonic(LDX_MNEMONIC); }
+"LDX.W"         { return mnemonic_wide(LDX_MNEMONIC); }
+"LDY"           { return mnemonic(LDY_MNEMONIC); }
+"LDY.W"         { return mnemonic_wide(LDY_MNEMONIC); }
+"LSR"           { return mnemonic(LSR_MNEMONIC); }
+"LSR.W"         { return mnemonic_wide(LSR_MNEMONIC); }
+"NOP"           { return mnemonic(NOP_MNEMONIC); }
+"ORA"           { return mnemonic(ORA_MNEMONIC); }
+"ORA.W"         { return mnemonic_wide(ORA_MNEMONIC); }
+"PHA"           { return mnemonic(PHA_MNEMONIC); }
+"PHP"           { return mnemonic(PHP_MNEMONIC); }
+"PLA"           { return mnemonic(PLA_MNEMONIC); }
+"PLP"           { return mnemonic(PLP_MNEMONIC); }
+"ROL"           { return mnemonic(ROL_MNEMONIC); }
+"ROL.W"         { return mnemonic_wide(ROL_MNEMONIC); }
+"ROR"           { return mnemonic(ROR_MNEMONIC); }
+"ROR.W"         { return mnemonic_wide(ROR_MNEMONIC); }
+"RTI"           { return mnemonic(RTI_MNEMONIC); }
+"RTS"           { return mnemonic(RTS_MNEMONIC); }
+"SBC"           { return mnemonic(SBC_MNEMONIC); }
+"SBC.W"         { return mnemonic_wide(SBC_MNEMONIC); }
+"SEC"           { return mnemonic(SEC_MNEMONIC); }
+"SED"           { return mnemonic(SED_MNEMONIC); }
+"SEI"           { return mnemonic(SEI_MNEMONIC); }
+"STA"           { return mnemonic(STA_MNEMONIC); }
+"STA.W"         { return mnemonic_wide(STA_MNEMONIC); }
+"STX"           { return mnemonic(STX_MNEMONIC); }
+"STX.W"         { return mnemonic_wide(STX_MNEMONIC); }
+"STY"           { return mnemonic(STY_MNEMONIC); }
+"STY.W"         { return mnemonic_wide(STY_MNEMONIC); }
+"TAX"           { return mnemonic(TAX_MNEMONIC); }
+"TAY"           { return mnemonic(TAY_MNEMONIC); }
+"TSX"           { return mnemonic(TSX_MNEMONIC); }
+"TXA"           { return mnemonic(TXA_MNEMONIC); }
+"TXS"           { return mnemonic(TXS_MNEMONIC); }
+"TYA"           { return mnemonic(TYA_MNEMONIC); }
 "X"         { return('X'); }
 "Y"         { return('Y'); }
 "A"         { return('A'); }
@@ -219,7 +259,6 @@ LOCATION_STEP (yylloc);
 "-"{2,8}        { yylval.ident = yytext; return(BACKWARD_BRANCH); }
 "::"            { return(SCOPE_OP); }
 "."         { return('.'); }
-".W"        { return(WIDE_MODIFIER); }
 \n          { LOCATION_LINES (yylloc, yyleng); LOCATION_STEP (yylloc); return('\n'); }
 ","         { return(','); }
 ":"         { return(':'); }

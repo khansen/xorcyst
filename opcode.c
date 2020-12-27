@@ -943,12 +943,6 @@ unsigned char opcode_get(instr_mnemonic mnc, addressing_mode amode)
     }
     };
     /* */
-    if (amode == ABSOLUTE_WIDE_MODE)
-        amode = ABSOLUTE_MODE;
-    else if (amode == ABSOLUTE_X_WIDE_MODE)
-        amode = ABSOLUTE_X_MODE;
-    else if (amode == ABSOLUTE_Y_WIDE_MODE)
-        amode = ABSOLUTE_Y_MODE;
     return opcode_lookup[mnc][amode];
 }
 

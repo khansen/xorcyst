@@ -110,16 +110,15 @@ extern int yydebug;
     ZEROPAGE = 311,                /* ZEROPAGE  */
     ORG = 312,                     /* ORG  */
     SCOPE_OP = 313,                /* SCOPE_OP  */
-    WIDE_MODIFIER = 314,           /* WIDE_MODIFIER  */
-    LO_OP = 315,                   /* LO_OP  */
-    HI_OP = 316,                   /* HI_OP  */
-    EQ_OP = 317,                   /* EQ_OP  */
-    NE_OP = 318,                   /* NE_OP  */
-    LE_OP = 319,                   /* LE_OP  */
-    GE_OP = 320,                   /* GE_OP  */
-    SHL_OP = 321,                  /* SHL_OP  */
-    SHR_OP = 322,                  /* SHR_OP  */
-    UMINUS = 323                   /* UMINUS  */
+    LO_OP = 314,                   /* LO_OP  */
+    HI_OP = 315,                   /* HI_OP  */
+    EQ_OP = 316,                   /* EQ_OP  */
+    NE_OP = 317,                   /* NE_OP  */
+    LE_OP = 318,                   /* LE_OP  */
+    GE_OP = 319,                   /* GE_OP  */
+    SHL_OP = 320,                  /* SHL_OP  */
+    SHR_OP = 321,                  /* SHR_OP  */
+    UMINUS = 322                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -184,31 +183,30 @@ extern int yydebug;
 #define ZEROPAGE 311
 #define ORG 312
 #define SCOPE_OP 313
-#define WIDE_MODIFIER 314
-#define LO_OP 315
-#define HI_OP 316
-#define EQ_OP 317
-#define NE_OP 318
-#define LE_OP 319
-#define GE_OP 320
-#define SHL_OP 321
-#define SHR_OP 322
-#define UMINUS 323
+#define LO_OP 314
+#define HI_OP 315
+#define EQ_OP 316
+#define NE_OP 317
+#define LE_OP 318
+#define GE_OP 319
+#define SHL_OP 320
+#define SHR_OP 321
+#define UMINUS 322
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 69 "parser.y"
+#line 68 "parser.y"
 
     long integer;
-    int mnemonic;
+    instruction_mnemonic mnemonic;
     const char *string;
     const char *label;
     const char *ident;
     astnode *node;
 
-#line 212 "parser.h"
+#line 210 "parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -3498,20 +3498,20 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
     astnode *o = reduce_expression_complete( LHS(instr) );
     assert(o == LHS(instr));
     /* Convert (mnemonic, addressing mode) pair to opcode */
-    instr->instr.opcode = opcode_get(instr->instr.mnemonic, instr->instr.mode);
+    instr->instr.opcode = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
     if (instr->instr.opcode == 0xFF) {
         /* Check for the special cases */
-        if ((instr->instr.mnemonic == STX_MNEMONIC) && (instr->instr.mode == ABSOLUTE_Y_MODE)) {
+        if ((instr->instr.mnemonic.value == STX_MNEMONIC) && (instr->instr.mode == ABSOLUTE_Y_MODE)) {
             /* Doesn't have absolute version, "scale down" to zeropage */
             instr->instr.mode = ZEROPAGE_Y_MODE;
-            instr->instr.opcode = opcode_get(instr->instr.mnemonic, instr->instr.mode);
-        } else if ((instr->instr.mnemonic == STY_MNEMONIC) && (instr->instr.mode == ABSOLUTE_X_MODE)) {
+            instr->instr.opcode = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
+        } else if ((instr->instr.mnemonic.value == STY_MNEMONIC) && (instr->instr.mode == ABSOLUTE_X_MODE)) {
             /* Doesn't have absolute version, "scale down" to zeropage */
             instr->instr.mode = ZEROPAGE_X_MODE;
-            instr->instr.opcode = opcode_get(instr->instr.mnemonic, instr->instr.mode);
+            instr->instr.opcode = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
         } else if (instr->instr.mode == ABSOLUTE_MODE) {
             /* Check for relative addressing (these are parsed as absolute mode) */
-            switch (instr->instr.mnemonic) {
+            switch (instr->instr.mnemonic.value) {
                 case BCC_MNEMONIC:
                 case BCS_MNEMONIC:
                 case BEQ_MNEMONIC:
@@ -3522,7 +3522,9 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
                 case BVS_MNEMONIC:
                 /* Fix addressing mode and opcode */
                 instr->instr.mode = RELATIVE_MODE;
-                instr->instr.opcode = opcode_get(instr->instr.mnemonic, instr->instr.mode);
+                instr->instr.opcode = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
+                break;
+                default:
                 break;
             }
         }
@@ -3532,6 +3534,7 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
         absolute mode to zeropage mode */
         if ((astnode_is_type(o, INTEGER_NODE)) &&
         ((unsigned long)o->integer < 256) &&
+        !instr->instr.mnemonic.wide &&
         ((c = opcode_zp_equiv(instr->instr.opcode, instr->instr.mode)) != 0xFF)) {
             /* Switch to the zeromode version */
             instr->instr.opcode = c;
@@ -3561,9 +3564,6 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
                 case ABSOLUTE_MODE:
                 case ABSOLUTE_X_MODE:
                 case ABSOLUTE_Y_MODE:
-                case ABSOLUTE_WIDE_MODE:
-                case ABSOLUTE_X_WIDE_MODE:
-                case ABSOLUTE_Y_WIDE_MODE:
                 case INDIRECT_MODE:
                 /* Operand must fit in 16 bits */
                 if ((unsigned long)o->integer >= 0x10000) {
@@ -3893,15 +3893,17 @@ static int inc_pc_by_instruction(astnode *instr, void *arg, astnode **next)
     assert(!in_dataseg);
     if (LHS(instr)) {
         /* Has operand */
-        unsigned char zp_op = opcode_zp_equiv(instr->instr.opcode, instr->instr.mode);
-        if (zp_op != 0xFF) {
-            /* See if we can optimize this to a ZP-instruction */
-            astnode *operand = eval_expression(LHS(instr));
-            if (operand && astnode_is_type(operand, INTEGER_NODE)) {
-                if ((operand->integer >= 0) && (operand->integer < 256)) {
-                    instr->instr.opcode = zp_op;
+        if (!instr->instr.mnemonic.wide) {
+            unsigned char zp_op = opcode_zp_equiv(instr->instr.opcode, instr->instr.mode);
+            if (zp_op != 0xFF) {
+                /* See if we can optimize this to a ZP-instruction */
+                astnode *operand = eval_expression(LHS(instr));
+                if (operand && astnode_is_type(operand, INTEGER_NODE)) {
+                    if ((operand->integer >= 0) && (operand->integer < 256)) {
+                        instr->instr.opcode = zp_op;
+                    }
+                    astnode_finalize(operand);
                 }
-                astnode_finalize(operand);
             }
         }
     }
