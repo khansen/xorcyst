@@ -1,3 +1,4 @@
+%option yywrap
 %{
 /*
  * $Id: scanner.l,v 1.15 2007/11/11 22:35:46 khansen Exp $
