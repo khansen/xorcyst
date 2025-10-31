@@ -380,7 +380,6 @@ static void put_statement(FILE *fp, const astnode *n, location *loc)
     astnode *expr;
     astnode *type;
     int len;
-    int i;
     int line;
     unsigned char flags;
     static int tag = 0; /* Used to give labels unique IDs */
@@ -490,7 +489,6 @@ static void put_statement(FILE *fp, const astnode *n, location *loc)
         break;
 
         case DATA_NODE:
-        i = 0;
         type = LHS(n);
         /* Go through all the elements of the data array */
         for (expr = RHS(n); expr != NULL; expr = astnode_get_next_sibling(expr) ) {
