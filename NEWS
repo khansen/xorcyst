@@ -1,3 +1,5 @@
+Version 1.6.1:
+- Modernize autotools
 Version 1.6.0:
 - Added support for .w ("wide") mnemonic suffix to force 16-bit address encoding. This can
   be used to disable the default zero page optimization of instructions. Example:
