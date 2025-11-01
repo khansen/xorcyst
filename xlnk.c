@@ -133,7 +133,7 @@ static int str_to_int(const char *s)
 /*--------------------------------------------------------------------------*/
 /* Argument parsing stuff. */
 
-static char program_version[] = "xlnk 1.6.0";
+static char program_version[] = "xlnk 1.6.1";
 
 struct tag_xlnk_arguments {
     const char *input_file;

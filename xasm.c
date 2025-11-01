@@ -120,7 +120,7 @@ char *xasm_path;
 /*---------------------------------------------------------------------------*/
 /* Argument parsing stuff. */
 
-static char program_version[] = "xasm 1.6.0";
+static char program_version[] = "xasm 1.6.1";
 
 /* Argument variables set by arg parser. */
 xasm_arguments xasm_args;
