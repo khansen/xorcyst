@@ -8,6 +8,7 @@ config.h
 config.log
 config.status
 Makefile
+stamp-h1
 xasm
 xlnk
 
