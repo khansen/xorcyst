@@ -6,6 +6,13 @@ AC_CONFIG_SRCDIR([astnode.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign silent-rules])
 AM_SILENT_RULES([yes])
+AM_MAINTAINER_MODE
+
+dnl Require make to be installed
+AC_CHECK_PROGS([MAKE], [gmake make], [:])
+if test "x$MAKE" = "x:"; then
+  AC_MSG_ERROR([make is required to build this package. Please install make.])
+fi
 
 AC_TYPE_SIZE_T
 AC_TYPE_INT16_T
@@ -19,9 +26,20 @@ AC_C_CONST
 dnl Checks for programs.
 AC_PROG_AWK
 AC_PROG_CC
-AC_PROG_YACC
-AC_PROG_LEX([yywrap])
+
+dnl Optional parser/lexer tools for maintainers
+dnl If not found, we just won't regenerate parser.c / scanner.c
+AC_CHECK_PROGS([YACC], [bison byacc yacc], [:])
+AC_CHECK_PROGS([LEX],  [flex lex],          [:])
 AC_SUBST([LEXLIB], [])
+
+if test "x$YACC" = "x:"; then
+  AC_MSG_WARN([No yacc/bison/byacc found; parser.c will not be regenerated from parser.y])
+fi
+
+if test "x$LEX" = "x:"; then
+  AC_MSG_WARN([No lex/flex found; scanner.c will not be regenerated from scanner.l])
+fi
 
 dnl Checks for libraries.
 
