@@ -151,19 +151,6 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-LEXCOMPILE = $(LEX) $(AM_LFLAGS) $(LFLAGS)
-AM_V_LEX = $(am__v_LEX_@AM_V@)
-am__v_LEX_ = $(am__v_LEX_@AM_DEFAULT_V@)
-am__v_LEX_0 = @echo "  LEX     " $@;
-am__v_LEX_1 = 
-YLWRAP = $(top_srcdir)/ylwrap
-am__yacc_c2h = sed -e s/cc$$/hh/ -e s/cpp$$/hpp/ -e s/cxx$$/hxx/ \
-		   -e s/c++$$/h++/ -e s/c$$/h/
-YACCCOMPILE = $(YACC) $(AM_YFLAGS) $(YFLAGS)
-AM_V_YACC = $(am__v_YACC_@AM_V@)
-am__v_YACC_ = $(am__v_YACC_@AM_DEFAULT_V@)
-am__v_YACC_0 = @echo "  YACC    " $@;
-am__v_YACC_1 = 
 SOURCES = $(xasm_SOURCES) $(xlnk_SOURCES)
 DIST_SOURCES = $(xasm_SOURCES) $(xlnk_SOURCES)
 am__can_run_installinfo = \
@@ -193,7 +180,7 @@ AM_RECURSIVE_TARGETS = cscope
 am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/config.h.in AUTHORS \
 	COPYING ChangeLog INSTALL NEWS README TODO compile \
 	config.guess config.sub depcomp install-sh missing \
-	mkinstalldirs parser.c parser.h scanner.c ylwrap
+	mkinstalldirs ylwrap
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -244,7 +231,6 @@ INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LDFLAGS = @LDFLAGS@
 LEX = @LEX@
 LEXLIB = @LEXLIB@
-LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LTLIBOBJS = @LTLIBOBJS@
@@ -264,7 +250,6 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 VERSION = @VERSION@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -318,13 +303,31 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-xasm_SOURCES = astnode.c astnode.h astproc.c astproc.h charmap.c charmap.h \
-codegen.c codegen.h loc.h objdef.h opcode.c opcode.h parser.y scanner.l symtab.c \
-symtab.h xasm.c my_getopt.c my_getopt.h getopt.h
 
-xlnk_SOURCES = xlnk.c script.c script.h unit.c unit.h hashtab.c hashtab.h \
-opcode.c opcode.h my_getopt.c my_getopt.h getopt.h
+# Use the *generated* files for normal builds
+xasm_SOURCES = \
+  astnode.c astnode.h \
+  astproc.c astproc.h \
+  charmap.c charmap.h \
+  codegen.c codegen.h \
+  loc.h objdef.h \
+  opcode.c opcode.h \
+  parser.c scanner.c \
+  symtab.c symtab.h \
+  xasm.c \
+  my_getopt.c my_getopt.h getopt.h
 
+xlnk_SOURCES = \
+  xlnk.c \
+  script.c script.h \
+  unit.c unit.h \
+  hashtab.c hashtab.h \
+  opcode.c opcode.h \
+  my_getopt.c my_getopt.h getopt.h
+
+
+# Distribute the grammar/lexer sources, but don’t use them by default to build
+EXTRA_DIST = parser.y scanner.l
 AM_CFLAGS = -Wall
 AM_LFLAGS = -i
 AM_YFLAGS = -d
@@ -332,7 +335,7 @@ all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
-.SUFFIXES: .c .l .o .obj .y
+.SUFFIXES: .c .o .obj
 am--refresh: Makefile
 	@:
 $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
@@ -423,9 +426,6 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-$(am__rm_f) $(bin_PROGRAMS)
-parser.h: parser.c
-	@if test ! -f $@; then rm -f parser.c; else :; fi
-	@if test ! -f $@; then $(MAKE) $(AM_MAKEFLAGS) parser.c; else :; fi
 
 xasm$(EXEEXT): $(xasm_OBJECTS) $(xasm_DEPENDENCIES) $(EXTRA_xasm_DEPENDENCIES) 
 	@rm -f xasm$(EXEEXT)
@@ -475,12 +475,6 @@ am--depfiles: $(am__depfiles_remade)
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
-
-.l.c:
-	$(AM_V_LEX)$(am__skiplex) $(SHELL) $(YLWRAP) $< $(LEX_OUTPUT_ROOT).c $@ -- $(LEXCOMPILE)
-
-.y.c:
-	$(AM_V_YACC)$(am__skipyacc) $(SHELL) $(YLWRAP) $< y.tab.c $@ y.tab.h `echo $@ | $(am__yacc_c2h)` y.output $*.output -- $(YACCCOMPILE)
 
 ID: $(am__tagged_files)
 	$(am__define_uniq_tagged_files); mkid -fID $$unique
@@ -756,9 +750,6 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-	-$(am__rm_f) parser.c
-	-$(am__rm_f) parser.h
-	-$(am__rm_f) scanner.c
 clean: clean-am
 
 clean-am: clean-binPROGRAMS clean-generic mostlyclean-am
@@ -878,6 +869,23 @@ uninstall-am: uninstall-binPROGRAMS
 
 .PRECIOUS: Makefile
 
+
+# Optional maintainer-only regeneration rules
+# (These are only used if someone runs make after editing parser.y/scanner.l)
+
+parser.c: parser.y
+	@if test "x$(YACC)" = "x:"; then \
+	  echo "Cannot regenerate parser.c: no yacc/bison/byacc found (YACC is ':')"; \
+	  exit 1; \
+	fi
+	$(AM_V_YACC)$(YACC) $(AM_YFLAGS) -o $@ $<
+
+scanner.c: scanner.l
+	@if test "x$(LEX)" = "x:"; then \
+	  echo "Cannot regenerate scanner.c: no flex/lex found (LEX is ':')"; \
+	  exit 1; \
+	fi
+	$(AM_V_LEX)$(LEX) $(AM_LFLAGS) -o $@ $<
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

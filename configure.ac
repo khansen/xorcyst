@@ -19,9 +19,20 @@ AC_C_CONST
 dnl Checks for programs.
 AC_PROG_AWK
 AC_PROG_CC
-AC_PROG_YACC
-AC_PROG_LEX([yywrap])
+
+dnl Optional parser/lexer tools for maintainers
+dnl If not found, we just won't regenerate parser.c / scanner.c
+AC_CHECK_PROGS([YACC], [bison byacc yacc], [:])
+AC_CHECK_PROGS([LEX],  [flex lex],          [:])
 AC_SUBST([LEXLIB], [])
+
+if test "x$YACC" = "x:"; then
+  AC_MSG_WARN([No yacc/bison/byacc found; parser.c will not be regenerated from parser.y])
+fi
+
+if test "x$LEX" = "x:"; then
+  AC_MSG_WARN([No lex/flex found; scanner.c will not be regenerated from scanner.l])
+fi
 
 dnl Checks for libraries.
 
