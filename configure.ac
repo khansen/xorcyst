@@ -7,6 +7,12 @@ AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign silent-rules])
 AM_SILENT_RULES([yes])
 
+dnl Require make to be installed
+AC_CHECK_PROGS([MAKE], [gmake make], [:])
+if test "x$MAKE" = "x:"; then
+  AC_MSG_ERROR([GNU make (gmake/make) is required to build this package. Please install make.])
+fi
+
 AC_TYPE_SIZE_T
 AC_TYPE_INT16_T
 AC_TYPE_INT32_T
