@@ -329,7 +329,7 @@ xlnk_SOURCES = \
 
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
-EXTRA_DIST = parser.y scanner.l
+EXTRA_DIST = parser.y scanner.l parser.h
 AM_CFLAGS = -Wall
 AM_LFLAGS = -i
 AM_YFLAGS = -d
@@ -875,12 +875,13 @@ uninstall-am: uninstall-binPROGRAMS
 # Optional maintainer-only regeneration rules
 # (These are only used if someone runs make after editing parser.y/scanner.l)
 
-@MAINTAINER_MODE_TRUE@parser.c: parser.y
+# Regenerate both parser.c and parser.h from parser.y
+@MAINTAINER_MODE_TRUE@parser.c parser.h: parser.y
 @MAINTAINER_MODE_TRUE@	@if test "x$(YACC)" = "x:"; then \
-@MAINTAINER_MODE_TRUE@	  echo "Cannot regenerate parser.c: no yacc/bison/byacc found (YACC is ':')"; \
+@MAINTAINER_MODE_TRUE@	  echo "Cannot regenerate parser.c/parser.h: no yacc/bison/byacc found (YACC is ':')"; \
 @MAINTAINER_MODE_TRUE@	  exit 1; \
 @MAINTAINER_MODE_TRUE@	fi
-@MAINTAINER_MODE_TRUE@	$(AM_V_YACC)$(YACC) $(AM_YFLAGS) -o $@ $<
+@MAINTAINER_MODE_TRUE@	$(AM_V_YACC)$(YACC) $(AM_YFLAGS) -d -o parser.c $<
 
 @MAINTAINER_MODE_TRUE@scanner.c: scanner.l
 @MAINTAINER_MODE_TRUE@	@if test "x$(LEX)" = "x:"; then \

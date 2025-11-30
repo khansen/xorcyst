@@ -11,7 +11,7 @@ AM_MAINTAINER_MODE
 dnl Require make to be installed
 AC_CHECK_PROGS([MAKE], [gmake make], [:])
 if test "x$MAKE" = "x:"; then
-  AC_MSG_ERROR([GNU make (gmake/make) is required to build this package. Please install make.])
+  AC_MSG_ERROR([make is required to build this package. Please install make.])
 fi
 
 AC_TYPE_SIZE_T

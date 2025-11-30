@@ -3694,7 +3694,7 @@ done
 test -n "$MAKE" || MAKE=":"
 
 if test "x$MAKE" = "x:"; then
-  as_fn_error $? "GNU make (gmake/make) is required to build this package. Please install make." "$LINENO" 5
+  as_fn_error $? "make is required to build this package. Please install make." "$LINENO" 5
 fi
 
 

@@ -24,7 +24,7 @@ xlnk_SOURCES = \
   my_getopt.c my_getopt.h getopt.h
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
-EXTRA_DIST = parser.y scanner.l
+EXTRA_DIST = parser.y scanner.l parser.h
 
 AM_CFLAGS = -Wall
 AM_LFLAGS = -i
@@ -35,12 +35,13 @@ AM_YFLAGS = -d
 
 if MAINTAINER_MODE
 
-parser.c: parser.y
+# Regenerate both parser.c and parser.h from parser.y
+parser.c parser.h: parser.y
 	@if test "x$(YACC)" = "x:"; then \
-	  echo "Cannot regenerate parser.c: no yacc/bison/byacc found (YACC is ':')"; \
+	  echo "Cannot regenerate parser.c/parser.h: no yacc/bison/byacc found (YACC is ':')"; \
 	  exit 1; \
 	fi
-	$(AM_V_YACC)$(YACC) $(AM_YFLAGS) -o $@ $<
+	$(AM_V_YACC)$(YACC) $(AM_YFLAGS) -d -o parser.c $<
 
 scanner.c: scanner.l
 	@if test "x$(LEX)" = "x:"; then \
