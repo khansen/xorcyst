@@ -33,6 +33,8 @@ AM_YFLAGS = -d
 # Optional maintainer-only regeneration rules
 # (These are only used if someone runs make after editing parser.y/scanner.l)
 
+if MAINTAINER_MODE
+
 parser.c: parser.y
 	@if test "x$(YACC)" = "x:"; then \
 	  echo "Cannot regenerate parser.c: no yacc/bison/byacc found (YACC is ':')"; \
@@ -46,3 +48,5 @@ scanner.c: scanner.l
 	  exit 1; \
 	fi
 	$(AM_V_LEX)$(LEX) $(AM_LFLAGS) -o $@ $<
+
+endif

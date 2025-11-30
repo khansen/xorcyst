@@ -875,19 +875,19 @@ uninstall-am: uninstall-binPROGRAMS
 # Optional maintainer-only regeneration rules
 # (These are only used if someone runs make after editing parser.y/scanner.l)
 
-parser.c: parser.y
-	@if test "x$(YACC)" = "x:"; then \
-	  echo "Cannot regenerate parser.c: no yacc/bison/byacc found (YACC is ':')"; \
-	  exit 1; \
-	fi
-	$(AM_V_YACC)$(YACC) $(AM_YFLAGS) -o $@ $<
+@MAINTAINER_MODE_TRUE@parser.c: parser.y
+@MAINTAINER_MODE_TRUE@	@if test "x$(YACC)" = "x:"; then \
+@MAINTAINER_MODE_TRUE@	  echo "Cannot regenerate parser.c: no yacc/bison/byacc found (YACC is ':')"; \
+@MAINTAINER_MODE_TRUE@	  exit 1; \
+@MAINTAINER_MODE_TRUE@	fi
+@MAINTAINER_MODE_TRUE@	$(AM_V_YACC)$(YACC) $(AM_YFLAGS) -o $@ $<
 
-scanner.c: scanner.l
-	@if test "x$(LEX)" = "x:"; then \
-	  echo "Cannot regenerate scanner.c: no flex/lex found (LEX is ':')"; \
-	  exit 1; \
-	fi
-	$(AM_V_LEX)$(LEX) $(AM_LFLAGS) -o $@ $<
+@MAINTAINER_MODE_TRUE@scanner.c: scanner.l
+@MAINTAINER_MODE_TRUE@	@if test "x$(LEX)" = "x:"; then \
+@MAINTAINER_MODE_TRUE@	  echo "Cannot regenerate scanner.c: no flex/lex found (LEX is ':')"; \
+@MAINTAINER_MODE_TRUE@	  exit 1; \
+@MAINTAINER_MODE_TRUE@	fi
+@MAINTAINER_MODE_TRUE@	$(AM_V_LEX)$(LEX) $(AM_LFLAGS) -o $@ $<
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
