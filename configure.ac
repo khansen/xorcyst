@@ -6,6 +6,7 @@ AC_CONFIG_SRCDIR([astnode.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign silent-rules])
 AM_SILENT_RULES([yes])
+AM_MAINTAINER_MODE
 
 dnl Require make to be installed
 AC_CHECK_PROGS([MAKE], [gmake make], [:])
