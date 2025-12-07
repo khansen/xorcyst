@@ -1473,8 +1473,7 @@ astnode *astnode_create_list(astnode *l)
         astnode_add_child(n, l);
     } else {
         /* Make a node with zero children */
-        location dummyloc;
-        dummyloc.file = 0;
+        location dummyloc = {0};
         n = astnode_create(LIST_NODE, dummyloc);
     }
     return n;
