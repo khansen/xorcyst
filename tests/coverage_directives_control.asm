@@ -1,0 +1,33 @@
+CODE
+counter = 0
+DEFINE SYMBOL1
+
+IF 1
+  NOP
+ELIF 0
+  NOP
+ELSE
+  NOP
+ENDIF
+
+IFDEF SYMBOL1
+  NOP
+ELSE
+  NOP
+ENDIF
+
+IFNDEF SYMBOL2
+  NOP
+ELSE
+  NOP
+ENDIF
+
+REPT 2
+  INX
+ENDM
+
+WHILE counter < 1
+  counter = counter + 1
+ENDM
+
+END

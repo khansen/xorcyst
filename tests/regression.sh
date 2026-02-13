@@ -28,6 +28,17 @@ run_expect_success() {
     fi
 }
 
+run_expect_success_pure_binary() {
+    asm_file=$1
+    out_file="$TMPDIR/out-pure.bin"
+    log_file="$TMPDIR/out-pure.log"
+
+    if ! "$XASM" --pure-binary "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected pure-binary success for $asm_file"
+    fi
+}
+
 run_expect_error_no_crash() {
     asm_file=$1
     expected=$2
@@ -58,6 +69,12 @@ run_expect_error_no_crash() {
 # Existing sanity tests
 run_expect_success "$ROOT_DIR/tests/ifndef.asm"
 run_expect_success "$ROOT_DIR/tests/macro.asm"
+run_expect_success "$ROOT_DIR/tests/coverage_instructions.asm"
+run_expect_success "$ROOT_DIR/tests/coverage_directives_control.asm"
+run_expect_success "$ROOT_DIR/tests/coverage_directives_macros_io.asm"
+run_expect_success "$ROOT_DIR/tests/coverage_directives_types_symbols.asm"
+run_expect_success "$ROOT_DIR/tests/coverage_directives_layout.asm"
+run_expect_success_pure_binary "$ROOT_DIR/tests/coverage_org_pure.asm"
 
 # Regression: long include path must not smash stack
 long_name=$(awk 'BEGIN { for (i = 0; i < 500; ++i) printf "a" }')
@@ -101,5 +118,8 @@ items_lo .db 0
 .endp
 ASM
 run_expect_success "$TMPDIR/proc-single-branch.asm"
+
+# Regression: ERROR directive should fail cleanly with expected diagnostic
+run_expect_error_no_crash "$ROOT_DIR/tests/coverage_error_directive.asm" "intentional regression error"
 
 echo "All regression tests passed"
