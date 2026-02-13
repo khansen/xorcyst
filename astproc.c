@@ -183,6 +183,9 @@ typedef struct tag_backward_branch_info backward_branch_info;
 static forward_branch_info forward_branch[BRANCH_MAX];
 
 static backward_branch_info backward_branch[BRANCH_MAX];
+enum { FORWARD_BRANCH_REF_MAX = 128 };
+
+static void err(location loc, const char *fmt, ...);
 
 /**
  * Zaps forward/backward branch data.
@@ -199,6 +202,30 @@ static void branch_init()
         backward_branch[i].decl = NULL;
         backward_branch[i].counter = 0;
     }
+}
+
+/*---------------------------------------------------------------------------*/
+
+static int branch_level(astnode *n, char marker, const char *kind, int *level_out)
+{
+    size_t i;
+    size_t len;
+    if ((n == NULL) || (n->ident == NULL)) {
+        return 0;
+    }
+    len = strlen(n->ident);
+    if ((len < 1) || (len > BRANCH_MAX)) {
+        err(n->loc, "%s branch label `%s' has invalid length", kind, n->ident);
+        return 0;
+    }
+    for (i = 0; i < len; ++i) {
+        if (n->ident[i] != marker) {
+            err(n->loc, "invalid %s branch label `%s'", kind, n->ident);
+            return 0;
+        }
+    }
+    *level_out = (int)len - 1;
+    return 1;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2836,22 +2863,38 @@ static int process_error(astnode *error, void *arg, astnode **next)
 static int process_forward_branch_decl(astnode *n, void *arg, astnode **next)
 {
     astnode *l;
+    char *new_label;
     int i;
+    int level;
     char str[32];
+    size_t base_len;
     assert(!strchr(n->ident, '#'));
+    if (!branch_level(n, '+', "forward", &level)) {
+        return 0;
+    }
     /* Get branch info structure for label (+, ++, ...) */
-    forward_branch_info *fwd = &forward_branch[strlen(n->ident)-1];
+    forward_branch_info *fwd = &forward_branch[level];
     /* Morph n to globally unique label */
     snprintf(str, sizeof (str), "#%d", fwd->counter);
-    n->label = (char *)realloc(n->ident, strlen(n->ident)+strlen(str)+1);
+    base_len = strlen(n->ident);
+    new_label = (char *)realloc(n->ident, base_len + strlen(str) + 1);
+    if (new_label == NULL) {
+        err(n->loc, "out of memory");
+        return 0;
+    }
+    n->label = new_label;
     strcat(n->label, str);
     n->type = LABEL_NODE;
     symtab_enter(n->label, LABEL_SYMBOL, n, 0);
     /* Fix reference identifiers */
     for (i=0; i<fwd->index; i++) {
         l = fwd->refs[i];
-        l->ident = (char *)realloc(l->ident, strlen(n->ident)+1);
-        strcpy(l->ident, n->ident);
+        l->ident = (char *)realloc(l->ident, strlen(n->label)+1);
+        if (l->ident == NULL) {
+            err(n->loc, "out of memory");
+            continue;
+        }
+        strcpy(l->ident, n->label);
     }
     /* Prepare for next declaration */
     fwd->index = 0;
@@ -2866,14 +2909,26 @@ static int process_forward_branch_decl(astnode *n, void *arg, astnode **next)
  */
 static int process_backward_branch_decl(astnode *n, void *arg, astnode **next)
 {
+    char *new_label;
+    int level;
     char str[32];
+    size_t base_len;
     assert(!strchr(n->ident, '#'));
+    if (!branch_level(n, '-', "backward", &level)) {
+        return 0;
+    }
     /* Get branch info */
-    backward_branch_info *bwd = &backward_branch[strlen(n->ident)-1];
+    backward_branch_info *bwd = &backward_branch[level];
     bwd->decl = n;
     /* Morph n to globally unique label */
     snprintf(str, sizeof (str), "#%d", bwd->counter);
-    n->label = (char *)realloc(n->ident, strlen(n->ident)+strlen(str)+1);
+    base_len = strlen(n->ident);
+    new_label = (char *)realloc(n->ident, base_len + strlen(str) + 1);
+    if (new_label == NULL) {
+        err(n->loc, "out of memory");
+        return 0;
+    }
+    n->label = new_label;
     strcat(n->label, str);
     n->type = LABEL_NODE;
     symtab_enter(n->label, LABEL_SYMBOL, n, 0);
@@ -2889,8 +2944,16 @@ static int process_backward_branch_decl(astnode *n, void *arg, astnode **next)
  */
 static int process_forward_branch(astnode *n, void *arg, astnode **next)
 {
+    int level;
+    if (!branch_level(n, '+', "forward", &level)) {
+        return 0;
+    }
     /* Add n to proper forward_branch array */
-    forward_branch_info *fwd = &forward_branch[strlen(n->ident)-1];
+    forward_branch_info *fwd = &forward_branch[level];
+    if (fwd->index >= FORWARD_BRANCH_REF_MAX) {
+        err(n->loc, "too many unresolved references to `%s' (max %d)", n->ident, FORWARD_BRANCH_REF_MAX);
+        return 0;
+    }
     fwd->refs[fwd->index++] = n;
     /* Change to identifier node */
     n->type = IDENTIFIER_NODE;
@@ -2904,13 +2967,21 @@ static int process_forward_branch(astnode *n, void *arg, astnode **next)
  */
 static int process_backward_branch(astnode *n, void *arg, astnode **next)
 {
+    int level;
+    if (!branch_level(n, '-', "backward", &level)) {
+        return 0;
+    }
     /* Get branch info */
-    backward_branch_info *bwd = &backward_branch[strlen(n->ident)-1];
+    backward_branch_info *bwd = &backward_branch[level];
     /* Make sure it's a valid reference */
     if (bwd->decl != NULL) {
         /* Fix n->ident */
-        n->ident = (char *)realloc(n->ident, strlen(bwd->decl->ident)+1);
-        strcpy(n->ident, bwd->decl->ident);
+        n->ident = (char *)realloc(n->ident, strlen(bwd->decl->label)+1);
+        if (n->ident == NULL) {
+            err(n->loc, "out of memory");
+            return 0;
+        }
+        strcpy(n->ident, bwd->decl->label);
     }
     /* Change to identifier node */
     n->type = IDENTIFIER_NODE;
