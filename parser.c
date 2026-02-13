@@ -119,6 +119,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "symtab.h"
 #include "loc.h"
 //#define YYDEBUG 1
@@ -3977,7 +3978,7 @@ void handle_incsrc(astnode *n)
         break;
         case 1:
         /* Failed to open file */
-        sprintf(errs, "could not open '%s' for reading", file->string);
+        snprintf(errs, sizeof(errs), "could not open '%s' for reading", file->string);
         yyerror(errs);
         break;
         case 2:
@@ -4002,6 +4003,7 @@ void handle_incbin(astnode *n)
     FILE *fp;
     unsigned char *data;
     int size;
+    long file_size;
     char errs[512];
     /* Get the node which describes the file to include */
     astnode *file = astnode_get_child(n, 0);
@@ -4011,22 +4013,46 @@ void handle_incbin(astnode *n)
     fp = open_included_file(filename, quoted_form, NULL);
     if (fp) {
         /* Get filesize */
-        fseek(fp, 0, SEEK_END);
-        size = ftell(fp);
-        rewind(fp);
-        if (size > 0) {
-            /* Allocate buffer to hold file contents */
-            data = (unsigned char *)malloc(size);
-            /* Read file contents into buffer */
-            fread(data, 1, size, fp);
-            /* Insert binary node */
-            astnode_add_sibling(n, astnode_create_binary(data, size, n->loc) );
+        if (fseek(fp, 0, SEEK_END) != 0) {
+            snprintf(errs, sizeof(errs), "could not read '%s'", file->string);
+            yyerror(errs);
+        } else {
+            file_size = ftell(fp);
+            if (file_size < 0) {
+                snprintf(errs, sizeof(errs), "could not read '%s'", file->string);
+                yyerror(errs);
+            } else if (file_size > INT_MAX) {
+                snprintf(errs, sizeof(errs), "file '%s' is too large to include", file->string);
+                yyerror(errs);
+            } else {
+                size = (int)file_size;
+                rewind(fp);
+                if (size > 0) {
+                    size_t bytes_read;
+                    /* Allocate buffer to hold file contents */
+                    data = (unsigned char *)malloc((size_t)size);
+                    if (data == NULL) {
+                        yyerror("out of memory while processing INCBIN");
+                    } else {
+                        /* Read file contents into buffer */
+                        bytes_read = fread(data, 1, (size_t)size, fp);
+                        if (bytes_read != (size_t)size) {
+                            free(data);
+                            snprintf(errs, sizeof(errs), "could not read '%s'", file->string);
+                            yyerror(errs);
+                        } else {
+                            /* Insert binary node */
+                            astnode_add_sibling(n, astnode_create_binary(data, size, n->loc) );
+                        }
+                    }
+                }
+            }
         }
         /* Close file */
         fclose(fp);
     } else {
         /* Couldn't open file */
-        sprintf(errs, "could not open '%s' for reading", file->string);
+        snprintf(errs, sizeof(errs), "could not open '%s' for reading", file->string);
         yyerror(errs);
     }
 }

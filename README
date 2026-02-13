@@ -3,3 +3,7 @@ This is The XORcyst version 1.6.1, a set of tools for 6502 software development.
 See the documentation in the doc/ directory.
 
 See INSTALL for generic installation instructions.
+
+Run regression tests with:
+
+    sh tests/regression.sh
