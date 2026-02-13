@@ -3,9 +3,15 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
 XASM="$ROOT_DIR/xasm"
+XLNK="$ROOT_DIR/xlnk"
 
 if [ ! -x "$XASM" ]; then
     echo "error: $XASM not found; build xasm first" >&2
+    exit 1
+fi
+
+if [ ! -x "$XLNK" ]; then
+    echo "error: $XLNK not found; build xlnk first" >&2
     exit 1
 fi
 
@@ -66,6 +72,42 @@ run_expect_error_no_crash() {
     fi
 }
 
+run_xlnk_expect_success() {
+    script_file=$1
+    log_file="$TMPDIR/xlnk-success.log"
+
+    if ! "$XLNK" "$script_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected linker success for $script_file"
+    fi
+}
+
+run_xlnk_expect_error_no_crash() {
+    script_file=$1
+    expected=$2
+    log_file="$TMPDIR/xlnk-error.log"
+
+    set +e
+    "$XLNK" "$script_file" >"$log_file" 2>&1
+    status=$?
+    set -e
+
+    if [ "$status" -eq 0 ]; then
+        cat "$log_file" >&2
+        fail "expected linker failure for $script_file"
+    fi
+
+    if [ "$status" -ge 128 ]; then
+        cat "$log_file" >&2
+        fail "xlnk crashed for $script_file (exit $status)"
+    fi
+
+    if ! grep -q -- "$expected" "$log_file"; then
+        cat "$log_file" >&2
+        fail "missing expected linker error '$expected' for $script_file"
+    fi
+}
+
 # Existing sanity tests
 run_expect_success "$ROOT_DIR/tests/ifndef.asm"
 run_expect_success "$ROOT_DIR/tests/macro.asm"
@@ -121,5 +163,54 @@ run_expect_success "$TMPDIR/proc-single-branch.asm"
 
 # Regression: ERROR directive should fail cleanly with expected diagnostic
 run_expect_error_no_crash "$ROOT_DIR/tests/coverage_error_directive.asm" "intentional regression error"
+
+# Linker regression: simple link script with copy/bank/pad/link should succeed
+cat > "$TMPDIR/link_unit_a.asm" <<'ASM'
+start:
+    lda #$01
+    rts
+END
+ASM
+cat > "$TMPDIR/link_unit_b.asm" <<'ASM'
+func:
+    ldx #$05
+    rts
+END
+ASM
+
+if ! "$XASM" "$TMPDIR/link_unit_a.asm" -o "$TMPDIR/link_unit_a.o" >/dev/null 2>&1; then
+    fail "failed to build linker fixture unit A"
+fi
+if ! "$XASM" "$TMPDIR/link_unit_b.asm" -o "$TMPDIR/link_unit_b.o" >/dev/null 2>&1; then
+    fail "failed to build linker fixture unit B"
+fi
+
+printf '\xAA\xBB' > "$TMPDIR/link_header.bin"
+
+cat > "$TMPDIR/link_ok.script" <<EOF
+output{file=$TMPDIR/link_ok.bin}
+copy{file=$TMPDIR/link_header.bin}
+bank{size=\$0010,origin=\$8000}
+link{file=$TMPDIR/link_unit_a.o}
+pad{offset=\$0008}
+link{file=$TMPDIR/link_unit_b.o}
+EOF
+
+run_xlnk_expect_success "$TMPDIR/link_ok.script"
+
+if [ ! -f "$TMPDIR/link_ok.bin" ]; then
+    fail "linker did not produce output file"
+fi
+
+out_size=$(wc -c < "$TMPDIR/link_ok.bin" | tr -d '[:space:]')
+if [ "$out_size" != "18" ]; then
+    fail "unexpected linker output size ($out_size, expected 18)"
+fi
+
+# Linker regression: linking before opening output should fail cleanly
+cat > "$TMPDIR/link_fail_no_output.script" <<EOF
+link{file=$TMPDIR/link_unit_a.o,origin=\$8000}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_fail_no_output.script" "no output open"
 
 echo "All regression tests passed"
