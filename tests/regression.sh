@@ -4,6 +4,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
 XASM="$ROOT_DIR/xasm"
 XLNK="$ROOT_DIR/xlnk"
+cd "$ROOT_DIR"
 
 if [ ! -x "$XASM" ]; then
     echo "error: $XASM not found; build xasm first" >&2
