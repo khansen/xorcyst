@@ -1,0 +1,31 @@
+DATA
+ZEROPAGE zp_byte BYTE
+PUBLIC ZEROPAGE zp_pub BYTE
+
+DATASEG
+pt BYTE
+ALIGN pt 16
+
+CODESEG
+b1 DB 1,2,3
+BYTE 4
+CHAR "A"
+ASC "B"
+DW 1
+WORD 2
+DD 3
+DWORD 4
+PAD 1
+DSB 1
+DSW 1
+DSD 1
+
+PROC localproc
+  LDX #0
+- DEX
+  BMI +
+  JMP -
++ RTS
+ENDP
+
+END
