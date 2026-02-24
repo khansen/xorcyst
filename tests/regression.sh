@@ -46,6 +46,118 @@ run_expect_success_pure_binary() {
     fi
 }
 
+run_expect_success_with_listing() {
+    asm_file=$1
+    out_file="$TMPDIR/out-listing.o"
+    lst_file="$TMPDIR/out-listing.lst"
+    log_file="$TMPDIR/out-listing.log"
+
+    if ! "$XASM" --lst="$lst_file" "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected listing success for $asm_file"
+    fi
+
+    if [ ! -s "$lst_file" ]; then
+        fail "listing file was not generated for $asm_file"
+    fi
+
+    if ! grep -q "LINE  ADDR  HEX BYTES     SOURCE CODE" "$lst_file"; then
+        fail "listing header missing for $asm_file"
+    fi
+
+    if ! grep -q "SYMBOL TABLE:" "$lst_file"; then
+        fail "symbol table section missing for $asm_file"
+    fi
+
+    if ! grep -Eq "^[0-9]{4}  [0-9A-F]{4}  " "$lst_file"; then
+        fail "listing body missing address rows for $asm_file"
+    fi
+}
+
+run_expect_success_pure_binary_with_listing() {
+    asm_file=$1
+    out_file="$TMPDIR/out-pure-listing.bin"
+    lst_file="$TMPDIR/out-pure-listing.lst"
+    log_file="$TMPDIR/out-pure-listing.log"
+
+    if ! "$XASM" --pure-binary --listing="$lst_file" "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected pure-binary listing success for $asm_file"
+    fi
+
+    if [ ! -s "$lst_file" ]; then
+        fail "pure-binary listing file was not generated for $asm_file"
+    fi
+
+    if ! grep -q "8000" "$lst_file"; then
+        fail "expected ORG address missing from pure-binary listing for $asm_file"
+    fi
+
+    if ! grep -q "A9 01" "$lst_file"; then
+        fail "expected opcode bytes missing from pure-binary listing for $asm_file"
+    fi
+
+    if ! grep -q "SYMBOL TABLE:" "$lst_file"; then
+        fail "symbol table section missing from pure-binary listing for $asm_file"
+    fi
+}
+
+run_expect_scoped_label_listing() {
+    asm_file="$TMPDIR/listing-label-scope.asm"
+    out_file="$TMPDIR/listing-label-scope.bin"
+    lst_file="$TMPDIR/listing-label-scope.lst"
+    log_file="$TMPDIR/listing-label-scope.log"
+
+    cat > "$asm_file" <<'ASM'
+.org $c000
+Reset:
+ldx #1
+- dex
+  bpl -
+- dex
+  bpl -
+  rts
+@@loop:
+  dey
+  bpl @@loop
+Reset2:
+  ldx #1
+  @@loop:
+  dex
+  bpl @@loop
+.end
+ASM
+
+    if ! "$XASM" --pure-binary --listing="$lst_file" "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected scoped-label listing success"
+    fi
+
+    if ! grep -Eq '^[0-9]{4}  C000[[:space:]]+Reset:' "$lst_file"; then
+        fail "expected Reset label line in listing"
+    fi
+
+    if ! grep -Eq '^[0-9]{4}  C00C[[:space:]]+Reset2:' "$lst_file"; then
+        fail "expected Reset2 label line in listing"
+    fi
+
+    if ! grep -Eq '^Reset-#0[[:space:]]+= \$C002$' "$lst_file"; then
+        fail "expected scoped backward label Reset-#0 in symbol table"
+    fi
+
+    if ! grep -Eq '^Reset-#1[[:space:]]+= \$C005$' "$lst_file"; then
+        fail "expected scoped backward label Reset-#1 in symbol table"
+    fi
+
+    if ! grep -Eq '^Reset@@loop[[:space:]]+= \$C009$' "$lst_file"; then
+        fail "expected scoped local label Reset@@loop in symbol table"
+    fi
+
+    if ! grep -Eq '^Reset2@@loop[[:space:]]+= \$C00E$' "$lst_file"; then
+        fail "expected scoped local label Reset2@@loop in symbol table"
+    fi
+}
+
 run_expect_error_no_crash() {
     asm_file=$1
     expected=$2
@@ -117,7 +229,10 @@ run_expect_success "$ROOT_DIR/tests/coverage_directives_control.asm"
 run_expect_success "$ROOT_DIR/tests/coverage_directives_macros_io.asm"
 run_expect_success "$ROOT_DIR/tests/coverage_directives_types_symbols.asm"
 run_expect_success "$ROOT_DIR/tests/coverage_directives_layout.asm"
+run_expect_success_with_listing "$ROOT_DIR/tests/coverage_instructions.asm"
 run_expect_success_pure_binary "$ROOT_DIR/tests/coverage_org_pure.asm"
+run_expect_success_pure_binary_with_listing "$ROOT_DIR/tests/coverage_org_pure.asm"
+run_expect_scoped_label_listing
 
 # Regression: long include path must not smash stack
 long_name=$(awk 'BEGIN { for (i = 0; i < 500; ++i) printf "a" }')

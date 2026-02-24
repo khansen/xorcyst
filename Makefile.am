@@ -12,6 +12,7 @@ xasm_SOURCES = \
   opcode.c opcode.h \
   parser.c scanner.c \
   symtab.c symtab.h \
+  listing.c listing.h \
   xasm.c \
   my_getopt.c my_getopt.h getopt.h
 

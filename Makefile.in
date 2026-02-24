@@ -109,6 +109,7 @@ PROGRAMS = $(bin_PROGRAMS)
 am_xasm_OBJECTS = astnode.$(OBJEXT) astproc.$(OBJEXT) \
 	charmap.$(OBJEXT) codegen.$(OBJEXT) opcode.$(OBJEXT) \
 	parser.$(OBJEXT) scanner.$(OBJEXT) symtab.$(OBJEXT) \
+	listing.$(OBJEXT) \
 	xasm.$(OBJEXT) my_getopt.$(OBJEXT)
 xasm_OBJECTS = $(am_xasm_OBJECTS)
 xasm_LDADD = $(LDADD)
@@ -133,7 +134,8 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/astnode.Po ./$(DEPDIR)/astproc.Po \
 	./$(DEPDIR)/charmap.Po ./$(DEPDIR)/codegen.Po \
-	./$(DEPDIR)/hashtab.Po ./$(DEPDIR)/my_getopt.Po \
+	./$(DEPDIR)/hashtab.Po ./$(DEPDIR)/listing.Po \
+	./$(DEPDIR)/my_getopt.Po \
 	./$(DEPDIR)/opcode.Po ./$(DEPDIR)/parser.Po \
 	./$(DEPDIR)/scanner.Po ./$(DEPDIR)/script.Po \
 	./$(DEPDIR)/symtab.Po ./$(DEPDIR)/unit.Po ./$(DEPDIR)/xasm.Po \
@@ -316,6 +318,7 @@ xasm_SOURCES = \
   opcode.c opcode.h \
   parser.c scanner.c \
   symtab.c symtab.h \
+  listing.c listing.h \
   xasm.c \
   my_getopt.c my_getopt.h getopt.h
 
