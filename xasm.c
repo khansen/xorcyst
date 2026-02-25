@@ -100,6 +100,7 @@
 #include "astproc.h"
 #include "symtab.h"
 #include "codegen.h"
+#include "listing.h"
 #include "xasm.h"
 
 /*---------------------------------------------------------------------------*/
@@ -130,6 +131,8 @@ static struct option long_options[] = {
   { "define",   required_argument, 0, 'D' },
   { "include-path", required_argument, 0, 'I' },
   { "output",   required_argument, 0, 'o' },
+  { "listing",  required_argument, 0, 'L' },
+  { "lst",      required_argument, 0, 'L' },
   { "quiet",    no_argument, 0, 'q' },
   { "silent",   no_argument, 0, 's' },
   { "verbose",  no_argument, 0, 'v' },
@@ -151,7 +154,7 @@ static void usage()
 Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [-o FILE] [--output=FILE] [--pure-binary]\n\
             [--include-path=DIR] [-I DIR] [--swap-parens]\n\
-            [--case-insensitive]\n\
+            [--case-insensitive] [--listing=FILE]\n\
             [--no-warn] [--verbose] [--quiet] [--silent] \n\
             [--debug] [--help] [--usage] [--version]\n\
             FILE\n\
@@ -169,6 +172,7 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
 -D, --define=IDENT[=VALUE] Define IDENT\n\
 -I, --include-path=DIR     Specify a search path for include files\n\
 -o, --output=FILE          Output to FILE instead of standard output\n\
+    --listing=FILE         Generate listing file\n\
     --pure-binary          Output pure 6502 binary\n\
     --swap-parens          Use ( ) instead of [ ] for indirection\n\
     --case-insensitive     Case-insensitive identifiers\n\
@@ -248,14 +252,20 @@ parse_arguments (int argc, char **argv)
     xasm_args.swap_parens = 0;
     xasm_args.pure_binary = 0;
     xasm_args.case_insensitive = 0;
+    xasm_args.no_warn = 0;
     xasm_args.input_file = NULL;
     xasm_args.output_file = NULL;
     xasm_args.include_paths = NULL;
     xasm_args.include_path_count = 0;
+    xasm_args.listing_file = NULL;
 
     /* Parse options. */
-    while ((key = getopt_long(argc, argv, "D:I:o:qsvV", long_options, &index)) != -1) {
+    while ((key = getopt_long(argc, argv, "D:I:L:o:qsvV", long_options, &index)) != -1) {
         switch (key) {
+            case 'L':
+            xasm_args.listing_file = optarg;
+            break;
+
             case 'g':
             xasm_args.debug = 1;
             break;
@@ -422,6 +432,7 @@ static int total_errors()
  */
 int main(int argc, char *argv[]) {
     FILE *output_fp;
+    int output_generated = 0;
     char *default_outfile = 0;
 
     /* Working directory is needed for include statements */
@@ -496,7 +507,13 @@ int main(int argc, char *argv[]) {
                 codegen_write(root_node, output_fp);
             }
             fclose(output_fp);
+            output_generated = (total_errors() == 0);
         }
+    }
+
+    if (output_generated && xasm_args.listing_file != NULL) {
+        verbose("Generating listing...");
+        generate_listing(root_node, xasm_args.listing_file);
     }
 
     /* Cleanup */

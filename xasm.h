@@ -35,6 +35,7 @@ struct tag_xasm_arguments {
     int pure_binary;
     int case_insensitive;
     const char *output_file;
+    const char *listing_file;
     char **include_paths;
     int include_path_count;
 };

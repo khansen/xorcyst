@@ -3552,8 +3552,10 @@ void astproc_second_pass(astnode *root)
     in_dataseg = 0; /* codeseg is default */
     /* Do the walk. */
     astproc_walk(root, NULL, map);
-    /* */
-    remove_unused_labels();
+    /* Preserve labels when generating a listing, so they can be emitted. */
+    if (xasm_args.listing_file == NULL) {
+        remove_unused_labels();
+    }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3949,7 +3951,7 @@ static int ensure_symbol_is_defined(astnode *id, void *arg, astnode **next)
 {
     symtab_entry *e = symtab_lookup(id->ident);
     assert(e);
-    if ((e->flags & EXTRN_FLAG) && !(e->flags & ERROR_UNDEFINED_FLAG)) {
+    if (xasm_args.pure_binary && (e->flags & EXTRN_FLAG) && !(e->flags & ERROR_UNDEFINED_FLAG)) {
         err(id->loc, "cannot generate pure binary because `%s' is not defined", id->ident);
         e->flags |= ERROR_UNDEFINED_FLAG;
     }
