@@ -139,6 +139,10 @@ static struct option long_options[] = {
   { "xref-format", required_argument, 0, 0 },
   { "xref-include-locals", required_argument, 0, 0 },
   { "xref-include-anon", required_argument, 0, 0 },
+  { "audit-raw-addresses", no_argument, 0, 0 },
+  { "audit-level", required_argument, 0, 0 },
+  { "audit-rom-range", required_argument, 0, 0 },
+  { "audit-output-format", required_argument, 0, 0 },
   { "compare", required_argument, 0, 0 },
   { "compare-offset", required_argument, 0, 0 },
   { "compare-length", required_argument, 0, 0 },
@@ -174,6 +178,8 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
             [--xref-include-locals=true|false]\n\
             [--xref-include-anon=true|false]\n\
+            [--audit-raw-addresses] [--audit-level=warn|error]\n\
+            [--audit-rom-range=LO-HI] [--audit-output-format=text|json]\n\
             [--compare=FILE] [--compare-format=text|json]\n\
             [--compare-offset=N] [--compare-length=N]\n\
             [--compare-max-mismatches=N] [--compare-cpu-base=ADDR]\n\
@@ -203,6 +209,11 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
                             Include local labels in xref (default false)\n\
     --xref-include-anon=BOOL\n\
                             Include anonymous labels in xref (default false)\n\
+    --audit-raw-addresses   Enable raw-address audit diagnostics\n\
+    --audit-level=LVL       Audit severity level: warn|error\n\
+    --audit-rom-range=RNG   Audit ROM range, e.g. $C000-$FFFF\n\
+    --audit-output-format=FMT\n\
+                            Audit output format: text|json\n\
     --compare=FILE         Compare assembled output with FILE\n\
     --compare-offset=N     Compare start offset in bytes (default 0)\n\
     --compare-length=N     Compare byte count (default auto)\n\
@@ -330,6 +341,71 @@ static int parse_bool_value(const char *value, int *out)
     return 0;
 }
 
+static int parse_audit_level_value(const char *value, int *out_level_error)
+{
+    if (strcmp(value, "warn") == 0) {
+        *out_level_error = 0;
+        return 1;
+    }
+    if (strcmp(value, "error") == 0) {
+        *out_level_error = 1;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_audit_output_value(const char *value, int *out_json)
+{
+    if (strcmp(value, "text") == 0) {
+        *out_json = 0;
+        return 1;
+    }
+    if (strcmp(value, "json") == 0) {
+        *out_json = 1;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_audit_rom_range_value(const char *value, long *out_lo, long *out_hi)
+{
+    const char *dash;
+    char lo_buf[64];
+    char hi_buf[64];
+    long lo;
+    long hi;
+    int lo_len;
+    int hi_len;
+
+    if (value == NULL || out_lo == NULL || out_hi == NULL) {
+        return 0;
+    }
+
+    dash = strchr(value, '-');
+    if (dash == NULL || dash == value || *(dash + 1) == '\0') {
+        return 0;
+    }
+    lo_len = (int)(dash - value);
+    hi_len = (int)strlen(dash + 1);
+    if (lo_len <= 0 || hi_len <= 0 || lo_len >= (int)sizeof(lo_buf) || hi_len >= (int)sizeof(hi_buf)) {
+        return 0;
+    }
+    memcpy(lo_buf, value, (size_t)lo_len);
+    lo_buf[lo_len] = '\0';
+    memcpy(hi_buf, dash + 1, (size_t)hi_len);
+    hi_buf[hi_len] = '\0';
+
+    if (!parse_long_value(lo_buf, &lo) || !parse_long_value(hi_buf, &hi)) {
+        return 0;
+    }
+    if (lo < 0 || hi < 0 || hi < lo) {
+        return 0;
+    }
+    *out_lo = lo;
+    *out_hi = hi;
+    return 1;
+}
+
 static void warn_global(const char *code, const char *fmt, ...)
 {
     va_list ap;
@@ -399,6 +475,12 @@ parse_arguments (int argc, char **argv)
     xasm_args.no_warn = 0;
     xasm_args.warn_unused_equ = 0;
     xasm_args.werror_unused_equ = 0;
+    xasm_args.audit_raw_addresses = 0;
+    xasm_args.audit_level_error = 0;
+    xasm_args.audit_output_json = 0;
+    xasm_args.audit_rom_range_set = 0;
+    xasm_args.audit_rom_lo = 0;
+    xasm_args.audit_rom_hi = 0;
     xasm_args.input_file = NULL;
     xasm_args.output_file = NULL;
     xasm_args.include_paths = NULL;
@@ -522,6 +604,21 @@ parse_arguments (int argc, char **argv)
             } else if (strcmp(long_options[index].name, "Wno-unused-equ") == 0) {
                 xasm_args.warn_unused_equ = 0;
                 xasm_args.werror_unused_equ = 0;
+            } else if (strcmp(long_options[index].name, "audit-raw-addresses") == 0) {
+                xasm_args.audit_raw_addresses = 1;
+            } else if (strcmp(long_options[index].name, "audit-level") == 0) {
+                if (!parse_audit_level_value(optarg, &xasm_args.audit_level_error)) {
+                    cli_error("invalid value for --audit-level: `%s' (expected warn|error)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "audit-rom-range") == 0) {
+                if (!parse_audit_rom_range_value(optarg, &xasm_args.audit_rom_lo, &xasm_args.audit_rom_hi)) {
+                    cli_error("invalid value for --audit-rom-range: `%s' (expected LO-HI)", optarg);
+                }
+                xasm_args.audit_rom_range_set = 1;
+            } else if (strcmp(long_options[index].name, "audit-output-format") == 0) {
+                if (!parse_audit_output_value(optarg, &xasm_args.audit_output_json)) {
+                    cli_error("invalid value for --audit-output-format: `%s' (expected text|json)", optarg);
+                }
             } else if (strcmp(long_options[index].name, "listing-format") == 0) {
                 listing_format fmt;
                 if (!parse_listing_format_value(optarg, &fmt)) {
@@ -1082,6 +1179,22 @@ int main(int argc, char *argv[]) {
                            xasm_args.output_file,
                            xasm_args.pure_binary)) {
             exit_code = 3;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.audit_raw_addresses) {
+        int findings;
+        verbose("Running raw-address audit...");
+        findings = run_raw_address_audit(root_node,
+                                         xasm_args.audit_level_error,
+                                         xasm_args.audit_output_json,
+                                         xasm_args.audit_rom_range_set,
+                                         xasm_args.audit_rom_lo,
+                                         xasm_args.audit_rom_hi);
+        if (findings < 0) {
+            exit_code = 3;
+        } else if (xasm_args.audit_level_error && findings > 0) {
+            exit_code = 4;
         }
     }
 

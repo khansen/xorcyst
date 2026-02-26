@@ -2232,3 +2232,753 @@ int generate_xref(astnode *root,
     free_xref_context(&ctx);
     return ok;
 }
+
+typedef struct tag_audit_label {
+    char *name;
+    int address;
+} audit_label;
+
+typedef struct tag_audit_equ {
+    char *name;
+    int value;
+} audit_equ;
+
+typedef struct tag_audit_finding {
+    char *code;
+    char *severity;
+    location loc;
+    int has_cpu_address;
+    int cpu_address;
+    char *expression;
+    char *suggested_symbol;
+    char *message;
+} audit_finding;
+
+typedef struct tag_audit_context {
+    audit_label *labels;
+    int label_count;
+    int label_capacity;
+    audit_equ *equs;
+    int equ_count;
+    int equ_capacity;
+    audit_finding *findings;
+    int finding_count;
+    int finding_capacity;
+    int level_error;
+    int output_json;
+    int rom_range_set;
+    long rom_lo;
+    long rom_hi;
+} audit_context;
+
+static int parse_hex_literal_strict(const char *s, int *out)
+{
+    const char *p;
+    int v = 0;
+    if (s == NULL || out == NULL) {
+        return 0;
+    }
+    while (isspace((unsigned char)*s)) {
+        s++;
+    }
+    if (*s != '$') {
+        return 0;
+    }
+    p = s + 1;
+    if (!isxdigit((unsigned char)*p)) {
+        return 0;
+    }
+    while (*p != '\0' && !isspace((unsigned char)*p) && *p != ',' && *p != ';') {
+        int c = (unsigned char)*p;
+        if (!isxdigit(c)) {
+            return 0;
+        }
+        if (c >= '0' && c <= '9') {
+            v = (v * 16) + (c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            v = (v * 16) + (c - 'a' + 10);
+        } else {
+            v = (v * 16) + (c - 'A' + 10);
+        }
+        p++;
+    }
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '\0' && *p != ',' && *p != ';') {
+        return 0;
+    }
+    *out = v;
+    return 1;
+}
+
+static int parse_pointer_split_literal(const char *s, int *is_lo, int *target)
+{
+    const char *p = s;
+    if (s == NULL || is_lo == NULL || target == NULL) {
+        return 0;
+    }
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '#') {
+        return 0;
+    }
+    p++;
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p == '<') {
+        *is_lo = 1;
+    } else if (*p == '>') {
+        *is_lo = 0;
+    } else {
+        return 0;
+    }
+    p++;
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+    return parse_hex_literal_strict(p, target);
+}
+
+static int split_csv_operands(const char *s, char tokens[][128], int max_tokens)
+{
+    int count = 0;
+    const char *p = s;
+    while (p != NULL && *p != '\0' && count < max_tokens) {
+        const char *start;
+        const char *end;
+        int len;
+        while (isspace((unsigned char)*p)) {
+            p++;
+        }
+        if (*p == '\0' || *p == ';') {
+            break;
+        }
+        start = p;
+        while (*p != '\0' && *p != ',' && *p != ';') {
+            p++;
+        }
+        end = p;
+        while (end > start && isspace((unsigned char)*(end - 1))) {
+            end--;
+        }
+        len = (int)(end - start);
+        if (len > 0) {
+            if (len >= 128) {
+                len = 127;
+            }
+            memcpy(tokens[count], start, (size_t)len);
+            tokens[count][len] = '\0';
+            count++;
+        }
+        if (*p == ',') {
+            p++;
+        } else if (*p == ';') {
+            break;
+        }
+    }
+    return count;
+}
+
+static int ensure_audit_label_capacity(audit_context *ctx)
+{
+    audit_label *tmp;
+    int new_capacity;
+    if (ctx->label_count < ctx->label_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->label_capacity == 0) ? 32 : (ctx->label_capacity * 2);
+    tmp = (audit_label *)realloc(ctx->labels, (size_t)new_capacity * sizeof(audit_label));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->labels = tmp;
+    ctx->label_capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_audit_equ_capacity(audit_context *ctx)
+{
+    audit_equ *tmp;
+    int new_capacity;
+    if (ctx->equ_count < ctx->equ_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->equ_capacity == 0) ? 32 : (ctx->equ_capacity * 2);
+    tmp = (audit_equ *)realloc(ctx->equs, (size_t)new_capacity * sizeof(audit_equ));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->equs = tmp;
+    ctx->equ_capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_audit_finding_capacity(audit_context *ctx)
+{
+    audit_finding *tmp;
+    int new_capacity;
+    if (ctx->finding_count < ctx->finding_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->finding_capacity == 0) ? 32 : (ctx->finding_capacity * 2);
+    tmp = (audit_finding *)realloc(ctx->findings, (size_t)new_capacity * sizeof(audit_finding));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->findings = tmp;
+    ctx->finding_capacity = new_capacity;
+    return 1;
+}
+
+static int add_audit_label(audit_context *ctx, const char *name, int address)
+{
+    audit_label *l;
+    if (!ensure_audit_label_capacity(ctx)) {
+        return 0;
+    }
+    l = &ctx->labels[ctx->label_count++];
+    l->name = xstrdup(name);
+    l->address = address;
+    return l->name != NULL;
+}
+
+static int add_audit_equ(audit_context *ctx, const char *name, int value)
+{
+    audit_equ *e;
+    if (!ensure_audit_equ_capacity(ctx)) {
+        return 0;
+    }
+    e = &ctx->equs[ctx->equ_count++];
+    e->name = xstrdup(name);
+    e->value = value;
+    return e->name != NULL;
+}
+
+static const char *audit_find_label_by_address(const audit_context *ctx, int address)
+{
+    int i;
+    for (i = 0; i < ctx->label_count; ++i) {
+        if ((ctx->labels[i].address & 0xFFFF) == (address & 0xFFFF)) {
+            return ctx->labels[i].name;
+        }
+    }
+    return NULL;
+}
+
+static const char *audit_find_equ_by_value(const audit_context *ctx, int value)
+{
+    int i;
+    for (i = 0; i < ctx->equ_count; ++i) {
+        if (ctx->equs[i].value >= 0 && ctx->equs[i].value < 0x100
+            && ctx->equs[i].value == value) {
+            return ctx->equs[i].name;
+        }
+    }
+    return NULL;
+}
+
+static int audit_line_has_ignore_code(const char *comment, const char *code)
+{
+    const char *p;
+    if (comment == NULL || code == NULL) {
+        return 0;
+    }
+    p = strstr(comment, "xasm:audit-ignore");
+    if (p == NULL) {
+        return 0;
+    }
+    p += strlen("xasm:audit-ignore");
+    while (*p != '\0') {
+        char token[16];
+        int n = 0;
+        while (*p != '\0' && (isspace((unsigned char)*p) || *p == ',')) {
+            p++;
+        }
+        while (*p != '\0' && !isspace((unsigned char)*p) && *p != ',') {
+            if (n < (int)sizeof(token) - 1) {
+                token[n++] = *p;
+            }
+            p++;
+        }
+        token[n] = '\0';
+        if (n > 0 && strcmp(token, code) == 0) {
+            return 1;
+        }
+        if (*p == '\0') {
+            break;
+        }
+    }
+    return 0;
+}
+
+static int audit_is_suppressed(location loc, const char *code)
+{
+    FILE *fp;
+    char line[1024];
+    int line_no = 0;
+    int disabled = 0;
+    if (loc.file == NULL || loc.first_line <= 0) {
+        return 0;
+    }
+    fp = fopen(loc.file, "r");
+    if (fp == NULL) {
+        return 0;
+    }
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        const char *comment = strchr(line, ';');
+        line_no++;
+        if (line_no == loc.first_line) {
+            if (comment != NULL && audit_line_has_ignore_code(comment + 1, code)) {
+                fclose(fp);
+                return 1;
+            }
+            if (disabled) {
+                fclose(fp);
+                return 1;
+            }
+            break;
+        }
+        if (comment != NULL) {
+            if (strstr(comment + 1, "xasm:audit-disable") != NULL) {
+                disabled = 1;
+            }
+            if (strstr(comment + 1, "xasm:audit-enable") != NULL) {
+                disabled = 0;
+            }
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+
+static int add_audit_finding(audit_context *ctx,
+                             const char *code,
+                             location loc,
+                             int has_cpu_address,
+                             int cpu_address,
+                             const char *expression,
+                             const char *suggested_symbol,
+                             const char *message)
+{
+    audit_finding *f;
+    if (audit_is_suppressed(loc, code)) {
+        return 1;
+    }
+    if (!ensure_audit_finding_capacity(ctx)) {
+        return 0;
+    }
+    f = &ctx->findings[ctx->finding_count++];
+    memset(f, 0, sizeof(*f));
+    f->code = xstrdup(code);
+    f->severity = xstrdup(ctx->level_error ? "error" : "warning");
+    f->loc = loc;
+    f->has_cpu_address = has_cpu_address;
+    f->cpu_address = cpu_address;
+    f->expression = xstrdup(expression != NULL ? expression : "");
+    f->suggested_symbol = xstrdup(suggested_symbol != NULL ? suggested_symbol : "");
+    f->message = xstrdup(message != NULL ? message : "");
+    return f->code != NULL && f->severity != NULL && f->expression != NULL
+        && f->suggested_symbol != NULL && f->message != NULL;
+}
+
+static void build_audit_symbol_maps(audit_context *ctx)
+{
+    symbol_ident_list labels;
+    symbol_ident_list constants;
+    int i;
+    symtab_list_type(LABEL_SYMBOL, &labels);
+    for (i = 0; i < labels.size; ++i) {
+        symtab_entry *e = symtab_lookup(labels.idents[i]);
+        if (e != NULL && (e->flags & ADDR_FLAG)) {
+            add_audit_label(ctx, e->id, e->address);
+        }
+    }
+    symtab_list_finalize(&labels);
+
+    symtab_list_type(CONSTANT_SYMBOL, &constants);
+    for (i = 0; i < constants.size; ++i) {
+        symtab_entry *e = symtab_lookup(constants.idents[i]);
+        int value;
+        if (e == NULL || !(e->flags & EQU_FLAG) || e->def == NULL) {
+            continue;
+        }
+        if (eval_expression_int(e->def, &value, 0)) {
+            add_audit_equ(ctx, e->id, value);
+        }
+    }
+    symtab_list_finalize(&constants);
+}
+
+static int audit_visit_dataseg(astnode *n, void *arg, astnode **next)
+{
+    (void)n;
+    (void)arg;
+    (void)next;
+    in_dataseg = 1;
+    return 0;
+}
+
+static int audit_visit_codeseg(astnode *n, void *arg, astnode **next)
+{
+    (void)n;
+    (void)arg;
+    (void)next;
+    in_dataseg = 0;
+    return 0;
+}
+
+static int audit_visit_org(astnode *org, void *arg, astnode **next)
+{
+    int addr = get_current_pc();
+    (void)arg;
+    (void)next;
+    if (eval_expression_int(LHS(org), &addr, 0)) {
+        set_current_pc(addr);
+    }
+    return 0;
+}
+
+static int audit_visit_instruction(astnode *instr, void *arg, astnode **next)
+{
+    audit_context *ctx = (audit_context *)arg;
+    const char *opcode = opcode_to_string(instr->instr.opcode);
+    int len = opcode_length(instr->instr.opcode);
+    int addr = get_current_pc();
+    char operand[256];
+    int value;
+    const char *label_name;
+    const char *equ_name;
+    int is_lo;
+    int target;
+    astnode *operand_expr = LHS(instr);
+    (void)next;
+
+    if (len < 1) {
+        len = 1;
+    }
+    extract_operand_from_line(instr->loc, operand, sizeof(operand));
+
+    if ((strcmp(opcode, "JSR") == 0 || strcmp(opcode, "JMP") == 0)
+        && parse_hex_literal_strict(operand, &value)) {
+        label_name = audit_find_label_by_address(ctx, value);
+        if (label_name != NULL) {
+            add_audit_finding(ctx,
+                              "A100",
+                              instr->loc,
+                              1,
+                              addr,
+                              operand,
+                              label_name,
+                              "raw control-flow target");
+        }
+    }
+
+    if (parse_pointer_split_literal(operand, &is_lo, &target)) {
+        label_name = audit_find_label_by_address(ctx, target);
+        if (label_name != NULL) {
+            add_audit_finding(ctx,
+                              "A110",
+                              instr->loc,
+                              1,
+                              addr,
+                              operand,
+                              label_name,
+                              "raw pointer immediate split");
+        }
+    }
+
+    if (instr->instr.mode != IMMEDIATE_MODE
+        && (strncmp(opcode, "B", 1) != 0)
+        && parse_hex_literal_strict(operand, &value)
+        && value >= 0 && value < 0x100) {
+        equ_name = audit_find_equ_by_value(ctx, value);
+        if (equ_name != NULL) {
+            location use_loc = instr->loc;
+            if (operand_expr != NULL) {
+                use_loc = operand_expr->loc;
+            }
+            add_audit_finding(ctx,
+                              "A120",
+                              use_loc,
+                              1,
+                              addr,
+                              operand,
+                              equ_name,
+                              "raw low-address operand");
+        }
+    }
+
+    add_current_pc(len);
+    return 0;
+}
+
+static int audit_visit_data(astnode *data, void *arg, astnode **next)
+{
+    audit_context *ctx = (audit_context *)arg;
+    astnode *expr;
+    int addr = get_current_pc();
+    int bytes_per_item;
+    int expr_index = 0;
+    char operands[32][128];
+    int operand_count;
+    char operand_text[512];
+    (void)next;
+
+    switch (LHS(data)->datatype) {
+        case BYTE_DATATYPE:
+        case CHAR_DATATYPE:
+            bytes_per_item = 1;
+            break;
+        case WORD_DATATYPE:
+            bytes_per_item = 2;
+            break;
+        case DWORD_DATATYPE:
+            bytes_per_item = 4;
+            break;
+        default:
+            bytes_per_item = 1;
+            break;
+    }
+
+    extract_operand_from_line(data->loc, operand_text, sizeof(operand_text));
+    operand_count = split_csv_operands(operand_text, operands, 32);
+
+    if (LHS(data)->datatype == WORD_DATATYPE) {
+        for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr), ++expr_index) {
+            int value;
+            const char *label_name;
+            if (expr_index >= operand_count) {
+                continue;
+            }
+            if (!parse_hex_literal_strict(operands[expr_index], &value)) {
+                continue;
+            }
+            label_name = audit_find_label_by_address(ctx, value);
+            if (label_name != NULL) {
+                add_audit_finding(ctx,
+                                  "A130",
+                                  expr->loc,
+                                  1,
+                                  addr + (expr_index * 2),
+                                  operands[expr_index],
+                                  label_name,
+                                  "raw .DW target");
+            }
+        }
+    } else if (LHS(data)->datatype == BYTE_DATATYPE || LHS(data)->datatype == CHAR_DATATYPE) {
+        int byte_index = 0;
+        astnode *expr_list[64];
+        int expr_count = 0;
+        for (expr = RHS(data); expr != NULL && expr_count < 64; expr = astnode_get_next_sibling(expr)) {
+            expr_list[expr_count++] = expr;
+        }
+        for (byte_index = 0; byte_index + 1 < expr_count && (byte_index + 1) < operand_count; byte_index += 2) {
+            int lo;
+            int hi;
+            int target;
+            const char *label_name;
+            char pair_expr[300];
+            if (!parse_hex_literal_strict(operands[byte_index], &lo)
+                || !parse_hex_literal_strict(operands[byte_index + 1], &hi)) {
+                continue;
+            }
+            if (lo < 0 || lo > 0xFF || hi < 0 || hi > 0xFF) {
+                continue;
+            }
+            target = lo | (hi << 8);
+            if (ctx->rom_range_set && ((long)target < ctx->rom_lo || (long)target > ctx->rom_hi)) {
+                continue;
+            }
+            label_name = audit_find_label_by_address(ctx, target);
+            if (label_name == NULL) {
+                continue;
+            }
+            snprintf(pair_expr, sizeof(pair_expr), "%s,%s", operands[byte_index], operands[byte_index + 1]);
+            add_audit_finding(ctx,
+                              "A131",
+                              expr_list[byte_index]->loc,
+                              1,
+                              addr + byte_index,
+                              pair_expr,
+                              label_name,
+                              "raw .DB pointer pair");
+        }
+    }
+
+    add_current_pc((astnode_get_child_count(data) - 1) * bytes_per_item);
+    return 0;
+}
+
+static int audit_visit_storage(astnode *storage, void *arg, astnode **next)
+{
+    int count = 0;
+    (void)arg;
+    (void)next;
+    if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
+        add_current_pc(count);
+    }
+    return 0;
+}
+
+static int audit_visit_binary(astnode *node, void *arg, astnode **next)
+{
+    (void)arg;
+    (void)next;
+    add_current_pc(node->binary.size);
+    return 0;
+}
+
+static void free_audit_context(audit_context *ctx)
+{
+    int i;
+    for (i = 0; i < ctx->label_count; ++i) {
+        free(ctx->labels[i].name);
+    }
+    free(ctx->labels);
+    ctx->labels = NULL;
+    ctx->label_count = 0;
+    ctx->label_capacity = 0;
+
+    for (i = 0; i < ctx->equ_count; ++i) {
+        free(ctx->equs[i].name);
+    }
+    free(ctx->equs);
+    ctx->equs = NULL;
+    ctx->equ_count = 0;
+    ctx->equ_capacity = 0;
+
+    for (i = 0; i < ctx->finding_count; ++i) {
+        free(ctx->findings[i].code);
+        free(ctx->findings[i].severity);
+        free(ctx->findings[i].expression);
+        free(ctx->findings[i].suggested_symbol);
+        free(ctx->findings[i].message);
+    }
+    free(ctx->findings);
+    ctx->findings = NULL;
+    ctx->finding_count = 0;
+    ctx->finding_capacity = 0;
+}
+
+static void emit_audit_text(const audit_context *ctx)
+{
+    int i;
+    for (i = 0; i < ctx->finding_count; ++i) {
+        const audit_finding *f = &ctx->findings[i];
+        fprintf(stderr, "%s:%d:%d: %s %s: %s '%s' can use symbol '%s'\n",
+                f->loc.file != NULL ? f->loc.file : "",
+                f->loc.first_line,
+                f->loc.first_column,
+                f->severity,
+                f->code,
+                f->message,
+                f->expression,
+                f->suggested_symbol);
+    }
+}
+
+static void emit_audit_json(const audit_context *ctx)
+{
+    int i;
+    printf("{\n");
+    printf("  \"version\": \"1\",\n");
+    printf("  \"findings\": [");
+    for (i = 0; i < ctx->finding_count; ++i) {
+        const audit_finding *f = &ctx->findings[i];
+        if (i > 0) {
+            printf(",");
+        }
+        printf("\n    {");
+        printf("\"code\":");
+        print_json_string(stdout, f->code);
+        printf(",\"severity\":");
+        print_json_string(stdout, f->severity);
+        printf(",\"file\":");
+        print_json_string(stdout, f->loc.file != NULL ? f->loc.file : "");
+        printf(",\"line\":%d", f->loc.first_line);
+        printf(",\"column\":%d", f->loc.first_column);
+        printf(",\"cpu_address\":");
+        if (f->has_cpu_address) {
+            char hex[16];
+            snprintf(hex, sizeof(hex), "0x%04X", f->cpu_address & 0xFFFF);
+            print_json_string(stdout, hex);
+        } else {
+            printf("null");
+        }
+        printf(",\"expression\":");
+        print_json_string(stdout, f->expression);
+        printf(",\"suggested_symbol\":");
+        if (f->suggested_symbol != NULL && f->suggested_symbol[0] != '\0') {
+            print_json_string(stdout, f->suggested_symbol);
+        } else {
+            printf("null");
+        }
+        printf(",\"message\":");
+        print_json_string(stdout, f->message);
+        printf("}");
+    }
+    if (ctx->finding_count > 0) {
+        printf("\n");
+    }
+    printf("  ]\n");
+    printf("}\n");
+}
+
+int run_raw_address_audit(astnode *root,
+                          int level_error,
+                          int output_json,
+                          int rom_range_set,
+                          long rom_lo,
+                          long rom_hi)
+{
+    static astnodeprocmap map[] = {
+        { DATASEG_NODE, audit_visit_dataseg },
+        { CODESEG_NODE, audit_visit_codeseg },
+        { ORG_NODE, audit_visit_org },
+        { INSTRUCTION_NODE, audit_visit_instruction },
+        { DATA_NODE, audit_visit_data },
+        { STORAGE_NODE, audit_visit_storage },
+        { BINARY_NODE, audit_visit_binary },
+        { STRUC_DECL_NODE, list_noop },
+        { UNION_DECL_NODE, list_noop },
+        { ENUM_DECL_NODE, list_noop },
+        { RECORD_DECL_NODE, list_noop },
+        { 0, NULL }
+    };
+    audit_context ctx;
+
+    if (root == NULL) {
+        return 0;
+    }
+
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.level_error = level_error ? 1 : 0;
+    ctx.output_json = output_json ? 1 : 0;
+    ctx.rom_range_set = rom_range_set ? 1 : 0;
+    ctx.rom_lo = rom_lo;
+    ctx.rom_hi = rom_hi;
+
+    build_audit_symbol_maps(&ctx);
+
+    in_dataseg = 0;
+    dataseg_pc = 0;
+    codeseg_pc = 0;
+    close_source_cache();
+    astproc_walk(root, &ctx, map);
+    close_source_cache();
+
+    if (ctx.output_json) {
+        emit_audit_json(&ctx);
+    } else {
+        emit_audit_text(&ctx);
+    }
+
+    {
+        int findings = ctx.finding_count;
+        free_audit_context(&ctx);
+        return findings;
+    }
+}

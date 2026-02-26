@@ -61,6 +61,12 @@ struct tag_xasm_arguments {
     const char *listing_file;
     int warn_unused_equ;
     int werror_unused_equ;
+    int audit_raw_addresses;
+    int audit_level_error;
+    int audit_output_json;
+    int audit_rom_range_set;
+    long audit_rom_lo;
+    long audit_rom_hi;
     int listing_format;
     int listing_format_set;
     const char *compare_file;

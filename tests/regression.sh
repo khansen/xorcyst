@@ -498,6 +498,83 @@ ASM
     fi
 }
 
+run_expect_audit_raw_addresses_feature() {
+    asm_file="$TMPDIR/audit-raw.asm"
+    out_file="$TMPDIR/audit-raw.bin"
+    log_file="$TMPDIR/audit-raw.log"
+    json_file="$TMPDIR/audit-raw.json"
+
+    cat > "$asm_file" <<'ASM'
+ORG $C000
+Target:
+  RTS
+Start:
+  LDA $80
+  JSR $C000 ; xasm:audit-ignore A100
+  JMP $C000
+  LDA #<$C000
+  LDA #>$C000
+  DW $C000
+  DB $00,$C0,$01,$02
+; xasm:audit-disable
+  LDA $80
+; xasm:audit-enable
+  RTS
+ZP EQU $80
+END
+ASM
+
+    if ! "$XASM" --pure-binary --audit-raw-addresses --audit-rom-range=\$C000-\$FFFF "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected audit warn-level success"
+    fi
+
+    for code in A100 A110 A120 A130 A131; do
+        if ! grep -q "warning $code:" "$log_file"; then
+            cat "$log_file" >&2
+            fail "expected audit finding for $code"
+        fi
+    done
+
+    if grep -q "JSR \$C000" "$log_file"; then
+        cat "$log_file" >&2
+        fail "did not expect ignored A100 finding for JSR line"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --audit-raw-addresses --audit-level=error --audit-rom-range=\$C000-\$FFFF "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 4 ]; then
+        cat "$log_file" >&2
+        fail "expected audit error-level exit code 4 (got $status)"
+    fi
+    if ! grep -q "error A120:" "$log_file"; then
+        cat "$log_file" >&2
+        fail "expected error-level audit diagnostics"
+    fi
+
+    if ! "$XASM" --pure-binary --audit-raw-addresses --audit-output-format=json --audit-rom-range=\$C000-\$FFFF "$asm_file" -o "$out_file" >"$json_file" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "expected audit JSON output success"
+    fi
+    for key in '"version": "1"' '"findings": [' '"code":"A120"' '"severity":"warning"' '"suggested_symbol":"ZP"'; do
+        if ! grep -Fq "$key" "$json_file"; then
+            cat "$json_file" >&2
+            fail "expected audit JSON key/value: $key"
+        fi
+    done
+
+    set +e
+    "$XASM" --audit-raw-addresses --audit-level=bogus "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 2 ]; then
+        cat "$log_file" >&2
+        fail "expected --audit-level misuse exit code 2 (got $status)"
+    fi
+}
+
 run_expect_scoped_label_listing() {
     asm_file="$TMPDIR/listing-label-scope.asm"
     out_file="$TMPDIR/listing-label-scope.bin"
@@ -635,6 +712,7 @@ run_expect_compare_mismatch "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_xref_outputs
 run_expect_phase1_spec_parity
 run_expect_unused_equ_feature
+run_expect_audit_raw_addresses_feature
 run_expect_scoped_label_listing
 
 # Regression: long include path must not smash stack

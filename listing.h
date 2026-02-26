@@ -26,5 +26,11 @@ int generate_xref(astnode *root,
                   const char *source_file,
                   const char *output_file,
                   int pure_binary);
+int run_raw_address_audit(astnode *root,
+                          int level_error,
+                          int output_json,
+                          int rom_range_set,
+                          long rom_lo,
+                          long rom_hi);
 
 #endif
