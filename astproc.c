@@ -748,6 +748,7 @@ static astnode *substitute_ident(astnode *expr)
     e = symtab_lookup(expr->ident);
     if (e != NULL) {
         if (e->type == CONSTANT_SYMBOL) {
+            e->ref_count++;
             /* This is a defined symbol that should be
             replaced by the expression it stands for */
             c = astnode_clone((astnode *)e->def, expr->loc);
@@ -1921,7 +1922,7 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
     e = symtab_lookup(id->ident);
     if (e == NULL) {
         // TODO: Check that expression is a constant?
-        symtab_enter(id->ident, CONSTANT_SYMBOL, expr, 0);
+        symtab_enter(id->ident, CONSTANT_SYMBOL, expr, EQU_FLAG);
     } else {
         /* Symbol is being redefined */
         /* This is not allowed for EQU equate! */
@@ -3486,6 +3487,107 @@ void remove_unused_labels()
     symtab_list_finalize(&list);
 }
 
+static int line_has_comment_directive(const char *line, const char *directive)
+{
+    const char *comment;
+    if (line == NULL || directive == NULL) {
+        return 0;
+    }
+    comment = strchr(line, ';');
+    if (comment == NULL) {
+        return 0;
+    }
+    return strstr(comment + 1, directive) != NULL;
+}
+
+static int is_unused_equ_suppressed(location loc)
+{
+    FILE *fp;
+    char line[1024];
+    int line_no = 0;
+    int disabled = 0;
+
+    if (loc.file == NULL || loc.first_line <= 0) {
+        return 0;
+    }
+
+    fp = fopen(loc.file, "r");
+    if (fp == NULL) {
+        return 0;
+    }
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        line_no++;
+        if (line_no == loc.first_line && line_has_comment_directive(line, "xasm:ignore unused-equ")) {
+            fclose(fp);
+            return 1;
+        }
+        if (line_has_comment_directive(line, "xasm:disable unused-equ")) {
+            disabled = 1;
+        }
+        if (line_has_comment_directive(line, "xasm:enable unused-equ")) {
+            disabled = 0;
+        }
+        if (line_no >= loc.first_line) {
+            break;
+        }
+    }
+
+    fclose(fp);
+    return disabled;
+}
+
+static void emit_unused_equ_diagnostic(location loc, const char *name, int as_error)
+{
+    if (!as_error && xasm_args.no_warn) {
+        return;
+    }
+    if (loc.file == NULL) {
+        loc.file = "";
+    }
+    if (as_error) {
+        fprintf(stderr, "%s:%d:%d: error W0201: symbol '%s' defined by .EQU is never used\n",
+                loc.file, loc.first_line, loc.first_column, name);
+        err_count++;
+    } else {
+        fprintf(stderr, "%s:%d:%d: warning W0201: symbol '%s' defined by .EQU is never used\n",
+                loc.file, loc.first_line, loc.first_column, name);
+        warn_count++;
+    }
+}
+
+static void warn_unused_equates(void)
+{
+    symbol_ident_list list;
+    int i;
+
+    if (!xasm_args.warn_unused_equ) {
+        return;
+    }
+
+    symtab_list_type(CONSTANT_SYMBOL, &list);
+    for (i = 0; i < list.size; ++i) {
+        symtab_entry *e = symtab_lookup(list.idents[i]);
+        if (e == NULL) {
+            continue;
+        }
+        if (!(e->flags & EQU_FLAG)) {
+            continue;
+        }
+        if (e->ref_count != 0) {
+            continue;
+        }
+        if (e->def == NULL) {
+            continue;
+        }
+        if (is_unused_equ_suppressed(e->def->loc)) {
+            continue;
+        }
+        emit_unused_equ_diagnostic(e->def->loc, e->id, xasm_args.werror_unused_equ);
+    }
+    symtab_list_finalize(&list);
+}
+
 /**
  * If the storage is of user-defined type, replaces it with
  * .DSB sizeof(type) * count
@@ -3799,6 +3901,7 @@ void astproc_third_pass(astnode *root)
     in_dataseg = 0; /* codeseg is default */
     /* Do the walk. */
     astproc_walk(root, NULL, map);
+    warn_unused_equates();
 }
 
 /*---------------------------------------------------------------------------*/

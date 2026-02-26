@@ -429,6 +429,75 @@ ASM
     fi
 }
 
+run_expect_unused_equ_feature() {
+    asm_file="$TMPDIR/unused-equ.asm"
+    out_file="$TMPDIR/unused-equ.o"
+    log_file="$TMPDIR/unused-equ.log"
+
+    cat > "$asm_file" <<'ASM'
+USED EQU $10
+UNUSED EQU $20
+SUPP_LINE EQU $30 ; xasm:ignore unused-equ
+; xasm:disable unused-equ
+SUPP_BLOCK EQU $40
+; xasm:enable unused-equ
+ALSO_UNUSED EQU $50
+
+LDA USED
+DB USED+1
+DB "ALSO_UNUSED"
+; UNUSED is only in a comment
+END
+ASM
+
+    if ! "$XASM" --warn-unused-equ "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected --warn-unused-equ success"
+    fi
+
+    if ! grep -q "warning W0201: symbol 'UNUSED' defined by .EQU is never used" "$log_file"; then
+        cat "$log_file" >&2
+        fail "expected W0201 warning for UNUSED"
+    fi
+
+    if ! grep -q "warning W0201: symbol 'ALSO_UNUSED' defined by .EQU is never used" "$log_file"; then
+        cat "$log_file" >&2
+        fail "expected W0201 warning for ALSO_UNUSED"
+    fi
+
+    if grep -q "SUPP_LINE" "$log_file"; then
+        cat "$log_file" >&2
+        fail "did not expect W0201 for SUPP_LINE"
+    fi
+
+    if grep -q "SUPP_BLOCK" "$log_file"; then
+        cat "$log_file" >&2
+        fail "did not expect W0201 for SUPP_BLOCK"
+    fi
+
+    set +e
+    "$XASM" --Werror=unused-equ "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -eq 0 ]; then
+        cat "$log_file" >&2
+        fail "expected --Werror=unused-equ to fail"
+    fi
+    if ! grep -q "error W0201: symbol 'UNUSED' defined by .EQU is never used" "$log_file"; then
+        cat "$log_file" >&2
+        fail "expected W0201 promoted to error"
+    fi
+
+    if ! "$XASM" --warn-unused-equ --Wno-unused-equ "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected --Wno-unused-equ to disable diagnostics"
+    fi
+    if grep -q "W0201" "$log_file"; then
+        cat "$log_file" >&2
+        fail "did not expect W0201 with --Wno-unused-equ"
+    fi
+}
+
 run_expect_scoped_label_listing() {
     asm_file="$TMPDIR/listing-label-scope.asm"
     out_file="$TMPDIR/listing-label-scope.bin"
@@ -565,6 +634,7 @@ run_expect_compare_match "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_compare_mismatch "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_xref_outputs
 run_expect_phase1_spec_parity
+run_expect_unused_equ_feature
 run_expect_scoped_label_listing
 
 # Regression: long include path must not smash stack

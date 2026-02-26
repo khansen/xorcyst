@@ -2172,7 +2172,7 @@ int generate_xref(astnode *root,
         if (e == NULL) {
             continue;
         }
-        if (e->flags & VOLATILE_FLAG) {
+        if (!(e->flags & EQU_FLAG) || (e->flags & VOLATILE_FLAG)) {
             continue;
         }
         if (e->def != NULL) {

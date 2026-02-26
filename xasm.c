@@ -156,6 +156,9 @@ static struct option long_options[] = {
   { "pure-binary", no_argument, 0, 0 },
   { "case-insensitive", no_argument, 0, 0 },
   { "no-warn",  no_argument, 0, 0 },
+  { "warn-unused-equ", no_argument, 0, 0 },
+  { "Werror", required_argument, 0, 0 },
+  { "Wno-unused-equ", no_argument, 0, 0 },
   { 0 }
 };
 
@@ -174,6 +177,7 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--compare=FILE] [--compare-format=text|json]\n\
             [--compare-offset=N] [--compare-length=N]\n\
             [--compare-max-mismatches=N] [--compare-cpu-base=ADDR]\n\
+            [--warn-unused-equ] [--Werror=unused-equ] [--Wno-unused-equ]\n\
             [--no-warn] [--verbose] [--quiet] [--silent] \n\
             [--debug] [--help] [--usage] [--version]\n\
             FILE\n\
@@ -207,6 +211,9 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
     --compare-format=FMT   Compare output format: text|json\n\
     --compare-cpu-base=ADDR\n\
                             Fallback CPU base address (e.g. $C000)\n\
+    --warn-unused-equ      Warn on unused EQU symbols (W0201)\n\
+    --Werror=unused-equ    Promote unused EQU warnings to errors\n\
+    --Wno-unused-equ       Disable unused EQU warnings\n\
     --pure-binary          Output pure 6502 binary\n\
     --swap-parens          Use ( ) instead of [ ] for indirection\n\
     --case-insensitive     Case-insensitive identifiers\n\
@@ -390,6 +397,8 @@ parse_arguments (int argc, char **argv)
     xasm_args.pure_binary = 0;
     xasm_args.case_insensitive = 0;
     xasm_args.no_warn = 0;
+    xasm_args.warn_unused_equ = 0;
+    xasm_args.werror_unused_equ = 0;
     xasm_args.input_file = NULL;
     xasm_args.output_file = NULL;
     xasm_args.include_paths = NULL;
@@ -501,6 +510,18 @@ parse_arguments (int argc, char **argv)
                 xasm_args.case_insensitive = 1;
             } else if (strcmp(long_options[index].name, "no-warn") == 0) {
                 xasm_args.no_warn = 1;
+            } else if (strcmp(long_options[index].name, "warn-unused-equ") == 0) {
+                xasm_args.warn_unused_equ = 1;
+            } else if (strcmp(long_options[index].name, "Werror") == 0) {
+                if (strcmp(optarg, "unused-equ") == 0) {
+                    xasm_args.warn_unused_equ = 1;
+                    xasm_args.werror_unused_equ = 1;
+                } else {
+                    cli_error("invalid value for --Werror: `%s' (expected unused-equ)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "Wno-unused-equ") == 0) {
+                xasm_args.warn_unused_equ = 0;
+                xasm_args.werror_unused_equ = 0;
             } else if (strcmp(long_options[index].name, "listing-format") == 0) {
                 listing_format fmt;
                 if (!parse_listing_format_value(optarg, &fmt)) {

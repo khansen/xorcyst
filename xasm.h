@@ -59,6 +59,8 @@ struct tag_xasm_arguments {
     int case_insensitive;
     const char *output_file;
     const char *listing_file;
+    int warn_unused_equ;
+    int werror_unused_equ;
     int listing_format;
     int listing_format_set;
     const char *compare_file;
