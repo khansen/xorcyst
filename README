@@ -7,3 +7,37 @@ See INSTALL for generic installation instructions.
 Run regression tests with:
 
     sh tests/regression.sh
+
+Recent workflow features in `xasm`:
+
+- Structured listings:
+  - `--listing=<file>`
+  - `--listing-format=text|json|ndjson` (default `text`)
+- Cross-reference output:
+  - `--xref=<file>`
+  - `--xref-format=text|csv|json` (default `json`)
+  - `--xref-include-locals=true|false`
+  - `--xref-include-anon=true|false`
+- Unused `.EQU` diagnostics:
+  - `--warn-unused-equ`
+  - `--Werror=unused-equ`
+  - `--Wno-unused-equ`
+- Raw-address audit:
+  - `--audit-raw-addresses`
+  - `--audit-level=warn|error`
+  - `--audit-rom-range=<lo>-<hi>`
+  - `--audit-output-format=text|json`
+- Built-in parity compare:
+  - `--compare=<reference.bin>`
+  - `--compare-offset=<n>`
+  - `--compare-length=<n>`
+  - `--compare-max-mismatches=<n>`
+  - `--compare-format=text|json`
+  - `--compare-cpu-base=<addr>`
+
+Feature-specific non-zero exits:
+
+- `2` CLI misuse (invalid option values)
+- `3` file I/O failure
+- `4` audit findings when `--audit-level=error`
+- `5` compare mismatch
