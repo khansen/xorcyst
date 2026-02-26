@@ -3553,7 +3553,7 @@ void astproc_second_pass(astnode *root)
     /* Do the walk. */
     astproc_walk(root, NULL, map);
     /* Preserve labels when generating a listing, so they can be emitted. */
-    if (xasm_args.listing_file == NULL) {
+    if (xasm_args.listing_file == NULL && xasm_args.xref_file == NULL) {
         remove_unused_labels();
     }
 }
