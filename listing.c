@@ -1286,6 +1286,21 @@ static int starts_with(const char *s, const char *prefix)
     return strncmp(s, prefix, n) == 0;
 }
 
+static int count_char_occurrences(const char *s, char ch)
+{
+    int count = 0;
+    if (s == NULL) {
+        return 0;
+    }
+    while (*s != '\0') {
+        if (*s == ch) {
+            count++;
+        }
+        s++;
+    }
+    return count;
+}
+
 static void classify_symbol_name(const char *name, const char **kind, const char **scope)
 {
     if (name != NULL) {
@@ -1294,8 +1309,17 @@ static void classify_symbol_name(const char *name, const char **kind, const char
             *scope = "anonymous";
             return;
         }
+        if (strstr(name, "+#") != NULL || strstr(name, "-#") != NULL) {
+            *kind = "anonymous_label";
+            *scope = "anonymous";
+            return;
+        }
         if (strstr(name, "@@") != NULL) {
-            *kind = "local_label";
+            if (count_char_occurrences(name, '#') >= 2) {
+                *kind = "macro_label";
+            } else {
+                *kind = "local_label";
+            }
             *scope = "local";
             return;
         }

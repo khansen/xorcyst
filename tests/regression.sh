@@ -292,6 +292,32 @@ ASM
     if ! head -n 1 "$xref_csv_base.refs.csv" | grep -q '^symbol,file,line,column,'; then
         fail "xref refs CSV header missing"
     fi
+
+    macro_asm="$TMPDIR/xref-macro-fixture.asm"
+    macro_xref="$TMPDIR/xref.macro.json"
+    cat > "$macro_asm" <<'ASM'
+ORG $C000
+MACRO SPIN
+@@loop:
+    DEX
+    BNE @@loop
+ENDM
+Start:
+    LDX #3
+    SPIN
+    RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --xref="$macro_xref" --xref-include-locals=true "$macro_asm" -o "$TMPDIR/xref-macro.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "expected xref macro fixture success"
+    fi
+
+    if ! grep -q '"kind":"macro_label"' "$macro_xref"; then
+        cat "$macro_xref" >&2
+        fail "xref JSON should classify macro-expanded locals as macro_label"
+    fi
 }
 
 run_expect_phase1_spec_parity() {
@@ -575,6 +601,114 @@ ASM
     fi
 }
 
+run_expect_edge_hardening() {
+    asm_cmp="$TMPDIR/edge-compare.asm"
+    out_cmp="$TMPDIR/edge-compare.bin"
+    ref_cmp="$TMPDIR/edge-compare.ref.bin"
+    log_cmp="$TMPDIR/edge-compare.log"
+
+    cat > "$asm_cmp" <<'ASM'
+ORG $C000
+Start:
+  DB 1,2,3,4,5
+END
+ASM
+
+    if ! "$XASM" --pure-binary "$asm_cmp" -o "$out_cmp" >"$log_cmp" 2>&1; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: failed to assemble compare fixture"
+    fi
+    cp "$out_cmp" "$ref_cmp"
+    printf '\xFF' | dd of="$ref_cmp" bs=1 seek=1 conv=notrunc >/dev/null 2>&1
+    printf '\xEE' | dd of="$ref_cmp" bs=1 seek=3 conv=notrunc >/dev/null 2>&1
+
+    set +e
+    "$XASM" --pure-binary --compare="$ref_cmp" --compare-offset=1 --compare-length=4 --compare-max-mismatches=2 "$asm_cmp" -o "$out_cmp" >"$log_cmp" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 5 ]; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: compare with offset/length expected exit 5"
+    fi
+    if ! grep -q 'mismatch #1 at output+0x0001' "$log_cmp"; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: expected mismatch #1 at offset 1"
+    fi
+    if ! grep -q 'mismatch #2 at output+0x0003' "$log_cmp"; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: expected mismatch #2 at offset 3"
+    fi
+
+    # listing-format warning path should not fail assembly.
+    if ! "$XASM" --listing-format=json "$ROOT_DIR/tests/ifndef.asm" -o "$TMPDIR/edge-listing.o" >"$log_cmp" 2>&1; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: --listing-format without --listing should not fail assembly"
+    fi
+    if ! grep -q 'warning W0017: --listing-format is ignored because --listing is not set' "$log_cmp"; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: missing W0017 warning"
+    fi
+
+    # xref anonymous include toggle.
+    asm_anon="$TMPDIR/edge-anon.asm"
+    xref_default="$TMPDIR/edge-anon.default.json"
+    xref_anon="$TMPDIR/edge-anon.anon.json"
+    cat > "$asm_anon" <<'ASM'
+ORG $C000
+Start:
+  LDX #1
+- DEX
+  BPL -
+  BEQ +
+  RTS
++ RTS
+END
+ASM
+    if ! "$XASM" --pure-binary --xref="$xref_default" "$asm_anon" -o "$TMPDIR/edge-anon.bin" >"$log_cmp" 2>&1; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: xref default failed"
+    fi
+    if grep -q -- '-#0' "$xref_default" || grep -q -- '+#0' "$xref_default"; then
+        fail "edge hardening: anonymous labels should be excluded by default"
+    fi
+    if ! "$XASM" --pure-binary --xref="$xref_anon" --xref-include-anon=true "$asm_anon" -o "$TMPDIR/edge-anon.bin" >"$log_cmp" 2>&1; then
+        cat "$log_cmp" >&2
+        fail "edge hardening: xref include anon failed"
+    fi
+    if ! grep -q -- '"name":"-#0"' "$xref_anon" || ! grep -q -- '"name":"+#0"' "$xref_anon"; then
+        fail "edge hardening: anonymous symbols missing with --xref-include-anon=true"
+    fi
+
+    # audit ROM-range gate should suppress out-of-range A131 even if label exists.
+    asm_audit="$TMPDIR/edge-audit-range.asm"
+    log_audit="$TMPDIR/edge-audit-range.log"
+    cat > "$asm_audit" <<'ASM'
+ORG $C000
+TargetIn:
+  RTS
+ORG $D000
+TargetOut:
+  RTS
+ORG $C010
+Start:
+  DB $00,$C0,$00,$D0
+  RTS
+END
+ASM
+    if ! "$XASM" --pure-binary --audit-raw-addresses --audit-rom-range=\$C000-\$C0FF "$asm_audit" -o "$TMPDIR/edge-audit-range.bin" >"$log_audit" 2>&1; then
+        cat "$log_audit" >&2
+        fail "edge hardening: audit range fixture failed"
+    fi
+    if ! grep -q 'A131:' "$log_audit"; then
+        cat "$log_audit" >&2
+        fail "edge hardening: expected in-range A131 finding"
+    fi
+    if grep -q 'TargetOut' "$log_audit"; then
+        cat "$log_audit" >&2
+        fail "edge hardening: out-of-range A131 finding should be suppressed by ROM range"
+    fi
+}
+
 run_expect_scoped_label_listing() {
     asm_file="$TMPDIR/listing-label-scope.asm"
     out_file="$TMPDIR/listing-label-scope.bin"
@@ -713,6 +847,7 @@ run_expect_xref_outputs
 run_expect_phase1_spec_parity
 run_expect_unused_equ_feature
 run_expect_audit_raw_addresses_feature
+run_expect_edge_hardening
 run_expect_scoped_label_listing
 
 # Regression: long include path must not smash stack
