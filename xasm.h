@@ -25,6 +25,29 @@
 #ifndef XASM_H
 #define XASM_H
 
+enum tag_listing_format {
+    LISTING_FORMAT_TEXT = 0,
+    LISTING_FORMAT_JSON,
+    LISTING_FORMAT_NDJSON
+};
+
+typedef enum tag_listing_format listing_format;
+
+enum tag_compare_format {
+    COMPARE_FORMAT_TEXT = 0,
+    COMPARE_FORMAT_JSON
+};
+
+typedef enum tag_compare_format compare_format;
+
+enum tag_xref_format {
+    XREF_FORMAT_JSON = 0,
+    XREF_FORMAT_TEXT,
+    XREF_FORMAT_CSV
+};
+
+typedef enum tag_xref_format xref_format;
+
 struct tag_xasm_arguments {
     const char *input_file;
     int debug;
@@ -36,6 +59,27 @@ struct tag_xasm_arguments {
     int case_insensitive;
     const char *output_file;
     const char *listing_file;
+    int warn_unused_equ;
+    int werror_unused_equ;
+    int audit_raw_addresses;
+    int audit_level_error;
+    int audit_output_json;
+    int audit_rom_range_set;
+    long audit_rom_lo;
+    long audit_rom_hi;
+    int listing_format;
+    int listing_format_set;
+    const char *compare_file;
+    long compare_offset;
+    long compare_length;
+    int compare_max_mismatches;
+    int compare_format;
+    int compare_cpu_base_set;
+    long compare_cpu_base;
+    const char *xref_file;
+    int xref_format;
+    int xref_include_locals;
+    int xref_include_anon;
     char **include_paths;
     int include_path_count;
 };

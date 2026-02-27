@@ -93,6 +93,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 #include "getopt.h"
@@ -133,6 +134,21 @@ static struct option long_options[] = {
   { "output",   required_argument, 0, 'o' },
   { "listing",  required_argument, 0, 'L' },
   { "lst",      required_argument, 0, 'L' },
+  { "listing-format", required_argument, 0, 0 },
+  { "xref", required_argument, 0, 0 },
+  { "xref-format", required_argument, 0, 0 },
+  { "xref-include-locals", required_argument, 0, 0 },
+  { "xref-include-anon", required_argument, 0, 0 },
+  { "audit-raw-addresses", no_argument, 0, 0 },
+  { "audit-level", required_argument, 0, 0 },
+  { "audit-rom-range", required_argument, 0, 0 },
+  { "audit-output-format", required_argument, 0, 0 },
+  { "compare", required_argument, 0, 0 },
+  { "compare-offset", required_argument, 0, 0 },
+  { "compare-length", required_argument, 0, 0 },
+  { "compare-max-mismatches", required_argument, 0, 0 },
+  { "compare-format", required_argument, 0, 0 },
+  { "compare-cpu-base", required_argument, 0, 0 },
   { "quiet",    no_argument, 0, 'q' },
   { "silent",   no_argument, 0, 's' },
   { "verbose",  no_argument, 0, 'v' },
@@ -144,6 +160,9 @@ static struct option long_options[] = {
   { "pure-binary", no_argument, 0, 0 },
   { "case-insensitive", no_argument, 0, 0 },
   { "no-warn",  no_argument, 0, 0 },
+  { "warn-unused-equ", no_argument, 0, 0 },
+  { "Werror", required_argument, 0, 0 },
+  { "Wno-unused-equ", no_argument, 0, 0 },
   { 0 }
 };
 
@@ -155,6 +174,16 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [-o FILE] [--output=FILE] [--pure-binary]\n\
             [--include-path=DIR] [-I DIR] [--swap-parens]\n\
             [--case-insensitive] [--listing=FILE]\n\
+            [--listing-format=text|json|ndjson]\n\
+            [--xref=FILE] [--xref-format=text|csv|json]\n\
+            [--xref-include-locals=true|false]\n\
+            [--xref-include-anon=true|false]\n\
+            [--audit-raw-addresses] [--audit-level=warn|error]\n\
+            [--audit-rom-range=LO-HI] [--audit-output-format=text|json]\n\
+            [--compare=FILE] [--compare-format=text|json]\n\
+            [--compare-offset=N] [--compare-length=N]\n\
+            [--compare-max-mismatches=N] [--compare-cpu-base=ADDR]\n\
+            [--warn-unused-equ] [--Werror=unused-equ] [--Wno-unused-equ]\n\
             [--no-warn] [--verbose] [--quiet] [--silent] \n\
             [--debug] [--help] [--usage] [--version]\n\
             FILE\n\
@@ -173,6 +202,29 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
 -I, --include-path=DIR     Specify a search path for include files\n\
 -o, --output=FILE          Output to FILE instead of standard output\n\
     --listing=FILE         Generate listing file\n\
+    --listing-format=FMT   Listing format: text|json|ndjson\n\
+    --xref=FILE            Generate cross-reference output\n\
+    --xref-format=FMT      Xref format: text|csv|json\n\
+    --xref-include-locals=BOOL\n\
+                            Include local labels in xref (default false)\n\
+    --xref-include-anon=BOOL\n\
+                            Include anonymous labels in xref (default false)\n\
+    --audit-raw-addresses   Enable raw-address audit diagnostics\n\
+    --audit-level=LVL       Audit severity level: warn|error\n\
+    --audit-rom-range=RNG   Audit ROM range, e.g. $C000-$FFFF\n\
+    --audit-output-format=FMT\n\
+                            Audit output format: text|json\n\
+    --compare=FILE         Compare assembled output with FILE\n\
+    --compare-offset=N     Compare start offset in bytes (default 0)\n\
+    --compare-length=N     Compare byte count (default auto)\n\
+    --compare-max-mismatches=N\n\
+                            Maximum mismatches reported (default 1)\n\
+    --compare-format=FMT   Compare output format: text|json\n\
+    --compare-cpu-base=ADDR\n\
+                            Fallback CPU base address (e.g. $C000)\n\
+    --warn-unused-equ      Warn on unused EQU symbols (W0201)\n\
+    --Werror=unused-equ    Promote unused EQU warnings to errors\n\
+    --Wno-unused-equ       Disable unused EQU warnings\n\
     --pure-binary          Output pure 6502 binary\n\
     --swap-parens          Use ( ) instead of [ ] for indirection\n\
     --case-insensitive     Case-insensitive identifiers\n\
@@ -197,6 +249,174 @@ static void version()
 {
     printf("%s\n", program_version);
     exit(0);
+}
+
+static void cli_error(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "error: ");
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+    exit(2);
+}
+
+static int parse_long_value(const char *s, long *out)
+{
+    char *endptr;
+    long v;
+    if (s == NULL || out == NULL || *s == '\0') {
+        return 0;
+    }
+    if (s[0] == '$') {
+        v = strtol(s + 1, &endptr, 16);
+    } else {
+        v = strtol(s, &endptr, 0);
+    }
+    if (*endptr != '\0') {
+        return 0;
+    }
+    *out = v;
+    return 1;
+}
+
+static int parse_listing_format_value(const char *value, listing_format *out)
+{
+    if (strcmp(value, "text") == 0) {
+        *out = LISTING_FORMAT_TEXT;
+        return 1;
+    }
+    if (strcmp(value, "json") == 0) {
+        *out = LISTING_FORMAT_JSON;
+        return 1;
+    }
+    if (strcmp(value, "ndjson") == 0) {
+        *out = LISTING_FORMAT_NDJSON;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_compare_format_value(const char *value, compare_format *out)
+{
+    if (strcmp(value, "text") == 0) {
+        *out = COMPARE_FORMAT_TEXT;
+        return 1;
+    }
+    if (strcmp(value, "json") == 0) {
+        *out = COMPARE_FORMAT_JSON;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_xref_format_value(const char *value, xref_format *out)
+{
+    if (strcmp(value, "json") == 0) {
+        *out = XREF_FORMAT_JSON;
+        return 1;
+    }
+    if (strcmp(value, "text") == 0) {
+        *out = XREF_FORMAT_TEXT;
+        return 1;
+    }
+    if (strcmp(value, "csv") == 0) {
+        *out = XREF_FORMAT_CSV;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_bool_value(const char *value, int *out)
+{
+    if (strcmp(value, "true") == 0) {
+        *out = 1;
+        return 1;
+    }
+    if (strcmp(value, "false") == 0) {
+        *out = 0;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_audit_level_value(const char *value, int *out_level_error)
+{
+    if (strcmp(value, "warn") == 0) {
+        *out_level_error = 0;
+        return 1;
+    }
+    if (strcmp(value, "error") == 0) {
+        *out_level_error = 1;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_audit_output_value(const char *value, int *out_json)
+{
+    if (strcmp(value, "text") == 0) {
+        *out_json = 0;
+        return 1;
+    }
+    if (strcmp(value, "json") == 0) {
+        *out_json = 1;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_audit_rom_range_value(const char *value, long *out_lo, long *out_hi)
+{
+    const char *dash;
+    char lo_buf[64];
+    char hi_buf[64];
+    long lo;
+    long hi;
+    int lo_len;
+    int hi_len;
+
+    if (value == NULL || out_lo == NULL || out_hi == NULL) {
+        return 0;
+    }
+
+    dash = strchr(value, '-');
+    if (dash == NULL || dash == value || *(dash + 1) == '\0') {
+        return 0;
+    }
+    lo_len = (int)(dash - value);
+    hi_len = (int)strlen(dash + 1);
+    if (lo_len <= 0 || hi_len <= 0 || lo_len >= (int)sizeof(lo_buf) || hi_len >= (int)sizeof(hi_buf)) {
+        return 0;
+    }
+    memcpy(lo_buf, value, (size_t)lo_len);
+    lo_buf[lo_len] = '\0';
+    memcpy(hi_buf, dash + 1, (size_t)hi_len);
+    hi_buf[hi_len] = '\0';
+
+    if (!parse_long_value(lo_buf, &lo) || !parse_long_value(hi_buf, &hi)) {
+        return 0;
+    }
+    if (lo < 0 || hi < 0 || hi < lo) {
+        return 0;
+    }
+    *out_lo = lo;
+    *out_hi = hi;
+    return 1;
+}
+
+static void warn_global(const char *code, const char *fmt, ...)
+{
+    va_list ap;
+    if (xasm_args.no_warn) {
+        return;
+    }
+    va_start(ap, fmt);
+    fprintf(stderr, "warning %s: ", code);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
 }
 
 /**
@@ -253,11 +473,32 @@ parse_arguments (int argc, char **argv)
     xasm_args.pure_binary = 0;
     xasm_args.case_insensitive = 0;
     xasm_args.no_warn = 0;
+    xasm_args.warn_unused_equ = 0;
+    xasm_args.werror_unused_equ = 0;
+    xasm_args.audit_raw_addresses = 0;
+    xasm_args.audit_level_error = 0;
+    xasm_args.audit_output_json = 0;
+    xasm_args.audit_rom_range_set = 0;
+    xasm_args.audit_rom_lo = 0;
+    xasm_args.audit_rom_hi = 0;
     xasm_args.input_file = NULL;
     xasm_args.output_file = NULL;
     xasm_args.include_paths = NULL;
     xasm_args.include_path_count = 0;
     xasm_args.listing_file = NULL;
+    xasm_args.listing_format = LISTING_FORMAT_TEXT;
+    xasm_args.listing_format_set = 0;
+    xasm_args.compare_file = NULL;
+    xasm_args.compare_offset = 0;
+    xasm_args.compare_length = -1;
+    xasm_args.compare_max_mismatches = 1;
+    xasm_args.compare_format = COMPARE_FORMAT_TEXT;
+    xasm_args.compare_cpu_base_set = 0;
+    xasm_args.compare_cpu_base = 0;
+    xasm_args.xref_file = NULL;
+    xasm_args.xref_format = XREF_FORMAT_JSON;
+    xasm_args.xref_include_locals = 0;
+    xasm_args.xref_include_anon = 0;
 
     /* Parse options. */
     while ((key = getopt_long(argc, argv, "D:I:L:o:qsvV", long_options, &index)) != -1) {
@@ -351,6 +592,85 @@ parse_arguments (int argc, char **argv)
                 xasm_args.case_insensitive = 1;
             } else if (strcmp(long_options[index].name, "no-warn") == 0) {
                 xasm_args.no_warn = 1;
+            } else if (strcmp(long_options[index].name, "warn-unused-equ") == 0) {
+                xasm_args.warn_unused_equ = 1;
+            } else if (strcmp(long_options[index].name, "Werror") == 0) {
+                if (strcmp(optarg, "unused-equ") == 0) {
+                    xasm_args.warn_unused_equ = 1;
+                    xasm_args.werror_unused_equ = 1;
+                } else {
+                    cli_error("invalid value for --Werror: `%s' (expected unused-equ)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "Wno-unused-equ") == 0) {
+                xasm_args.warn_unused_equ = 0;
+                xasm_args.werror_unused_equ = 0;
+            } else if (strcmp(long_options[index].name, "audit-raw-addresses") == 0) {
+                xasm_args.audit_raw_addresses = 1;
+            } else if (strcmp(long_options[index].name, "audit-level") == 0) {
+                if (!parse_audit_level_value(optarg, &xasm_args.audit_level_error)) {
+                    cli_error("invalid value for --audit-level: `%s' (expected warn|error)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "audit-rom-range") == 0) {
+                if (!parse_audit_rom_range_value(optarg, &xasm_args.audit_rom_lo, &xasm_args.audit_rom_hi)) {
+                    cli_error("invalid value for --audit-rom-range: `%s' (expected LO-HI)", optarg);
+                }
+                xasm_args.audit_rom_range_set = 1;
+            } else if (strcmp(long_options[index].name, "audit-output-format") == 0) {
+                if (!parse_audit_output_value(optarg, &xasm_args.audit_output_json)) {
+                    cli_error("invalid value for --audit-output-format: `%s' (expected text|json)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "listing-format") == 0) {
+                listing_format fmt;
+                if (!parse_listing_format_value(optarg, &fmt)) {
+                    cli_error("invalid value for --listing-format: `%s' (expected text|json|ndjson)", optarg);
+                }
+                xasm_args.listing_format = fmt;
+                xasm_args.listing_format_set = 1;
+            } else if (strcmp(long_options[index].name, "xref") == 0) {
+                xasm_args.xref_file = optarg;
+            } else if (strcmp(long_options[index].name, "xref-format") == 0) {
+                xref_format fmt;
+                if (!parse_xref_format_value(optarg, &fmt)) {
+                    cli_error("invalid value for --xref-format: `%s' (expected text|csv|json)", optarg);
+                }
+                xasm_args.xref_format = fmt;
+            } else if (strcmp(long_options[index].name, "xref-include-locals") == 0) {
+                if (!parse_bool_value(optarg, &xasm_args.xref_include_locals)) {
+                    cli_error("invalid value for --xref-include-locals: `%s' (expected true|false)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "xref-include-anon") == 0) {
+                if (!parse_bool_value(optarg, &xasm_args.xref_include_anon)) {
+                    cli_error("invalid value for --xref-include-anon: `%s' (expected true|false)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "compare") == 0) {
+                xasm_args.compare_file = optarg;
+            } else if (strcmp(long_options[index].name, "compare-offset") == 0) {
+                if (!parse_long_value(optarg, &xasm_args.compare_offset) || xasm_args.compare_offset < 0) {
+                    cli_error("invalid value for --compare-offset: `%s' (must be >= 0)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "compare-length") == 0) {
+                if (!parse_long_value(optarg, &xasm_args.compare_length) || xasm_args.compare_length < 0) {
+                    cli_error("invalid value for --compare-length: `%s' (must be >= 0)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "compare-max-mismatches") == 0) {
+                long max_mismatches;
+                if (!parse_long_value(optarg, &max_mismatches) || max_mismatches <= 0) {
+                    cli_error("invalid value for --compare-max-mismatches: `%s' (must be >= 1)", optarg);
+                }
+                xasm_args.compare_max_mismatches = (int)max_mismatches;
+            } else if (strcmp(long_options[index].name, "compare-format") == 0) {
+                compare_format fmt;
+                if (!parse_compare_format_value(optarg, &fmt)) {
+                    cli_error("invalid value for --compare-format: `%s' (expected text|json)", optarg);
+                }
+                xasm_args.compare_format = fmt;
+            } else if (strcmp(long_options[index].name, "compare-cpu-base") == 0) {
+                long cpu_base;
+                if (!parse_long_value(optarg, &cpu_base) || cpu_base < 0) {
+                    cli_error("invalid value for --compare-cpu-base: `%s' (must be >= 0)", optarg);
+                }
+                xasm_args.compare_cpu_base_set = 1;
+                xasm_args.compare_cpu_base = cpu_base;
             }
             break;
 
@@ -378,6 +698,10 @@ parse_arguments (int argc, char **argv)
     }
     else {
         xasm_args.input_file = argv[optind];
+    }
+
+    if (xasm_args.listing_file == NULL && xasm_args.listing_format_set) {
+        warn_global("W0017", "--listing-format is ignored because --listing is not set");
     }
 }
 
@@ -427,12 +751,334 @@ static int total_errors()
     return yynerrs + astproc_err_count();
 }
 
+#define COMPARE_SOURCE_TEXT_MAX 1024
+
+typedef struct tag_compare_mismatch {
+    long index;
+    long output_offset;
+    unsigned char expected;
+    unsigned char actual;
+    int has_cpu_address;
+    long cpu_address;
+    int has_source;
+    listing_lookup_result source;
+    char source_text[COMPARE_SOURCE_TEXT_MAX];
+} compare_mismatch;
+
+static int read_file_bytes(const char *path, unsigned char **data, long *size)
+{
+    FILE *fp;
+    long n;
+    unsigned char *buf = NULL;
+    size_t got;
+
+    if (path == NULL || data == NULL || size == NULL) {
+        return 0;
+    }
+
+    fp = fopen(path, "rb");
+    if (fp == NULL) {
+        return 0;
+    }
+
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        fclose(fp);
+        return 0;
+    }
+    n = ftell(fp);
+    if (n < 0) {
+        fclose(fp);
+        return 0;
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) {
+        fclose(fp);
+        return 0;
+    }
+
+    if (n > 0) {
+        buf = (unsigned char *)malloc((size_t)n);
+        if (buf == NULL) {
+            fclose(fp);
+            return 0;
+        }
+        got = fread(buf, 1, (size_t)n, fp);
+        if ((long)got != n) {
+            free(buf);
+            fclose(fp);
+            return 0;
+        }
+    }
+
+    fclose(fp);
+    *data = buf;
+    *size = n;
+    return 1;
+}
+
+static void read_source_line(const char *filename, int line, char *buf, int buf_size)
+{
+    FILE *fp;
+    char *p;
+    int current;
+
+    if (buf == NULL || buf_size <= 0) {
+        return;
+    }
+    buf[0] = '\0';
+
+    if (filename == NULL || line <= 0) {
+        return;
+    }
+
+    fp = fopen(filename, "r");
+    if (fp == NULL) {
+        return;
+    }
+
+    current = 0;
+    while (current < line) {
+        if (fgets(buf, buf_size, fp) == NULL) {
+            buf[0] = '\0';
+            fclose(fp);
+            return;
+        }
+        current++;
+    }
+    fclose(fp);
+
+    p = strrchr(buf, '\n');
+    if (p != NULL) {
+        *p = '\0';
+    }
+    p = strrchr(buf, '\r');
+    if (p != NULL) {
+        *p = '\0';
+    }
+}
+
+static void print_json_escaped(FILE *fp, const char *s)
+{
+    const unsigned char *p = (const unsigned char *)s;
+    fputc('"', fp);
+    if (p != NULL) {
+        while (*p != '\0') {
+            unsigned char c = *p++;
+            switch (c) {
+                case '\"': fputs("\\\"", fp); break;
+                case '\\': fputs("\\\\", fp); break;
+                case '\b': fputs("\\b", fp); break;
+                case '\f': fputs("\\f", fp); break;
+                case '\n': fputs("\\n", fp); break;
+                case '\r': fputs("\\r", fp); break;
+                case '\t': fputs("\\t", fp); break;
+                default:
+                if (c < 0x20) {
+                    fprintf(fp, "\\u%04X", c);
+                } else {
+                    fputc(c, fp);
+                }
+                break;
+            }
+        }
+    }
+    fputc('"', fp);
+}
+
+static int run_compare(astnode *root)
+{
+    unsigned char *assembled_data = NULL;
+    unsigned char *reference_data = NULL;
+    long assembled_size = 0;
+    long reference_size = 0;
+    long available_assembled;
+    long available_reference;
+    long compared_length;
+    long i;
+    int mismatch_total = 0;
+    int mismatch_reported = 0;
+    int max_mismatches = xasm_args.compare_max_mismatches;
+    compare_mismatch *mismatches = NULL;
+    int exit_code = 0;
+
+    if (!read_file_bytes(xasm_args.output_file, &assembled_data, &assembled_size)) {
+        fprintf(stderr, "error: could not read `%s'\n", xasm_args.output_file);
+        return 3;
+    }
+    if (!read_file_bytes(xasm_args.compare_file, &reference_data, &reference_size)) {
+        fprintf(stderr, "error: could not read `%s'\n", xasm_args.compare_file);
+        free(assembled_data);
+        return 3;
+    }
+
+    available_assembled = (xasm_args.compare_offset < assembled_size)
+                        ? (assembled_size - xasm_args.compare_offset)
+                        : 0;
+    available_reference = (xasm_args.compare_offset < reference_size)
+                        ? (reference_size - xasm_args.compare_offset)
+                        : 0;
+
+    if (xasm_args.compare_length >= 0) {
+        compared_length = xasm_args.compare_length;
+    } else {
+        compared_length = (available_assembled < available_reference)
+                        ? available_assembled
+                        : available_reference;
+    }
+    if (compared_length > available_assembled) {
+        compared_length = available_assembled;
+    }
+    if (compared_length > available_reference) {
+        compared_length = available_reference;
+    }
+    if (compared_length < 0) {
+        compared_length = 0;
+    }
+
+    mismatches = (compare_mismatch *)calloc((size_t)max_mismatches, sizeof(compare_mismatch));
+    if (mismatches == NULL) {
+        fprintf(stderr, "error: out of memory while comparing output\n");
+        free(assembled_data);
+        free(reference_data);
+        return 3;
+    }
+
+    for (i = 0; i < compared_length; ++i) {
+        long output_offset = xasm_args.compare_offset + i;
+        unsigned char expected = reference_data[output_offset];
+        unsigned char actual = assembled_data[output_offset];
+        if (expected != actual) {
+            compare_mismatch *m;
+            listing_lookup_result lookup;
+
+            mismatch_total++;
+            if (mismatch_reported >= max_mismatches) {
+                break;
+            }
+
+            m = &mismatches[mismatch_reported];
+            m->index = mismatch_total;
+            m->output_offset = output_offset;
+            m->expected = expected;
+            m->actual = actual;
+            m->has_cpu_address = 0;
+            m->cpu_address = 0;
+            m->has_source = 0;
+            m->source.file = NULL;
+            m->source.line = 0;
+            m->source.column = 0;
+            m->source.cpu_address = 0;
+            m->source.cpu_address_known = 0;
+            m->source_text[0] = '\0';
+
+            if (xasm_args.pure_binary && listing_lookup_output_offset(root, output_offset, &lookup)) {
+                m->has_source = 1;
+                m->source = lookup;
+                read_source_line(lookup.file, lookup.line, m->source_text, sizeof(m->source_text));
+                if (lookup.cpu_address_known) {
+                    m->has_cpu_address = 1;
+                    m->cpu_address = (long)(lookup.cpu_address & 0xFFFF);
+                }
+            }
+
+            if (!m->has_cpu_address && xasm_args.compare_cpu_base_set) {
+                m->has_cpu_address = 1;
+                m->cpu_address = xasm_args.compare_cpu_base + output_offset;
+            }
+
+            mismatch_reported++;
+        }
+    }
+
+    if (xasm_args.compare_format == COMPARE_FORMAT_JSON) {
+        int j;
+        printf("{\n");
+        printf("  \"version\": \"1\",\n");
+        printf("  \"reference_file\": ");
+        print_json_escaped(stdout, xasm_args.compare_file);
+        printf(",\n");
+        printf("  \"assembled_file\": ");
+        print_json_escaped(stdout, xasm_args.output_file);
+        printf(",\n");
+        printf("  \"compared_length\": %ld,\n", compared_length);
+        printf("  \"match\": %s,\n", (mismatch_total == 0) ? "true" : "false");
+        printf("  \"mismatches\": [");
+        for (j = 0; j < mismatch_reported; ++j) {
+            compare_mismatch *m = &mismatches[j];
+            if (j > 0) {
+                printf(",");
+            }
+            printf("\n    {");
+            printf("\"index\": %ld,", m->index);
+            printf("\"output_offset\": %ld,", m->output_offset);
+            if (m->has_cpu_address) {
+                printf("\"cpu_address\": \"0x%04lX\",", m->cpu_address & 0xFFFF);
+            } else {
+                printf("\"cpu_address\": null,");
+            }
+            printf("\"expected_hex\": \"%02X\",", m->expected);
+            printf("\"actual_hex\": \"%02X\",", m->actual);
+            printf("\"source\": ");
+            if (m->has_source) {
+                printf("{\"file\": ");
+                print_json_escaped(stdout, m->source.file != NULL ? m->source.file : "");
+                printf(", \"line\": %d, \"column\": %d, \"source_text\": ", m->source.line, m->source.column);
+                print_json_escaped(stdout, m->source_text);
+                printf("}");
+            } else {
+                printf("null");
+            }
+            printf("}");
+        }
+        if (mismatch_reported > 0) {
+            printf("\n");
+        }
+        printf("  ]\n");
+        printf("}\n");
+    } else if (mismatch_total > 0) {
+        int j;
+        for (j = 0; j < mismatch_reported; ++j) {
+            compare_mismatch *m = &mismatches[j];
+            if (m->has_cpu_address) {
+                printf("mismatch #%ld at output+0x%04lX (CPU $%04lX): expected %02X got %02X\n",
+                       m->index,
+                       m->output_offset & 0xFFFF,
+                       m->cpu_address & 0xFFFF,
+                       m->expected,
+                       m->actual);
+            } else {
+                printf("mismatch #%ld at output+0x%04lX: expected %02X got %02X\n",
+                       m->index,
+                       m->output_offset & 0xFFFF,
+                       m->expected,
+                       m->actual);
+            }
+            if (m->has_source) {
+                printf("source: %s:%d:%d  %s\n",
+                       m->source.file != NULL ? m->source.file : "",
+                       m->source.line,
+                       m->source.column,
+                       m->source_text);
+            }
+        }
+    }
+
+    if (mismatch_total > 0) {
+        exit_code = 5;
+    }
+
+    free(mismatches);
+    free(assembled_data);
+    free(reference_data);
+    return exit_code;
+}
+
 /**
  * Program entrypoint.
  */
 int main(int argc, char *argv[]) {
     FILE *output_fp;
     int output_generated = 0;
+    int exit_code = 0;
     char *default_outfile = 0;
 
     /* Working directory is needed for include statements */
@@ -513,7 +1159,48 @@ int main(int argc, char *argv[]) {
 
     if (output_generated && xasm_args.listing_file != NULL) {
         verbose("Generating listing...");
-        generate_listing(root_node, xasm_args.listing_file);
+        if (!generate_listing(root_node,
+                              xasm_args.listing_file,
+                              (listing_format)xasm_args.listing_format,
+                              xasm_args.input_file,
+                              xasm_args.output_file)) {
+            exit_code = 3;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.xref_file != NULL) {
+        verbose("Generating xref...");
+        if (!generate_xref(root_node,
+                           xasm_args.xref_file,
+                           (xref_format)xasm_args.xref_format,
+                           xasm_args.xref_include_locals,
+                           xasm_args.xref_include_anon,
+                           xasm_args.input_file,
+                           xasm_args.output_file,
+                           xasm_args.pure_binary)) {
+            exit_code = 3;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.audit_raw_addresses) {
+        int findings;
+        verbose("Running raw-address audit...");
+        findings = run_raw_address_audit(root_node,
+                                         xasm_args.audit_level_error,
+                                         xasm_args.audit_output_json,
+                                         xasm_args.audit_rom_range_set,
+                                         xasm_args.audit_rom_lo,
+                                         xasm_args.audit_rom_hi);
+        if (findings < 0) {
+            exit_code = 3;
+        } else if (xasm_args.audit_level_error && findings > 0) {
+            exit_code = 4;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.compare_file != NULL) {
+        verbose("Comparing output...");
+        exit_code = run_compare(root_node);
     }
 
     /* Cleanup */
@@ -534,5 +1221,8 @@ int main(int argc, char *argv[]) {
 
     free(xasm_path);
 
-    return (total_errors() == 0) ? 0 : 1;
+    if (total_errors() != 0) {
+        return 1;
+    }
+    return exit_code;
 }

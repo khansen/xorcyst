@@ -79,6 +79,7 @@ typedef struct tag_label_attribs label_attribs;
 #define ALIGN_FLAG  0x20    /* Symbol has alignment constraint */
 #define ADDR_FLAG   0x40    /* Symbol has hardcoded address */
 #define ERROR_UNDEFINED_FLAG  0x80
+#define EQU_FLAG    0x100   /* Symbol is defined using EQU */
 /**
  * Must keep a definition-ordered list of struct or union's fields.
  */
