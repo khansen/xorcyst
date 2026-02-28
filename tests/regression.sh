@@ -1811,4 +1811,111 @@ if ! grep -q "expression does not evaluate to integer literal" "$TMPDIR/db-undef
     fail "missing expected error 'expression does not evaluate to integer literal'"
 fi
 
+# Regression: division by zero in assembler
+cat > "$TMPDIR/xasm-div0.asm" <<'ASM'
+div0 EQU 10 / 0
+END
+ASM
+set +e
+"$XASM" --pure-binary "$TMPDIR/xasm-div0.asm" -o "$TMPDIR/xasm-div0.bin" > "$TMPDIR/xasm-div0.log" 2>&1
+status=$?
+set -e
+if ! grep -q "division by zero in expression" "$TMPDIR/xasm-div0.log"; then
+    cat "$TMPDIR/xasm-div0.log" >&2
+    fail "missing expected assembler error 'division by zero in expression'"
+fi
+
+# Regression: division by zero in linker
+cat > "$TMPDIR/xlnk-div0.asm" <<'ASM'
+.public div0
+.extrn some_symbol:label
+div0 = some_symbol / 0
+END
+ASM
+cat > "$TMPDIR/xlnk-div0-symbol.asm" <<'ASM'
+.public some_symbol
+some_symbol = 10
+END
+ASM
+# We expect xasm to fail here because it can't fold but it tries to write a constant.
+# Actually, let's see if we can make it an expression that xasm MUST pass to linker.
+# If we use a label, xasm can't fold it.
+set +e
+"$XASM" "$TMPDIR/xlnk-div0.asm" -o "$TMPDIR/xlnk-div0.o" > "$TMPDIR/xlnk-div0-xasm.log" 2>&1
+xasm_status=$?
+set -e
+if [ "$xasm_status" -eq 0 ]; then
+    fail "xasm should have failed to generate object with non-constant public EQU"
+fi
+if ! grep -q "does not evaluate to constant" "$TMPDIR/xlnk-div0-xasm.log"; then
+    cat "$TMPDIR/xlnk-div0-xasm.log" >&2
+    fail "missing expected xasm error 'does not evaluate to constant'"
+fi
+
+# Linker regression: division by zero in bytecode expression
+cat > "$TMPDIR/xlnk-div0-bytecode.asm" <<'ASM'
+.extrn some_symbol:label
+    lda #10 / (some_symbol - 10)
+END
+ASM
+cat > "$TMPDIR/xlnk-div0-symbol.asm" <<'ASM'
+.public some_symbol
+some_symbol = 10
+END
+ASM
+if ! "$XASM" "$TMPDIR/xlnk-div0-bytecode.asm" -o "$TMPDIR/xlnk-div0-bytecode.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-div0-bytecode fixture"
+fi
+if ! "$XASM" "$TMPDIR/xlnk-div0-symbol.asm" -o "$TMPDIR/xlnk-div0-symbol.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-div0-symbol fixture"
+fi
+cat > "$TMPDIR/xlnk-div0-bytecode.script" <<EOF
+output{file=$TMPDIR/xlnk-div0-bytecode.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_unit_a.o} # filler
+link{file=$TMPDIR/xlnk-div0-bytecode.o}
+link{file=$TMPDIR/xlnk-div0-symbol.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/xlnk-div0-bytecode.script" > "$TMPDIR/xlnk-div0-bytecode.log" 2>&1
+status=$?
+set -e
+if ! grep -q "division by zero in expression" "$TMPDIR/xlnk-div0-bytecode.log"; then
+    cat "$TMPDIR/xlnk-div0-bytecode.log" >&2
+    fail "missing expected linker error 'division by zero in expression'"
+fi
+
+# Regression: RAM alignment leak/fragmentation
+cat > "$TMPDIR/link_ram_align_leak.asm" <<'ASM'
+.dataseg
+var_in_block1 .dsb 15
+aligned_var   .dsb 1
+small_var     .dsb 1
+ALIGN aligned_var 256
+.codeseg
+    lda var_in_block1
+    lda aligned_var
+    lda small_var
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_ram_align_leak.asm" -o "$TMPDIR/link_ram_align_leak.o" >/dev/null 2>&1; then
+    fail "failed to build RAM align leak fixture"
+fi
+cat > "$TMPDIR/link_ram_align_leak.script" <<EOF
+output{file=$TMPDIR/link_ram_align_leak.bin}
+ram{start=\$0201,end=\$0210}
+ram{start=\$0301,end=\$04FF}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_ram_align_leak.o}
+EOF
+# We use -v to see RAM mapping
+"$XLNK" -v "$TMPDIR/link_ram_align_leak.script" > "$TMPDIR/link_ram_align_leak.log" 2>&1
+# aligned_var (align 8 -> 256) should go to $0400.
+# The block $0301-$0400 should be preserved and available for others.
+# small_var or var_in_block1 should end up in $0301 if the leak is fixed.
+if ! grep -q "0301-030F" "$TMPDIR/link_ram_align_leak.log"; then
+    cat "$TMPDIR/link_ram_align_leak.log" >&2
+    fail "RAM alignment padding block was leaked"
+fi
+
 echo "All regression tests passed"

@@ -89,6 +89,7 @@
 #include "symtab.h"
 #include "objdef.h"
 #include "opcode.h"
+#include "astproc.h"
 #include "xasm.h"
 #include "assert.h"
 
@@ -656,12 +657,14 @@ static void put_public_constants(FILE *fp)
                     /* Write value */   put_str_16(fp, s);
                 }
                 else {
-                    fprintf(stderr, "put_public_constants(): string constant too long\n");
+                    fprintf(stderr, "error: put_public_constants(): string constant too long\n");
+                    astproc_inc_err_count();
                 }
                 break;
 
                 default:
-                fprintf(stderr, "put_public_constants(): expression isn't a constant after all\n");
+                fprintf(stderr, "error: put_public_constants(): `%s' does not evaluate to constant\n", e->id);
+                astproc_inc_err_count();
                 break;
             }
         }

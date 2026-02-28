@@ -553,7 +553,11 @@ static int alloc_ram(local *l)
                     if (b == ram_block_head) {
                         ram_block_head = n;    /* New head */
                     }
-                    b = n;
+                    else {
+                        p->next = n;           /* Link from previous */
+                    }
+                    p = n;                     /* Current predecessor for next loop iteration */
+                    b = n;                     /* Start re-check from new padding block */
                 }
                 continue;
             }
@@ -727,6 +731,17 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
     local *l;
     xasm_constant *c;
     xasm_constant lhs_result, rhs_result;
+
+    memset(result, 0, sizeof(xasm_constant));
+    result->type = -1; /* Default to unresolved */
+
+    if (e == NULL) {
+        return;
+    }
+
+    memset(&lhs_result, 0, sizeof(lhs_result));
+    memset(&rhs_result, 0, sizeof(rhs_result));
+
     switch (e->type) {
         case XASM_OPERATOR_EXPRESSION:
         switch (e->op_expr.operator) {
@@ -763,8 +778,22 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
                     case XASM_OP_PLUS:   result->integer = lhs_result.integer + rhs_result.integer;  break;
                     case XASM_OP_MINUS:  result->integer = lhs_result.integer - rhs_result.integer;  break;
                     case XASM_OP_MUL:    result->integer = lhs_result.integer * rhs_result.integer;  break;
-                    case XASM_OP_DIV:    result->integer = lhs_result.integer / rhs_result.integer;  break;
-                    case XASM_OP_MOD:    result->integer = lhs_result.integer % rhs_result.integer;  break;
+                    case XASM_OP_DIV:
+                    if (rhs_result.integer == 0) {
+                        err("division by zero in expression");
+                        result->type = -1;
+                    } else {
+                        result->integer = lhs_result.integer / rhs_result.integer;
+                    }
+                    break;
+                    case XASM_OP_MOD:
+                    if (rhs_result.integer == 0) {
+                        err("modulo by zero in expression");
+                        result->type = -1;
+                    } else {
+                        result->integer = lhs_result.integer % rhs_result.integer;
+                    }
+                    break;
                     case XASM_OP_SHL:    result->integer = lhs_result.integer << rhs_result.integer; break;
                     case XASM_OP_SHR:    result->integer = lhs_result.integer >> rhs_result.integer; break;
                     case XASM_OP_AND:    result->integer = lhs_result.integer & rhs_result.integer;  break;
