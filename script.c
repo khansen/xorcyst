@@ -220,6 +220,8 @@ static void get_token(const char *s, int *i, char *delim, char *dest)
  * @param line Line of file
  * @param fmt printf-style format string
  */
+extern int err_count;
+
 static void err(const char *filename, int line, const char *fmt, ...)
 {
     va_list ap;
@@ -231,6 +233,8 @@ static void err(const char *filename, int line, const char *fmt, ...)
     fprintf(stderr, "\n");
 
     va_end(ap);
+
+    err_count++;
 }
 
 /*---------------------------------------------------------------------------*/

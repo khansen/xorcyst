@@ -353,7 +353,7 @@ static hashtab *constant_hash;
 static hashtab *unit_hash;
 
 /** Number of errors and warnings during linking */
-static int err_count;
+int err_count;
 static int warn_count;
 
 static int suppress;
