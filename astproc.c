@@ -141,6 +141,10 @@ static int symbol_modifiers = 0;
 static int dataseg_pc;
 static int codeseg_pc;
 
+/* Pass to fold_constants / reduce_expression to control $ folding */
+#define FOLD_PC_NO  0
+#define FOLD_PC_YES 1
+
 /*---------------------------------------------------------------------------*/
 
 /** Mapping from regular ASCII characters to custom character values.
@@ -163,8 +167,10 @@ static void reset_charmap()
 /*---------------------------------------------------------------------------*/
 /* Forward/backward branching stuff */
 
+enum { FORWARD_BRANCH_REF_MAX = 128 };
+
 struct tag_forward_branch_info {
-    astnode *refs[128];
+    astnode *refs[FORWARD_BRANCH_REF_MAX];
     int index;  /* Index into refs */
     int counter;
 };
@@ -180,50 +186,117 @@ typedef struct tag_backward_branch_info backward_branch_info;
 
 #define BRANCH_MAX 8
 
-static forward_branch_info forward_branch[BRANCH_MAX];
+struct tag_branch_scope {
+    int id;
+    forward_branch_info forward[BRANCH_MAX];
+    backward_branch_info backward[BRANCH_MAX];
+    struct tag_branch_scope *next;
+};
 
-static backward_branch_info backward_branch[BRANCH_MAX];
-enum { FORWARD_BRANCH_REF_MAX = 128 };
+typedef struct tag_branch_scope branch_scope;
+
+static branch_scope *branch_scope_stack = NULL;
+static int branch_scope_count = 0;
 
 static void err(location loc, const char *fmt, ...);
+
+/**
+ * Pushes a new branch scope.
+ */
+static void branch_push()
+{
+    branch_scope *s = (branch_scope *)malloc(sizeof(branch_scope));
+    int i, j;
+    int depth = 0;
+    branch_scope *temp;
+
+    if (s == NULL) {
+        fprintf(stderr, "error: out of memory while allocating branch scope\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Check depth limit to prevent infinite recursion */
+    for (temp = branch_scope_stack; temp != NULL; temp = temp->next) {
+        depth++;
+    }
+    if (depth >= 500) {
+        fprintf(stderr, "error: nesting depth limit exceeded (macros, loops or procedures nested too deeply)\n");
+        exit(EXIT_FAILURE);
+    }
+
+    s->id = branch_scope_count++;
+    for (i=0; i<BRANCH_MAX; i++) {
+        for (j=0; j<FORWARD_BRANCH_REF_MAX; j++) {
+            s->forward[i].refs[j] = NULL;
+        }
+        s->forward[i].index = 0;
+        s->forward[i].counter = 0;
+        s->backward[i].decl = NULL;
+        s->backward[i].counter = 0;
+    }
+    s->next = branch_scope_stack;
+    branch_scope_stack = s;
+}
+
+/**
+ * Pops the current branch scope.
+ */
+static void branch_pop()
+{
+    branch_scope *s = branch_scope_stack;
+    int i;
+    if (s == NULL) {
+        return;
+    }
+    /* Check for unresolved forward references in this scope */
+    for (i=0; i<BRANCH_MAX; i++) {
+        if (s->forward[i].index > 0) {
+            int j;
+            for (j=0; j < s->forward[i].index; ++j) {
+                err(s->forward[i].refs[j]->loc, "unresolved forward reference");
+            }
+        }
+    }
+    branch_scope_stack = s->next;
+    free(s);
+}
 
 /**
  * Zaps forward/backward branch data.
  */
 static void branch_init()
 {
-    int i, j;
-    for (i=0; i<BRANCH_MAX; i++) {
-        for (j=0; j<128; j++) {
-            forward_branch[i].refs[j] = NULL;
-        }
-        forward_branch[i].index = 0;
-        forward_branch[i].counter = 0;
-        backward_branch[i].decl = NULL;
-        backward_branch[i].counter = 0;
+    while (branch_scope_stack != NULL) {
+        branch_pop();
     }
+    branch_push();
 }
 
 /*---------------------------------------------------------------------------*/
 
 static int branch_level(astnode *n, char marker, const char *kind, int *level_out)
 {
-    size_t i;
-    size_t len;
+    size_t len = 0;
     if ((n == NULL) || (n->ident == NULL)) {
         return 0;
     }
-    len = strlen(n->ident);
+
+    /* Find length of marker run (before any # suffix) */
+    while (n->ident[len] == marker) {
+        len++;
+    }
+
     if ((len < 1) || (len > BRANCH_MAX)) {
         err(n->loc, "%s branch label `%s' has invalid length", kind, n->ident);
         return 0;
     }
-    for (i = 0; i < len; ++i) {
-        if (n->ident[i] != marker) {
-            err(n->loc, "invalid %s branch label `%s'", kind, n->ident);
-            return 0;
-        }
+
+    /* Verify that the rest is either empty or starts with # */
+    if (n->ident[len] != '\0' && n->ident[len] != '#') {
+        err(n->loc, "invalid %s branch label `%s'", kind, n->ident);
+        return 0;
     }
+
     *level_out = (int)len - 1;
     return 1;
 }
@@ -398,6 +471,24 @@ static void substitute_expr_for_id(astnode *expr, astnode *id, astnode *list)
 
 /*---------------------------------------------------------------------------*/
 
+static int handle_push_branch_scope(astnode *n, void *arg, astnode **next)
+{
+    branch_push();
+    /* This is a synthetic node; remove it from the AST after applying scope. */
+    astnode_remove(n);
+    astnode_finalize(n);
+    return 0;
+}
+
+static int handle_pop_branch_scope(astnode *n, void *arg, astnode **next)
+{
+    branch_pop();
+    /* This is a synthetic node; remove it from the AST after applying scope. */
+    astnode_remove(n);
+    astnode_finalize(n);
+    return 0;
+}
+
 /**
  * Globalizes a macro expanded local.
  * This is done simply by concatenating the local label identifier with the
@@ -419,8 +510,12 @@ static int globalize_macro_expanded_local(astnode *n, void *arg, astnode **next)
             n->label = realloc(n->label, strlen(n->label)+strlen(str)+1);
             strcat(n->label, str);
         } else {
-            /* LOCAL_ID_NODE, use ident field */
-            assert(astnode_is_type(n, LOCAL_ID_NODE));
+            /* LOCAL_ID_NODE, branch nodes use ident field */
+            assert(astnode_is_type(n, LOCAL_ID_NODE)
+                || astnode_is_type(n, FORWARD_BRANCH_DECL_NODE)
+                || astnode_is_type(n, BACKWARD_BRANCH_DECL_NODE)
+                || astnode_is_type(n, FORWARD_BRANCH_NODE)
+                || astnode_is_type(n, BACKWARD_BRANCH_NODE));
             n->ident = realloc(n->ident, strlen(n->ident)+strlen(str)+1);
             strcat(n->ident, str);
         }
@@ -441,6 +536,10 @@ static void globalize_macro_expanded_locals(astnode *exp_body, int count)
     static astnodeprocmap map[] = {
         { LOCAL_ID_NODE, globalize_macro_expanded_local },
         { LOCAL_LABEL_NODE, globalize_macro_expanded_local },
+        { FORWARD_BRANCH_DECL_NODE, globalize_macro_expanded_local },
+        { BACKWARD_BRANCH_DECL_NODE, globalize_macro_expanded_local },
+        { FORWARD_BRANCH_NODE, globalize_macro_expanded_local },
+        { BACKWARD_BRANCH_NODE, globalize_macro_expanded_local },
         { 0, NULL }
     };
     /* Do the walk. */
@@ -509,8 +608,16 @@ static int expand_macro(astnode *macro, void *arg, astnode **next)
         /* Replace MACRO_NODE by the macro body instance */
         {
             astnode *stmts = astnode_remove_children(exp_body);
-            astnode_replace(macro, stmts);
-            *next = stmts;
+            astnode *push = astnode_create(PUSH_BRANCH_SCOPE_NODE, macro->loc);
+            astnode *pop = astnode_create(POP_BRANCH_SCOPE_NODE, macro->loc);
+            if (stmts != NULL) {
+                astnode_add_sibling(push, stmts);
+                astnode_add_sibling(astnode_get_last_sibling(stmts), pop);
+            } else {
+                astnode_add_sibling(push, pop);
+            }
+            astnode_replace(macro, push);
+            *next = push;
             astnode_finalize(exp_body);
         }
 
@@ -527,19 +634,26 @@ static int expand_macro(astnode *macro, void *arg, astnode **next)
  * If the expression can be folded, the original expression is replaced by the
  * new one, and the original expression is finalized.
  * @param expr Expression
+ * @param fold_pc If non-zero, CURRENT_PC_NODE ($) is folded to the current PC value
  * @return Original expression, if couldn't fold, otherwise new, folded expression
  */
-astnode *astproc_fold_constants(astnode *expr)
+static astnode *fold_constants(astnode *expr, int fold_pc)
 {
     astnode *folded;
     astnode *lhs;
     astnode *rhs;
     if (expr == NULL) { return NULL; }
     folded = NULL;
+    if (fold_pc && astnode_is_type(expr, CURRENT_PC_NODE)) {
+        folded = astnode_create_integer(in_dataseg ? dataseg_pc : codeseg_pc, expr->loc);
+        astnode_replace(expr, folded);
+        astnode_finalize(expr);
+        return folded;
+    }
     if (astnode_is_type(expr, ARITHMETIC_NODE)) {
         /* Fold operands recursively */
-        lhs = astproc_fold_constants(LHS(expr));
-        rhs = astproc_fold_constants(RHS(expr));
+        lhs = fold_constants(LHS(expr), fold_pc);
+        rhs = fold_constants(RHS(expr), fold_pc);
         switch (expr->oper) {
             /* Binary ops */
             case PLUS_OPERATOR:
@@ -733,6 +847,14 @@ astnode *astproc_fold_constants(astnode *expr)
     }
     /* Couldn't fold it, return original expression */
     return expr;
+}
+
+/**
+ * Folds constant expressions.  CURRENT_PC_NODE ($) is never folded.
+ */
+astnode *astproc_fold_constants(astnode *expr)
+{
+    return fold_constants(expr, FOLD_PC_NO);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -949,7 +1071,7 @@ static astnode *reduce_scope(astnode *expr)
     return expr;
 }
 
-static astnode *reduce_expression(astnode *expr);
+static astnode *reduce_expression(astnode *expr, int fold_pc);
 
 /**
  * Handles remainder of fields in A.B.C.D . ..., where one or more fields may be indexed.
@@ -1069,7 +1191,7 @@ static astnode *reduce_dot(astnode *expr)
         term2,
         expr->loc
     );
-    sum = reduce_expression(sum);
+    sum = reduce_expression(sum, FOLD_PC_NO);
     /* Replace dotted expression by sum */
     astnode_replace(expr, sum);
     astnode_finalize(expr);
@@ -1127,7 +1249,7 @@ static astnode *reduce_mask(astnode *mask)
                     astnode_clone(sym->field.offset, expr->loc),
                     expr->loc
                 );
-                c = reduce_expression(c);
+                c = reduce_expression(c, FOLD_PC_NO);
                 astnode_replace(mask, c);
                 astnode_finalize(mask);
                 expr = c;
@@ -1150,7 +1272,7 @@ static astnode *reduce_index(astnode *expr)
     astnode *index;
     id = LHS(expr);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
-    index = reduce_expression(RHS(expr));
+    index = reduce_expression(RHS(expr), FOLD_PC_NO);
     /* Lookup identifier */
     e = symtab_lookup(id->ident);
     assert(e != 0);
@@ -1249,10 +1371,11 @@ static astnode *reduce_highlevel_constructs(astnode *expr)
 /**
  * Really reduces an expression.
  * @param expr Expression to attempt to reduce
+ * @param fold_pc If non-zero, CURRENT_PC_NODE ($) is folded to the current PC value
  */
-static astnode *reduce_expression_complete(astnode *expr)
+static astnode *reduce_expression_complete(astnode *expr, int fold_pc)
 {
-    return astproc_fold_constants( reduce_highlevel_constructs( substitute_defines(expr) ) );
+    return fold_constants( reduce_highlevel_constructs( substitute_defines(expr) ), fold_pc );
 }
 
 /**
@@ -1264,10 +1387,11 @@ static astnode *reduce_expression_complete(astnode *expr)
  * new one, the original is finalized, and a pointer to the new expression
  * is returned.
  * If the expression is not reduced, the original pointer is returned.
+ * @param fold_pc If non-zero, CURRENT_PC_NODE ($) is folded to the current PC value
  */
-static astnode *reduce_expression(astnode *expr)
+static astnode *reduce_expression(astnode *expr, int fold_pc)
 {
-    return astproc_fold_constants( substitute_defines(expr) );
+    return fold_constants( substitute_defines(expr), fold_pc );
 }
 
 /**
@@ -1339,7 +1463,7 @@ static void reduce_record(symtab_entry *r, astnode *init, astnode *flat)
             term,
             val->loc
         );
-        result = reduce_expression(result);
+        result = reduce_expression(result, FOLD_PC_NO);
     }
     /* Determine reason for stopping loop */
     if (val != NULL) {
@@ -1762,6 +1886,18 @@ static int load_charmap(astnode *n, void *arg, astnode **next)
 }
 
 /**
+ * Increments PC according to the size of the included binary.
+ */
+static int inc_pc_by_binary(astnode *node, void *arg, astnode **next)
+{
+    if (in_dataseg)
+        dataseg_pc += node->binary.size;
+    else
+        codeseg_pc += node->binary.size;
+    return 0;
+}
+
+/**
  * First-time processing of instruction node.
  * @param instr Node of type INSTRUCTION_NODE
  * @param arg Not used
@@ -1776,8 +1912,80 @@ static int process_instruction(astnode *instr, void *arg, astnode **next)
         return 0;
     }
     else {
+        unsigned char op;
         expr = astnode_get_child(instr, 0);
-        reduce_expression(expr);
+        reduce_expression(expr, FOLD_PC_NO);
+        op = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
+        if (op != 0xFF) {
+            codeseg_pc += opcode_length(op);
+        } else {
+            /* opcode_get() could not resolve an opcode for this mnemonic/mode
+             * combination. This can happen e.g. for branch mnemonics that are
+             * initially parsed as ABSOLUTE_MODE and later rewritten to
+             * RELATIVE_MODE in translate_instruction().
+             *
+             * To avoid mis-estimating the instruction length (which would
+             * skew codeseg_pc and break EQU $ / PC-relative calculations),
+             * first detect known branch mnemonics and treat them as 2-byte
+             * relative branches, even if their mode is still ABSOLUTE_MODE
+             * at this point. Otherwise, estimate the length from the
+             * addressing mode and use a conservative default of 3 bytes
+             * when in doubt.
+             */
+            int estimated_len = 3;
+            int is_branch = 0;
+            int is_stx_abs_y = 0;
+            int is_sty_abs_x = 0;
+            instr_mnemonic mnc = instr->instr.mnemonic.value;
+            if (mnc == BPL_MNEMONIC || mnc == BMI_MNEMONIC ||
+                mnc == BVC_MNEMONIC || mnc == BVS_MNEMONIC ||
+                mnc == BCC_MNEMONIC || mnc == BCS_MNEMONIC ||
+                mnc == BNE_MNEMONIC || mnc == BEQ_MNEMONIC) {
+                is_branch = 1;
+            }
+            if (mnc == STX_MNEMONIC && instr->instr.mode == ABSOLUTE_Y_MODE) {
+                is_stx_abs_y = 1;
+            }
+            if (mnc == STY_MNEMONIC && instr->instr.mode == ABSOLUTE_X_MODE) {
+                is_sty_abs_x = 1;
+            }
+            switch (instr->instr.mode) {
+            case RELATIVE_MODE:
+                /* Branch instructions are 2 bytes (opcode + signed offset). */
+                estimated_len = 2;
+                break;
+            case ABSOLUTE_MODE:
+                if (is_branch) {
+                    /* Branch parsed as ABSOLUTE_MODE but will become RELATIVE_MODE. */
+                    estimated_len = 2;
+                } else {
+                    /* Absolute addressing uses a 16-bit operand. */
+                    estimated_len = 3;
+                }
+                break;
+            case ABSOLUTE_X_MODE:
+                if (is_sty_abs_x) {
+                    /* STY ABSOLUTE_X doesn't exist, will be reduced to ZEROPAGE_X */
+                    estimated_len = 2;
+                } else {
+                    estimated_len = 3;
+                }
+                break;
+            case ABSOLUTE_Y_MODE:
+                if (is_stx_abs_y) {
+                    /* STX ABSOLUTE_Y doesn't exist, will be reduced to ZEROPAGE_Y */
+                    estimated_len = 2;
+                } else {
+                    estimated_len = 3;
+                }
+                break;
+            default:
+                /* Other modes: keep conservative 3-byte estimate. */
+                estimated_len = 3;
+                break;
+            }
+            codeseg_pc += estimated_len;
+        }
         return 1;
     }
 }
@@ -1797,20 +2005,6 @@ static int process_data(astnode *data, void *arg, astnode **next)
     astnode *stmts;
     type = astnode_get_child(data, 0);
     assert(astnode_is_type(type, DATATYPE_NODE));
-    if (in_dataseg) {
-        err(data->loc, "value not allowed in data segment");
-        /* Replace with storage node  */
-        astnode_replace(
-            data,
-            astnode_create_storage(
-                astnode_create_datatype(BYTE_DATATYPE, NULL, data->loc),
-                astnode_create_integer(1, data->loc),
-                data->loc
-            )
-        );
-        astnode_finalize(data);
-        return 0;
-    }
     if (type->datatype == USER_DATATYPE) {
         /* Make sure the type exists */
         if (symtab_global_lookup(LHS(type)->ident) == NULL) {
@@ -1837,7 +2031,7 @@ static int process_data(astnode *data, void *arg, astnode **next)
     for (j=1; j<astnode_get_child_count(data); j++) {
         expr = astnode_get_child(data, j);
         /* Substitute defines and fold constants */
-        expr = reduce_expression(expr);
+        expr = reduce_expression(expr, FOLD_PC_NO);
         /* If it's a string, replace by array of integers */
         /* (makes it easier to process later... favour regularity) */
         if (astnode_is_type(expr, STRING_NODE)) {
@@ -1857,6 +2051,21 @@ static int process_data(astnode *data, void *arg, astnode **next)
             j += strlen(expr->string)-1;
             astnode_finalize(expr);
         }
+    }
+    {
+        int count = astnode_get_child_count(data) - 1;
+        int nbytes;
+        switch (type->datatype) {
+            case BYTE_DATATYPE:
+            case CHAR_DATATYPE:  nbytes = count; break;
+            case WORD_DATATYPE:  nbytes = count * 2; break;
+            case DWORD_DATATYPE: nbytes = count * 4; break;
+            default: nbytes = 0; break;
+        }
+        if (in_dataseg)
+            dataseg_pc += nbytes;
+        else
+            codeseg_pc += nbytes;
     }
     return 1;
 }
@@ -1895,11 +2104,16 @@ static int process_storage(astnode *storage, void *arg, astnode **next)
         type->datatype = BYTE_DATATYPE;
     }
     /* Substitute defines and fold constants */
-    expr = reduce_expression(expr);
+    expr = reduce_expression(expr, FOLD_PC_NO);
     // TODO: Validate range somewhere else than here please... ???
     if (astnode_is_type(expr, INTEGER_NODE)) {
         if ((expr->integer <= 0) || (expr->integer >= 0x10000)) {
             err(storage->loc, "operand out of range");
+        } else {
+            if (in_dataseg)
+                dataseg_pc += expr->integer;
+            else
+                codeseg_pc += expr->integer;
         }
     }
     return 1;
@@ -1916,7 +2130,7 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
     astnode *id;
     astnode *expr;
     expr = astnode_clone(astnode_get_child(equ, 1), equ->loc);
-    expr = reduce_expression(expr);
+    expr = reduce_expression(expr, FOLD_PC_YES);
     id = astnode_get_child(equ, 0);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
     e = symtab_lookup(id->ident);
@@ -1952,7 +2166,7 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
     /* Very similar to EQU, except symbol 1) can be
     redefined and 2) is volatile (see end of proc) */
     expr = astnode_clone(astnode_get_child(assign, 1), assign->loc);
-    expr = reduce_expression(expr);
+    expr = reduce_expression(expr, FOLD_PC_YES);
     id = astnode_get_child(assign, 0);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
     e = symtab_lookup(id->ident);
@@ -2057,7 +2271,7 @@ static int process_if(astnode *if_node, void *arg, astnode **next)
             /* The expression which is being tested */
             expr = astnode_get_child(c, 0);
             /* Try to reduce expression to literal */
-            expr = reduce_expression(expr);
+            expr = reduce_expression(expr, FOLD_PC_YES);
             /* Resulting expression must be an integer literal,
             since this is static evaluation.
             In other words, it can't contain label references.
@@ -2126,11 +2340,16 @@ static int process_org(astnode *org, void *arg, astnode **next)
         err(org->loc, "org directive can only be used when output format is pure 6502 binary");
     } else {
         astnode *addr = astnode_get_child(org, 0);
-        addr = reduce_expression_complete(addr);
+        addr = reduce_expression_complete(addr, FOLD_PC_YES);
         if (astnode_is_type(addr, INTEGER_NODE)) {
             /* Range check */
             if ((addr->integer < 0) || (addr->integer >= 0x10000)) {
                 err(org->loc, "org address out of 64K range");
+            } else {
+                if (in_dataseg)
+                    dataseg_pc = addr->integer;
+                else
+                    codeseg_pc = addr->integer;
             }
         } else {
             err(org->loc, "org address does not evaluate to literal");
@@ -2153,7 +2372,7 @@ static int process_rept(astnode *rept, void *arg, astnode **next)
     astnode *list;
     count = astnode_get_child(rept, 0);
     /* Try to reduce count expression to literal */
-    count = reduce_expression_complete(count);
+    count = reduce_expression_complete(count, FOLD_PC_YES);
     /* Resulting expression must be an integer literal,
     since this is static evaluation.
     */
@@ -2172,9 +2391,19 @@ static int process_rept(astnode *rept, void *arg, astnode **next)
                 astnode_add_sibling(stmts, astnode_remove_children(list) );
                 astnode_finalize(list);
             }
-            astnode_replace(rept, stmts);
+            {
+                astnode *push = astnode_create(PUSH_BRANCH_SCOPE_NODE, rept->loc);
+                astnode *pop = astnode_create(POP_BRANCH_SCOPE_NODE, rept->loc);
+                if (stmts != NULL) {
+                    astnode_add_sibling(push, stmts);
+                    astnode_add_sibling(astnode_get_last_sibling(stmts), pop);
+                } else {
+                    astnode_add_sibling(push, pop);
+                }
+                astnode_replace(rept, push);
+                *next = push;
+            }
             astnode_finalize(rept);
-            *next = stmts;
         } else {
             /* count == 0 */
             astnode_remove(rept);
@@ -2198,9 +2427,16 @@ static int process_while(astnode *while_node, void *arg, astnode **next)
     astnode *expr;
     astnode *stmts;
     astnode *list;
+    /* Safety limit to prevent infinite loops */
+    if (while_node->while_node.iterations++ > 5000) {
+        err(while_node->loc, "WHILE loop iteration limit exceeded");
+        astnode_remove(while_node);
+        astnode_finalize(while_node);
+        return 0;
+    }
     expr = astnode_get_child(while_node, 0);
     /* Try to reduce expression to literal */
-    expr = reduce_expression(astnode_clone(expr, expr->loc));
+    expr = reduce_expression(astnode_clone(expr, expr->loc), FOLD_PC_YES);
     /* Resulting expression must be an integer literal,
     since this is static evaluation.
     */
@@ -2210,9 +2446,19 @@ static int process_while(astnode *while_node, void *arg, astnode **next)
             list = astnode_clone(astnode_get_child(while_node, 1), while_node->loc);
             stmts = astnode_remove_children(list);
             astnode_finalize(list);
-            astnode_replace(while_node, stmts);
-            astnode_add_sibling(stmts, while_node);  /* Clever huh? */
-            *next = stmts;
+            {
+                astnode *push = astnode_create(PUSH_BRANCH_SCOPE_NODE, while_node->loc);
+                astnode *pop = astnode_create(POP_BRANCH_SCOPE_NODE, while_node->loc);
+                if (stmts != NULL) {
+                    astnode_add_sibling(push, stmts);
+                    astnode_add_sibling(astnode_get_last_sibling(stmts), pop);
+                } else {
+                    astnode_add_sibling(push, pop);
+                }
+                astnode_replace(while_node, push);
+                astnode_add_sibling(pop, while_node);
+                *next = push;
+            }
         } else {
             astnode_remove(while_node);
             astnode_finalize(while_node);
@@ -2266,7 +2512,7 @@ static int enter_label(astnode *label, void *arg, astnode **next)
     }
     e = symtab_enter(label->ident, LABEL_SYMBOL, label, (in_dataseg ? DATA_FLAG : 0) | symbol_modifiers );
     /* Check if hardcoded address */
-    addr = reduce_expression_complete(RHS(label));
+    addr = reduce_expression_complete(RHS(label), FOLD_PC_NO);
     if (astnode_is_type(addr, INTEGER_NODE)) {
         /* Store it */
         e->address = addr->integer;
@@ -2336,6 +2582,7 @@ static int enter_proc(astnode *proc, void *arg, astnode **next)
     /* Enter it! RHS(proc) is the list of procedure statements */
     symtab_enter(id->ident, PROC_SYMBOL, RHS(proc), (in_dataseg ? DATA_FLAG : 0) );
     label_count++;
+
     return 1;
 }
 
@@ -2357,7 +2604,7 @@ static astnode *enter_struc_atomic_field(astnode *c, astnode *offset, ordered_fi
     field_id = LHS(c);
     assert(astnode_get_type(field_id) == IDENTIFIER_NODE);
     field_data = RHS(c);
-    reduce_expression(RHS(field_data));
+    reduce_expression(RHS(field_data), FOLD_PC_NO);
     if (astnode_is_type(field_data, DATA_NODE)) {
         err(c->loc, "data initialization not allowed here");
         return(offset);
@@ -2386,7 +2633,7 @@ static astnode *enter_struc_atomic_field(astnode *c, astnode *offset, ordered_fi
         astnode_clone(RHS(field_data), field_data->loc),
         field_data->loc
     );
-    field_size = reduce_expression(field_size);
+    field_size = reduce_expression(field_size, FOLD_PC_NO);
     /* Set field size */
     fe->field.size = astnode_clone(field_size, field_size->loc);
     /* Add field size to total offset */
@@ -2396,7 +2643,7 @@ static astnode *enter_struc_atomic_field(astnode *c, astnode *offset, ordered_fi
         field_size,
         offset->loc
     );
-    offset = reduce_expression(offset);
+    offset = reduce_expression(offset, FOLD_PC_NO);
     return(offset);
 }
 
@@ -2454,7 +2701,7 @@ astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list
         astnode_clone(se->struc.size, offset->loc),
         offset->loc
     );
-    offset = reduce_expression(offset);
+    offset = reduce_expression(offset, FOLD_PC_NO);
     return(offset);
 }
 
@@ -2530,7 +2777,7 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
         field_id = LHS(c);
         assert(astnode_get_type(field_id) == IDENTIFIER_NODE);
         field_data = RHS(c);
-        reduce_expression(RHS(field_data));
+        reduce_expression(RHS(field_data), FOLD_PC_NO);
         if (astnode_is_type(field_data, DATA_NODE)) {
             err(c->loc, "data initialization not allowed here");
             continue;
@@ -2542,7 +2789,7 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
             astnode_clone(RHS(field_data), field_data->loc),
             field_data->loc
         );
-        field_size = reduce_expression(field_size);
+        field_size = reduce_expression(field_size, FOLD_PC_NO);
         if (!astnode_is_type(field_size, INTEGER_NODE)) {
             err(c->loc, "union member must be of constant size");
             astnode_finalize(field_size);
@@ -2635,7 +2882,7 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
                 }
             } else {
                 id = LHS(c);
-                val = reduce_expression_complete(astnode_clone(RHS(c), RHS(c)->loc));
+                val = reduce_expression_complete(astnode_clone(RHS(c), RHS(c)->loc), FOLD_PC_NO);
                 if (!astnode_is_type(val, INTEGER_NODE)) {
                     err(c->loc, "initializer does not evaluate to integer literal");
                     astnode_finalize(val);
@@ -2684,7 +2931,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
         for (c = record_id->next_sibling; c != NULL; c = c->next_sibling) {
             /* c has two children: field identifier and its width */
             field_id = LHS(c);
-            field_width = astnode_clone(reduce_expression(RHS(c)), RHS(c)->loc);
+            field_width = astnode_clone(reduce_expression(RHS(c), FOLD_PC_NO), RHS(c)->loc);
             /* Validate the width -- must be positive integer literal */
             if (!astnode_is_type(field_width, INTEGER_NODE)) {
                 err(c->loc, "record member `%s' is not of constant size", field_id->ident);
@@ -2811,7 +3058,8 @@ static int tag_extrn_symbols(astnode *extrn, void *arg, astnode **next)
  */
 static int process_message(astnode *message, void *arg, astnode **next)
 {
-    astnode *expr = reduce_expression_complete(LHS(message));
+    astnode *expr;
+    expr = reduce_expression_complete(LHS(message), FOLD_PC_YES);
     if (astnode_is_type(expr, STRING_NODE)) {
         printf("%s\n", expr->string);
     } else if (astnode_is_type(expr, INTEGER_NODE)) {
@@ -2829,7 +3077,8 @@ static int process_message(astnode *message, void *arg, astnode **next)
  */
 static int process_warning(astnode *warning, void *arg, astnode **next)
 {
-    astnode *expr = reduce_expression_complete(LHS(warning));
+    astnode *expr;
+    expr = reduce_expression_complete(LHS(warning), FOLD_PC_YES);
     if (astnode_is_type(expr, STRING_NODE)) {
         warn(warning->loc, expr->string);
     } else {
@@ -2845,7 +3094,8 @@ static int process_warning(astnode *warning, void *arg, astnode **next)
  */
 static int process_error(astnode *error, void *arg, astnode **next)
 {
-    astnode *expr = reduce_expression_complete(LHS(error));
+    astnode *expr;
+    expr = reduce_expression_complete(LHS(error), FOLD_PC_YES);
     if (astnode_is_type(expr, STRING_NODE)) {
         err(error->loc, expr->string);
     } else {
@@ -2869,14 +3119,13 @@ static int process_forward_branch_decl(astnode *n, void *arg, astnode **next)
     int level;
     char str[32];
     size_t base_len;
-    assert(!strchr(n->ident, '#'));
     if (!branch_level(n, '+', "forward", &level)) {
         return 0;
     }
     /* Get branch info structure for label (+, ++, ...) */
-    forward_branch_info *fwd = &forward_branch[level];
+    forward_branch_info *fwd = &branch_scope_stack->forward[level];
     /* Morph n to globally unique label */
-    snprintf(str, sizeof (str), "#%d", fwd->counter);
+    snprintf(str, sizeof (str), "#%d#%d", branch_scope_stack->id, fwd->counter);
     base_len = strlen(n->ident);
     new_label = (char *)realloc(n->ident, base_len + strlen(str) + 1);
     if (new_label == NULL) {
@@ -2914,15 +3163,14 @@ static int process_backward_branch_decl(astnode *n, void *arg, astnode **next)
     int level;
     char str[32];
     size_t base_len;
-    assert(!strchr(n->ident, '#'));
     if (!branch_level(n, '-', "backward", &level)) {
         return 0;
     }
     /* Get branch info */
-    backward_branch_info *bwd = &backward_branch[level];
+    backward_branch_info *bwd = &branch_scope_stack->backward[level];
     bwd->decl = n;
     /* Morph n to globally unique label */
-    snprintf(str, sizeof (str), "#%d", bwd->counter);
+    snprintf(str, sizeof (str), "#%d#%d", branch_scope_stack->id, bwd->counter);
     base_len = strlen(n->ident);
     new_label = (char *)realloc(n->ident, base_len + strlen(str) + 1);
     if (new_label == NULL) {
@@ -2950,7 +3198,7 @@ static int process_forward_branch(astnode *n, void *arg, astnode **next)
         return 0;
     }
     /* Add n to proper forward_branch array */
-    forward_branch_info *fwd = &forward_branch[level];
+    forward_branch_info *fwd = &branch_scope_stack->forward[level];
     if (fwd->index >= FORWARD_BRANCH_REF_MAX) {
         err(n->loc, "too many unresolved references to `%s' (max %d)", n->ident, FORWARD_BRANCH_REF_MAX);
         return 0;
@@ -2973,7 +3221,7 @@ static int process_backward_branch(astnode *n, void *arg, astnode **next)
         return 0;
     }
     /* Get branch info */
-    backward_branch_info *bwd = &backward_branch[level];
+    backward_branch_info *bwd = &branch_scope_stack->backward[level];
     /* Make sure it's a valid reference */
     if (bwd->decl != NULL) {
         /* Fix n->ident */
@@ -3038,12 +3286,25 @@ static int validate_ref(astnode *n, void *arg, astnode **next)
         }
         symtab_list_finalize(&list);
         if (e == NULL) {
-            strtok(n->ident, "#");  /* Remove globalize junk */
-//            err(n->loc, "unknown symbol `%s'", n->ident);
-            /* ### Replace by integer 0 */
-            //astnode_replace(n, astnode_create_integer(0, n->loc) );
-            //astnode_finalize(n);
-            warn(n->loc, "`%s' undeclared; assuming external label", n->ident);
+            char *display_name = (char *)malloc(strlen(n->ident) + 1);
+            if (display_name != NULL) {
+                strcpy(display_name, n->ident);
+                strtok(display_name, "#");  /* Remove globalize junk */
+                if (strncmp(display_name, "@@", 2) == 0) {
+                    err(n->loc, "undefined local label `%s'", display_name);
+                } else {
+                    warn(n->loc, "`%s' undeclared; assuming external label", display_name);
+                }
+                free(display_name);
+            } else {
+                /* Fallback to original name if OOM */
+                if (strncmp(n->ident, "@@", 2) == 0) {
+                    err(n->loc, "undefined local label `%s'", n->ident);
+                } else {
+                    warn(n->loc, "`%s' undeclared; assuming external label", n->ident);
+                }
+            }
+            /* Enter it anyway to avoid late-pass crashes on unresolved symbols */
             e = symtab_enter(n->ident, LABEL_SYMBOL, NULL, EXTRN_FLAG);
         }
     }
@@ -3299,6 +3560,7 @@ void astproc_first_pass(astnode *root)
         { DATASEG_NODE, process_dataseg },
         { CODESEG_NODE, process_codeseg },
         { ORG_NODE, process_org },
+        { BINARY_NODE, inc_pc_by_binary },
         { CHARMAP_NODE, load_charmap },
         { INSTRUCTION_NODE, process_instruction },
         { DATA_NODE, process_data },
@@ -3316,6 +3578,8 @@ void astproc_first_pass(astnode *root)
         { BACKWARD_BRANCH_DECL_NODE, process_backward_branch_decl },
         { FORWARD_BRANCH_NODE, process_forward_branch },
         { BACKWARD_BRANCH_NODE, process_backward_branch },
+        { PUSH_BRANCH_SCOPE_NODE, handle_push_branch_scope },
+        { POP_BRANCH_SCOPE_NODE, handle_pop_branch_scope },
         { 0, NULL }
     };
     reset_charmap();
@@ -3323,6 +3587,9 @@ void astproc_first_pass(astnode *root)
     in_dataseg = 0; /* codeseg is default */
     /* Do the walk. */
     astproc_walk(root, NULL, map);
+    while (branch_scope_stack != NULL) {
+        branch_pop();
+    }
     /* Remove all the volatile constants from the symbol table */
     /* These are the ones defined with the '=' operator, whose identifiers should
     all have been replaced by their value in the syntax tree now. Since
@@ -3408,7 +3675,7 @@ static int tag_align_symbols(astnode *align, void *arg, astnode **next)
                 switch (e->type) {
                     case LABEL_SYMBOL:
                     case VAR_SYMBOL:
-                    expr = reduce_expression(RHS(align));
+                    expr = reduce_expression(RHS(align), FOLD_PC_NO);
                     if (!astnode_is_type(expr, INTEGER_NODE)) {
                         err(align->loc, "alignment expression must be an integer literal");
                     } else if ((expr->integer < 0) || (expr->integer >= 0x10000)) {
@@ -3477,8 +3744,15 @@ void remove_unused_labels()
         symtab_entry * e = symtab_lookup(id);
         if ((e->ref_count == 0) && ((e->flags & (PUBLIC_FLAG | EXTRN_FLAG)) == 0)) {
             n = e->def;
-            strtok(n->label, "#");  /* Remove globalize junk */
-            warn(n->loc, "`%s' defined but not used", n->label);
+            char *display_name = (char *)malloc(strlen(n->label) + 1);
+            if (display_name != NULL) {
+                strcpy(display_name, n->label);
+                strtok(display_name, "#");  /* Remove globalize junk */
+                warn(n->loc, "`%s' defined but not used", display_name);
+                free(display_name);
+            } else {
+                warn(n->loc, "`%s' defined but not used", n->label);
+            }
             astnode_remove(n);
             astnode_finalize(n);
             //symtab_remove(n->label); ### FIXME leads to crash sometimes...
@@ -3672,7 +3946,7 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
 {
     unsigned char c;
     /* Put the operand in final form */
-    astnode *o = reduce_expression_complete( LHS(instr) );
+    astnode *o = reduce_expression_complete( LHS(instr), FOLD_PC_NO );
     assert(o == LHS(instr));
     /* Convert (mnemonic, addressing mode) pair to opcode */
     instr->instr.opcode = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
@@ -3787,7 +4061,7 @@ static int maybe_merge_data(astnode *n, void *arg, astnode **next)
     } else {
         /* Reduce expressions to final form */
         for (n = n->first_child; n != NULL; n = temp->next_sibling) {
-            temp = reduce_expression_complete(n);
+            temp = reduce_expression_complete(n, FOLD_PC_NO);
             if (astnode_is_type(temp, INTEGER_NODE)) {
                 /* Check that value fits according to datatype */
                 switch (type->datatype) {
@@ -3838,13 +4112,13 @@ static int maybe_merge_storage(astnode *storage, void *arg, astnode **next)
             astnode_clone(old_count, storage->loc),
             storage->loc
         );
-        new_count = reduce_expression_complete(new_count);
+        new_count = reduce_expression_complete(new_count, FOLD_PC_NO);
         astnode_replace(old_count, new_count);
         astnode_finalize(old_count);
         astnode_finalize(temp);
         *next = storage;
     } else {
-        reduce_expression_complete(RHS(storage));
+        reduce_expression_complete(RHS(storage), FOLD_PC_NO);
     }
     return 0;
 }
@@ -4009,8 +4283,7 @@ static astnode *eval_expression(astnode *expr)
 
         case IDENTIFIER_NODE: {
             symtab_entry *e = symtab_lookup(expr->ident);
-// ###        assert(e->type == LABEL_SYMBOL);
-            if (e->flags & ADDR_FLAG)
+            if (e != NULL && e->type == LABEL_SYMBOL && (e->flags & ADDR_FLAG))
                 return astnode_create_integer(e->address, expr->loc);
         } break;
 
@@ -4042,10 +4315,12 @@ static int set_pc_from_org(astnode *org, void *arg, astnode **next)
 {
     astnode *addr = LHS(org);
     assert(astnode_is_type(addr, INTEGER_NODE));
-    if (in_dataseg)
-        dataseg_pc = addr->integer;
-    else
-        codeseg_pc = addr->integer;
+    if ((addr->integer >= 0) && (addr->integer < 0x10000)) {
+        if (in_dataseg)
+            dataseg_pc = addr->integer;
+        else
+            codeseg_pc = addr->integer;
+    }
     return 0;
 }
 
@@ -4055,7 +4330,9 @@ static int set_pc_from_org(astnode *org, void *arg, astnode **next)
 static int ensure_symbol_is_defined(astnode *id, void *arg, astnode **next)
 {
     symtab_entry *e = symtab_lookup(id->ident);
-    assert(e);
+    if (e == NULL) {
+        return 0;
+    }
     if (xasm_args.pure_binary && (e->flags & EXTRN_FLAG) && !(e->flags & ERROR_UNDEFINED_FLAG)) {
         err(id->loc, "cannot generate pure binary because `%s' is not defined", id->ident);
         e->flags |= ERROR_UNDEFINED_FLAG;
@@ -4097,26 +4374,19 @@ static int inc_pc_by_data(astnode *data, void *arg, astnode **next)
     astnode *type = LHS(data);
     int count = astnode_get_child_count(data) - 1;
     int nbytes;
-    assert(!in_dataseg);
     switch (type->datatype) {
-        case BYTE_DATATYPE:  nbytes = count; break;
+        case BYTE_DATATYPE:
+        case CHAR_DATATYPE:  nbytes = count; break;
         case WORD_DATATYPE:  nbytes = count * 2; break;
         case DWORD_DATATYPE: nbytes = count * 4; break;
         default:
         assert(0);
         break;
     }
-    codeseg_pc += nbytes;
-    return 0;
-}
-
-/**
- * Increments PC according to the size of the included binary.
- */
-static int inc_pc_by_binary(astnode *node, void *arg, astnode **next)
-{
-    assert(!in_dataseg);
-    codeseg_pc += node->binary.size;
+    if (in_dataseg)
+        dataseg_pc += nbytes;
+    else
+        codeseg_pc += nbytes;
     return 0;
 }
 
@@ -4130,10 +4400,12 @@ static int inc_pc_by_storage(astnode *storage, void *arg, astnode **next)
     astnode *count = eval_expression(RHS(storage));
     if (count) {
         if (astnode_get_type(count) == INTEGER_NODE) {
-            if (in_dataseg)
-                dataseg_pc += count->integer;
-            else
-                codeseg_pc += count->integer;
+            if ((count->integer > 0) && (count->integer < 0x10000)) {
+                if (in_dataseg)
+                    dataseg_pc += count->integer;
+                else
+                    codeseg_pc += count->integer;
+            }
         }
         astnode_finalize(count);
     }
@@ -4234,7 +4506,9 @@ static int write_instruction(astnode *instr, void *arg, astnode **next)
                 fputc((unsigned char)(value >> 8), fp);
             }
         }
-        astnode_finalize(operand);
+        if (operand != NULL) {
+            astnode_finalize(operand);
+        }
     }
     codeseg_pc += opcode_length(instr->instr.opcode);
     return 0;
@@ -4245,17 +4519,38 @@ static int write_instruction(astnode *instr, void *arg, astnode **next)
  */
 static int write_data(astnode *data, void *arg, astnode **next)
 {
-    FILE *fp = (FILE *)arg;
     astnode *type = LHS(data);
     astnode *expr;
-    assert(!in_dataseg);
+    if (in_dataseg) {
+        int count = astnode_get_child_count(data) - 1;
+        int nbytes;
+        switch (type->datatype) {
+            case BYTE_DATATYPE:
+            case CHAR_DATATYPE:  nbytes = count; break;
+            case WORD_DATATYPE:  nbytes = count * 2; break;
+            case DWORD_DATATYPE: nbytes = count * 4; break;
+            default: nbytes = 0; break;
+        }
+        dataseg_pc += nbytes;
+        return 1;
+    }
+    FILE *fp = (FILE *)arg;
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr) ) {
         int value;
         astnode *e = eval_expression(expr);
-        assert(e->type == INTEGER_NODE);
+        if (e == NULL || !astnode_is_type(e, INTEGER_NODE)) {
+            err(expr->loc, "expression does not evaluate to integer literal");
+            codeseg_pc += (type->datatype == BYTE_DATATYPE || type->datatype == CHAR_DATATYPE) ? 1 :
+                          (type->datatype == WORD_DATATYPE) ? 2 : 4;
+            if (e != NULL) {
+                astnode_finalize(e);
+            }
+            continue;
+        }
         value = e->integer;
         switch (type->datatype) {
             case BYTE_DATATYPE:
+            case CHAR_DATATYPE:
             if (!IS_BYTE_VALUE(value)) {
                 warn(expr->loc, "operand out of range; truncated");
                 value &= 0xFF;
@@ -4296,11 +4591,22 @@ static int write_data(astnode *data, void *arg, astnode **next)
  */
 static int write_storage(astnode *storage, void *arg, astnode **next)
 {
+    if (in_dataseg) {
+        astnode *count = eval_expression(RHS(storage));
+        if (count) {
+            if (astnode_get_type(count) == INTEGER_NODE) {
+                if ((count->integer > 0) && (count->integer < 0x10000)) {
+                    dataseg_pc += count->integer;
+                }
+            }
+            astnode_finalize(count);
+        }
+        return 1;
+    }
     FILE *fp = (FILE *)arg;
     astnode *type = LHS(storage);
     astnode *count = eval_expression(RHS(storage));
     assert(type->datatype == BYTE_DATATYPE);
-    assert(!in_dataseg);
     if (count) {
         int i;
         assert(astnode_get_type(count) == INTEGER_NODE);
@@ -4317,8 +4623,11 @@ static int write_storage(astnode *storage, void *arg, astnode **next)
  */
 static int write_binary(astnode *node, void *arg, astnode **next)
 {
+    if (in_dataseg) {
+        dataseg_pc += node->binary.size;
+        return 0;
+    }
     FILE *fp = (FILE *)arg;
-    assert(!in_dataseg);
     fwrite(node->binary.data, 1, node->binary.size, fp);
     codeseg_pc += node->binary.size;
     return 0;

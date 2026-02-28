@@ -226,6 +226,8 @@ enum tag_astnode_type {
     MASK_NODE,
     INDEX_NODE,
     ORG_NODE,
+    PUSH_BRANCH_SCOPE_NODE,
+    POP_BRANCH_SCOPE_NODE,
     TOMBSTONE_NODE
 };
 
@@ -303,6 +305,15 @@ struct tag_binary_attribs {
 typedef struct tag_binary_attribs binary_attribs;
 
 /**
+ * WHILE node attributes.
+ */
+struct tag_while_attribs {
+    int iterations;
+};
+
+typedef struct tag_while_attribs while_attribs;
+
+/**
  * Structure that defines content of a node in the abstract syntax tree.
  */
 struct tag_astnode {
@@ -318,6 +329,7 @@ struct tag_astnode {
         arithmetic_operator oper;   /* type == ARITHMETIC_NODE */
         datatype datatype;  /* type == DATATYPE_NODE */
         int modifiers;  /* type == DATASEG_NODE, VAR_DECL_NODE */
+        while_attribs while_node; /* type == WHILE_NODE */
     /* The other node types have attributes stored as children,
     or can use this general-purpose field: */
         long param;

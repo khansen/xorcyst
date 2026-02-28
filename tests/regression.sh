@@ -76,6 +76,7 @@ run_expect_success_with_listing() {
 
 run_expect_success_pure_binary_with_listing() {
     asm_file=$1
+    expected_addr=${2:-8000}
     out_file="$TMPDIR/out-pure-listing.bin"
     lst_file="$TMPDIR/out-pure-listing.lst"
     log_file="$TMPDIR/out-pure-listing.log"
@@ -89,8 +90,8 @@ run_expect_success_pure_binary_with_listing() {
         fail "pure-binary listing file was not generated for $asm_file"
     fi
 
-    if ! grep -q "8000" "$lst_file"; then
-        fail "expected ORG address missing from pure-binary listing for $asm_file"
+    if ! grep -Fq -- "$expected_addr" "$lst_file"; then
+        fail "expected ORG address $expected_addr missing from pure-binary listing for $asm_file"
     fi
 
     if ! grep -q "A9 01" "$lst_file"; then
@@ -668,14 +669,14 @@ ASM
         cat "$log_cmp" >&2
         fail "edge hardening: xref default failed"
     fi
-    if grep -q -- '-#0' "$xref_default" || grep -q -- '+#0' "$xref_default"; then
+    if grep -q -- '-#' "$xref_default" || grep -q -- '+#' "$xref_default"; then
         fail "edge hardening: anonymous labels should be excluded by default"
     fi
     if ! "$XASM" --pure-binary --xref="$xref_anon" --xref-include-anon=true "$asm_anon" -o "$TMPDIR/edge-anon.bin" >"$log_cmp" 2>&1; then
         cat "$log_cmp" >&2
         fail "edge hardening: xref include anon failed"
     fi
-    if ! grep -q -- '"name":"-#0"' "$xref_anon" || ! grep -q -- '"name":"+#0"' "$xref_anon"; then
+    if ! grep -Eq '"name":"-#0(#[0-9]+)?"' "$xref_anon" || ! grep -Eq '"name":"\+#0(#[0-9]+)?"' "$xref_anon"; then
         fail "edge hardening: anonymous symbols missing with --xref-include-anon=true"
     fi
 
@@ -748,12 +749,12 @@ ASM
         fail "expected Reset2 label line in listing"
     fi
 
-    if ! grep -Eq '^Reset-#0[[:space:]]+= \$C002$' "$lst_file"; then
-        fail "expected scoped backward label Reset-#0 in symbol table"
+    if ! grep -Eq '^Reset-#0#0[[:space:]]+= \$C002$' "$lst_file"; then
+        fail "expected scoped backward label Reset-#0#0 in symbol table"
     fi
 
-    if ! grep -Eq '^Reset-#1[[:space:]]+= \$C005$' "$lst_file"; then
-        fail "expected scoped backward label Reset-#1 in symbol table"
+    if ! grep -Eq '^Reset-#0#1[[:space:]]+= \$C005$' "$lst_file"; then
+        fail "expected scoped backward label Reset-#0#1 in symbol table"
     fi
 
     if ! grep -Eq '^Reset@@loop[[:space:]]+= \$C009$' "$lst_file"; then
@@ -944,5 +945,644 @@ cat > "$TMPDIR/link_fail_no_output.script" <<EOF
 link{file=$TMPDIR/link_unit_a.o,origin=\$8000}
 EOF
 run_xlnk_expect_error_no_crash "$TMPDIR/link_fail_no_output.script" "no output open"
+
+# Regression: DSB in DATASEG must not crash in pure binary mode
+cat > "$TMPDIR/dataseg-dsb-crash.asm" <<'ASM'
+ORG $C000
+DATASEG
+Foo: DSB 1
+CODESEG
+Start:
+    LDA Foo
+    RTS
+END
+ASM
+run_expect_success_pure_binary "$TMPDIR/dataseg-dsb-crash.asm"
+
+# Regression: EQU $ must be static (evaluated at definition point)
+cat > "$TMPDIR/equ-pc-static.asm" <<'ASM'
+ORG $C000
+Start:
+    LDA #1
+Foo EQU $
+    LDA #2
+    LDX #Foo
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/equ-pc-static.asm" "C000"
+if ! grep -q "Foo.*=.*\$C002" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "EQU \$ was not static (expected \$C002 for Foo)"
+fi
+
+# Regression: EQU $ must be correct even after a branch instruction
+# (which is initially parsed as ABSOLUTE_MODE but is 2 bytes RELATIVE_MODE)
+cat > "$TMPDIR/equ-pc-after-branch.asm" <<'ASM'
+ORG $C000
+Start:
+    LDA #1
+    BEQ +
+Foo EQU $
++   RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/equ-pc-after-branch.asm" "C000"
+if ! grep -q "Foo.*=.*\$C004" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "EQU \$ after branch was incorrect (expected \$C004 for Foo)"
+fi
+
+# Regression: Anonymous labels must be isolated in macros
+cat > "$TMPDIR/macro-anon-isolation.asm" <<'ASM'
+ORG $C000
+MACRO test_macro
+    BNE +
+    LDA #1
++   NOP
+ENDM
+Start:
+    BEQ +
+    test_macro
++   RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/macro-anon-isolation.asm" "C000"
+# Start+#0#0 should be the target of BEQ +, which is the RTS at the end ($C007)
+if ! grep -q "Start+#0#0.*=.*\$C007" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Anonymous labels were not isolated in macro"
+fi
+
+# Regression: Anonymous labels must span procedure boundaries
+# (unlike local labels, + and - are scoped to public labels, not procs)
+cat > "$TMPDIR/proc-anon-span.asm" <<'ASM'
+ORG $C000
+.proc flush
+    LDA $10
+    BEQ +
+    LDA #0
+    STA $10
+    RTS
+.endp
+.proc other
+    LDA #1
++   RTS
+.endp
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/proc-anon-span.asm" "C000"
+# The + in flush should resolve to the + declaration in other ($C00B)
+if ! grep -q "+#0#0.*=.*\$C00B" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Anonymous labels should span procedure boundaries"
+fi
+
+# Regression: Anonymous labels must be isolated in REPT blocks
+cat > "$TMPDIR/rept-anon-isolation.asm" <<'ASM'
+ORG $C000
+Start:
+    BEQ +
+    REPT 2
+    BNE +
+    LDA #1
++   NOP
+    ENDM
++   RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/rept-anon-isolation.asm" "C000"
+# The outer + should resolve to the RTS after the REPT block, not the + inside
+if ! grep -q "Start+#0#0.*=.*\$C00C" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Anonymous labels were not isolated in REPT block"
+fi
+
+# Regression: Anonymous labels must be isolated in WHILE blocks
+cat > "$TMPDIR/while-anon-isolation.asm" <<'ASM'
+ORG $C000
+COUNT = 1
+Start:
+    BEQ +
+    WHILE COUNT > 0
+    BNE +
+    LDA #1
++   NOP
+COUNT = COUNT - 1
+    ENDM
++   RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/while-anon-isolation.asm" "C000"
+if ! grep -q "Start+#0#0.*=.*\$C007" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Anonymous labels were not isolated in WHILE block"
+fi
+
+# Regression: undefined local label must produce a clear error, not "assuming external"
+cat > "$TMPDIR/local-label-undefined.asm" <<'ASM'
+ORG $C000
+.proc first
+    LDA #0
+    BEQ @@done
+    RTS
+.endp
+.proc second
+    @@done:
+    RTS
+.endp
+END
+ASM
+run_expect_error_no_crash "$TMPDIR/local-label-undefined.asm" "undefined local label"
+
+# Regression: Labels must remain relocatable in object files
+cat > "$TMPDIR/reloc-label-a.asm" <<'ASM'
+.public Target
+Target:
+    RTS
+END
+ASM
+cat > "$TMPDIR/reloc-label-b.asm" <<'ASM'
+.extrn Target:label
+    DW Target
+END
+ASM
+if ! "$XASM" "$TMPDIR/reloc-label-a.asm" -o "$TMPDIR/reloc-label-a.o" >/dev/null 2>&1; then
+    fail "failed to assemble relocatable unit A"
+fi
+if ! "$XASM" "$TMPDIR/reloc-label-b.asm" -o "$TMPDIR/reloc-label-b.o" >/dev/null 2>&1; then
+    fail "failed to assemble relocatable unit B"
+fi
+cat > "$TMPDIR/reloc-link.script" <<EOF
+output{file=$TMPDIR/reloc-link.bin}
+bank{size=\$1000,origin=\$C000}
+link{file=$TMPDIR/reloc-label-a.o}
+link{file=$TMPDIR/reloc-label-b.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/reloc-link.script"
+# Unit A is 1 byte (RTS). Unit B is 2 bytes (DW Target).
+# Target is at $C000. So Unit B should contain $00 $C0.
+# The binary will be [RTS] [00] [C0].
+# We check for the sequence 60 00 c0.
+if ! od -An -t x1 "$TMPDIR/reloc-link.bin" | tr -d '[:space:]' | grep -q "6000c0"; then
+    od -t x1 "$TMPDIR/reloc-link.bin" >&2
+    fail "Label was not correctly relocated (frozen at Pass 1 address?)"
+fi
+
+# Regression: EQU $ must snapshot, but normal labels must remain accurate 
+# even when ZP optimization changes instruction lengths between passes.
+cat > "$TMPDIR/zp-opt-accurate-pc.asm" <<'ASM'
+    ORG $0080
+Start:
+    LDA #1
+    LDA Target  ; Pass 1: estimated 3 bytes (Absolute)
+                ; Pass 3: optimized to 2 bytes (Zero Page)
+Snap EQU $      ; Pass 1: $0082 + 3 = $0085
+                ; Pass 5: should still be $0085
+Target:         ; Pass 1: $0085
+                ; Pass 5: should be $0084 (LDA #1=2, LDA Target=2)
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/zp-opt-accurate-pc.asm" "0080"
+if ! grep -q "Snap.*=.*\$0085" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "EQU \$ did not correctly snapshot Pass 1 PC"
+fi
+if ! grep -q "Target.*=.*\$0084" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Normal label address was frozen at Pass 1 PC instead of remaining accurate"
+fi
+
+# Regression: Invalid ORG address should not poison PC-relative equates
+cat > "$TMPDIR/org-range-poison.asm" <<'ASM'
+    ORG $8000
+    LDA #1
+    ORG $10000 ; Out of range
+    .message $
+END
+ASM
+# We expect error but we want to check the output to see if PC remained $8002
+"$XASM" --pure-binary "$TMPDIR/org-range-poison.asm" -o "$TMPDIR/org-range-poison.bin" > "$TMPDIR/org-range-poison.log" 2>&1 || true
+if ! grep -q "32770" "$TMPDIR/org-range-poison.log"; then
+    cat "$TMPDIR/org-range-poison.log" >&2
+    fail "Invalid ORG poisoned subsequent PC (expected 32770/$8002)"
+fi
+
+# Regression: Invalid DSB count should not poison PC-relative equates
+cat > "$TMPDIR/dsb-range-poison.asm" <<'ASM'
+    ORG $8000
+    LDA #1
+    DSB -1 ; Out of range (negative)
+    .message $
+END
+ASM
+"$XASM" --pure-binary "$TMPDIR/dsb-range-poison.asm" -o "$TMPDIR/dsb-range-poison.bin" > "$TMPDIR/dsb-range-poison.log" 2>&1 || true
+if ! grep -q "32770" "$TMPDIR/dsb-range-poison.log"; then
+    cat "$TMPDIR/dsb-range-poison.log" >&2
+    fail "Invalid DSB count poisoned subsequent PC (expected 32770/$8002)"
+fi
+
+# Regression: Weird macro arguments must not crash the assembler
+cat > "$TMPDIR/weird-macro-args.asm" <<'ASM'
+MACRO weird arg
+  LDA arg
+ENDM
+  weird #1
+  weird $1234
+  weird +
+  weird @@local
+  weird RTS
+END
+ASM
+# We expect errors but NO crash
+"$XASM" --pure-binary "$TMPDIR/weird-macro-args.asm" -o "$TMPDIR/weird-macro-args.bin" >/dev/null 2>&1 || true
+
+# Regression: Instruction length estimation must handle modes that get reduced
+cat > "$TMPDIR/instr-length-reduction.asm" <<'ASM'
+    ORG $0080
+Start:
+    LDA #1
+    STX $1234,y ; Pass 1: STX ABSOLUTE_Y -> estimated 2 bytes (will become ZEROPAGE_Y)
+Snap EQU $      ; Pass 1: $0082 + 2 = $0084
+                ; Pass 5: should still be $0084
+Target:         ; Pass 1: $0084
+                ; Pass 5: should be $0084
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/instr-length-reduction.asm" "0080"
+if ! grep -q "Snap.*=.*\$0084" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Instruction length reduction was not correctly estimated (EQU \$ snapshot wrong)"
+fi
+
+# Regression: ASSIGN (=) with $ must snapshot PC at definition point, not use point
+cat > "$TMPDIR/assign-pc-snapshot.asm" <<'ASM'
+    ORG $C000
+    LDA #1
+foo = $
+    LDA #2
+    LDA #3
+    .message foo
+END
+ASM
+"$XASM" --pure-binary "$TMPDIR/assign-pc-snapshot.asm" -o "$TMPDIR/assign-pc-snapshot.bin" > "$TMPDIR/assign-pc-snapshot.log" 2>&1 || true
+# foo = $ is at PC $C002 (after ORG $C000 + LDA #1). Message should print 49154.
+if ! grep -q "49154" "$TMPDIR/assign-pc-snapshot.log"; then
+    cat "$TMPDIR/assign-pc-snapshot.log" >&2
+    fail "ASSIGN (=) with \$ did not snapshot PC at definition point (expected 49154/\$C002)"
+fi
+
+# Regression: Forward branches near 128-byte limit must not go out of range in linked object files
+cat > "$TMPDIR/branch-limit-obj.asm" <<'ASM'
+.extrn state:label
+.proc test_proc
+    cmp #$B0
+    bcc target_label    ; forward branch over ~105 bytes
+    lda #1
+    sta state
+    lda #2
+    sta state
+    lda #3
+    sta state
+    lda #4
+    sta state
+    lda #5
+    sta state
+    lda #6
+    sta state
+    lda #7
+    sta state
+    lda #8
+    sta state
+    lda #9
+    sta state
+    lda #10
+    sta state
+    lda #11
+    sta state
+    lda #12
+    sta state
+    lda #13
+    sta state
+    lda #14
+    sta state
+    lda #15
+    sta state
+    lda #16
+    sta state
+    lda #17
+    sta state
+    lda #18
+    sta state
+    lda #19
+    sta state
+    lda #20
+    sta state
+    lda #21
+    sta state
+    target_label:
+    rts
+.endp
+END
+ASM
+cat > "$TMPDIR/branch-limit-state.asm" <<'ASM'
+.public state
+state:
+    DSB 1
+END
+ASM
+if ! "$XASM" "$TMPDIR/branch-limit-obj.asm" -o "$TMPDIR/branch-limit-obj.o" >/dev/null 2>&1; then
+    fail "failed to assemble branch-limit-obj.asm"
+fi
+if ! "$XASM" "$TMPDIR/branch-limit-state.asm" -o "$TMPDIR/branch-limit-state.o" >/dev/null 2>&1; then
+    fail "failed to assemble branch-limit-state.asm"
+fi
+cat > "$TMPDIR/branch-limit-link.script" <<EOF
+output{file=$TMPDIR/branch-limit-link.bin}
+bank{size=\$2000,origin=\$C000}
+link{file=$TMPDIR/branch-limit-obj.o}
+link{file=$TMPDIR/branch-limit-state.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/branch-limit-link.script"
+
+# Test: CHAR_DATATYPE must be included in Pass 1 PC tracking
+cat > "$TMPDIR/char-pc-tracking.asm" <<'ASM'
+    ORG $C000
+    .char 65, 66, 67   ; 3 bytes
+Snap EQU $
+    .message Snap
+END
+ASM
+"$XASM" --pure-binary "$TMPDIR/char-pc-tracking.asm" -o "$TMPDIR/char-pc-tracking.bin" > "$TMPDIR/char-pc-tracking.log" 2>&1 || true
+# .char 65,66,67 = 3 bytes, so Snap should be $C003 = 49155
+if ! grep -q "49155" "$TMPDIR/char-pc-tracking.log"; then
+    cat "$TMPDIR/char-pc-tracking.log" >&2
+    fail "CHAR_DATATYPE not tracked in Pass 1 PC (expected 49155/\$C003)"
+fi
+
+# Test: Backward branch labels (-) must be isolated in macro scopes
+cat > "$TMPDIR/macro-backward-isolation.asm" <<'ASM'
+    ORG $C000
+
+.macro test_macro
+    -:
+    LDA #1
+    BNE -
+.endm
+
+    -:
+    LDA #2
+    test_macro
+    BNE -           ; must refer to outer -, not macro's -
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/macro-backward-isolation.asm" "C000"
+# The outer BNE - should jump to the outer label at $C000, not to the macro's label.
+# If isolation fails, it would jump to the wrong target.
+# Check listing for the outer backward label at $C000.
+# The outer - label should be -#0#0 and the macro's - label should be -#0#1#0
+# (different scope IDs prove isolation). Both must exist in the symbol table.
+if ! grep -q -- "-#0#0.*=.*\$C000" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Backward branch label not correctly isolated in macro scope"
+fi
+if ! grep -q -- "-#0#1#0" "$TMPDIR/out-pure-listing.lst"; then
+    cat "$TMPDIR/out-pure-listing.lst" >&2
+    fail "Macro backward branch label missing from symbol table"
+fi
+
+# Test: Nested scopes (macro inside REPT) with anonymous labels
+cat > "$TMPDIR/nested-scope-isolation.asm" <<'ASM'
+    ORG $C000
+
+.macro inner_macro
+    BEQ +
+    LDA #1
+    +:
+.endm
+
+    REPT 2
+    BEQ +
+    inner_macro
+    +:
+    ENDM
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/nested-scope-isolation.asm" "C000"
+
+# Test: Multiple anonymous label levels (++, +++)
+cat > "$TMPDIR/multi-level-anon.asm" <<'ASM'
+    ORG $C000
+    BEQ +
+    BEQ ++
+    LDA #1
+    +:
+    LDA #2
+    ++:
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/multi-level-anon.asm" "C000"
+
+# Test: EQU with complex $ expression ($ + offset)
+cat > "$TMPDIR/equ-pc-complex.asm" <<'ASM'
+    ORG $C000
+    LDA #1          ; 2 bytes -> PC = $C002
+foo EQU $ + 5       ; should be $C002 + 5 = $C007
+    LDA #2
+    .message foo
+END
+ASM
+"$XASM" --pure-binary "$TMPDIR/equ-pc-complex.asm" -o "$TMPDIR/equ-pc-complex.bin" > "$TMPDIR/equ-pc-complex.log" 2>&1 || true
+# $C007 = 49159
+if ! grep -q "49159" "$TMPDIR/equ-pc-complex.log"; then
+    cat "$TMPDIR/equ-pc-complex.log" >&2
+    fail "EQU \$ + offset did not evaluate correctly (expected 49159/\$C007)"
+fi
+
+# Test: Binary include (.incbin) PC tracking
+printf '\x01\x02\x03\x04\x05' > "$TMPDIR/five-bytes.bin"
+cat > "$TMPDIR/incbin-pc-tracking.asm" <<'ASM'
+    ORG $C000
+    LDA #1          ; 2 bytes
+ASM
+# Use printf to write the INCBIN line with the proper path
+printf '    INCBIN "%s"\n' "$TMPDIR/five-bytes.bin" >> "$TMPDIR/incbin-pc-tracking.asm"
+cat >> "$TMPDIR/incbin-pc-tracking.asm" <<'ASM'
+Snap EQU $
+    .message Snap
+END
+ASM
+"$XASM" --pure-binary "$TMPDIR/incbin-pc-tracking.asm" -o "$TMPDIR/incbin-pc-tracking.out" > "$TMPDIR/incbin-pc-tracking.log" 2>&1 || true
+# LDA #1 = 2 bytes, INCBIN = 5 bytes -> Snap = $C000 + 7 = $C007 = 49159
+if ! grep -q "49159" "$TMPDIR/incbin-pc-tracking.log"; then
+    cat "$TMPDIR/incbin-pc-tracking.log" >&2
+    fail "INCBIN not tracked in Pass 1 PC (expected 49159/\$C007)"
+fi
+
+# Test: Branch at exact 127-byte boundary (should succeed)
+# BCC = 2 bytes. We need target_label at exactly PC+129 from the BCC
+# (offset = 127 from end of BCC instruction).
+# BCC(2) + 127 bytes of NOP = 129 bytes total; target at BCC+129 means offset=127.
+{
+cat <<'ASM'
+    ORG $C000
+    BCC target_label
+ASM
+# 127 bytes of NOP (1 byte each)
+for i in $(seq 1 127); do echo "    NOP"; done
+cat <<'ASM'
+    target_label:
+    RTS
+END
+ASM
+} > "$TMPDIR/branch-exact-127.asm"
+if ! "$XASM" --pure-binary "$TMPDIR/branch-exact-127.asm" -o "$TMPDIR/branch-exact-127.bin" >/dev/null 2>&1; then
+    fail "Branch at exact 127-byte offset should succeed"
+fi
+
+# Test: Branch far out of range (256 NOPs — offset exceeds byte range)
+{
+cat <<'ASM'
+    ORG $C000
+    BCC target_label
+ASM
+# 256 bytes of NOP (offset = 256, well past byte range)
+for i in $(seq 1 256); do echo "    NOP"; done
+cat <<'ASM'
+    target_label:
+    RTS
+END
+ASM
+} > "$TMPDIR/branch-far-out-of-range.asm"
+set +e
+"$XASM" --pure-binary "$TMPDIR/branch-far-out-of-range.asm" -o "$TMPDIR/branch-far-out-of-range.bin" >"$TMPDIR/branch-far-out-of-range.log" 2>&1
+status=$?
+set -e
+if [ "$status" -eq 0 ]; then
+    cat "$TMPDIR/branch-far-out-of-range.log" >&2
+    fail "Branch at 256-byte offset should fail with 'branch out of range'"
+fi
+if [ "$status" -ge 128 ]; then
+    cat "$TMPDIR/branch-far-out-of-range.log" >&2
+    fail "xasm crashed for branch-far-out-of-range (exit $status)"
+fi
+if ! grep -q "branch out of range" "$TMPDIR/branch-far-out-of-range.log"; then
+    cat "$TMPDIR/branch-far-out-of-range.log" >&2
+    fail "missing expected error 'branch out of range' for branch-far-out-of-range.asm"
+fi
+
+# Test: ASSIGN redefinition with $ captures different PCs
+cat > "$TMPDIR/assign-redefine-pc.asm" <<'ASM'
+    ORG $C000
+foo = $             ; $C000
+    LDA #1          ; 2 bytes
+    LDA #2          ; 2 bytes
+    .message foo    ; should print $C000 = 49152
+foo = $             ; $C004
+    LDA #3          ; 2 bytes
+    .message foo    ; should print $C004 = 49156
+END
+ASM
+"$XASM" --pure-binary "$TMPDIR/assign-redefine-pc.asm" -o "$TMPDIR/assign-redefine-pc.bin" > "$TMPDIR/assign-redefine-pc.log" 2>&1 || true
+if ! grep -q "49152" "$TMPDIR/assign-redefine-pc.log"; then
+    cat "$TMPDIR/assign-redefine-pc.log" >&2
+    fail "First ASSIGN \$ did not capture \$C000 (expected 49152)"
+fi
+if ! grep -q "49156" "$TMPDIR/assign-redefine-pc.log"; then
+    cat "$TMPDIR/assign-redefine-pc.log" >&2
+    fail "Second ASSIGN \$ did not capture \$C004 (expected 49156)"
+fi
+
+# Regression: recursive macro must not crash or hang
+cat > "$TMPDIR/recursive-macro.asm" <<'ASM'
+MACRO recurse
+  recurse
+ENDM
+recurse
+END
+ASM
+set +e
+"$XASM" --pure-binary "$TMPDIR/recursive-macro.asm" -o "$TMPDIR/recursive-macro.bin" > "$TMPDIR/recursive-macro.log" 2>&1
+status=$?
+set -e
+if [ "$status" -eq 0 ]; then
+    fail "recursive macro should have failed"
+fi
+if ! grep -q "nesting depth limit exceeded" "$TMPDIR/recursive-macro.log"; then
+    cat "$TMPDIR/recursive-macro.log" >&2
+    fail "missing expected error 'nesting depth limit exceeded'"
+fi
+
+# Regression: infinite WHILE loop must not hang
+cat > "$TMPDIR/infinite-while.asm" <<'ASM'
+WHILE 1
+  NOP
+ENDM
+END
+ASM
+set +e
+"$XASM" --pure-binary "$TMPDIR/infinite-while.asm" -o "$TMPDIR/infinite-while.bin" > "$TMPDIR/infinite-while.log" 2>&1
+status=$?
+set -e
+if ! grep -q "WHILE loop iteration limit exceeded" "$TMPDIR/infinite-while.log"; then
+    cat "$TMPDIR/infinite-while.log" >&2
+    fail "missing expected error 'WHILE loop iteration limit exceeded'"
+fi
+
+# Regression: INCBIN in DATASEG must not crash in pure binary mode
+printf '\x01\x02\x03' > "$TMPDIR/three-bytes.bin"
+cat > "$TMPDIR/dataseg-incbin-crash.asm" <<ASM
+ORG \$C000
+DATASEG
+ASM
+printf '    INCBIN "%s"\n' "$TMPDIR/three-bytes.bin" >> "$TMPDIR/dataseg-incbin-crash.asm"
+cat >> "$TMPDIR/dataseg-incbin-crash.asm" <<ASM
+CODESEG
+Start:
+    LDA #1
+    RTS
+END
+ASM
+run_expect_success_pure_binary "$TMPDIR/dataseg-incbin-crash.asm"
+
+# Regression: Data directives in DATASEG must not crash in pure binary mode
+cat > "$TMPDIR/dataseg-data-crash.asm" <<'ASM'
+ORG $C000
+DATASEG
+Foo: .db 1, 2, 3
+Bar: .dw $1234
+CODESEG
+Start:
+    LDA Foo
+    LDX Bar
+    RTS
+END
+ASM
+run_expect_success_pure_binary "$TMPDIR/dataseg-data-crash.asm"
+
+# Regression: Undefined symbol in .db must not crash the assembler
+cat > "$TMPDIR/db-undefined-crash.asm" <<'ASM'
+.db UNDEFINED_SYMBOL
+END
+ASM
+set +e
+"$XASM" --pure-binary "$TMPDIR/db-undefined-crash.asm" -o "$TMPDIR/db-undefined-crash.bin" > "$TMPDIR/db-undefined-crash.log" 2>&1
+status=$?
+set -e
+if [ "$status" -eq 0 ]; then
+    fail "undefined symbol in .db should have failed"
+fi
+if [ "$status" -ge 128 ]; then
+    cat "$TMPDIR/db-undefined-crash.log" >&2
+    fail "xasm crashed for undefined symbol in .db (exit $status)"
+fi
+if ! grep -q "expression does not evaluate to integer literal" "$TMPDIR/db-undefined-crash.log"; then
+    cat "$TMPDIR/db-undefined-crash.log" >&2
+    fail "missing expected error 'expression does not evaluate to integer literal'"
+fi
 
 echo "All regression tests passed"
