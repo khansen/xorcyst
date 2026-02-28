@@ -244,6 +244,8 @@ const char *astnode_type_to_string(astnode_type at) {
         case MASK_NODE:     return "MASK_NODE";
         case INDEX_NODE:    return "INDEX_NODE";
         case ORG_NODE:      return "ORG_NODE";
+        case PUSH_BRANCH_SCOPE_NODE: return "PUSH_BRANCH_SCOPE_NODE";
+        case POP_BRANCH_SCOPE_NODE:  return "POP_BRANCH_SCOPE_NODE";
         case TOMBSTONE_NODE:    return "TOMBSTONE_NODE";
     }
     return "astnode_type_to_string: invalid type";
@@ -400,14 +402,10 @@ astnode *astnode_create(astnode_type type, location loc)
     if (loc.file == NULL) {
         loc.file = yy_current_filename();
     }
-    astnode *n = (astnode *)malloc(sizeof(astnode));
+    astnode *n = (astnode *)calloc(1, sizeof(astnode));
     if (n != NULL) {
         n->type = type;
         n->loc = loc;
-        n->flags = 0;
-        n->label = NULL;
-        n->string = NULL;
-        n->parent = n->first_child = n->prev_sibling = n->next_sibling = NULL;
     }
     return n;
 }
@@ -784,6 +782,10 @@ astnode *astnode_clone(const astnode *n, location loc)
         c->datatype = n->datatype;
         break;
 
+        case WHILE_NODE:
+        c->while_node.iterations = n->while_node.iterations;
+        break;
+
         default:
         c->param = n->param;
     }
@@ -818,6 +820,7 @@ int astnode_equal(const astnode *n1, const astnode *n2)
         case BINARY_NODE:   if (n1->binary.size != n2->binary.size) return 0;   break;
         case DATATYPE_NODE: if (n1->datatype != n2->datatype) return 0; break;
         case TOMBSTONE_NODE:    if (n1->param != n2->param) return 0;   break;
+        case WHILE_NODE:    /* Runtime iterations not compared */   break;
 
         case INSTRUCTION_NODE:
             if ( (n1->instr.mnemonic.value != n2->instr.mnemonic.value)
@@ -1635,6 +1638,7 @@ astnode *astnode_create_rept(astnode *expr, astnode *stmts, location loc)
 astnode *astnode_create_while(astnode *expr, astnode *stmts, location loc)
 {
     astnode *n = astnode_create(WHILE_NODE, loc);
+    n->while_node.iterations = 0;
     /* This node has two children:
     1) A boolean expression
     2) List of statements, which is the (anonymous) macro body */
