@@ -498,23 +498,40 @@ static int handle_pop_branch_scope(astnode *n, void *arg, astnode **next)
 
 static int handle_exitm(astnode *n, void *arg, astnode **next)
 {
-    astnode *c = n->next_sibling;
-    while (c != NULL) {
-        astnode *t = c->next_sibling;
+    astnode *c;
+    astnode *pop_node = NULL;
+
+    /* First, search for the matching POP_MACRO_BODY_NODE without mutating the AST. */
+    for (c = n->next_sibling; c != NULL; c = c->next_sibling) {
         if (astnode_is_type(c, POP_MACRO_BODY_NODE)) {
-            /* Found the end of the current macro body */
-            *next = c;
+            pop_node = c;
             break;
         }
+    }
+
+    if (pop_node == NULL) {
+        /* EXITM used outside a macro; report error but leave following nodes intact. */
+        err(n->loc, "EXITM used outside a macro");
+        *next = n->next_sibling;
+
+        /* Remove the invalid EXITM node itself. */
+        astnode_remove(n);
+        astnode_finalize(n);
+        return 0;
+    }
+
+    /* Found the end of the current macro body; tombstone nodes up to the POP marker. */
+    c = n->next_sibling;
+    while (c != NULL && c != pop_node) {
+        astnode *t = c->next_sibling;
         /* Replace node by tombstone so it's ignored in later passes */
         astnode_replace(c, astnode_create_tombstone(astnode_get_type(c), c->loc));
         astnode_finalize(c);
         c = t;
     }
-    if (c == NULL) {
-        err(n->loc, "EXITM used outside a macro");
-        *next = n->next_sibling;
-    }
+
+    /* Continue processing from the POP_MACRO_BODY_NODE. */
+    *next = pop_node;
     astnode_remove(n);
     astnode_finalize(n);
     return 0;
@@ -1005,8 +1022,8 @@ static astnode *reduce_sizeof(astnode *expr)
                                         default:             elem_size = 1; break;
                                     }
                                 }
-                                /* Reduce count expression to literal */
-                                astnode *count_expr = reduce_expression_complete(RHS(curr), FOLD_PC_NO);
+                                /* Reduce count expression to literal using a clone to avoid AST mutation */
+                                astnode *count_expr = reduce_expression_complete(astnode_clone(RHS(curr), RHS(curr)->loc), FOLD_PC_NO);
                                 if (astnode_is_type(count_expr, INTEGER_NODE)) {
                                     total_bytes += (count_expr->integer * elem_size);
                                 }
