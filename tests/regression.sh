@@ -2391,4 +2391,71 @@ if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "
     fail "defined() with label symbol failed"
 fi
 
+# Regression: EXITM inside nested scope unwinds branch scope stack
+cat > "$TMPDIR/exitm-scope-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+-
+    NOP
+.macro test
+  .REPT 1
+    .EXITM
+  .ENDM
+.endm
+    test
+    BNE -
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/exitm-scope-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), NOP ($EA), BNE -3 ($D0 $FD)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901ead0fd"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "EXITM scope unwinding broke anonymous label resolution"
+fi
+
+# Regression: EXITM with deeper nested scopes (REPT inside REPT)
+cat > "$TMPDIR/exitm-deep-scope-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+-
+    NOP
+.macro deep_exit
+  .REPT 1
+    .REPT 1
+      .EXITM
+    .ENDM
+  .ENDM
+.endm
+    deep_exit
+    BNE -
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/exitm-deep-scope-test.asm" "0000"
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901ead0fd"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "EXITM with deeply nested scopes broke anonymous label resolution"
+fi
+
+# Regression: sizeof(label) with unresolvable storage count
+cat > "$TMPDIR/sizeof-unresolved-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+.extrn ext_count:byte
+mydata:
+    .dsb ext_count
+    LDA #sizeof(mydata)
+END
+ASM
+# sizeof should fail to resolve because ext_count is not a constant
+# In pure-binary mode, extrn is not allowed, so test in object mode
+set +e
+"$XASM" "$TMPDIR/sizeof-unresolved-test.asm" -o "$TMPDIR/sizeof-unresolved.o" > "$TMPDIR/sizeof-unresolved.log" 2>&1
+rc=$?
+set -e
+# The test passes if it doesn't crash (sizeof returns the expression unreduced)
+if [ "$rc" -ge 128 ]; then
+    cat "$TMPDIR/sizeof-unresolved.log" >&2
+    fail "sizeof with unresolved storage count crashed (exit $rc)"
+fi
+
 echo "All regression tests passed"
