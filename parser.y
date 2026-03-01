@@ -318,6 +318,7 @@ instruction:
 expression:
     indexed_identifier { $$ = $1; }
     | SIZEOF sizeof_arg { $$ = astnode_create_sizeof($2, @$); }
+    | SIZEOF '(' sizeof_arg ')' { $$ = astnode_create_sizeof($3, @$); }
     | scope_access { $$ = $1; }
     | struc_access { $$ = $1; }
     | local_id { $$ = $1; }
@@ -347,6 +348,7 @@ extended_expression:
 sizeof_arg:
     identifier { $$ = $1; }
     | datatype { $$ = $1; }
+    | STRING_LITERAL { $$ = astnode_create_string($1, @$); }
     ;
 
 expression_opt:

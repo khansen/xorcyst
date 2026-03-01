@@ -956,14 +956,56 @@ static astnode *reduce_sizeof(astnode *expr)
                 break;
 
                 case VAR_SYMBOL:
-                type = astnode_clone(LHS(e->def), id->loc);
-                if (astnode_is_type(e->def, STORAGE_NODE)) {
-                    count = astnode_clone(RHS(e->def), id->loc);
-                }
-                else {
-                    count = astnode_create_integer(astnode_get_child_count(e->def)-1, id->loc);
+                case LABEL_SYMBOL:
+                {
+                    astnode *def = (astnode *)e->def;
+                    astnode *data = NULL;
+                    if (e->type == VAR_SYMBOL) {
+                        data = def;
+                    } else if (def != NULL && astnode_is_type(def, LABEL_NODE)) {
+                        data = def->next_sibling;
+                    }
+
+                    if (data != NULL && astnode_is_type(data, DATA_NODE)) {
+                        astnode *d_type = LHS(data);
+                        astnode *child;
+                        int total_size = 0;
+                        int elem_size = 1;
+                        if (d_type != NULL && astnode_is_type(d_type, DATATYPE_NODE)) {
+                            switch (d_type->datatype) {
+                                case WORD_DATATYPE:  elem_size = 2; break;
+                                case DWORD_DATATYPE: elem_size = 4; break;
+                                default:             elem_size = 1; break;
+                            }
+                        }
+                        for (child = RHS(data); child != NULL; child = child->next_sibling) {
+                            if (astnode_is_type(child, STRING_NODE)) {
+                                total_size += strlen(child->string);
+                            } else {
+                                total_size += 1;
+                            }
+                        }
+                        c = astnode_create_integer(total_size * elem_size, expr->loc);
+                        astnode_replace(expr, c);
+                        astnode_finalize(expr);
+                        return c;
+                    } else if (data != NULL && astnode_is_type(data, STORAGE_NODE)) {
+                        count = astnode_clone(RHS(data), expr->loc);
+                        /* Fall through to handle count below for type-based size */
+                        type = astnode_clone(LHS(data), expr->loc);
+                    } else if (e->type == VAR_SYMBOL) {
+                        /* Original VAR_SYMBOL logic for other types */
+                        type = astnode_clone(LHS(e->def), id->loc);
+                        if (astnode_is_type(e->def, STORAGE_NODE)) {
+                            count = astnode_clone(RHS(e->def), id->loc);
+                        }
+                        else {
+                            count = astnode_create_integer(astnode_get_child_count(e->def)-1, id->loc);
+                        }
+                    }
                 }
                 break;
+
 
                 case CONSTANT_SYMBOL:
                 {
@@ -989,6 +1031,11 @@ static astnode *reduce_sizeof(astnode *expr)
         /* Replace identifier by datatype node */
         astnode_replace(id, type);
         astnode_finalize(id);
+    } else if (astnode_is_type(LHS(expr), STRING_NODE)) {
+        c = astnode_create_integer(strlen(LHS(expr)->string), expr->loc);
+        astnode_replace(expr, c);
+        astnode_finalize(expr);
+        return c;
     }
     type = LHS(expr);
     switch (type->datatype) {
