@@ -2136,4 +2136,22 @@ if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "
     fail "SIZEOF aliased labels failed"
 fi
 
+# Regression: SIZEOF contiguous data
+cat > "$TMPDIR/sizeof-contiguous-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+Label1:
+    .db 1, 2
+    .dw $3344
+    .db 5
+    LDA #sizeof(Label1)
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/sizeof-contiguous-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), 1, 2, $44, $33, 5, LDA #5 ($A9 $05)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a9010102443305a905"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "SIZEOF contiguous data failed"
+fi
+
 echo "All regression tests passed"

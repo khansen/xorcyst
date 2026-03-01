@@ -141,9 +141,11 @@ static int symbol_modifiers = 0;
 static int dataseg_pc;
 static int codeseg_pc;
 
-/* Pass to fold_constants / reduce_expression to control $ folding */
 #define FOLD_PC_NO  0
 #define FOLD_PC_YES 1
+
+static astnode *reduce_expression(astnode *expr, int fold_pc);
+static astnode *reduce_expression_complete(astnode *expr, int fold_pc);
 
 /*---------------------------------------------------------------------------*/
 
@@ -511,7 +513,7 @@ static int handle_exitm(astnode *n, void *arg, astnode **next)
     }
     if (c == NULL) {
         err(n->loc, "EXITM used outside a macro");
-        *next = NULL;
+        *next = n->next_sibling;
     }
     astnode_remove(n);
     astnode_finalize(n);
@@ -965,59 +967,75 @@ static astnode *reduce_sizeof(astnode *expr)
                 case LABEL_SYMBOL:
                 {
                     astnode *def = (astnode *)e->def;
-                    astnode *data = NULL;
-                    if (e->type == VAR_SYMBOL) {
-                        data = def;
-                    } else if (def != NULL && astnode_is_type(def, LABEL_NODE)) {
-                        /* Walk forward to find the associated data/storage node */
-                        data = def->next_sibling;
-                        while (data != NULL) {
-                            if (astnode_is_type(data, DATA_NODE) || astnode_is_type(data, STORAGE_NODE)) {
+                    if (def != NULL && astnode_is_type(def, LABEL_NODE)) {
+                        /* Walk forward to find and sum contiguous data/storage nodes */
+                        astnode *curr = def->next_sibling;
+                        int total_bytes = 0;
+                        int found_data = 0;
+
+                        while (curr != NULL) {
+                            if (astnode_is_type(curr, DATA_NODE)) {
+                                astnode *d_type = LHS(curr);
+                                astnode *child;
+                                int node_size = 0;
+                                int elem_size = 1;
+                                if (d_type != NULL && astnode_is_type(d_type, DATATYPE_NODE)) {
+                                    switch (d_type->datatype) {
+                                        case WORD_DATATYPE:  elem_size = 2; break;
+                                        case DWORD_DATATYPE: elem_size = 4; break;
+                                        default:             elem_size = 1; break;
+                                    }
+                                }
+                                for (child = RHS(curr); child != NULL; child = child->next_sibling) {
+                                    if (astnode_is_type(child, STRING_NODE)) {
+                                        node_size += strlen(child->string);
+                                    } else {
+                                        node_size += 1;
+                                    }
+                                }
+                                total_bytes += (node_size * elem_size);
+                                found_data = 1;
+                            } else if (astnode_is_type(curr, STORAGE_NODE)) {
+                                int elem_size = 1;
+                                astnode *d_type = LHS(curr);
+                                if (d_type != NULL && astnode_is_type(d_type, DATATYPE_NODE)) {
+                                    switch (d_type->datatype) {
+                                        case WORD_DATATYPE:  elem_size = 2; break;
+                                        case DWORD_DATATYPE: elem_size = 4; break;
+                                        default:             elem_size = 1; break;
+                                    }
+                                }
+                                /* Reduce count expression to literal */
+                                astnode *count_expr = reduce_expression_complete(RHS(curr), FOLD_PC_NO);
+                                if (astnode_is_type(count_expr, INTEGER_NODE)) {
+                                    total_bytes += (count_expr->integer * elem_size);
+                                }
+                                astnode_finalize(count_expr);
+                                found_data = 1;
+                            } else if (astnode_is_type(curr, LABEL_NODE)) {
+                                /* Stop if we hit a NEW label (unless we haven't found any data yet) */
+                                if (found_data) break;
+                            } else if (astnode_is_type(curr, TOMBSTONE_NODE) ||
+                                       astnode_is_type(curr, PUSH_BRANCH_SCOPE_NODE) ||
+                                       astnode_is_type(curr, POP_BRANCH_SCOPE_NODE) ||
+                                       astnode_is_type(curr, PUSH_MACRO_BODY_NODE) ||
+                                       astnode_is_type(curr, POP_MACRO_BODY_NODE)) {
+                                /* Skip internal markers */
+                            } else {
+                                /* Found something else (instruction, directive, etc), stop */
                                 break;
                             }
-                            if (astnode_is_type(data, LABEL_NODE) ||
-                                astnode_is_type(data, TOMBSTONE_NODE) ||
-                                astnode_is_type(data, PUSH_BRANCH_SCOPE_NODE) ||
-                                astnode_is_type(data, POP_BRANCH_SCOPE_NODE) ||
-                                astnode_is_type(data, PUSH_MACRO_BODY_NODE) ||
-                                astnode_is_type(data, POP_MACRO_BODY_NODE)) {
-                                data = data->next_sibling;
-                                continue;
-                            }
-                            /* Found something else, stop looking */
-                            data = NULL;
-                            break;
+                            curr = curr->next_sibling;
+                        }
+
+                        if (found_data) {
+                            c = astnode_create_integer(total_bytes, expr->loc);
+                            astnode_replace(expr, c);
+                            astnode_finalize(expr);
+                            return c;
                         }
                     }
-
-                    if (data != NULL && astnode_is_type(data, DATA_NODE)) {
-                        astnode *d_type = LHS(data);
-                        astnode *child;
-                        int total_size = 0;
-                        int elem_size = 1;
-                        if (d_type != NULL && astnode_is_type(d_type, DATATYPE_NODE)) {
-                            switch (d_type->datatype) {
-                                case WORD_DATATYPE:  elem_size = 2; break;
-                                case DWORD_DATATYPE: elem_size = 4; break;
-                                default:             elem_size = 1; break;
-                            }
-                        }
-                        for (child = RHS(data); child != NULL; child = child->next_sibling) {
-                            if (astnode_is_type(child, STRING_NODE)) {
-                                total_size += strlen(child->string);
-                            } else {
-                                total_size += 1;
-                            }
-                        }
-                        c = astnode_create_integer(total_size * elem_size, expr->loc);
-                        astnode_replace(expr, c);
-                        astnode_finalize(expr);
-                        return c;
-                    } else if (data != NULL && astnode_is_type(data, STORAGE_NODE)) {
-                        count = astnode_clone(RHS(data), expr->loc);
-                        /* Fall through to handle count below for type-based size */
-                        type = astnode_clone(LHS(data), expr->loc);
-                    } else if (e->type == VAR_SYMBOL) {
+ else if (e->type == VAR_SYMBOL) {
                         /* Original VAR_SYMBOL logic for other types */
                         type = astnode_clone(LHS(e->def), id->loc);
                         if (astnode_is_type(e->def, STORAGE_NODE)) {
