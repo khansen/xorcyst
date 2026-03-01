@@ -62,6 +62,8 @@ const char *yy_current_filename();
 
 typedef struct YYLTYPE location;
 
+extern const location loc_preserve;
+
 /* Initialize LOC. */
      # define LOCATION_RESET(Loc)                  \
        (Loc).first_column = (Loc).first_line = 1;  \

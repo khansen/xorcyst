@@ -216,6 +216,8 @@ enum tag_astnode_type {
     PROC_NODE,
     REPT_NODE,
     WHILE_NODE,
+    DO_NODE,
+    EXITM_NODE,
     MESSAGE_NODE,
     WARNING_NODE,
     ERROR_NODE,
@@ -226,6 +228,7 @@ enum tag_astnode_type {
     MASK_NODE,
     INDEX_NODE,
     ORG_NODE,
+    UNDEF_NODE,
     PUSH_BRANCH_SCOPE_NODE,
     POP_BRANCH_SCOPE_NODE,
     TOMBSTONE_NODE
@@ -313,6 +316,13 @@ struct tag_while_attribs {
 
 typedef struct tag_while_attribs while_attribs;
 
+struct tag_do_attribs {
+    int iterations;
+    int executed_once;
+};
+
+typedef struct tag_do_attribs do_attribs;
+
 /**
  * Structure that defines content of a node in the abstract syntax tree.
  */
@@ -330,6 +340,7 @@ struct tag_astnode {
         datatype datatype;  /* type == DATATYPE_NODE */
         int modifiers;  /* type == DATASEG_NODE, VAR_DECL_NODE */
         while_attribs while_node; /* type == WHILE_NODE */
+        do_attribs do_node; /* type == DO_NODE */
     /* The other node types have attributes stored as children,
     or can use this general-purpose field: */
         long param;
@@ -356,6 +367,7 @@ int astnode_remove_child(astnode *, astnode *);
 astnode *astnode_remove_child_at(astnode *, int);
 astnode *astnode_remove_children(astnode *);
 void astnode_add_sibling(astnode *, astnode *);
+void astnode_add_sibling_after(astnode *, astnode *);
 void astnode_add_child(astnode *, astnode *);
 void astnode_add_children(astnode *, int, ...);
 astnode *astnode_get_child(const astnode *, int);
@@ -421,6 +433,7 @@ astnode *astnode_create_scope(astnode *, astnode *, location);
 astnode *astnode_create_proc(astnode *, astnode *, location);
 astnode *astnode_create_rept(astnode *, astnode *, location);
 astnode *astnode_create_while(astnode *, astnode *, location);
+astnode *astnode_create_do(astnode *, astnode *, location);
 astnode *astnode_create_message(astnode *, location);
 astnode *astnode_create_warning(astnode *, location);
 astnode *astnode_create_error(astnode *, location);
@@ -432,6 +445,7 @@ astnode *astnode_create_mask(astnode *, location);
 astnode *astnode_create_align(astnode *, astnode *, location);
 astnode *astnode_create_index(astnode *, astnode *, location);
 astnode *astnode_create_org(astnode *, location);
+astnode *astnode_create_undef(astnode *, location);
 astnode *astnode_create_tombstone(astnode_type type, location);
 
 #endif  /* !ASTNODE_H */
