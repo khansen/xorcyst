@@ -1992,4 +1992,71 @@ link{file=$TMPDIR/link_debug.o}
 EOF
 run_xlnk_expect_success "$TMPDIR/link_debug.script"
 
+# Regression: defined() pseudo-function
+cat > "$TMPDIR/defined-test.asm" <<'ASM'
+FOO EQU 1
+.if defined(FOO)
+    LDA #1
+.else
+    LDA #0
+.endif
+.if defined(BAR)
+    LDA #2
+.else
+    LDA #3
+.endif
+BAR EQU 456
+.if defined(BAR)
+    LDA #4
+.else
+    LDA #5
+.endif
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/defined-test.asm" "0000"
+# Expected values: LDA #1 ($A9 $01), LDA #3 ($A9 $03), LDA #4 ($A9 $04)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a903a904"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "defined() function evaluation failed"
+fi
+
+# Regression: .UNDEF directive
+cat > "$TMPDIR/undef-test.asm" <<'ASM'
+FOO EQU 1
+.if defined(FOO)
+    LDA #1
+.endif
+.UNDEF FOO
+.if defined(FOO)
+    LDA #2
+.endif
+FOO EQU 456
+.if defined(FOO)
+    LDA #3
+.endif
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/undef-test.asm" "0000"
+# Expected values: LDA #1 ($A9 $01), LDA #3 ($A9 $03)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a903"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".UNDEF directive failed"
+fi
+
+# Regression: SIZEOF string constant
+cat > "$TMPDIR/sizeof-str-test.asm" <<'ASM'
+STR1 EQU "hello"
+STR2 EQU "world!"
+    LDA #1
+    LDA #SIZEOF STR1
+    LDX #SIZEOF STR2
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/sizeof-str-test.asm" "0000"
+# Expected values: LDA #1 ($A9 $01), LDA #5 ($A9 $05), LDX #6 ($A2 $06)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a905a206"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "SIZEOF string constant failed"
+fi
+
 echo "All regression tests passed"

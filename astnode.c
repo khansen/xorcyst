@@ -244,6 +244,7 @@ const char *astnode_type_to_string(astnode_type at) {
         case MASK_NODE:     return "MASK_NODE";
         case INDEX_NODE:    return "INDEX_NODE";
         case ORG_NODE:      return "ORG_NODE";
+        case UNDEF_NODE:    return "UNDEF_NODE";
         case PUSH_BRANCH_SCOPE_NODE: return "PUSH_BRANCH_SCOPE_NODE";
         case POP_BRANCH_SCOPE_NODE:  return "POP_BRANCH_SCOPE_NODE";
         case TOMBSTONE_NODE:    return "TOMBSTONE_NODE";
@@ -1800,5 +1801,17 @@ astnode *astnode_create_org(astnode *addr, location loc)
 {
     astnode *n = astnode_create(ORG_NODE, loc);
     astnode_add_child(n, addr);
+    return n;
+}
+
+/**
+ * Creates an UNDEF node.
+ * @param ident Identifier
+ * @param loc File location
+ */
+astnode *astnode_create_undef(astnode *ident, location loc)
+{
+    astnode *n = astnode_create(UNDEF_NODE, loc);
+    astnode_add_child(n, ident);
     return n;
 }

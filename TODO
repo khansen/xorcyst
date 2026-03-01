@@ -1,8 +1,5 @@
-- don't crash if .extrn is not referenced
-- .undef
 - a way to define temporary variables for a proc (on the stack)?
 - types must be defined before they are used
-- a way to get the length of a string constant (extend sizeof or provide length(s) function)
 - .module or .namespace
 - .obj, .objend
 - .radix
@@ -11,15 +8,9 @@
 - .pushstate, .popstate
 - .exitm
 - .local
-  - local labels in macros currently behave strangely
-- interpretation of $ (current pc) used in dataseg?
 - variable-number-of-argument macros
 - -W flag allowing more fine-grained control of warnings
 - inlining function calls?
-- generate listing!
-  - final binary: instruction by instruction, prints all the addresses + bytes
 - a way to specify fixed-point numbers?
 - .ifdef inside struct/union
-- defined() function, so you can do .if defined(FOO) && (FOO == 3)
-- don't write any output if there are unresolved externals while linking
 

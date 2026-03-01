@@ -216,6 +216,7 @@ LOCATION_STEP (yylloc);
 {pragma_prefix}"ENDP"   { return(ENDP); }
 {pragma_prefix}"ENDS"   { return(ENDS); }
 {pragma_prefix}"EQU"    { return(EQU); }
+{pragma_prefix}"UNDEF"  { return(UNDEF); }
 {pragma_prefix}"DEFINE" { return(DEFINE); }
 {pragma_prefix}"INCLUDE" { return(INCSRC); }
 {pragma_prefix}"INCSRC" { return(INCSRC); }

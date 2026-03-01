@@ -226,6 +226,7 @@ enum tag_astnode_type {
     MASK_NODE,
     INDEX_NODE,
     ORG_NODE,
+    UNDEF_NODE,
     PUSH_BRANCH_SCOPE_NODE,
     POP_BRANCH_SCOPE_NODE,
     TOMBSTONE_NODE
@@ -432,6 +433,7 @@ astnode *astnode_create_mask(astnode *, location);
 astnode *astnode_create_align(astnode *, astnode *, location);
 astnode *astnode_create_index(astnode *, astnode *, location);
 astnode *astnode_create_org(astnode *, location);
+astnode *astnode_create_undef(astnode *, location);
 astnode *astnode_create_tombstone(astnode_type type, location);
 
 #endif  /* !ASTNODE_H */

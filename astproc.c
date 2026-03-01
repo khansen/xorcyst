@@ -941,6 +941,18 @@ static astnode *reduce_sizeof(astnode *expr)
                 }
                 break;
 
+                case CONSTANT_SYMBOL:
+                {
+                    astnode *def = (astnode *)e->def;
+                    if (astnode_is_type(def, STRING_NODE)) {
+                        c = astnode_create_integer(strlen(def->string), expr->loc);
+                        astnode_replace(expr, c);
+                        astnode_finalize(expr);
+                        return c;
+                    }
+                }
+                break;
+
                 default:
                 /* Can't take sizeof of this symbol type */
                 break;
@@ -1291,10 +1303,28 @@ static astnode *reduce_index(astnode *expr)
     astnode *index;
     id = LHS(expr);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
+
+    /* Check for defined() pseudo-function */
+    if (strcasecmp(id->ident, "defined") == 0) {
+        astnode *arg = RHS(expr);
+        int is_def = 0;
+        if (astnode_is_type(arg, IDENTIFIER_NODE)) {
+            is_def = (symtab_lookup(arg->ident) != NULL);
+        }
+        c = astnode_create_integer(is_def, expr->loc);
+        astnode_replace(expr, c);
+        astnode_finalize(expr);
+        return c;
+    }
+
     index = reduce_expression(RHS(expr), FOLD_PC_NO);
     /* Lookup identifier */
     e = symtab_lookup(id->ident);
-    assert(e != 0);
+    if (e == NULL) {
+        /* Symbol not found. It might be a forward reference or truly missing. 
+           We can't reduce this index yet. */
+        return expr;
+    }
     /* Get its datatype */
     type = LHS(e->def);
     /* Create expression: identifier + sizeof(datatype) * index */
@@ -1341,8 +1371,14 @@ static astnode *substitute_defines(astnode *expr)
         break;
 
         case INDEX_NODE:
-        substitute_defines(LHS(expr));
-        substitute_defines(RHS(expr));
+        {
+            astnode *id = LHS(expr);
+            substitute_defines(id);
+            /* Don't substitute argument of defined() */
+            if (!(astnode_is_type(id, IDENTIFIER_NODE) && strcasecmp(id->ident, "defined") == 0)) {
+                substitute_defines(RHS(expr));
+            }
+        }
         break;
 
         case DOT_NODE:
@@ -2009,6 +2045,16 @@ static int process_instruction(astnode *instr, void *arg, astnode **next)
     }
 }
 
+static int process_undef(astnode *undef, void *arg, astnode **next)
+{
+    astnode *id = LHS(undef);
+    assert(astnode_is_type(id, IDENTIFIER_NODE));
+    symtab_remove(id->ident);
+    astnode_remove(undef);
+    astnode_finalize(undef);
+    return 0;
+}
+
 /**
  * First-time processing of data node.
  * @param data Node of type DATA_NODE
@@ -2149,7 +2195,7 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
     astnode *id;
     astnode *expr;
     expr = astnode_clone(astnode_get_child(equ, 1), equ->loc);
-    expr = reduce_expression(expr, FOLD_PC_YES);
+    expr = reduce_expression_complete(expr, FOLD_PC_YES);
     id = astnode_get_child(equ, 0);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
     e = symtab_lookup(id->ident);
@@ -2290,7 +2336,7 @@ static int process_if(astnode *if_node, void *arg, astnode **next)
             /* The expression which is being tested */
             expr = astnode_get_child(c, 0);
             /* Try to reduce expression to literal */
-            expr = reduce_expression(expr, FOLD_PC_YES);
+            expr = reduce_expression_complete(expr, FOLD_PC_YES);
             /* Resulting expression must be an integer literal,
             since this is static evaluation.
             In other words, it can't contain label references.
@@ -3352,6 +3398,16 @@ static int validate_index(astnode *n, void *arg, astnode **next)
         astnode_finalize(n);
         return 0;
     }
+
+    /* Check for defined() pseudo-function */
+    if (strcasecmp(id->ident, "defined") == 0) {
+        astnode *reduced = reduce_index(n);
+        if (reduced != n) {
+            *next = reduced;
+            return 0;
+        }
+    }
+
     e = symtab_lookup(id->ident);
     if (e != NULL) {
         type = LHS(e->def);
@@ -3585,6 +3641,7 @@ void astproc_first_pass(astnode *root)
         { DATA_NODE, process_data },
         { STORAGE_NODE, process_storage },
         { EQU_NODE, process_equ },
+        { UNDEF_NODE, process_undef },
         { ASSIGN_NODE, process_assign },
         { IFDEF_NODE, process_ifdef },
         { IFNDEF_NODE, process_ifndef },
