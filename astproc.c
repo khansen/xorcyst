@@ -501,11 +501,22 @@ static int handle_exitm(astnode *n, void *arg, astnode **next)
     astnode *c;
     astnode *pop_node = NULL;
 
-    /* First, search for the matching POP_MACRO_BODY_NODE without mutating the AST. */
-    for (c = n->next_sibling; c != NULL; c = c->next_sibling) {
-        if (astnode_is_type(c, POP_MACRO_BODY_NODE)) {
-            pop_node = c;
-            break;
+    /* Search for the POP_MACRO_BODY_NODE that closes the *current* macro body.
+       We start with depth = 1 to represent the macro body containing this EXITM.
+       Nested PUSH/POP_MACRO_BODY pairs (from inner macro expansions) are tracked
+       via depth; the POP that brings depth back to 0 closes the current macro. */
+    {
+        int depth = 1;
+        for (c = n->next_sibling; c != NULL; c = c->next_sibling) {
+            if (astnode_is_type(c, PUSH_MACRO_BODY_NODE)) {
+                depth++;
+            } else if (astnode_is_type(c, POP_MACRO_BODY_NODE)) {
+                depth--;
+                if (depth == 0) {
+                    pop_node = c;
+                    break;
+                }
+            }
         }
     }
 

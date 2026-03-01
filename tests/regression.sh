@@ -2436,6 +2436,31 @@ if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "
     fail "EXITM with deeply nested scopes broke anonymous label resolution"
 fi
 
+# Regression: EXITM in outer macro with inner macro expansion (nested PUSH/POP_MACRO_BODY)
+cat > "$TMPDIR/exitm-nested-macro-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+-
+    NOP
+.macro inner_macro
+    NOP
+.endm
+.macro outer_macro
+    inner_macro
+    .EXITM
+    BRK ; should be skipped
+.endm
+    outer_macro
+    BNE -
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/exitm-nested-macro-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), NOP ($EA), NOP ($EA from inner_macro), BNE -4 ($D0 $FC)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901eaead0fc"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "EXITM with nested macro expansion matched wrong POP_MACRO_BODY"
+fi
+
 # Regression: sizeof(label) with unresolvable storage count
 cat > "$TMPDIR/sizeof-unresolved-test.asm" <<'ASM'
     ORG $0000
