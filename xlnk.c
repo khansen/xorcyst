@@ -735,8 +735,18 @@ static void bytecode_walk(const unsigned char *bytes, int size, xasm_bytecodepro
         /* Skip any bytecode arguments */
         switch (cmd) {
             case XASM_CMD_END:   break;
-            case XASM_CMD_BIN8:  i += get_1(bytes, &i) + 1;  break;  /* Skip count and array of bytes */
-            case XASM_CMD_BIN16: i += get_2(bytes, &i) + 1;  break;  /* Skip count and array of bytes */
+            case XASM_CMD_BIN8:
+            {
+                int len = get_1(bytes, &i);
+                i += len + 1;
+            }
+            break;
+            case XASM_CMD_BIN16:
+            {
+                int len = get_2(bytes, &i);
+                i += len + 1;
+            }
+            break;
             case XASM_CMD_LABEL: i += label_cmd_args_size(&bytes[i]); break; /* Skip flag byte and possibly name and alignment */
             case XASM_CMD_INSTR: i += 3; break;  /* Skip 6502 opcode and 16-bit expr id */
             case XASM_CMD_DB:    i += 2; break;  /* Skip 16-bit expr id */

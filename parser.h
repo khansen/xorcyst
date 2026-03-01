@@ -1,8 +1,8 @@
-/* A Bison parser, made by GNU Bison 3.7.4.  */
+/* A Bison parser, made by GNU Bison 3.8.2.  */
 
 /* Bison interface for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
    Inc.
 
    This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -85,119 +85,53 @@ extern int yydebug;
     MACRO = 286,                   /* MACRO  */
     REPT = 287,                    /* REPT  */
     WHILE = 288,                   /* WHILE  */
-    ENDM = 289,                    /* ENDM  */
-    ALIGN = 290,                   /* ALIGN  */
-    EQU = 291,                     /* EQU  */
-    DEFINE = 292,                  /* DEFINE  */
-    END = 293,                     /* END  */
-    PUBLIC = 294,                  /* PUBLIC  */
-    EXTRN = 295,                   /* EXTRN  */
-    CHARMAP = 296,                 /* CHARMAP  */
-    STRUC = 297,                   /* STRUC  */
-    UNION = 298,                   /* UNION  */
-    ENDS = 299,                    /* ENDS  */
-    RECORD = 300,                  /* RECORD  */
-    ENUM = 301,                    /* ENUM  */
-    ENDE = 302,                    /* ENDE  */
-    PROC = 303,                    /* PROC  */
-    ENDP = 304,                    /* ENDP  */
-    SIZEOF = 305,                  /* SIZEOF  */
-    MASK = 306,                    /* MASK  */
-    TAG = 307,                     /* TAG  */
-    MESSAGE = 308,                 /* MESSAGE  */
-    WARNING = 309,                 /* WARNING  */
-    ERROR = 310,                   /* ERROR  */
-    ZEROPAGE = 311,                /* ZEROPAGE  */
-    ORG = 312,                     /* ORG  */
-    SCOPE_OP = 313,                /* SCOPE_OP  */
-    LO_OP = 314,                   /* LO_OP  */
-    HI_OP = 315,                   /* HI_OP  */
-    EQ_OP = 316,                   /* EQ_OP  */
-    NE_OP = 317,                   /* NE_OP  */
-    LE_OP = 318,                   /* LE_OP  */
-    GE_OP = 319,                   /* GE_OP  */
-    SHL_OP = 320,                  /* SHL_OP  */
-    SHR_OP = 321,                  /* SHR_OP  */
-    UMINUS = 322                   /* UMINUS  */
+    DO = 289,                      /* DO  */
+    UNTIL = 290,                   /* UNTIL  */
+    ENDM = 291,                    /* ENDM  */
+    EXITM = 292,                   /* EXITM  */
+    ALIGN = 293,                   /* ALIGN  */
+    EQU = 294,                     /* EQU  */
+    UNDEF = 295,                   /* UNDEF  */
+    DEFINE = 296,                  /* DEFINE  */
+    END = 297,                     /* END  */
+    PUBLIC = 298,                  /* PUBLIC  */
+    EXTRN = 299,                   /* EXTRN  */
+    CHARMAP = 300,                 /* CHARMAP  */
+    STRUC = 301,                   /* STRUC  */
+    UNION = 302,                   /* UNION  */
+    ENDS = 303,                    /* ENDS  */
+    RECORD = 304,                  /* RECORD  */
+    ENUM = 305,                    /* ENUM  */
+    ENDE = 306,                    /* ENDE  */
+    PROC = 307,                    /* PROC  */
+    ENDP = 308,                    /* ENDP  */
+    SIZEOF = 309,                  /* SIZEOF  */
+    MASK = 310,                    /* MASK  */
+    TAG = 311,                     /* TAG  */
+    MESSAGE = 312,                 /* MESSAGE  */
+    WARNING = 313,                 /* WARNING  */
+    ERROR = 314,                   /* ERROR  */
+    ZEROPAGE = 315,                /* ZEROPAGE  */
+    ORG = 316,                     /* ORG  */
+    SCOPE_OP = 317,                /* SCOPE_OP  */
+    LO_OP = 318,                   /* LO_OP  */
+    HI_OP = 319,                   /* HI_OP  */
+    EQ_OP = 320,                   /* EQ_OP  */
+    NE_OP = 321,                   /* NE_OP  */
+    LE_OP = 322,                   /* LE_OP  */
+    GE_OP = 323,                   /* GE_OP  */
+    SHL_OP = 324,                  /* SHL_OP  */
+    SHR_OP = 325,                  /* SHR_OP  */
+    UMINUS = 326                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
-/* Token kinds.  */
-#define YYEMPTY -2
-#define YYEOF 0
-#define YYerror 256
-#define YYUNDEF 257
-#define INTEGER_LITERAL 258
-#define STRING_LITERAL 259
-#define FILE_PATH 260
-#define IDENTIFIER 261
-#define LOCAL_ID 262
-#define FORWARD_BRANCH 263
-#define BACKWARD_BRANCH 264
-#define LABEL 265
-#define LOCAL_LABEL 266
-#define MNEMONIC 267
-#define _LABEL_ 268
-#define BYTE 269
-#define CHAR 270
-#define WORD 271
-#define DWORD 272
-#define DSB 273
-#define DSW 274
-#define DSD 275
-#define DATASEG 276
-#define CODESEG 277
-#define IF 278
-#define IFDEF 279
-#define IFNDEF 280
-#define ELSE 281
-#define ELIF 282
-#define ENDIF 283
-#define INCSRC 284
-#define INCBIN 285
-#define MACRO 286
-#define REPT 287
-#define WHILE 288
-#define ENDM 289
-#define ALIGN 290
-#define EQU 291
-#define DEFINE 292
-#define END 293
-#define PUBLIC 294
-#define EXTRN 295
-#define CHARMAP 296
-#define STRUC 297
-#define UNION 298
-#define ENDS 299
-#define RECORD 300
-#define ENUM 301
-#define ENDE 302
-#define PROC 303
-#define ENDP 304
-#define SIZEOF 305
-#define MASK 306
-#define TAG 307
-#define MESSAGE 308
-#define WARNING 309
-#define ERROR 310
-#define ZEROPAGE 311
-#define ORG 312
-#define SCOPE_OP 313
-#define LO_OP 314
-#define HI_OP 315
-#define EQ_OP 316
-#define NE_OP 317
-#define LE_OP 318
-#define GE_OP 319
-#define SHL_OP 320
-#define SHR_OP 321
-#define UMINUS 322
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 68 "parser.y"
+#line 69 "parser.y"
 
     long integer;
     instruction_mnemonic mnemonic;
@@ -206,7 +140,7 @@ union YYSTYPE
     const char *ident;
     astnode *node;
 
-#line 210 "parser.h"
+#line 144 "parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -231,6 +165,8 @@ struct YYLTYPE
 
 extern YYSTYPE yylval;
 extern YYLTYPE yylloc;
+
 int yyparse (void);
+
 
 #endif /* !YY_YY_PARSER_H_INCLUDED  */

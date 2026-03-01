@@ -1162,7 +1162,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (output_generated && xasm_args.listing_file != NULL) {
+    if ((output_generated || total_errors() != 0) && xasm_args.listing_file != NULL) {
         verbose("Generating listing...");
         if (!generate_listing(root_node,
                               xasm_args.listing_file,
