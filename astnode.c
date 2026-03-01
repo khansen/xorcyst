@@ -80,6 +80,8 @@
 #include <assert.h>
 #include "astnode.h"
 
+const location loc_preserve = { -1, -1, -1, -1, NULL };
+
 #define SAFE_FREE(a) if (a) { free(a); a = NULL; }
 
 /*---------------------------------------------------------------------------*/
@@ -234,6 +236,8 @@ const char *astnode_type_to_string(astnode_type at) {
         case PROC_NODE:     return "PROC_NODE";
         case REPT_NODE:     return "REPT_NODE";
         case WHILE_NODE:    return "WHILE_NODE";
+        case DO_NODE:       return "DO_NODE";
+        case EXITM_NODE:    return "EXITM_NODE";
         case MESSAGE_NODE:  return "MESSAGE_NODE";
         case WARNING_NODE:  return "WARNING_NODE";
         case ERROR_NODE:    return "ERROR_NODE";
@@ -671,6 +675,27 @@ void astnode_add_sibling(astnode *brother, astnode *sister)
 }
 
 /**
+ * Adds a node as a sibling immediately after another.
+ * @param brother Node to add after
+ * @param sister Node to add
+ */
+void astnode_add_sibling_after(astnode *brother, astnode *sister)
+{
+    astnode *p;
+    if (brother && sister) {
+        /* Link sister between brother and brother->next_sibling */
+        sister->next_sibling = brother->next_sibling;
+        if (brother->next_sibling) {
+            brother->next_sibling->prev_sibling = sister;
+        }
+        brother->next_sibling = sister;
+        sister->prev_sibling = brother;
+        p = astnode_get_parent(brother);
+        astnode_set_parent(sister, p);
+    }
+}
+
+/**
  * Gets the child node at the specified index.
  * @param n The parent node
  * @param index The index of the desired child node
@@ -744,7 +769,11 @@ astnode *astnode_clone(const astnode *n, location loc)
     astnode *n_c;
     if (n == NULL) { return NULL; }
     /* Create node */
-    c = astnode_create(astnode_get_type(n), loc);
+    if (loc.first_line == -1) {
+        c = astnode_create(astnode_get_type(n), n->loc);
+    } else {
+        c = astnode_create(astnode_get_type(n), loc);
+    }
     /* Copy attributes */
     switch (astnode_get_type(n)) {
         case INTEGER_NODE:
@@ -787,6 +816,11 @@ astnode *astnode_clone(const astnode *n, location loc)
         c->while_node.iterations = n->while_node.iterations;
         break;
 
+        case DO_NODE:
+        c->do_node.iterations = n->do_node.iterations;
+        c->do_node.executed_once = n->do_node.executed_once;
+        break;
+
         default:
         c->param = n->param;
     }
@@ -822,6 +856,7 @@ int astnode_equal(const astnode *n1, const astnode *n2)
         case DATATYPE_NODE: if (n1->datatype != n2->datatype) return 0; break;
         case TOMBSTONE_NODE:    if (n1->param != n2->param) return 0;   break;
         case WHILE_NODE:    /* Runtime iterations not compared */   break;
+        case DO_NODE:       /* Runtime attributes not compared */   break;
 
         case INSTRUCTION_NODE:
             if ( (n1->instr.mnemonic.value != n2->instr.mnemonic.value)
@@ -1648,6 +1683,29 @@ astnode *astnode_create_while(astnode *expr, astnode *stmts, location loc)
         2,
         expr,
         astnode_create_list(stmts)
+    );
+    return n;
+}
+
+/**
+ * Creates a DO loop node.
+ * @param stmts Loop body
+ * @param expr Termination expression (UNTIL expression)
+ * @param loc File location
+ */
+astnode *astnode_create_do(astnode *stmts, astnode *expr, location loc)
+{
+    astnode *n = astnode_create(DO_NODE, loc);
+    n->do_node.iterations = 0;
+    n->do_node.executed_once = 0;
+    /* This node has two children:
+    1) List of statements
+    2) A boolean expression */
+    astnode_add_children(
+        n,
+        2,
+        astnode_create_list(stmts),
+        expr
     );
     return n;
 }

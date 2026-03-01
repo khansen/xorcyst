@@ -85,41 +85,44 @@ extern int yydebug;
     MACRO = 286,                   /* MACRO  */
     REPT = 287,                    /* REPT  */
     WHILE = 288,                   /* WHILE  */
-    ENDM = 289,                    /* ENDM  */
-    ALIGN = 290,                   /* ALIGN  */
-    EQU = 291,                     /* EQU  */
-    UNDEF = 292,                   /* UNDEF  */
-    DEFINE = 293,                  /* DEFINE  */
-    END = 294,                     /* END  */
-    PUBLIC = 295,                  /* PUBLIC  */
-    EXTRN = 296,                   /* EXTRN  */
-    CHARMAP = 297,                 /* CHARMAP  */
-    STRUC = 298,                   /* STRUC  */
-    UNION = 299,                   /* UNION  */
-    ENDS = 300,                    /* ENDS  */
-    RECORD = 301,                  /* RECORD  */
-    ENUM = 302,                    /* ENUM  */
-    ENDE = 303,                    /* ENDE  */
-    PROC = 304,                    /* PROC  */
-    ENDP = 305,                    /* ENDP  */
-    SIZEOF = 306,                  /* SIZEOF  */
-    MASK = 307,                    /* MASK  */
-    TAG = 308,                     /* TAG  */
-    MESSAGE = 309,                 /* MESSAGE  */
-    WARNING = 310,                 /* WARNING  */
-    ERROR = 311,                   /* ERROR  */
-    ZEROPAGE = 312,                /* ZEROPAGE  */
-    ORG = 313,                     /* ORG  */
-    SCOPE_OP = 314,                /* SCOPE_OP  */
-    LO_OP = 315,                   /* LO_OP  */
-    HI_OP = 316,                   /* HI_OP  */
-    EQ_OP = 317,                   /* EQ_OP  */
-    NE_OP = 318,                   /* NE_OP  */
-    LE_OP = 319,                   /* LE_OP  */
-    GE_OP = 320,                   /* GE_OP  */
-    SHL_OP = 321,                  /* SHL_OP  */
-    SHR_OP = 322,                  /* SHR_OP  */
-    UMINUS = 323                   /* UMINUS  */
+    DO = 289,                      /* DO  */
+    UNTIL = 290,                   /* UNTIL  */
+    ENDM = 291,                    /* ENDM  */
+    EXITM = 292,                   /* EXITM  */
+    ALIGN = 293,                   /* ALIGN  */
+    EQU = 294,                     /* EQU  */
+    UNDEF = 295,                   /* UNDEF  */
+    DEFINE = 296,                  /* DEFINE  */
+    END = 297,                     /* END  */
+    PUBLIC = 298,                  /* PUBLIC  */
+    EXTRN = 299,                   /* EXTRN  */
+    CHARMAP = 300,                 /* CHARMAP  */
+    STRUC = 301,                   /* STRUC  */
+    UNION = 302,                   /* UNION  */
+    ENDS = 303,                    /* ENDS  */
+    RECORD = 304,                  /* RECORD  */
+    ENUM = 305,                    /* ENUM  */
+    ENDE = 306,                    /* ENDE  */
+    PROC = 307,                    /* PROC  */
+    ENDP = 308,                    /* ENDP  */
+    SIZEOF = 309,                  /* SIZEOF  */
+    MASK = 310,                    /* MASK  */
+    TAG = 311,                     /* TAG  */
+    MESSAGE = 312,                 /* MESSAGE  */
+    WARNING = 313,                 /* WARNING  */
+    ERROR = 314,                   /* ERROR  */
+    ZEROPAGE = 315,                /* ZEROPAGE  */
+    ORG = 316,                     /* ORG  */
+    SCOPE_OP = 317,                /* SCOPE_OP  */
+    LO_OP = 318,                   /* LO_OP  */
+    HI_OP = 319,                   /* HI_OP  */
+    EQ_OP = 320,                   /* EQ_OP  */
+    NE_OP = 321,                   /* NE_OP  */
+    LE_OP = 322,                   /* LE_OP  */
+    GE_OP = 323,                   /* GE_OP  */
+    SHL_OP = 324,                  /* SHL_OP  */
+    SHR_OP = 325,                  /* SHR_OP  */
+    UMINUS = 326                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -137,7 +140,7 @@ union YYSTYPE
     const char *ident;
     astnode *node;
 
-#line 141 "parser.h"
+#line 144 "parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

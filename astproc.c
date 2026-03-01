@@ -494,6 +494,30 @@ static int handle_pop_branch_scope(astnode *n, void *arg, astnode **next)
     return 0;
 }
 
+static int handle_exitm(astnode *n, void *arg, astnode **next)
+{
+    astnode *c = n->next_sibling;
+    while (c != NULL) {
+        astnode *t = c->next_sibling;
+        if (astnode_is_type(c, POP_BRANCH_SCOPE_NODE)) {
+            /* Found the end of the current macro scope */
+            *next = c;
+            break;
+        }
+        /* Replace node by tombstone so it's ignored in later passes */
+        astnode_replace(c, astnode_create_tombstone(astnode_get_type(c), c->loc));
+        astnode_finalize(c);
+        c = t;
+    }
+    if (c == NULL) {
+        /* No POP found? Should not happen if EXITM is in a macro */
+        *next = NULL;
+    }
+    astnode_remove(n);
+    astnode_finalize(n);
+    return 0;
+}
+
 /**
  * Globalizes a macro expanded local.
  * This is done simply by concatenating the local label identifier with the
@@ -2448,11 +2472,11 @@ static int process_rept(astnode *rept, void *arg, astnode **next)
             astnode_finalize(rept);
         } else if (count->integer > 0) {
             /* Expand body <count> times */
-            list = astnode_clone(astnode_get_child(rept, 1), rept->loc);
+            list = astnode_clone(astnode_get_child(rept, 1), loc_preserve);
             stmts = astnode_remove_children(list);
             astnode_finalize(list);
             while (--count->integer > 0) {
-                list = astnode_clone(astnode_get_child(rept, 1), rept->loc);
+                list = astnode_clone(astnode_get_child(rept, 1), loc_preserve);
                 astnode_add_sibling(stmts, astnode_remove_children(list) );
                 astnode_finalize(list);
             }
@@ -2508,7 +2532,7 @@ static int process_while(astnode *while_node, void *arg, astnode **next)
     if (astnode_is_type(expr, INTEGER_NODE)) {
         /* Expand body if the expression is true */
         if (expr->integer) {
-            list = astnode_clone(astnode_get_child(while_node, 1), while_node->loc);
+            list = astnode_clone(astnode_get_child(while_node, 1), loc_preserve);
             stmts = astnode_remove_children(list);
             astnode_finalize(list);
             {
@@ -2521,7 +2545,7 @@ static int process_while(astnode *while_node, void *arg, astnode **next)
                     astnode_add_sibling(push, pop);
                 }
                 astnode_replace(while_node, push);
-                astnode_add_sibling(pop, while_node);
+                astnode_add_sibling_after(pop, while_node);
                 *next = push;
             }
         } else {
@@ -2538,6 +2562,60 @@ static int process_while(astnode *while_node, void *arg, astnode **next)
 }
 
 /*---------------------------------------------------------------------------*/
+
+static int process_do(astnode *do_node, void *arg, astnode **next)
+{
+    astnode *expr;
+    astnode *stmts;
+    astnode *list;
+    int condition_met = 0;
+
+    /* Safety limit to prevent infinite loops */
+    if (do_node->do_node.iterations++ > 5000) {
+        err(do_node->loc, "DO loop iteration limit exceeded");
+        astnode_remove(do_node);
+        astnode_finalize(do_node);
+        return 0;
+    }
+
+    if (do_node->do_node.executed_once) {
+        expr = astnode_get_child(do_node, 1);
+        /* Try to reduce expression to literal */
+        expr = reduce_expression(astnode_clone(expr, expr->loc), FOLD_PC_YES);
+        if (astnode_is_type(expr, INTEGER_NODE)) {
+            condition_met = expr->integer;
+        } else {
+            err(do_node->loc, "until expression does not evaluate to literal");
+            condition_met = 1; /* Stop loop on error */
+        }
+        astnode_finalize(expr);
+    }
+
+    if (!condition_met) {
+        do_node->do_node.executed_once = 1;
+        list = astnode_clone(astnode_get_child(do_node, 0), loc_preserve);
+        stmts = astnode_remove_children(list);
+        astnode_finalize(list);
+        {
+            astnode *push = astnode_create(PUSH_BRANCH_SCOPE_NODE, do_node->loc);
+            astnode *pop = astnode_create(POP_BRANCH_SCOPE_NODE, do_node->loc);
+            if (stmts != NULL) {
+                astnode_add_sibling(push, stmts);
+                astnode_add_sibling(astnode_get_last_sibling(stmts), pop);
+            } else {
+                astnode_add_sibling(push, pop);
+            }
+            astnode_replace(do_node, push);
+            astnode_add_sibling_after(pop, do_node);
+            *next = push;
+            }
+
+    } else {
+        astnode_remove(do_node);
+        astnode_finalize(do_node);
+    }
+    return 0;
+}
 
 /**
  * Enters a macro into the symbol table.
@@ -3630,8 +3708,10 @@ void astproc_first_pass(astnode *root)
         { LOCAL_ID_NODE, globalize_local },
         { MACRO_DECL_NODE, enter_macro },
         { MACRO_NODE, expand_macro },
+        { EXITM_NODE, handle_exitm },
         { REPT_NODE, process_rept },
         { WHILE_NODE, process_while },
+        { DO_NODE, process_do },
         { DATASEG_NODE, process_dataseg },
         { CODESEG_NODE, process_codeseg },
         { ORG_NODE, process_org },

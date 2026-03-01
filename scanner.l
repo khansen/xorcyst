@@ -214,6 +214,7 @@ LOCATION_STEP (yylloc);
 {pragma_prefix}"ENDE"   { return(ENDE); }
 {pragma_prefix}"ENDM"   { return(ENDM); }
 {pragma_prefix}"ENDP"   { return(ENDP); }
+{pragma_prefix}"EXITM"  { return(EXITM); }
 {pragma_prefix}"ENDS"   { return(ENDS); }
 {pragma_prefix}"EQU"    { return(EQU); }
 {pragma_prefix}"UNDEF"  { return(UNDEF); }
@@ -230,6 +231,8 @@ LOCATION_STEP (yylloc);
 {pragma_prefix}"UNION"  { return(UNION); }
 {pragma_prefix}"RECORD" { return(RECORD); }
 {pragma_prefix}"ENUM"   { return(ENUM); }
+{pragma_prefix}"DO"     { return(DO); }
+{pragma_prefix}"UNTIL"  { return(UNTIL); }
 {pragma_prefix}"PROC"   { return(PROC); }
 {pragma_prefix}"REPT"   { return(REPT); }
 {pragma_prefix}"TAG"    { return(TAG); }
