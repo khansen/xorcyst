@@ -30,6 +30,11 @@
 #ifndef XLNK_SCRIPT_H
 #define XLNK_SCRIPT_H
 
+#include <stdio.h>
+
+extern int err_count;
+extern int warn_count;
+
 /**
  * The possible kinds of command.
  */
@@ -94,9 +99,6 @@ struct tag_xlnk_script_commandprocmap {
 typedef struct tag_xlnk_script_commandprocmap xlnk_script_commandprocmap;
 
 /* Function prototypes */
-
-extern int err_count;
-extern int warn_count;
 
 int xlnk_script_parse(const char *, xlnk_script *);
 void xlnk_script_finalize(xlnk_script *);

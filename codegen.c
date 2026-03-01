@@ -668,13 +668,13 @@ static void put_public_constants(FILE *fp)
                 }
                 else {
                     fprintf(stderr, "error: put_public_constants(): string constant too long\n");
-                    astproc_inc_err_count();
+                    err_count++;
                 }
                 break;
 
                 default:
                 fprintf(stderr, "error: put_public_constants(): `%s' does not evaluate to constant\n", e->id);
-                astproc_inc_err_count();
+                err_count++;
                 break;
             }
         }

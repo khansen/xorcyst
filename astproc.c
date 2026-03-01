@@ -106,7 +106,9 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 #include "astproc.h"
+
 #include "symtab.h"
 #include "opcode.h"
 #include "charmap.h"
@@ -123,10 +125,10 @@
 /*---------------------------------------------------------------------------*/
 
 /** Number of errors issued during processing. */
-static int err_count = 0;
+int err_count = 0;
 
 /** Number of warnings issued during processing. */
-static int warn_count = 0;
+int warn_count = 0;
 
 /* Keeps track of number of global labels encountered. */
 static int label_count = 0;
@@ -345,20 +347,6 @@ static void warn(location loc, const char *fmt, ...)
     }
 
     warn_count++;
-}
-
-/**
- * Gets the number of errors encountered during processing.
- * @return Number of errors
- */
-int astproc_err_count()
-{
-    return err_count;
-}
-
-void astproc_inc_err_count()
-{
-    err_count++;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -762,26 +750,40 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                     case MINUS_OPERATOR:    folded = astnode_create_integer(lhs->integer - rhs->integer, expr->loc);    break;
                     case MUL_OPERATOR:  folded = astnode_create_integer(lhs->integer * rhs->integer, expr->loc);    break;
                     case DIV_OPERATOR:
-                    if (rhs->integer == 0) {
-                        err(expr->loc, "division by zero in expression");
-                        return expr;
-                    } else {
-                        folded = astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
-                    }
-                    break;
+                        if (rhs->integer == 0) {
+                            err(expr->loc, "division by zero in expression");
+                            folded = astnode_create_integer(0, expr->loc);
+                        } else {
+                            folded = astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
+                        }
+                        break;
                     case MOD_OPERATOR:
-                    if (rhs->integer == 0) {
-                        err(expr->loc, "modulo by zero in expression");
-                        return expr;
-                    } else {
-                        folded = astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
-                    }
-                    break;
+                        if (rhs->integer == 0) {
+                            err(expr->loc, "modulo by zero in expression");
+                            folded = astnode_create_integer(0, expr->loc);
+                        } else {
+                            folded = astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
+                        }
+                        break;
                     case AND_OPERATOR:  folded = astnode_create_integer(lhs->integer & rhs->integer, expr->loc);    break;
                     case OR_OPERATOR:   folded = astnode_create_integer(lhs->integer | rhs->integer, expr->loc);    break;
                     case XOR_OPERATOR:  folded = astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);    break;
-                    case SHL_OPERATOR:  folded = astnode_create_integer(lhs->integer << rhs->integer, expr->loc);   break;
-                    case SHR_OPERATOR:  folded = astnode_create_integer(lhs->integer >> rhs->integer, expr->loc);   break;
+                    case SHL_OPERATOR:
+                        if (rhs->integer < 0 || (size_t)rhs->integer >= sizeof(int) * CHAR_BIT) {
+                            err(expr->loc, "invalid shift count in expression");
+                            folded = astnode_create_integer(0, expr->loc);
+                        } else {
+                            folded = astnode_create_integer((int)((unsigned int)lhs->integer << rhs->integer), expr->loc);
+                        }
+                        break;
+                    case SHR_OPERATOR:
+                        if (rhs->integer < 0 || (size_t)rhs->integer >= sizeof(int) * CHAR_BIT) {
+                            err(expr->loc, "invalid shift count in expression");
+                            folded = astnode_create_integer(0, expr->loc);
+                        } else {
+                            folded = astnode_create_integer((int)((unsigned int)lhs->integer >> rhs->integer), expr->loc);
+                        }
+                        break;
                     case LT_OPERATOR:   folded = astnode_create_integer(lhs->integer < rhs->integer, expr->loc);    break;
                     case GT_OPERATOR:   folded = astnode_create_integer(lhs->integer > rhs->integer, expr->loc);    break;
                     case EQ_OPERATOR:   folded = astnode_create_integer(lhs->integer == rhs->integer, expr->loc);   break;
@@ -4525,19 +4527,19 @@ static astnode *eval_expression(astnode *expr)
                     case MINUS_OPERATOR: return astnode_create_integer(lhs->integer - rhs->integer, expr->loc);
                     case MUL_OPERATOR:   return astnode_create_integer(lhs->integer * rhs->integer, expr->loc);
                     case DIV_OPERATOR:
-                    if (rhs->integer == 0) {
-                        err(expr->loc, "division by zero in expression");
-                        return astnode_create_integer(0, expr->loc);
-                    } else {
-                        return astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
-                    }
+                        if (rhs->integer == 0) {
+                            err(expr->loc, "division by zero in expression");
+                            return astnode_create_integer(0, expr->loc);
+                        } else {
+                            return astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
+                        }
                     case MOD_OPERATOR:
-                    if (rhs->integer == 0) {
-                        err(expr->loc, "modulo by zero in expression");
-                        return astnode_create_integer(0, expr->loc);
-                    } else {
-                        return astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
-                    }
+                        if (rhs->integer == 0) {
+                            err(expr->loc, "modulo by zero in expression");
+                            return astnode_create_integer(0, expr->loc);
+                        } else {
+                            return astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
+                        }
                     case AND_OPERATOR:   return astnode_create_integer(lhs->integer & rhs->integer, expr->loc);
                     case OR_OPERATOR:    return astnode_create_integer(lhs->integer | rhs->integer, expr->loc);
                     case XOR_OPERATOR:   return astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);

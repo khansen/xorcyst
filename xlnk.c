@@ -113,21 +113,48 @@
 #include "unit.h"
 #include "hashtab.h"
 
-#define SAFE_FREE(m) if ((m) != NULL) { free(m); m = NULL; }
+#include <stddef.h>
+#include <limits.h>
 
+/* Global statics for bytecode walking - NOTE: NOT REENTRANT!
+   bytecode_walk cannot be called recursively or from multiple threads. */
 static const unsigned char *current_bytecode_base;
 static int current_bytecode_size;
 static jmp_buf bytecode_jmpbuf;
 
 static void err(const char *fmt, ...);
 
+/**
+ * Checks that the specified range is within the current bytecode segment.
+ * If out of bounds, it performs a longjmp back to bytecode_walk.
+ * NOTE: longjmp bypasses resource cleanup. Handlers MUST NOT allocate
+ * resources on the heap that aren't tracked for later cleanup.
+ */
 static void check_bounds(const unsigned char *b, int offset, int needed)
 {
-    int total_offset = (int)(b - current_bytecode_base) + offset;
-    if (total_offset < 0 || total_offset + needed > current_bytecode_size) {
-        err("unexpected end of bytecode segment");
-        longjmp(bytecode_jmpbuf, 1);
+    ptrdiff_t base_offset = (ptrdiff_t)(b - current_bytecode_base);
+
+    /* Validate non-negative inputs and base offset before converting to size_t. */
+    if (current_bytecode_size < 0 || offset < 0 || needed < 0 || base_offset < 0) {
+        goto bail;
     }
+
+    /* Use non-wrapping bounds checks: verify each component fits within the segment. */
+    {
+        size_t bytecode_size = (size_t)current_bytecode_size;
+        size_t base_off = (size_t)base_offset;
+        size_t off = (size_t)offset;
+        size_t need = (size_t)needed;
+
+        if (base_off > bytecode_size) goto bail;
+        if (off > bytecode_size - base_off) goto bail;
+        if (need > bytecode_size - base_off - off) goto bail;
+    }
+    return;
+
+bail:
+    err("unexpected end of bytecode segment");
+    longjmp(bytecode_jmpbuf, 1);
 }
 
 /**
@@ -413,8 +440,12 @@ static void maybe_print_location()
         /* unit_file is part of current_bytecode_base. */
         /* check_bounds wants offset relative to first argument. */
         /* unit_file points to len byte. */
-        int offset = (int)(unit_file - current_bytecode_base);
-        if (offset < 0 || offset + len + 1 > current_bytecode_size) {
+        ptrdiff_t offset = (ptrdiff_t)(unit_file - current_bytecode_base);
+        size_t bytecode_size = (size_t)current_bytecode_size;
+        size_t off = (size_t)offset;
+        size_t need = (size_t)len + 1U;
+
+        if (offset < 0 || off > bytecode_size || need > bytecode_size - off) {
             /* unit_file is corrupt or from another segment. skip. */
             return;
         }
@@ -859,8 +890,22 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
                         result->integer = lhs_result.integer % rhs_result.integer;
                     }
                     break;
-                    case XASM_OP_SHL:    result->integer = lhs_result.integer << rhs_result.integer; break;
-                    case XASM_OP_SHR:    result->integer = lhs_result.integer >> rhs_result.integer; break;
+                    case XASM_OP_SHL:
+                    if (rhs_result.integer < 0 || (size_t)rhs_result.integer >= sizeof(long) * CHAR_BIT) {
+                        err("invalid shift count in expression");
+                        result->type = -1;
+                    } else {
+                        result->integer = (long)((unsigned long)lhs_result.integer << rhs_result.integer);
+                    }
+                    break;
+                    case XASM_OP_SHR:
+                    if (rhs_result.integer < 0 || (size_t)rhs_result.integer >= sizeof(long) * CHAR_BIT) {
+                        err("invalid shift count in expression");
+                        result->type = -1;
+                    } else {
+                        result->integer = (long)((unsigned long)lhs_result.integer >> rhs_result.integer);
+                    }
+                    break;
                     case XASM_OP_AND:    result->integer = lhs_result.integer & rhs_result.integer;  break;
                     case XASM_OP_OR: result->integer = lhs_result.integer | rhs_result.integer;  break;
                     case XASM_OP_XOR:    result->integer = lhs_result.integer ^ rhs_result.integer;  break;
@@ -875,29 +920,34 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
             /* If both sides are string... */
             else if ((lhs_result.type == XASM_STRING_CONSTANT) &&
             (rhs_result.type == XASM_STRING_CONSTANT)) {
-                switch (e->op_expr.operator) {
-                    case XASM_OP_PLUS:
-                    /* Concatenate */
-                    result->string = (char *)malloc(strlen(lhs_result.string)+strlen(rhs_result.string)+1);
-                    if (result->string != NULL) {
-                        strcpy(result->string, lhs_result.string);
-                        strcat(result->string, rhs_result.string);
-                        result->type = XASM_STRING_CONSTANT;
+                if (lhs_result.string == NULL || rhs_result.string == NULL) {
+                    result->type = -1;
+                } else {
+                    switch (e->op_expr.operator) {
+                        case XASM_OP_PLUS:
+                        /* Concatenate */
+                        result->string = (char *)malloc(strlen(lhs_result.string)+strlen(rhs_result.string)+1);
+                        if (result->string != NULL) {
+                            strcpy(result->string, lhs_result.string);
+                            strcat(result->string, rhs_result.string);
+                            result->type = XASM_STRING_CONSTANT;
+                        }
+                        break;
+
+                        /* String comparison: using strcmp() */
+                        case XASM_OP_EQ: result->integer = strcmp(lhs_result.string, rhs_result.string) == 0; result->type = XASM_INTEGER_CONSTANT; break;
+                        case XASM_OP_NE: result->integer = strcmp(lhs_result.string, rhs_result.string) != 0; result->type = XASM_INTEGER_CONSTANT; break;
+                        case XASM_OP_LT: result->integer = strcmp(lhs_result.string, rhs_result.string) < 0;  result->type = XASM_INTEGER_CONSTANT; break;
+                        case XASM_OP_GT: result->integer = strcmp(lhs_result.string, rhs_result.string) > 0;  result->type = XASM_INTEGER_CONSTANT; break;
+                        case XASM_OP_LE: result->integer = strcmp(lhs_result.string, rhs_result.string) <= 0; result->type = XASM_INTEGER_CONSTANT; break;
+                        case XASM_OP_GE: result->integer = strcmp(lhs_result.string, rhs_result.string) >= 0; result->type = XASM_INTEGER_CONSTANT; break;
+
+                        default:
+                        /* Not defined operator for string operation... */
+                        err("unsupported operator for string operands");
+                        result->type = -1;
+                        break;
                     }
-                    break;
-
-                    /* String comparison: using strcmp() */
-                    case XASM_OP_EQ: result->integer = strcmp(lhs_result.string, rhs_result.string) == 0; result->type = XASM_INTEGER_CONSTANT; break;
-                    case XASM_OP_NE: result->integer = strcmp(lhs_result.string, rhs_result.string) != 0; result->type = XASM_INTEGER_CONSTANT; break;
-                    case XASM_OP_LT: result->integer = strcmp(lhs_result.string, rhs_result.string) < 0;  result->type = XASM_INTEGER_CONSTANT; break;
-                    case XASM_OP_GT: result->integer = strcmp(lhs_result.string, rhs_result.string) > 0;  result->type = XASM_INTEGER_CONSTANT; break;
-                    case XASM_OP_LE: result->integer = strcmp(lhs_result.string, rhs_result.string) <= 0; result->type = XASM_INTEGER_CONSTANT; break;
-                    case XASM_OP_GE: result->integer = strcmp(lhs_result.string, rhs_result.string) >= 0; result->type = XASM_INTEGER_CONSTANT; break;
-
-                    default:
-                    /* Not defined operator for string operation... */
-                    assert(0);
-                    break;
                 }
             }
             else {
@@ -1368,7 +1418,7 @@ static void write_dx(const unsigned char *b, void *arg)
             }
         }
     } else {
-        assert(0);
+        err("could not evaluate expression");
     }
 
     finalize_constant(&c);
