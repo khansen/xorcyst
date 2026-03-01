@@ -95,6 +95,9 @@ typedef struct tag_xlnk_script_commandprocmap xlnk_script_commandprocmap;
 
 /* Function prototypes */
 
+extern int err_count;
+extern int warn_count;
+
 int xlnk_script_parse(const char *, xlnk_script *);
 void xlnk_script_finalize(xlnk_script *);
 int xlnk_script_length(xlnk_script *);

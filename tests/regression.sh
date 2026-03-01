@@ -978,8 +978,9 @@ fi
 
 # Linker regression: RAM allocation (ZP and normal RAM)
 cat > "$TMPDIR/link_ram.asm" <<'ASM'
-.DATASEG
+.DATASEG ZEROPAGE
 a_zp .dsb 16
+.DATASEG
 b_normal .dsb 1
 .CODESEG
     lda a_zp
@@ -992,29 +993,18 @@ if ! "$XASM" "$TMPDIR/link_ram.asm" -o "$TMPDIR/link_ram.o" >/dev/null 2>&1; the
 fi
 cat > "$TMPDIR/link_ram.script" <<EOF
 output{file=$TMPDIR/link_ram.bin}
-ram{start=\$0010,end=\$001F}
-ram{start=\$0300,end=\$03FF}
+ram{start=\$0010,end=\$0020}
+ram{start=\$0300,end=\$0400}
 bank{size=\$100,origin=\$8000}
 link{file=$TMPDIR/link_ram.o}
 EOF
 run_xlnk_expect_success "$TMPDIR/link_ram.script"
 # a_zp should be at $0010, b_normal at $0300
-# Depending on allocation order, could be:
 # lda a_zp ($10) -> A5 10
 # sta b_normal ($0300) -> 8D 00 03
-# OR (observed):
-# lda a_zp ($10) -> AD 00 03
-# sta b_normal ($0300) -> 85 10
-# Wait, if a_zp is $10, sta a_zp should be 85 10.
-# If b_normal is $0300, lda b_normal should be AD 00 03.
-# The code is:
-# lda a_zp
-# sta b_normal
-# If it outputs AD 00 03 85 10, it means it thinks a_zp is at $0300 and b_normal is at $10.
-# Which means b_normal got the ZP block!
-if ! od -An -t x1 "$TMPDIR/link_ram.bin" | tr -d '[:space:]' | grep -Eq "a5108d0003|ad00038510"; then
+if ! od -An -t x1 "$TMPDIR/link_ram.bin" | tr -d '[:space:]' | grep -q "a5108d0003"; then
     od -An -t x1 "$TMPDIR/link_ram.bin" >&2
-    fail "RAM allocation failed"
+    fail "RAM allocation failed (expected a5 10 8d 00 03)"
 fi
 
 # Linker regression: bank overflow
@@ -1147,8 +1137,7 @@ link{file=$TMPDIR/link_multi_ram.o}
 EOF
 run_xlnk_expect_success "$TMPDIR/link_multi_ram.script"
 # var1 should be at $0200, var2 at $0300
-# Depending on allocation order, could be AD 00 02 AD 00 03 or AD 00 03 AD 00 02
-if ! od -An -t x1 "$TMPDIR/link_multi_ram.bin" | tr -d '[:space:]' | grep -Eq "ad0002ad0003|ad0003ad0002"; then
+if ! od -An -t x1 "$TMPDIR/link_multi_ram.bin" | tr -d '[:space:]' | grep -q "ad0002ad0003"; then
     od -An -t x1 "$TMPDIR/link_multi_ram.bin" >&2
     fail "Multi-RAM allocation failed"
 fi
@@ -1166,7 +1155,7 @@ if ! "$XASM" "$TMPDIR/link_out_of_ram.asm" -o "$TMPDIR/link_out_of_ram.o" >/dev/
 fi
 cat > "$TMPDIR/link_out_of_ram.script" <<EOF
 output{file=$TMPDIR/link_out_of_ram.bin}
-ram{start=\$0200,end=\$020F}
+ram{start=\$0200,end=\$0210}
 bank{size=\$100,origin=\$8000}
 link{file=$TMPDIR/link_out_of_ram.o}
 EOF
@@ -1917,5 +1906,90 @@ if ! grep -q "0301-030F" "$TMPDIR/link_ram_align_leak.log"; then
     cat "$TMPDIR/link_ram_align_leak.log" >&2
     fail "RAM alignment padding block was leaked"
 fi
+
+# Linker regression: cross-unit string comparison
+cat > "$TMPDIR/link_str_cmp_a.asm" <<'ASM'
+.public str1
+str1 = "abc"
+END
+ASM
+cat > "$TMPDIR/link_str_cmp_b.asm" <<'ASM'
+.extrn str1:string
+    .db (str1 == "abc") + 10
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_str_cmp_a.asm" -o "$TMPDIR/link_str_cmp_a.o" >/dev/null 2>&1; then
+    fail "failed to build str_cmp fixture unit A"
+fi
+if ! "$XASM" "$TMPDIR/link_str_cmp_b.asm" -o "$TMPDIR/link_str_cmp_b.o" >/dev/null 2>&1; then
+    fail "failed to build str_cmp fixture unit B"
+fi
+cat > "$TMPDIR/link_str_cmp.script" <<EOF
+output{file=$TMPDIR/link_str_cmp.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_str_cmp_b.o}
+link{file=$TMPDIR/link_str_cmp_a.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_str_cmp.script"
+# (1 == 1) + 10 = 11 ($0b)
+if ! od -An -t x1 "$TMPDIR/link_str_cmp.bin" | tr -d '[:space:]' | grep -q "^0b"; then
+    od -An -t x1 "$TMPDIR/link_str_cmp.bin" >&2
+    fail "Linker string comparison failed"
+fi
+
+# Linker regression: malformed object files
+# Test 1: Missing XASM_CMD_END in codeseg
+# Header: MAGIC(FACE), VER(14), CONST(0000), UNIT(00), EXTRN(0000), DATA(000001), END(F3), CODE(000004), INSTR(F7), OP(00), EXID(0000)
+printf '\xfa\xce\x14\x00\x00\x00\x00\x00\x00\x00\x01\xf3\x00\x00\x04\xf7\x00\x00\x00\x00\x00' > "$TMPDIR/malformed1.o"
+cat > "$TMPDIR/malformed1.script" <<EOF
+output{file=$TMPDIR/malformed1.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/malformed1.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/malformed1.script" "unexpected end of bytecode segment"
+
+# Test 2: Truncated string in constant
+# MAGIC(FACE), VER(14), CONST(0001), STRLEN(05), STR(ABC - truncated)
+printf '\xfa\xce\x14\x00\x01\x05ABC' > "$TMPDIR/malformed2.o"
+cat > "$TMPDIR/malformed2.script" <<EOF
+output{file=$TMPDIR/malformed2.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/malformed2.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/malformed2.script" "failed to load unit"
+
+# Test 3: Expression nesting depth limit
+# Header: ... DATA(000001), F3, CODE(000001), F3, EXPR(0001), many OP_PLUS(10)
+# We need enough bytes to satisfy recursive reads if we didn't have depth limit.
+# But with limit it should fail early.
+{
+    printf '\xfa\xce\x14\x00\x00\x00\x00\x00\x00\x00\x01\xf3\x00\x00\x01\xf3\x00\x01'
+    for i in $(seq 1 501); do printf '\x10'; done
+} > "$TMPDIR/malformed3.o"
+cat > "$TMPDIR/malformed3.script" <<EOF
+output{file=$TMPDIR/malformed3.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/malformed3.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/malformed3.script" "expression nesting depth limit exceeded"
+
+# Linker regression: debug commands (XASM_CMD_FILE etc) must be correctly skipped
+cat > "$TMPDIR/link_debug.asm" <<'ASM'
+.codeseg
+    lda #1
+    sta $80
+    rts
+END
+ASM
+# Assemble with --debug to generate FILE/LINE bytecodes
+if ! "$XASM" --debug "$TMPDIR/link_debug.asm" -o "$TMPDIR/link_debug.o" >/dev/null 2>&1; then
+    fail "failed to build debug fixture"
+fi
+cat > "$TMPDIR/link_debug.script" <<EOF
+output{file=$TMPDIR/link_debug.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_debug.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_debug.script"
 
 echo "All regression tests passed"
