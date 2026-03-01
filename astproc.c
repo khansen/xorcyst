@@ -3080,7 +3080,7 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
                 }
             } else {
                 id = LHS(c);
-                val = reduce_expression_complete(RHS(c), FOLD_PC_NO);
+                val = reduce_expression_complete(astnode_clone(RHS(c), RHS(c)->loc), FOLD_PC_NO);
                 if (!astnode_is_type(val, INTEGER_NODE)) {
                     err(c->loc, "initializer does not evaluate to integer literal");
                     astnode_finalize(val);

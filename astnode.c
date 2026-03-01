@@ -685,14 +685,19 @@ void astnode_add_sibling(astnode *brother, astnode *sister)
 void astnode_add_sibling_after(astnode *brother, astnode *sister)
 {
     astnode *p;
+    astnode *last;
     if (brother && sister) {
-        /* Link sister between brother and brother->next_sibling */
-        sister->next_sibling = brother->next_sibling;
+        /* Link sister (and its chain) between brother and brother->next_sibling */
+        last = astnode_get_last_sibling(sister);
+        
+        last->next_sibling = brother->next_sibling;
         if (brother->next_sibling) {
-            brother->next_sibling->prev_sibling = sister;
+            brother->next_sibling->prev_sibling = last;
         }
+        
         brother->next_sibling = sister;
         sister->prev_sibling = brother;
+        
         p = astnode_get_parent(brother);
         astnode_set_parent(sister, p);
     }

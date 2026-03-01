@@ -2059,4 +2059,63 @@ if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "
     fail "SIZEOF string constant failed"
 fi
 
+# Regression: SIZEOF string literal and parentheses
+cat > "$TMPDIR/sizeof-lit-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+    LDA #sizeof("abc")
+    LDX #sizeof "defgh"
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/sizeof-lit-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), LDA #3 ($A9 $03), LDX #5 ($A2 $05)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a903a205"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "SIZEOF string literal or parentheses failed"
+fi
+
+# Regression: .EXITM
+cat > "$TMPDIR/exitm-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+MACRO exit_inner
+    LDA #1
+    .REPT 1
+        .EXITM
+    .ENDM
+    LDA #2 ; should be skipped
+ENDM
+MACRO exit_outer
+    exit_inner
+    LDA #3 ; should NOT be skipped
+ENDM
+    exit_outer
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/exitm-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), exit_outer -> LDA #1 ($A9 $01), LDA #3 ($A9 $03)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a901a903"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".EXITM directive failed"
+fi
+
+# Regression: .DO ... .UNTIL
+cat > "$TMPDIR/do-until-test.asm" <<'ASM'
+    ORG $C000
+    LDA #1
+VAL = 0
+.DO
+    LDA #VAL
+VAL = VAL + 1
+.UNTIL VAL == 3
+DONE: RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/do-until-test.asm" "C000"
+# Expected: LDA #1, LDA #0, LDA #1, LDA #2, RTS ($A9 $01 $A9 $00 $A9 $01 $A9 $02 $60)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a900a901a90260"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".DO ... .UNTIL loop failed"
+fi
+
 echo "All regression tests passed"
