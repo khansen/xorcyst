@@ -231,6 +231,8 @@ static void err(const char *filename, int line, const char *fmt, ...)
     fprintf(stderr, "\n");
 
     va_end(ap);
+
+    err_count++;
 }
 
 /*---------------------------------------------------------------------------*/

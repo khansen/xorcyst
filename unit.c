@@ -42,13 +42,23 @@
 
 /*---------------------------------------------------------------------------*/
 
+static int read_error = 0;
+
 /* Reads a byte */
-#define get_1(f) (unsigned char)fgetc(fp)
+static unsigned char get_1(FILE *fp)
+{
+    int c = fgetc(fp);
+    if (c == EOF) {
+        read_error = 1;
+        return 0;
+    }
+    return (unsigned char)c;
+}
 /* Reads a short (big-endian) */
 static unsigned short get_2(FILE *fp)
 {
     unsigned short result;
-    result = get_1(fp) << 8;    /* High byte */
+    result = (unsigned short)get_1(fp) << 8;    /* High byte */
     result |= get_1(fp);        /* Low byte */
     return result;
 }
@@ -65,7 +75,7 @@ static unsigned int get_4(FILE *fp)
 {
     unsigned int result;
     /* Assumes little-endian machine!! */
-    result = get_2(fp) << 16;   /* High 16 bits */
+    result = (unsigned int)get_2(fp) << 16;   /* High 16 bits */
     result |= get_2(fp);        /* Low 16 bits */
     return result;
 }
@@ -73,11 +83,22 @@ static unsigned int get_4(FILE *fp)
 static char *get_str_8(FILE *fp)
 {
     char *s;
-    int len = get_1(fp) + 1;
+    int c = fgetc(fp);
+    if (c == EOF) {
+        read_error = 1;
+        return NULL;
+    }
+    int len = c + 1;
     s = (char *)malloc(len + 1);
     if (s != NULL) {
-        fread(s, 1, len, fp);
+        if (fread(s, 1, len, fp) < (size_t)len) {
+            read_error = 1;
+            free(s);
+            return NULL;
+        }
         s[len] = '\0';
+    } else {
+        read_error = 1;
     }
     return s;
 }
@@ -85,11 +106,19 @@ static char *get_str_8(FILE *fp)
 static char *get_str_16(FILE *fp)
 {
     char *s;
-    int len = get_2(fp) + 1;
+    int len = get_2(fp);
+    if (read_error) return NULL;
+    len++;
     s = (char *)malloc(len + 1);
     if (s != NULL) {
-        fread(s, 1, len, fp);
+        if (fread(s, 1, len, fp) < (size_t)len) {
+            read_error = 1;
+            free(s);
+            return NULL;
+        }
         s[len] = '\0';
+    } else {
+        read_error = 1;
     }
     return s;
 }
@@ -119,6 +148,7 @@ static void get_const(FILE *fp, xasm_unit *u, int i)
 
         default:
         fprintf(stderr, "%s(0x%lx): get_const(): bad constant type (%.2X)\n", u->name, ftell(fp), cnst->type);
+        read_error = 1;
         break;
     }
     cnst->unit = u;
@@ -185,67 +215,91 @@ static void get_externals(FILE *fp, xasm_unit *u)
  * @param dest Pointer to pointer where expression should be stored
  * @param u Owner unit
  */
-static void get_expr_recursive(FILE *fp, xasm_expression **dest, xasm_unit *u)
+static void get_expr_recursive(FILE *fp, xasm_expression **dest, xasm_unit *u, int depth)
 {
     unsigned char type;
-    xasm_expression *exp = (xasm_expression *)malloc( sizeof(xasm_expression) );
-    if (exp != NULL) {
-        type = get_1(fp);
-        switch (type) {
-            case XASM_INT_8: exp->integer = get_1(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
-            case XASM_INT_16:    exp->integer = get_2(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
-            case XASM_INT_24:    exp->integer = get_3(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
-            case XASM_INT_32:    exp->integer = get_4(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
-            case XASM_STR_8: exp->string = get_str_8(fp);    exp->type = XASM_STRING_EXPRESSION;  break;
-            case XASM_STR_16:    exp->string = get_str_16(fp);   exp->type = XASM_STRING_EXPRESSION;  break;
+    xasm_expression *exp;
 
-            case XASM_LOCAL: exp->local_id = get_2(fp);  exp->type = XASM_LOCAL_EXPRESSION;   break;
-            case XASM_EXTRN: exp->extrn_id = get_2(fp);  exp->type = XASM_EXTERNAL_EXPRESSION;break;
-
-            case XASM_PC:    ;               exp->type = XASM_PC_EXPRESSION;  break;
-
-            case XASM_OP_PLUS:
-            case XASM_OP_MINUS:
-            case XASM_OP_MUL:
-            case XASM_OP_DIV:
-            case XASM_OP_MOD:
-            case XASM_OP_SHL:
-            case XASM_OP_SHR:
-            case XASM_OP_AND:
-            case XASM_OP_OR:
-            case XASM_OP_XOR:
-            case XASM_OP_EQ:
-            case XASM_OP_NE:
-            case XASM_OP_LT:
-            case XASM_OP_GT:
-            case XASM_OP_LE:
-            case XASM_OP_GE:
-            get_expr_recursive(fp, &exp->op_expr.lhs, u);
-            get_expr_recursive(fp, &exp->op_expr.rhs, u);
-            exp->op_expr.operator = type;
-            exp->type = XASM_OPERATOR_EXPRESSION;
-            break;
-
-            case XASM_OP_NOT:
-            case XASM_OP_NEG:
-            case XASM_OP_LO:
-            case XASM_OP_HI:
-            case XASM_OP_UMINUS:
-            case XASM_OP_BANK:
-            get_expr_recursive(fp, &exp->op_expr.lhs, u);
-            exp->op_expr.rhs = NULL;
-            exp->op_expr.operator = type;
-            exp->type = XASM_OPERATOR_EXPRESSION;
-            break;
-
-            default:
-            fprintf(stderr, "%s(0x%lx): get_expr(): invalid expression type (%.2X)\n", u->name, ftell(fp), type);
-            exp->integer = 0;
-            exp->type = XASM_INTEGER_EXPRESSION;
-            break;
-        }
+    if (read_error) {
+        *dest = NULL;
+        return;
     }
+
+    if (depth > 500) {
+        fprintf(stderr, "%s: get_expr(): expression nesting depth limit exceeded\n", u->name);
+        read_error = 1;
+        *dest = NULL;
+        return;
+    }
+
+    type = get_1(fp);
+    if (read_error) {
+        *dest = NULL;
+        return;
+    }
+
+    exp = (xasm_expression *)malloc( sizeof(xasm_expression) );
+    if (exp == NULL) {
+        read_error = 1;
+        *dest = NULL;
+        return;
+    }
+
     exp->unit = u;
+    switch (type) {
+        case XASM_INT_8: exp->integer = get_1(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
+        case XASM_INT_16:    exp->integer = get_2(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
+        case XASM_INT_24:    exp->integer = get_3(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
+        case XASM_INT_32:    exp->integer = get_4(fp);   exp->type = XASM_INTEGER_EXPRESSION; break;
+        case XASM_STR_8: exp->string = get_str_8(fp);    exp->type = XASM_STRING_EXPRESSION;  break;
+        case XASM_STR_16:    exp->string = get_str_16(fp);   exp->type = XASM_STRING_EXPRESSION;  break;
+
+        case XASM_LOCAL: exp->local_id = get_2(fp);  exp->type = XASM_LOCAL_EXPRESSION;   break;
+        case XASM_EXTRN: exp->extrn_id = get_2(fp);  exp->type = XASM_EXTERNAL_EXPRESSION;break;
+
+        case XASM_PC:    ;               exp->type = XASM_PC_EXPRESSION;  break;
+
+        case XASM_OP_PLUS:
+        case XASM_OP_MINUS:
+        case XASM_OP_MUL:
+        case XASM_OP_DIV:
+        case XASM_OP_MOD:
+        case XASM_OP_SHL:
+        case XASM_OP_SHR:
+        case XASM_OP_AND:
+        case XASM_OP_OR:
+        case XASM_OP_XOR:
+        case XASM_OP_EQ:
+        case XASM_OP_NE:
+        case XASM_OP_LT:
+        case XASM_OP_GT:
+        case XASM_OP_LE:
+        case XASM_OP_GE:
+        get_expr_recursive(fp, &exp->op_expr.lhs, u, depth + 1);
+        get_expr_recursive(fp, &exp->op_expr.rhs, u, depth + 1);
+        exp->op_expr.operator = type;
+        exp->type = XASM_OPERATOR_EXPRESSION;
+        break;
+
+        case XASM_OP_NOT:
+        case XASM_OP_NEG:
+        case XASM_OP_LO:
+        case XASM_OP_HI:
+        case XASM_OP_UMINUS:
+        case XASM_OP_BANK:
+        get_expr_recursive(fp, &exp->op_expr.lhs, u, depth + 1);
+        exp->op_expr.rhs = NULL;
+        exp->op_expr.operator = type;
+        exp->type = XASM_OPERATOR_EXPRESSION;
+        break;
+
+        default:
+        fprintf(stderr, "%s(0x%lx): get_expr(): invalid expression type (%.2X)\n", u->name, ftell(fp), type);
+        exp->integer = 0;
+        exp->type = XASM_INTEGER_EXPRESSION;
+        read_error = 1;
+        break;
+    }
     *dest = exp;
 }
 
@@ -259,15 +313,18 @@ static void get_expressions(FILE *fp, xasm_unit *u)
     int i;
     int count;
     count = get_2(fp);
+    if (read_error) return;
     if (count > 0) {
-        u->expressions = (xasm_expression **)malloc(sizeof(xasm_expression *) * count);
+        u->expressions = (xasm_expression **)calloc(count, sizeof(xasm_expression *));
+        if (u->expressions == NULL) { read_error = 1; return; }
     } else {
         u->expressions = NULL;
     }
     for (i=0; i<count; i++) {
-        get_expr_recursive(fp, &u->expressions[i], u);
+        get_expr_recursive(fp, &u->expressions[i], u, 0);
+        if (read_error) break;
     }
-    u->expr_count = count;
+    u->expr_count = i;
 }
 
 /**
@@ -277,14 +334,19 @@ static void get_expressions(FILE *fp, xasm_unit *u)
  */
 static void get_segment(FILE *fp, xasm_segment *seg)
 {
+    seg->size = 0;
+    seg->bytes = NULL;
     seg->size = get_3(fp);
+    if (read_error) return;
     if (seg->size > 0) {
         seg->bytes = (unsigned char *)malloc(seg->size);
         if (seg->bytes != NULL) {
-            fread(seg->bytes, 1, seg->size, fp);
+            if (fread(seg->bytes, 1, seg->size, fp) < (size_t)seg->size) {
+                read_error = 1;
+            }
+        } else {
+            read_error = 1;
         }
-    } else {
-        seg->bytes = NULL;
     }
 }
 
@@ -302,6 +364,7 @@ int xasm_unit_read(const char *filename, xasm_unit *u)
     unsigned short magic;
     unsigned char version;
 
+    read_error = 0;
     u->name = filename;
     fp = fopen(filename, "rb");
     if (fp == NULL) {
@@ -316,14 +379,16 @@ int xasm_unit_read(const char *filename, xasm_unit *u)
     }
 
     magic = get_2(fp);
-    if (magic != XASM_MAGIC) {
+    if (read_error || magic != XASM_MAGIC) {
         /* Error, bad magic number */
+        fclose(fp);
         return 0;
     }
 
     version = get_1(fp);
-    if (version != XASM_OBJ_VERSION) {
+    if (read_error || version != XASM_OBJ_VERSION) {
         /* Error, bad version */
+        fclose(fp);
         return 0;
     }
 
@@ -333,7 +398,8 @@ int xasm_unit_read(const char *filename, xasm_unit *u)
     count = get_1(fp);
     /* Read unit names */
     for (i=0; i<count; i++) {
-        get_str_8(fp);
+        char *s = get_str_8(fp);
+        SAFE_FREE(s);
     }
 
     get_externals(fp, u);
@@ -342,6 +408,11 @@ int xasm_unit_read(const char *filename, xasm_unit *u)
     get_expressions(fp, u);
 
     fclose(fp);
+
+    if (read_error) {
+        xasm_unit_finalize(u);
+        return 0;
+    }
 
     /* Success */
     return 1;

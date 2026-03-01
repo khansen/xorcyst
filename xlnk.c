@@ -105,6 +105,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
+#include <setjmp.h>
 #include "getopt.h"
 #include "objdef.h"
 #include "opcode.h"
@@ -113,6 +114,21 @@
 #include "hashtab.h"
 
 #define SAFE_FREE(m) if ((m) != NULL) { free(m); m = NULL; }
+
+static const unsigned char *current_bytecode_base;
+static int current_bytecode_size;
+static jmp_buf bytecode_jmpbuf;
+
+static void err(const char *fmt, ...);
+
+static void check_bounds(const unsigned char *b, int offset, int needed)
+{
+    int total_offset = (int)(b - current_bytecode_base) + offset;
+    if (total_offset < 0 || total_offset + needed > current_bytecode_size) {
+        err("unexpected end of bytecode segment");
+        longjmp(bytecode_jmpbuf, 1);
+    }
+}
 
 /**
  * Parses a string to an integer.
@@ -353,8 +369,8 @@ static hashtab *constant_hash;
 static hashtab *unit_hash;
 
 /** Number of errors and warnings during linking */
-static int err_count;
-static int warn_count;
+int err_count = 0;
+int warn_count = 0;
 
 static int suppress;
 
@@ -394,11 +410,21 @@ static void maybe_print_location()
     int len;
     if (unit_file != NULL) {
         len = unit_file[0] + 1;
+        /* unit_file is part of current_bytecode_base. */
+        /* check_bounds wants offset relative to first argument. */
+        /* unit_file points to len byte. */
+        int offset = (int)(unit_file - current_bytecode_base);
+        if (offset < 0 || offset + len + 1 > current_bytecode_size) {
+            /* unit_file is corrupt or from another segment. skip. */
+            return;
+        }
         str = (char *)malloc(len + 1);
-        strncpy(str, (char *)&unit_file[1], len);
-        str[len] = '\0';
-        fprintf(stderr, "%s:%d: ", str, unit_line);
-        free(str);
+        if (str != NULL) {
+            strncpy(str, (char *)&unit_file[1], len);
+            str[len] = '\0';
+            fprintf(stderr, "%s:%d: ", str, unit_line);
+            free(str);
+        }
     }
 }
 
@@ -553,7 +579,11 @@ static int alloc_ram(local *l)
                     if (b == ram_block_head) {
                         ram_block_head = n;    /* New head */
                     }
-                    b = n;
+                    else {
+                        p->next = n;           /* Link from previous */
+                    }
+                    p = n;                     /* Current predecessor for next loop iteration */
+                    b = n;                     /* Start re-check from new padding block */
                 }
                 continue;
             }
@@ -596,22 +626,25 @@ static void finalize_ram_blocks()
 /*--------------------------------------------------------------------------*/
 /* Functions to get big-endian values from byte buffer. */
 
+/*--------------------------------------------------------------------------*/
+
 /* Gets single byte from buffer and increments index. */
 static unsigned char get_1(const unsigned char *b, int *i)
 {
+    check_bounds(b, *i, 1);
     return b[(*i)++];
 }
 /* Gets big-endian short from buffer and increments index. */
 static unsigned short get_2(const unsigned char *b, int *i)
 {
-    unsigned short result = get_1(b, i) << 8;
+    unsigned short result = (unsigned short)get_1(b, i) << 8;
     result |= get_1(b, i);
     return result;
 }
 /* Gets big-endian 24-bit integer from buffer and increments index. */
 static unsigned int get_3(const unsigned char *b, int *i)
 {
-    unsigned int result = get_2(b, i) << 8;
+    unsigned int result = (unsigned int)get_2(b, i) << 8;
     result |= get_1(b, i);
     return result;
 }
@@ -628,14 +661,18 @@ static unsigned int get_3(const unsigned char *b, int *i)
 /**
  * Calculates the storage occupied by a CMD_LABEL bytecode's arguments.
  */
-static int label_cmd_args_size(const unsigned char *bytes)
+static int label_cmd_args_size(const unsigned char *b)
 {
-    int size = 1;   /* Smallest possible: flag byte */
-    int flags = bytes[0];
-    if (flags & XASM_LABEL_FLAG_EXPORT) { size += bytes[1] + 1 + 1; }    /* Length byte + string */
-    if (flags & XASM_LABEL_FLAG_ALIGN) { size += 1; }            /* Alignment */
-    if (flags & XASM_LABEL_FLAG_ADDR) { size += 2; }         /* Address */
-    return size;
+    int i = 0;
+    int flags = get_1(b, &i);
+    if (flags & XASM_LABEL_FLAG_EXPORT) {
+        int len = get_1(b, &i) + 1;
+        check_bounds(b, i, len);
+        i += len;
+    }
+    if (flags & XASM_LABEL_FLAG_ALIGN) { get_1(b, &i); }
+    if (flags & XASM_LABEL_FLAG_ADDR) { get_2(b, &i); }
+    return i;
 }
 
 /**
@@ -645,30 +682,51 @@ static int label_cmd_args_size(const unsigned char *bytes)
  * @param handlers Array of bytecode handlers (entries can be NULL)
  * @param arg Argument passed to bytecode handler, can be anything
  */
-static void bytecode_walk(const unsigned char *bytes, xasm_bytecodeproc *handlers, void *arg)
+static void bytecode_walk(const unsigned char *bytes, int size, xasm_bytecodeproc *handlers, void *arg)
 {
     int i;
     unsigned char cmd;
     unit_file = NULL;
     unit_line = -1;
-    if (bytes == NULL) { return; }
+    if (bytes == NULL || size <= 0) { return; }
+
+    current_bytecode_base = bytes;
+    current_bytecode_size = size;
+
+    if (setjmp(bytecode_jmpbuf)) {
+        return;
+    }
+
     i = 0;
     do {
         cmd = get_1(bytes, &i);
 
-        /* Check if debug command */
-        if (cmd < XASM_CMD_END) {
-            switch (cmd) {
-                case XASM_CMD_FILE:
-                unit_file = &bytes[i];
-                i += get_1(bytes, &i) + 1;  /* Skip count and array of bytes */
-                break;
-                case XASM_CMD_LINE8:  unit_line = get_1(bytes, &i);  break;
-                case XASM_CMD_LINE16: unit_line = get_2(bytes, &i);  break;
-                case XASM_CMD_LINE24: unit_line = get_3(bytes, &i);  break;
-                case XASM_CMD_LINE_INC: unit_line++; break;
+        if (cmd < XASM_CMD_END || cmd > XASM_CMD_WIDE_INSTR) {
+            /* Check if debug command */
+            if (cmd < XASM_CMD_END) {
+                switch (cmd) {
+                    case XASM_CMD_FILE:
+                    {
+                        int len = get_1(bytes, &i);
+                        check_bounds(bytes, i, len + 1);
+                        unit_file = &bytes[i-1]; /* Point to length byte */
+                        i += len + 1;
+                    }
+                    break;
+                    case XASM_CMD_LINE8:  unit_line = get_1(bytes, &i);  break;
+                    case XASM_CMD_LINE16: unit_line = get_2(bytes, &i);  break;
+                    case XASM_CMD_LINE24: unit_line = get_3(bytes, &i);  break;
+                    case XASM_CMD_LINE_INC: unit_line++; break;
+                    default:
+                    err("invalid debug bytecode");
+                    longjmp(bytecode_jmpbuf, 1);
+                    break;
+                }
+                continue;
+            } else {
+                err("invalid bytecode");
+                longjmp(bytecode_jmpbuf, 1);
             }
-            continue;
         }
 
         if (handlers[cmd-XASM_CMD_END] != NULL) {
@@ -691,6 +749,7 @@ static void bytecode_walk(const unsigned char *bytes, xasm_bytecodeproc *handler
 
             default:
             err("invalid bytecode");
+            longjmp(bytecode_jmpbuf, 1);
             break;
         }
     } while (cmd != XASM_CMD_END);
@@ -727,6 +786,17 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
     local *l;
     xasm_constant *c;
     xasm_constant lhs_result, rhs_result;
+
+    memset(result, 0, sizeof(xasm_constant));
+    result->type = -1; /* Default to unresolved */
+
+    if (e == NULL) {
+        return;
+    }
+
+    memset(&lhs_result, 0, sizeof(lhs_result));
+    memset(&rhs_result, 0, sizeof(rhs_result));
+
     switch (e->type) {
         case XASM_OPERATOR_EXPRESSION:
         switch (e->op_expr.operator) {
@@ -763,8 +833,22 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
                     case XASM_OP_PLUS:   result->integer = lhs_result.integer + rhs_result.integer;  break;
                     case XASM_OP_MINUS:  result->integer = lhs_result.integer - rhs_result.integer;  break;
                     case XASM_OP_MUL:    result->integer = lhs_result.integer * rhs_result.integer;  break;
-                    case XASM_OP_DIV:    result->integer = lhs_result.integer / rhs_result.integer;  break;
-                    case XASM_OP_MOD:    result->integer = lhs_result.integer % rhs_result.integer;  break;
+                    case XASM_OP_DIV:
+                    if (rhs_result.integer == 0) {
+                        err("division by zero in expression");
+                        result->type = -1;
+                    } else {
+                        result->integer = lhs_result.integer / rhs_result.integer;
+                    }
+                    break;
+                    case XASM_OP_MOD:
+                    if (rhs_result.integer == 0) {
+                        err("modulo by zero in expression");
+                        result->type = -1;
+                    } else {
+                        result->integer = lhs_result.integer % rhs_result.integer;
+                    }
+                    break;
                     case XASM_OP_SHL:    result->integer = lhs_result.integer << rhs_result.integer; break;
                     case XASM_OP_SHR:    result->integer = lhs_result.integer >> rhs_result.integer; break;
                     case XASM_OP_AND:    result->integer = lhs_result.integer & rhs_result.integer;  break;
@@ -793,12 +877,12 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
                     break;
 
                     /* String comparison: using strcmp() */
-                    case XASM_OP_EQ: result->integer = strcmp(lhs_result.string, rhs_result.string) == 0;    break;
-                    case XASM_OP_NE: result->integer = strcmp(lhs_result.string, rhs_result.string) != 0;    break;
-                    case XASM_OP_LT: result->integer = strcmp(lhs_result.string, rhs_result.string) < 0; break;
-                    case XASM_OP_GT: result->integer = strcmp(lhs_result.string, rhs_result.string) > 0; break;
-                    case XASM_OP_LE: result->integer = strcmp(lhs_result.string, rhs_result.string) <= 0;    break;
-                    case XASM_OP_GE: result->integer = strcmp(lhs_result.string, rhs_result.string) >= 0;    break;
+                    case XASM_OP_EQ: result->integer = strcmp(lhs_result.string, rhs_result.string) == 0; result->type = XASM_INTEGER_CONSTANT; break;
+                    case XASM_OP_NE: result->integer = strcmp(lhs_result.string, rhs_result.string) != 0; result->type = XASM_INTEGER_CONSTANT; break;
+                    case XASM_OP_LT: result->integer = strcmp(lhs_result.string, rhs_result.string) < 0;  result->type = XASM_INTEGER_CONSTANT; break;
+                    case XASM_OP_GT: result->integer = strcmp(lhs_result.string, rhs_result.string) > 0;  result->type = XASM_INTEGER_CONSTANT; break;
+                    case XASM_OP_LE: result->integer = strcmp(lhs_result.string, rhs_result.string) <= 0; result->type = XASM_INTEGER_CONSTANT; break;
+                    case XASM_OP_GE: result->integer = strcmp(lhs_result.string, rhs_result.string) >= 0; result->type = XASM_INTEGER_CONSTANT; break;
 
                     default:
                     /* Not defined operator for string operation... */
@@ -1117,10 +1201,10 @@ static void inc_pc_wide_instr(const unsigned char *b, void *arg)
 static void write_bin8(const unsigned char *b, void *arg)
 {
     int count;
-    int i;
+    int i = 1;
     write_binary_args *args = (write_binary_args *)arg;
-    i = 1;
     count = get_1(b, &i) + 1;
+    check_bounds(b, i, count);
     fwrite(&b[i], 1, count, args->fp);
     inc_pc( count, arg );
 }
@@ -1131,10 +1215,10 @@ static void write_bin8(const unsigned char *b, void *arg)
 static void write_bin16(const unsigned char *b, void *arg)
 {
     int count;
-    int i;
+    int i = 1;
     write_binary_args *args = (write_binary_args *)arg;
-    i = 1;
     count = get_2(b, &i) + 1;
+    check_bounds(b, i, count);
     fwrite(&b[i], 1, count, args->fp);
     inc_pc( count, arg );
 }
@@ -1367,7 +1451,7 @@ static void write_as_binary(FILE *fp, xunit *u)
     /* Reset PC */
     pc = u->code_origin;
     /* Do the walk */
-    bytecode_walk(u->_unit_.codeseg.bytes, handlers, (void *)&args);
+    bytecode_walk(u->_unit_.codeseg.bytes, u->_unit_.codeseg.size, handlers, (void *)&args);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1404,10 +1488,10 @@ static void print_chunk(FILE *out, const char *label,
 static void asm_write_bin8(const unsigned char *b, void *arg)
 {
     int count;
-    int i;
+    int i = 1;
     write_binary_args *args = (write_binary_args *)arg;
-    i = 1;
     count = get_1(b, &i) + 1;
+    check_bounds(b, i, count);
     //    fprintf(args->fp, "; %d byte(s)\n", count);
     print_chunk(args->fp, /*label=*/0, &b[i], count, /*cols=*/16);
     inc_pc( count, arg );
@@ -1419,10 +1503,10 @@ static void asm_write_bin8(const unsigned char *b, void *arg)
 static void asm_write_bin16(const unsigned char *b, void *arg)
 {
     int count;
-    int i;
+    int i = 1;
     write_binary_args *args = (write_binary_args *)arg;
-    i = 1;
     count = get_2(b, &i) + 1;
+    check_bounds(b, i, count);
     //    fprintf(args->fp, "; %d byte(s)\n", count);
     print_chunk(args->fp, /*label=*/0, &b[i], count, /*cols=*/16);
     inc_pc( count, arg );
@@ -1688,7 +1772,7 @@ static void write_as_assembly(FILE *fp, xunit *u)
     fprintf(fp, "; * %s, PC=$%.4X\n", u->_unit_.name, pc);
     fprintf(fp, "; ***************************************\n");
     /* Do the walk */
-    bytecode_walk(u->_unit_.codeseg.bytes, handlers, (void *)&args);
+    bytecode_walk(u->_unit_.codeseg.bytes, u->_unit_.codeseg.size, handlers, (void *)&args);
 }
 
 #define XLNK_NO_DEBUG
@@ -1740,7 +1824,7 @@ static void print_it(const unsigned char *b, void *arg)
  * Prints bytecodes.
  * @param bytes Bytecodes
  */
-static void print_bytecodes(const unsigned char *bytes)
+static void print_bytecodes(const unsigned char *bytes, int size)
 {
     static xasm_bytecodeproc handlers[] =
     {
@@ -1748,7 +1832,7 @@ static void print_bytecodes(const unsigned char *bytes)
         print_it,print_it,print_it,print_it,print_it,
         print_it,print_it,print_it
     };
-    bytecode_walk(bytes, handlers, NULL);
+    bytecode_walk(bytes, size, handlers, NULL);
 }
 
 /**
@@ -1757,8 +1841,8 @@ static void print_bytecodes(const unsigned char *bytes)
  */
 static void print_unit(xasm_unit *u)
 {
-    print_bytecodes(u->dataseg.bytes);
-    print_bytecodes(u->codeseg.bytes);
+    print_bytecodes(u->dataseg.bytes, u->dataseg.size);
+    print_bytecodes(u->codeseg.bytes, u->codeseg.size);
 }
 
 #endif /* !XLNK_NO_DEBUG */
@@ -1775,7 +1859,7 @@ static void create_local_array(int size, local_array *la)
 {
     la->size = size;
     if (size > 0) {
-        la->entries = (local *)malloc(sizeof(local) * size);
+        la->entries = (local *)calloc(size, sizeof(local));
     }
     else {
         la->entries = NULL;
@@ -1818,7 +1902,7 @@ static void count_one_local(const unsigned char *b, void *arg)
  * @param b Bytecodes, terminated by CMD_END
  * @return Number of locals counted
  */
-static int count_locals(const unsigned char *b)
+static int count_locals(const unsigned char *b, int size)
 {
     int count;
     /* Table of callback functions for our purpose. */
@@ -1838,7 +1922,7 @@ static int count_locals(const unsigned char *b)
         NULL    /* CMD_WIDE_INSTR */
     };
     count = 0;
-    bytecode_walk(b, handlers, (void *)&count);
+    bytecode_walk(b, size, handlers, (void *)&count);
     return count;
 }
 
@@ -1903,7 +1987,7 @@ static void register_one_local(const unsigned char *b, void *arg)
  * @param la Pointer to array to receive locals
  * @param xu Owner unit
  */
-static void register_locals(const unsigned char *b, local_array *la, xunit *xu)
+static void register_locals(const unsigned char *b, int size, local_array *la, xunit *xu)
 {
     local *lptr;
     local **lpptr;
@@ -1924,13 +2008,13 @@ static void register_locals(const unsigned char *b, local_array *la, xunit *xu)
         NULL    /* CMD_WIDE_INSTR */
     };
     /* Create array of locals */
-    create_local_array(count_locals(b), la);
+    create_local_array(count_locals(b, size), la);
     /* Prepare args */
     lptr = la->entries;
     lpptr = &lptr;
     reg_unit = xu;
     /* Go! */
-    bytecode_walk(b, handlers, (void *)lpptr);
+    bytecode_walk(b, size, handlers, (void *)lpptr);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -2037,7 +2121,7 @@ static void calc_data_addresses(xunit *u)
     pc = 0;
     verbose(1, "  %s", u->_unit_.name);
     /* Map away! */
-    bytecode_walk(u->_unit_.dataseg.bytes, handlers, (void *)&args);
+    bytecode_walk(u->_unit_.dataseg.bytes, u->_unit_.dataseg.size, handlers, (void *)&args);
     /* Store the end address, which is the total size of data */
     u->data_size = pc;
 }
@@ -2222,7 +2306,7 @@ static void calc_code_addresses(xunit *u)
     args.xu = u;
     args.index = 0;
     /* Do the walk */
-    bytecode_walk(u->_unit_.codeseg.bytes, handlers, (void *)&args);
+    bytecode_walk(u->_unit_.codeseg.bytes, u->_unit_.codeseg.size, handlers, (void *)&args);
     /* Store the total size of code */
     u->code_size = pc - u->code_origin;
 }
@@ -2334,8 +2418,8 @@ static void register_one_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
     verbose(1, "  unit `%s' loaded", file);
 
     verbose(1, "    registering local symbols...");
-    register_locals(xu->_unit_.dataseg.bytes, &xu->data_locals, xu);
-    register_locals(xu->_unit_.codeseg.bytes, &xu->code_locals, xu);
+    register_locals(xu->_unit_.dataseg.bytes, xu->_unit_.dataseg.size, &xu->data_locals, xu);
+    register_locals(xu->_unit_.codeseg.bytes, xu->_unit_.codeseg.size, &xu->code_locals, xu);
 
     verbose(1, "    registering public symbols...");
     enter_exported_constants(&xu->_unit_);

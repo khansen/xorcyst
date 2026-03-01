@@ -1153,7 +1153,12 @@ int main(int argc, char *argv[]) {
                 codegen_write(root_node, output_fp);
             }
             fclose(output_fp);
-            output_generated = (total_errors() == 0);
+            if (total_errors() != 0) {
+                remove(xasm_args.output_file);
+                output_generated = 0;
+            } else {
+                output_generated = 1;
+            }
         }
     }
 

@@ -946,6 +946,221 @@ link{file=$TMPDIR/link_unit_a.o,origin=\$8000}
 EOF
 run_xlnk_expect_error_no_crash "$TMPDIR/link_fail_no_output.script" "no output open"
 
+# Linker regression: cross-unit symbol resolution
+cat > "$TMPDIR/link_cross_a.asm" <<'ASM'
+.public public_symbol
+public_symbol = $1234
+END
+ASM
+cat > "$TMPDIR/link_cross_b.asm" <<'ASM'
+.extrn public_symbol:label
+    dw public_symbol
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_cross_a.asm" -o "$TMPDIR/link_cross_a.o" >/dev/null 2>&1; then
+    fail "failed to build cross-unit fixture unit A"
+fi
+if ! "$XASM" "$TMPDIR/link_cross_b.asm" -o "$TMPDIR/link_cross_b.o" >/dev/null 2>&1; then
+    fail "failed to build cross-unit fixture unit B"
+fi
+cat > "$TMPDIR/link_cross.script" <<EOF
+output{file=$TMPDIR/link_cross.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_cross_b.o}
+link{file=$TMPDIR/link_cross_a.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_cross.script"
+# public_symbol is $1234, so dw public_symbol should be 34 12
+if ! od -An -t x1 "$TMPDIR/link_cross.bin" | tr -d '[:space:]' | grep -q "3412"; then
+    od -t x1 "$TMPDIR/link_cross.bin" >&2
+    fail "Cross-unit symbol resolution failed (expected 34 12)"
+fi
+
+# Linker regression: RAM allocation (ZP and normal RAM)
+cat > "$TMPDIR/link_ram.asm" <<'ASM'
+.DATASEG ZEROPAGE
+a_zp .dsb 16
+.DATASEG
+b_normal .dsb 1
+.CODESEG
+    lda a_zp
+    sta b_normal
+END
+ASM
+
+if ! "$XASM" "$TMPDIR/link_ram.asm" -o "$TMPDIR/link_ram.o" >/dev/null 2>&1; then
+    fail "failed to build RAM fixture"
+fi
+cat > "$TMPDIR/link_ram.script" <<EOF
+output{file=$TMPDIR/link_ram.bin}
+ram{start=\$0010,end=\$0020}
+ram{start=\$0300,end=\$0400}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_ram.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_ram.script"
+# a_zp should be at $0010, b_normal at $0300
+# lda a_zp ($10) -> A5 10
+# sta b_normal ($0300) -> 8D 00 03
+if ! od -An -t x1 "$TMPDIR/link_ram.bin" | tr -d '[:space:]' | grep -q "a5108d0003"; then
+    od -An -t x1 "$TMPDIR/link_ram.bin" >&2
+    fail "RAM allocation failed (expected a5 10 8d 00 03)"
+fi
+
+# Linker regression: bank overflow
+cat > "$TMPDIR/link_overflow.asm" <<'ASM'
+    dsb 20
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_overflow.asm" -o "$TMPDIR/link_overflow.o" >/dev/null 2>&1; then
+    fail "failed to build overflow fixture"
+fi
+cat > "$TMPDIR/link_overflow.script" <<EOF
+output{file=$TMPDIR/link_overflow.bin}
+bank{size=\$0010,origin=\$8000}
+link{file=$TMPDIR/link_overflow.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_overflow.script" "bank size.*exceeded"
+
+# Linker regression: unresolved external
+cat > "$TMPDIR/link_unresolved.asm" <<'ASM'
+.extrn missing_symbol:label
+    lda missing_symbol
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_unresolved.asm" -o "$TMPDIR/link_unresolved.o" >/dev/null 2>&1; then
+    fail "failed to build unresolved fixture"
+fi
+cat > "$TMPDIR/link_unresolved.script" <<EOF
+output{file=$TMPDIR/link_unresolved.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_unresolved.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_unresolved.script" "unknown symbol \`missing_symbol'"
+
+# Linker regression: multiple banks
+cat > "$TMPDIR/link_bank1.asm" <<'ASM'
+    .db $01
+END
+ASM
+cat > "$TMPDIR/link_bank2.asm" <<'ASM'
+    .db $02
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_bank1.asm" -o "$TMPDIR/link_bank1.o" >/dev/null 2>&1; then
+    fail "failed to build bank1 fixture"
+fi
+if ! "$XASM" "$TMPDIR/link_bank2.asm" -o "$TMPDIR/link_bank2.o" >/dev/null 2>&1; then
+    fail "failed to build bank2 fixture"
+fi
+cat > "$TMPDIR/link_multi_bank.script" <<EOF
+output{file=$TMPDIR/link_multi_bank.bin}
+bank{size=\$10,origin=\$8000}
+link{file=$TMPDIR/link_bank1.o}
+bank{size=\$10,origin=\$9000}
+link{file=$TMPDIR/link_bank2.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_multi_bank.script"
+# Each bank is $10 (16) bytes. Total binary should be 32 bytes.
+out_size=$(wc -c < "$TMPDIR/link_multi_bank.bin" | tr -d '[:space:]')
+if [ "$out_size" != "32" ]; then
+    fail "unexpected multi-bank linker output size ($out_size, expected 32)"
+fi
+# Check bytes: $01 at offset 0, $02 at offset 16 ($10)
+if ! od -An -t x1 "$TMPDIR/link_multi_bank.bin" | tr -d '[:space:]' | grep -q "^0100000000000000000000000000000002"; then
+    od -An -t x1 "$TMPDIR/link_multi_bank.bin" >&2
+    fail "Multi-bank binary content incorrect"
+fi
+
+# Linker regression: unreferenced external (should NOT error)
+cat > "$TMPDIR/link_unused_ext.asm" <<'ASM'
+.extrn unused_symbol:label
+    rts
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_unused_ext.asm" -o "$TMPDIR/link_unused_ext.o" >/dev/null 2>&1; then
+    fail "failed to build unused ext fixture"
+fi
+cat > "$TMPDIR/link_unused_ext.script" <<EOF
+output{file=$TMPDIR/link_unused_ext.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_unused_ext.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_unused_ext.script"
+
+# Linker regression: invalid command in script
+cat > "$TMPDIR/link_bad_cmd.script" <<EOF
+bogus{foo=bar}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_bad_cmd.script" "unknown command \`bogus'"
+
+# Linker regression: missing required argument in script
+cat > "$TMPDIR/link_missing_arg.script" <<EOF
+bank{}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_missing_arg.script" "no bank size set"
+
+# Linker regression: argument out of range in script
+cat > "$TMPDIR/link_range_arg.script" <<EOF
+ram{start=\$10000,end=\$100}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_range_arg.script" "value of argument \`start' is out of range"
+
+# Linker regression: cannot pad backwards
+cat > "$TMPDIR/link_pad_back.script" <<EOF
+output{file=$TMPDIR/link_pad_back.bin}
+bank{size=\$100,origin=\$8000}
+pad{size=\$10}
+pad{offset=\$5}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_pad_back.script" "cannot pad.*backwards"
+
+# Linker regression: multiple RAM blocks allocation
+cat > "$TMPDIR/link_multi_ram.asm" <<'ASM'
+.dataseg
+var1 .dsb 8
+var2 .dsb 8
+.codeseg
+    lda var1
+    lda var2
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_multi_ram.asm" -o "$TMPDIR/link_multi_ram.o" >/dev/null 2>&1; then
+    fail "failed to build multi-ram fixture"
+fi
+cat > "$TMPDIR/link_multi_ram.script" <<EOF
+output{file=$TMPDIR/link_multi_ram.bin}
+ram{start=\$0200,end=\$0208}
+ram{start=\$0300,end=\$0308}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_multi_ram.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_multi_ram.script"
+# var1 should be at $0200, var2 at $0300
+if ! od -An -t x1 "$TMPDIR/link_multi_ram.bin" | tr -d '[:space:]' | grep -q "ad0002ad0003"; then
+    od -An -t x1 "$TMPDIR/link_multi_ram.bin" >&2
+    fail "Multi-RAM allocation failed"
+fi
+
+# Linker regression: out of RAM
+cat > "$TMPDIR/link_out_of_ram.asm" <<'ASM'
+.dataseg
+big_var .dsb 20
+.codeseg
+    lda big_var
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_out_of_ram.asm" -o "$TMPDIR/link_out_of_ram.o" >/dev/null 2>&1; then
+    fail "failed to build out-of-ram fixture"
+fi
+cat > "$TMPDIR/link_out_of_ram.script" <<EOF
+output{file=$TMPDIR/link_out_of_ram.bin}
+ram{start=\$0200,end=\$0210}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_out_of_ram.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/link_out_of_ram.script" "out of.*RAM"
+
 # Regression: DSB in DATASEG must not crash in pure binary mode
 cat > "$TMPDIR/dataseg-dsb-crash.asm" <<'ASM'
 ORG $C000
@@ -1584,5 +1799,197 @@ if ! grep -q "expression does not evaluate to integer literal" "$TMPDIR/db-undef
     cat "$TMPDIR/db-undefined-crash.log" >&2
     fail "missing expected error 'expression does not evaluate to integer literal'"
 fi
+
+# Regression: division by zero in assembler
+cat > "$TMPDIR/xasm-div0.asm" <<'ASM'
+div0 EQU 10 / 0
+END
+ASM
+set +e
+"$XASM" --pure-binary "$TMPDIR/xasm-div0.asm" -o "$TMPDIR/xasm-div0.bin" > "$TMPDIR/xasm-div0.log" 2>&1
+status=$?
+set -e
+if ! grep -q "division by zero in expression" "$TMPDIR/xasm-div0.log"; then
+    cat "$TMPDIR/xasm-div0.log" >&2
+    fail "missing expected assembler error 'division by zero in expression'"
+fi
+
+# Regression: division by zero in linker
+cat > "$TMPDIR/xlnk-div0.asm" <<'ASM'
+.public div0
+.extrn some_symbol:label
+div0 = some_symbol / 0
+END
+ASM
+cat > "$TMPDIR/xlnk-div0-symbol.asm" <<'ASM'
+.public some_symbol
+some_symbol = 10
+END
+ASM
+# We expect xasm to fail here because it can't fold but it tries to write a constant.
+# Actually, let's see if we can make it an expression that xasm MUST pass to linker.
+# If we use a label, xasm can't fold it.
+set +e
+"$XASM" "$TMPDIR/xlnk-div0.asm" -o "$TMPDIR/xlnk-div0.o" > "$TMPDIR/xlnk-div0-xasm.log" 2>&1
+xasm_status=$?
+set -e
+if [ "$xasm_status" -eq 0 ]; then
+    fail "xasm should have failed to generate object with non-constant public EQU"
+fi
+if ! grep -q "does not evaluate to constant" "$TMPDIR/xlnk-div0-xasm.log"; then
+    cat "$TMPDIR/xlnk-div0-xasm.log" >&2
+    fail "missing expected xasm error 'does not evaluate to constant'"
+fi
+
+# Linker regression: division by zero in bytecode expression
+cat > "$TMPDIR/xlnk-div0-bytecode.asm" <<'ASM'
+.extrn some_symbol:label
+    lda #10 / (some_symbol - 10)
+END
+ASM
+cat > "$TMPDIR/xlnk-div0-symbol.asm" <<'ASM'
+.public some_symbol
+some_symbol = 10
+END
+ASM
+if ! "$XASM" "$TMPDIR/xlnk-div0-bytecode.asm" -o "$TMPDIR/xlnk-div0-bytecode.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-div0-bytecode fixture"
+fi
+if ! "$XASM" "$TMPDIR/xlnk-div0-symbol.asm" -o "$TMPDIR/xlnk-div0-symbol.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-div0-symbol fixture"
+fi
+cat > "$TMPDIR/xlnk-div0-bytecode.script" <<EOF
+output{file=$TMPDIR/xlnk-div0-bytecode.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_unit_a.o} # filler
+link{file=$TMPDIR/xlnk-div0-bytecode.o}
+link{file=$TMPDIR/xlnk-div0-symbol.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/xlnk-div0-bytecode.script" > "$TMPDIR/xlnk-div0-bytecode.log" 2>&1
+status=$?
+set -e
+if ! grep -q "division by zero in expression" "$TMPDIR/xlnk-div0-bytecode.log"; then
+    cat "$TMPDIR/xlnk-div0-bytecode.log" >&2
+    fail "missing expected linker error 'division by zero in expression'"
+fi
+
+# Regression: RAM alignment leak/fragmentation
+cat > "$TMPDIR/link_ram_align_leak.asm" <<'ASM'
+.dataseg
+var_in_block1 .dsb 15
+aligned_var   .dsb 1
+small_var     .dsb 1
+ALIGN aligned_var 256
+.codeseg
+    lda var_in_block1
+    lda aligned_var
+    lda small_var
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_ram_align_leak.asm" -o "$TMPDIR/link_ram_align_leak.o" >/dev/null 2>&1; then
+    fail "failed to build RAM align leak fixture"
+fi
+cat > "$TMPDIR/link_ram_align_leak.script" <<EOF
+output{file=$TMPDIR/link_ram_align_leak.bin}
+ram{start=\$0201,end=\$0210}
+ram{start=\$0301,end=\$04FF}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_ram_align_leak.o}
+EOF
+# We use -v to see RAM mapping
+"$XLNK" -v "$TMPDIR/link_ram_align_leak.script" > "$TMPDIR/link_ram_align_leak.log" 2>&1
+# aligned_var (align 8 -> 256) should go to $0400.
+# The block $0301-$0400 should be preserved and available for others.
+# small_var or var_in_block1 should end up in $0301 if the leak is fixed.
+if ! grep -q "0301-030F" "$TMPDIR/link_ram_align_leak.log"; then
+    cat "$TMPDIR/link_ram_align_leak.log" >&2
+    fail "RAM alignment padding block was leaked"
+fi
+
+# Linker regression: cross-unit string comparison
+cat > "$TMPDIR/link_str_cmp_a.asm" <<'ASM'
+.public str1
+str1 = "abc"
+END
+ASM
+cat > "$TMPDIR/link_str_cmp_b.asm" <<'ASM'
+.extrn str1:string
+    .db (str1 == "abc") + 10
+END
+ASM
+if ! "$XASM" "$TMPDIR/link_str_cmp_a.asm" -o "$TMPDIR/link_str_cmp_a.o" >/dev/null 2>&1; then
+    fail "failed to build str_cmp fixture unit A"
+fi
+if ! "$XASM" "$TMPDIR/link_str_cmp_b.asm" -o "$TMPDIR/link_str_cmp_b.o" >/dev/null 2>&1; then
+    fail "failed to build str_cmp fixture unit B"
+fi
+cat > "$TMPDIR/link_str_cmp.script" <<EOF
+output{file=$TMPDIR/link_str_cmp.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_str_cmp_b.o}
+link{file=$TMPDIR/link_str_cmp_a.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_str_cmp.script"
+# (1 == 1) + 10 = 11 ($0b)
+if ! od -An -t x1 "$TMPDIR/link_str_cmp.bin" | tr -d '[:space:]' | grep -q "^0b"; then
+    od -An -t x1 "$TMPDIR/link_str_cmp.bin" >&2
+    fail "Linker string comparison failed"
+fi
+
+# Linker regression: malformed object files
+# Test 1: Missing XASM_CMD_END in codeseg
+# Header: MAGIC(FACE), VER(14), CONST(0000), UNIT(00), EXTRN(0000), DATA(000001), END(F3), CODE(000004), INSTR(F7), OP(00), EXID(0000)
+printf '\xfa\xce\x14\x00\x00\x00\x00\x00\x00\x00\x01\xf3\x00\x00\x04\xf7\x00\x00\x00\x00\x00' > "$TMPDIR/malformed1.o"
+cat > "$TMPDIR/malformed1.script" <<EOF
+output{file=$TMPDIR/malformed1.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/malformed1.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/malformed1.script" "unexpected end of bytecode segment"
+
+# Test 2: Truncated string in constant
+# MAGIC(FACE), VER(14), CONST(0001), STRLEN(05), STR(ABC - truncated)
+printf '\xfa\xce\x14\x00\x01\x05ABC' > "$TMPDIR/malformed2.o"
+cat > "$TMPDIR/malformed2.script" <<EOF
+output{file=$TMPDIR/malformed2.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/malformed2.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/malformed2.script" "failed to load unit"
+
+# Test 3: Expression nesting depth limit
+# Header: ... DATA(000001), F3, CODE(000001), F3, EXPR(0001), many OP_PLUS(10)
+# We need enough bytes to satisfy recursive reads if we didn't have depth limit.
+# But with limit it should fail early.
+{
+    printf '\xfa\xce\x14\x00\x00\x00\x00\x00\x00\x00\x01\xf3\x00\x00\x01\xf3\x00\x01'
+    for i in $(seq 1 501); do printf '\x10'; done
+} > "$TMPDIR/malformed3.o"
+cat > "$TMPDIR/malformed3.script" <<EOF
+output{file=$TMPDIR/malformed3.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/malformed3.o}
+EOF
+run_xlnk_expect_error_no_crash "$TMPDIR/malformed3.script" "expression nesting depth limit exceeded"
+
+# Linker regression: debug commands (XASM_CMD_FILE etc) must be correctly skipped
+cat > "$TMPDIR/link_debug.asm" <<'ASM'
+.codeseg
+    lda #1
+    sta $80
+    rts
+END
+ASM
+# Assemble with --debug to generate FILE/LINE bytecodes
+if ! "$XASM" --debug "$TMPDIR/link_debug.asm" -o "$TMPDIR/link_debug.o" >/dev/null 2>&1; then
+    fail "failed to build debug fixture"
+fi
+cat > "$TMPDIR/link_debug.script" <<EOF
+output{file=$TMPDIR/link_debug.bin}
+bank{size=\$100,origin=\$8000}
+link{file=$TMPDIR/link_debug.o}
+EOF
+run_xlnk_expect_success "$TMPDIR/link_debug.script"
 
 echo "All regression tests passed"
