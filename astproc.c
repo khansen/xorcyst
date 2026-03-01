@@ -499,8 +499,8 @@ static int handle_exitm(astnode *n, void *arg, astnode **next)
     astnode *c = n->next_sibling;
     while (c != NULL) {
         astnode *t = c->next_sibling;
-        if (astnode_is_type(c, POP_BRANCH_SCOPE_NODE)) {
-            /* Found the end of the current macro scope */
+        if (astnode_is_type(c, POP_MACRO_BODY_NODE)) {
+            /* Found the end of the current macro body */
             *next = c;
             break;
         }
@@ -510,7 +510,7 @@ static int handle_exitm(astnode *n, void *arg, astnode **next)
         c = t;
     }
     if (c == NULL) {
-        /* No POP found? Should not happen if EXITM is in a macro */
+        err(n->loc, "EXITM used outside a macro");
         *next = NULL;
     }
     astnode_remove(n);
@@ -637,16 +637,22 @@ static int expand_macro(astnode *macro, void *arg, astnode **next)
         /* Replace MACRO_NODE by the macro body instance */
         {
             astnode *stmts = astnode_remove_children(exp_body);
-            astnode *push = astnode_create(PUSH_BRANCH_SCOPE_NODE, macro->loc);
-            astnode *pop = astnode_create(POP_BRANCH_SCOPE_NODE, macro->loc);
+            astnode *push_scope = astnode_create(PUSH_BRANCH_SCOPE_NODE, macro->loc);
+            astnode *pop_scope = astnode_create(POP_BRANCH_SCOPE_NODE, macro->loc);
+            astnode *push_macro = astnode_create(PUSH_MACRO_BODY_NODE, macro->loc);
+            astnode *pop_macro = astnode_create(POP_MACRO_BODY_NODE, macro->loc);
+
+            astnode_add_sibling(push_scope, push_macro);
             if (stmts != NULL) {
-                astnode_add_sibling(push, stmts);
-                astnode_add_sibling(astnode_get_last_sibling(stmts), pop);
+                astnode_add_sibling(push_macro, stmts);
+                astnode_add_sibling(astnode_get_last_sibling(stmts), pop_macro);
             } else {
-                astnode_add_sibling(push, pop);
+                astnode_add_sibling(push_macro, pop_macro);
             }
-            astnode_replace(macro, push);
-            *next = push;
+            astnode_add_sibling(pop_macro, pop_scope);
+
+            astnode_replace(macro, push_scope);
+            *next = push_scope;
             astnode_finalize(exp_body);
         }
 
@@ -2571,14 +2577,15 @@ static int process_while(astnode *while_node, void *arg, astnode **next)
         return 0;
     }
     expr = astnode_get_child(while_node, 0);
-    /* Try to reduce expression to literal */
-    expr = reduce_expression(astnode_clone(expr, expr->loc), FOLD_PC_YES);
+    /* Try to reduce expression to literal. 
+       Work on a clone because reduction is destructive. */
+    astnode *eval_expr = reduce_expression_complete(astnode_clone(expr, expr->loc), FOLD_PC_YES);
     /* Resulting expression must be an integer literal,
     since this is static evaluation.
     */
-    if (astnode_is_type(expr, INTEGER_NODE)) {
+    if (astnode_is_type(eval_expr, INTEGER_NODE)) {
         /* Expand body if the expression is true */
-        if (expr->integer) {
+        if (eval_expr->integer) {
             list = astnode_clone(astnode_get_child(while_node, 1), loc_preserve);
             stmts = astnode_remove_children(list);
             astnode_finalize(list);
@@ -2604,7 +2611,7 @@ static int process_while(astnode *while_node, void *arg, astnode **next)
         astnode_remove(while_node);
         astnode_finalize(while_node);
     }
-    astnode_finalize(expr);
+    astnode_finalize(eval_expr);
     return 0;
 }
 
@@ -2627,15 +2634,16 @@ static int process_do(astnode *do_node, void *arg, astnode **next)
 
     if (do_node->do_node.executed_once) {
         expr = astnode_get_child(do_node, 1);
-        /* Try to reduce expression to literal */
-        expr = reduce_expression(astnode_clone(expr, expr->loc), FOLD_PC_YES);
-        if (astnode_is_type(expr, INTEGER_NODE)) {
-            condition_met = expr->integer;
+        /* Try to reduce expression to literal.
+           Work on a clone because reduction is destructive. */
+        astnode *eval_expr = reduce_expression_complete(astnode_clone(expr, expr->loc), FOLD_PC_YES);
+        if (astnode_is_type(eval_expr, INTEGER_NODE)) {
+            condition_met = eval_expr->integer;
         } else {
             err(do_node->loc, "until expression does not evaluate to literal");
             condition_met = 1; /* Stop loop on error */
         }
-        astnode_finalize(expr);
+        astnode_finalize(eval_expr);
     }
 
     if (!condition_met) {
@@ -3072,7 +3080,7 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
                 }
             } else {
                 id = LHS(c);
-                val = reduce_expression_complete(astnode_clone(RHS(c), RHS(c)->loc), FOLD_PC_NO);
+                val = reduce_expression_complete(RHS(c), FOLD_PC_NO);
                 if (!astnode_is_type(val, INTEGER_NODE)) {
                     err(c->loc, "initializer does not evaluate to integer literal");
                     astnode_finalize(val);
@@ -4149,8 +4157,7 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
 {
     unsigned char c;
     /* Put the operand in final form */
-    astnode *o = reduce_expression_complete( LHS(instr), FOLD_PC_NO );
-    assert(o == LHS(instr));
+    reduce_expression_complete( LHS(instr), FOLD_PC_NO );
     /* Convert (mnemonic, addressing mode) pair to opcode */
     instr->instr.opcode = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
     if (instr->instr.opcode == 0xFF) {
@@ -4186,8 +4193,8 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
     if (instr->instr.opcode != 0xFF) {
         /* If the operand is a constant, see if we can "reduce" from
         absolute mode to zeropage mode */
-        if ((astnode_is_type(o, INTEGER_NODE)) &&
-        ((unsigned long)o->integer < 256) &&
+        if ((astnode_is_type(LHS(instr), INTEGER_NODE)) &&
+        ((unsigned long)LHS(instr)->integer < 256) &&
         !instr->instr.mnemonic.wide &&
         ((c = opcode_zp_equiv(instr->instr.opcode, instr->instr.mode)) != 0xFF)) {
             /* Switch to the zeromode version */
@@ -4200,7 +4207,7 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
             }
         }
         /* If the operand is a constant, make sure it fits */
-        if (astnode_is_type(o, INTEGER_NODE)) {
+        if (astnode_is_type(LHS(instr), INTEGER_NODE)) {
             switch (instr->instr.mode) {
                 case IMMEDIATE_MODE:
                 case ZEROPAGE_MODE:
@@ -4209,9 +4216,9 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
                 case PREINDEXED_INDIRECT_MODE:
                 case POSTINDEXED_INDIRECT_MODE:
                 /* Operand must fit in 8 bits */
-                if (!IS_BYTE_VALUE(o->integer)) {
-                    warn(o->loc, "operand out of range; truncated");
-                    o->integer &= 0xFF;
+                if (!IS_BYTE_VALUE(LHS(instr)->integer)) {
+                    warn(LHS(instr)->loc, "operand out of range; truncated");
+                    LHS(instr)->integer &= 0xFF;
                 }
                 break;
 
@@ -4220,9 +4227,9 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
                 case ABSOLUTE_Y_MODE:
                 case INDIRECT_MODE:
                 /* Operand must fit in 16 bits */
-                if ((unsigned long)o->integer >= 0x10000) {
-                    warn(o->loc, "operand out of range; truncated");
-                    o->integer &= 0xFFFF;
+                if ((unsigned long)LHS(instr)->integer >= 0x10000) {
+                    warn(LHS(instr)->loc, "operand out of range; truncated");
+                    LHS(instr)->integer &= 0xFFFF;
                 }
                 break;
 
@@ -4234,7 +4241,7 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
                 break;
             }
         }
-        else if (astnode_is_type(o, STRING_NODE)) {
+        else if (astnode_is_type(LHS(instr), STRING_NODE)) {
             /* String operand doesn't make sense here */
             err(instr->loc, "invalid operand");
         }

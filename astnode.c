@@ -238,6 +238,8 @@ const char *astnode_type_to_string(astnode_type at) {
         case WHILE_NODE:    return "WHILE_NODE";
         case DO_NODE:       return "DO_NODE";
         case EXITM_NODE:    return "EXITM_NODE";
+        case PUSH_MACRO_BODY_NODE:  return "PUSH_MACRO_BODY_NODE";
+        case POP_MACRO_BODY_NODE:   return "POP_MACRO_BODY_NODE";
         case MESSAGE_NODE:  return "MESSAGE_NODE";
         case WARNING_NODE:  return "WARNING_NODE";
         case ERROR_NODE:    return "ERROR_NODE";

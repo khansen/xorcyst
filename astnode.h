@@ -218,6 +218,8 @@ enum tag_astnode_type {
     WHILE_NODE,
     DO_NODE,
     EXITM_NODE,
+    PUSH_MACRO_BODY_NODE,
+    POP_MACRO_BODY_NODE,
     MESSAGE_NODE,
     WARNING_NODE,
     ERROR_NODE,

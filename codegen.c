@@ -580,6 +580,8 @@ static void put_statement(FILE *fp, const astnode *n, location *loc)
         case MACRO_NODE:
         case MACRO_DECL_NODE:
         case EXITM_NODE:
+        case PUSH_MACRO_BODY_NODE:
+        case POP_MACRO_BODY_NODE:
         case PUSH_BRANCH_SCOPE_NODE:
         case POP_BRANCH_SCOPE_NODE:
         case ORG_NODE:
