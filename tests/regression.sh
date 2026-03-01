@@ -2195,4 +2195,200 @@ if [ $(grep -c "A9 01" "$lst_file") -ne 2 ]; then
     fail ".EXITM outside macro deleted subsequent code from AST"
 fi
 
+# Regression: defined() with .define symbols
+cat > "$TMPDIR/defined-define-test.asm" <<'ASM'
+.define MY_CONST 42
+.if defined(MY_CONST)
+    LDA #1
+.else
+    LDA #0
+.endif
+.if defined(NEVER_DEFINED)
+    LDA #2
+.else
+    LDA #3
+.endif
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/defined-define-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), LDA #3 ($A9 $03)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a903"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "defined() with .define symbols failed"
+fi
+
+# Regression: .undef of non-existent symbol (should not crash)
+cat > "$TMPDIR/undef-nonexist-test.asm" <<'ASM'
+    .UNDEF DOES_NOT_EXIST
+    LDA #1
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/undef-nonexist-test.asm" "0000"
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".undef of non-existent symbol crashed or failed"
+fi
+
+# Regression: sizeof(label) with .char data
+cat > "$TMPDIR/sizeof-char-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+chardata:
+    .char "ABCD"
+    .char 1, 2
+    LDA #sizeof(chardata)
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/sizeof-char-test.asm" "0000"
+# Expected: 4 bytes from "ABCD" + 2 bytes from 1,2 = 6 total
+# Output: A9 01 41 42 43 44 01 02 A9 06
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a906"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "sizeof(label) with .char data failed"
+fi
+
+# Regression: sizeof() with parentheses for non-string types
+cat > "$TMPDIR/sizeof-parens-test.asm" <<'ASM'
+    LDA #sizeof(byte)
+    LDX #sizeof(word)
+    LDY #sizeof(dword)
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/sizeof-parens-test.asm" "0000"
+# Expected: LDA #1, LDX #2, LDY #4 -> A9 01 A2 02 A0 04
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a202a004"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "sizeof() with parentheses for datatypes failed"
+fi
+
+# Regression: .EXITM directly in macro body (no REPT wrapper)
+cat > "$TMPDIR/exitm-direct-test.asm" <<'ASM'
+    ORG $0000
+.macro early_exit
+    LDA #1
+    .EXITM
+    LDA #99 ; should be skipped
+.endm
+    early_exit
+    LDA #2
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/exitm-direct-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), LDA #2 ($A9 $02) — no LDA #99
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a902"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".EXITM directly in macro body failed"
+fi
+# Verify LDA #99 was NOT emitted
+if od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a963"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".EXITM did not skip code after it in macro body"
+fi
+
+# Regression: .EXITM inside macro called from .WHILE loop
+cat > "$TMPDIR/exitm-while-test.asm" <<'ASM'
+    ORG $0000
+.macro maybe_exit val
+    LDA #val
+    .if val == 2
+        .EXITM
+    .endif
+    NOP ; only emitted when val != 2
+.endm
+cnt = 0
+.while cnt < 4
+    maybe_exit cnt
+cnt = cnt + 1
+.endm
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/exitm-while-test.asm" "0000"
+# Iterations: cnt=0: LDA #0, NOP; cnt=1: LDA #1, NOP; cnt=2: LDA #2 (EXITM skips NOP); cnt=3: LDA #3, NOP
+# Expected bytes: A9 00 EA A9 01 EA A9 02 A9 03 EA 60
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a900eaa901eaa902a903ea60"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".EXITM inside macro called from WHILE failed"
+fi
+
+# Regression: .DO ... .UNTIL with immediate true (executes exactly once)
+cat > "$TMPDIR/do-until-once-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+.DO
+    LDA #42
+.UNTIL 1
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/do-until-once-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), LDA #42 ($A9 $2A), RTS ($60)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a901a92a60"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".DO ... .UNTIL 1 did not execute exactly once"
+fi
+# Verify it's exactly 5 bytes (LDA #1 + LDA #42 + RTS)
+out_size=$(wc -c < "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]')
+if [ "$out_size" != "5" ]; then
+    fail ".DO ... .UNTIL 1 produced $out_size bytes, expected 5"
+fi
+
+# Regression: .DO ... .UNTIL with non-literal condition error
+cat > "$TMPDIR/do-until-nonlit-test.asm" <<'ASM'
+    ORG $0000
+.extrn ext_sym:label
+.DO
+    NOP
+.UNTIL ext_sym
+END
+ASM
+set +e
+"$XASM" --pure-binary "$TMPDIR/do-until-nonlit-test.asm" -o "$TMPDIR/do-until-nonlit.bin" > "$TMPDIR/do-until-nonlit.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail ".DO ... .UNTIL with non-literal condition should fail"
+fi
+if ! grep -q "until expression does not evaluate to literal" "$TMPDIR/do-until-nonlit.log"; then
+    cat "$TMPDIR/do-until-nonlit.log" >&2
+    fail "missing expected error 'until expression does not evaluate to literal'"
+fi
+
+# Regression: .DO ... .UNTIL with defined() / .undef interaction
+cat > "$TMPDIR/do-undef-test.asm" <<'ASM'
+    ORG $0000
+COUNTER = 0
+.DO
+    LDA #COUNTER
+COUNTER = COUNTER + 1
+.UNTIL COUNTER == 3
+    RTS
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/do-undef-test.asm" "0000"
+# Expected: LDA #0, LDA #1, LDA #2, RTS -> A9 00 A9 01 A9 02 60
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a900a901a90260"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail ".DO ... .UNTIL with ASSIGN counter failed"
+fi
+
+# Regression: defined() with label symbol
+cat > "$TMPDIR/defined-label-test.asm" <<'ASM'
+    ORG $0000
+mylab:
+    NOP
+.if defined(mylab)
+    LDA #1
+.else
+    LDA #0
+.endif
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/defined-label-test.asm" "0000"
+# Expected: NOP ($EA), LDA #1 ($A9 $01)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "eaa901"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "defined() with label symbol failed"
+fi
+
 echo "All regression tests passed"

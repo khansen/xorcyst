@@ -951,6 +951,81 @@ static astnode *substitute_ident(astnode *expr)
 }
 
 /**
+ * Returns the element size in bytes for a datatype node.
+ */
+static int datatype_elem_size(astnode *d_type)
+{
+    if (d_type != NULL && astnode_is_type(d_type, DATATYPE_NODE)) {
+        switch (d_type->datatype) {
+            case WORD_DATATYPE:  return 2;
+            case DWORD_DATATYPE: return 4;
+            default:             return 1;
+        }
+    }
+    return 1;
+}
+
+/**
+ * Tries to compute sizeof for a label by summing contiguous data/storage nodes.
+ * @param def The LABEL_NODE
+ * @param expr The SIZEOF_NODE (replaced on success)
+ * @return The replacement node, or NULL if no contiguous data found
+ */
+static astnode *sizeof_label_data(astnode *def, astnode *expr)
+{
+    astnode *curr = def->next_sibling;
+    int total_bytes = 0;
+    int found_data = 0;
+
+    while (curr != NULL) {
+        if (astnode_is_type(curr, DATA_NODE)) {
+            astnode *child;
+            int node_size = 0;
+            int elem_size = datatype_elem_size(LHS(curr));
+            for (child = RHS(curr); child != NULL; child = child->next_sibling) {
+                if (astnode_is_type(child, STRING_NODE)) {
+                    node_size += strlen(child->string);
+                } else {
+                    node_size += 1;
+                }
+            }
+            total_bytes += (node_size * elem_size);
+            found_data = 1;
+        } else if (astnode_is_type(curr, STORAGE_NODE)) {
+            int elem_size = datatype_elem_size(LHS(curr));
+            /* Reduce count expression to literal using a clone to avoid AST mutation */
+            astnode *count_expr = reduce_expression_complete(astnode_clone(RHS(curr), RHS(curr)->loc), FOLD_PC_NO);
+            if (astnode_is_type(count_expr, INTEGER_NODE)) {
+                total_bytes += (count_expr->integer * elem_size);
+            }
+            astnode_finalize(count_expr);
+            found_data = 1;
+        } else if (astnode_is_type(curr, LABEL_NODE)) {
+            /* Stop if we hit a NEW label (unless we haven't found any data yet) */
+            if (found_data) break;
+        } else if (astnode_is_type(curr, TOMBSTONE_NODE) ||
+                   astnode_is_type(curr, PUSH_BRANCH_SCOPE_NODE) ||
+                   astnode_is_type(curr, POP_BRANCH_SCOPE_NODE) ||
+                   astnode_is_type(curr, PUSH_MACRO_BODY_NODE) ||
+                   astnode_is_type(curr, POP_MACRO_BODY_NODE)) {
+            /* Skip internal markers */
+        } else {
+            /* Found something else (instruction, directive, etc), stop */
+            break;
+        }
+        curr = curr->next_sibling;
+    }
+
+    if (found_data) {
+        astnode *c = astnode_create_integer(total_bytes, expr->loc);
+        astnode_replace(expr, c);
+        astnode_finalize(expr);
+        return c;
+    }
+    return NULL;
+}
+
+/**
  * Substitutes sizeof with proper constant.
  * @param expr Node of type SIZEOF_NODE
  */
@@ -984,76 +1059,15 @@ static astnode *reduce_sizeof(astnode *expr)
                 case LABEL_SYMBOL:
                 {
                     astnode *def = (astnode *)e->def;
+                    /* If the definition is a label, try to compute size from contiguous data */
                     if (def != NULL && astnode_is_type(def, LABEL_NODE)) {
-                        /* Walk forward to find and sum contiguous data/storage nodes */
-                        astnode *curr = def->next_sibling;
-                        int total_bytes = 0;
-                        int found_data = 0;
-
-                        while (curr != NULL) {
-                            if (astnode_is_type(curr, DATA_NODE)) {
-                                astnode *d_type = LHS(curr);
-                                astnode *child;
-                                int node_size = 0;
-                                int elem_size = 1;
-                                if (d_type != NULL && astnode_is_type(d_type, DATATYPE_NODE)) {
-                                    switch (d_type->datatype) {
-                                        case WORD_DATATYPE:  elem_size = 2; break;
-                                        case DWORD_DATATYPE: elem_size = 4; break;
-                                        default:             elem_size = 1; break;
-                                    }
-                                }
-                                for (child = RHS(curr); child != NULL; child = child->next_sibling) {
-                                    if (astnode_is_type(child, STRING_NODE)) {
-                                        node_size += strlen(child->string);
-                                    } else {
-                                        node_size += 1;
-                                    }
-                                }
-                                total_bytes += (node_size * elem_size);
-                                found_data = 1;
-                            } else if (astnode_is_type(curr, STORAGE_NODE)) {
-                                int elem_size = 1;
-                                astnode *d_type = LHS(curr);
-                                if (d_type != NULL && astnode_is_type(d_type, DATATYPE_NODE)) {
-                                    switch (d_type->datatype) {
-                                        case WORD_DATATYPE:  elem_size = 2; break;
-                                        case DWORD_DATATYPE: elem_size = 4; break;
-                                        default:             elem_size = 1; break;
-                                    }
-                                }
-                                /* Reduce count expression to literal using a clone to avoid AST mutation */
-                                astnode *count_expr = reduce_expression_complete(astnode_clone(RHS(curr), RHS(curr)->loc), FOLD_PC_NO);
-                                if (astnode_is_type(count_expr, INTEGER_NODE)) {
-                                    total_bytes += (count_expr->integer * elem_size);
-                                }
-                                astnode_finalize(count_expr);
-                                found_data = 1;
-                            } else if (astnode_is_type(curr, LABEL_NODE)) {
-                                /* Stop if we hit a NEW label (unless we haven't found any data yet) */
-                                if (found_data) break;
-                            } else if (astnode_is_type(curr, TOMBSTONE_NODE) ||
-                                       astnode_is_type(curr, PUSH_BRANCH_SCOPE_NODE) ||
-                                       astnode_is_type(curr, POP_BRANCH_SCOPE_NODE) ||
-                                       astnode_is_type(curr, PUSH_MACRO_BODY_NODE) ||
-                                       astnode_is_type(curr, POP_MACRO_BODY_NODE)) {
-                                /* Skip internal markers */
-                            } else {
-                                /* Found something else (instruction, directive, etc), stop */
-                                break;
-                            }
-                            curr = curr->next_sibling;
-                        }
-
-                        if (found_data) {
-                            c = astnode_create_integer(total_bytes, expr->loc);
-                            astnode_replace(expr, c);
-                            astnode_finalize(expr);
-                            return c;
+                        astnode *result = sizeof_label_data(def, expr);
+                        if (result != NULL) {
+                            return result;
                         }
                     }
- else if (e->type == VAR_SYMBOL) {
-                        /* Original VAR_SYMBOL logic for other types */
+                    /* Fall back to original VAR_SYMBOL logic (struct field variables, etc.) */
+                    if (e->type == VAR_SYMBOL) {
                         type = astnode_clone(LHS(e->def), id->loc);
                         if (astnode_is_type(e->def, STORAGE_NODE)) {
                             count = astnode_clone(RHS(e->def), id->loc);
@@ -1064,7 +1078,6 @@ static astnode *reduce_sizeof(astnode *expr)
                     }
                 }
                 break;
-
 
                 case CONSTANT_SYMBOL:
                 {
@@ -2716,8 +2729,7 @@ static int process_do(astnode *do_node, void *arg, astnode **next)
             astnode_replace(do_node, push);
             astnode_add_sibling_after(pop, do_node);
             *next = push;
-            }
-
+        }
     } else {
         astnode_remove(do_node);
         astnode_finalize(do_node);
