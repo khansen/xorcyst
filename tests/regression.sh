@@ -2154,4 +2154,45 @@ if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "
     fail "SIZEOF contiguous data failed"
 fi
 
+# Regression: SIZEOF mixed contiguous data and storage
+cat > "$TMPDIR/sizeof-mixed-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+Label1:
+    .db 1, 2
+    .dsb 3
+    .dw $5566
+    LDA #sizeof(Label1)
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/sizeof-mixed-test.asm" "0000"
+# Expected total size: 2 (.db) + 3 (.dsb) + 2 (.dw) = 7. 
+# Full output: LDA #1 ($A9 01), 1, 2, 0, 0, 0, $66, $55, LDA #7 ($A9 07)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a90101020000006655a907"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "SIZEOF mixed contiguous data/storage failed"
+fi
+
+# Regression: .EXITM used outside a macro
+cat > "$TMPDIR/exitm-outside-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+    .EXITM ; error but should not delete following code from AST
+    LDA #1 ; this should STILL be present in listing
+END
+ASM
+out_file="$TMPDIR/exitm-outside.bin"
+lst_file="$TMPDIR/exitm-outside.lst"
+log_file="$TMPDIR/exitm-outside.log"
+# Should fail (exit code 1) due to error directive, but let's check if it generated listing with both instructions
+"$XASM" --pure-binary --listing="$lst_file" "$TMPDIR/exitm-outside-test.asm" -o "$out_file" >"$log_file" 2>&1 || true
+if ! grep -q "EXITM used outside a macro" "$log_file"; then
+    fail ".EXITM outside macro error message missing"
+fi
+# Expected bytes in listing: LDA #1 ($A9 01) twice
+if [ $(grep -c "A9 01" "$lst_file") -ne 2 ]; then
+    grep "A9 01" "$lst_file" >&2
+    fail ".EXITM outside macro deleted subsequent code from AST"
+fi
+
 echo "All regression tests passed"
