@@ -2118,4 +2118,22 @@ if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "
     fail ".DO ... .UNTIL loop failed"
 fi
 
+# Regression: SIZEOF aliased labels
+cat > "$TMPDIR/sizeof-alias-test.asm" <<'ASM'
+    ORG $0000
+    LDA #1
+Label1:
+Label2:
+    .db "test"
+    LDA #sizeof(Label1)
+    LDX #sizeof(Label2)
+END
+ASM
+run_expect_success_pure_binary_with_listing "$TMPDIR/sizeof-alias-test.asm" "0000"
+# Expected: LDA #1 ($A9 $01), .db "test" ($74 65 73 74), LDA #4 ($A9 $04), LDX #4 ($A2 $04)
+if ! od -An -t x1 "$TMPDIR/out-pure-listing.bin" | tr -d '[:space:]' | grep -q "a90174657374a904a204"; then
+    od -t x1 "$TMPDIR/out-pure-listing.bin" >&2
+    fail "SIZEOF aliased labels failed"
+fi
+
 echo "All regression tests passed"

@@ -969,7 +969,25 @@ static astnode *reduce_sizeof(astnode *expr)
                     if (e->type == VAR_SYMBOL) {
                         data = def;
                     } else if (def != NULL && astnode_is_type(def, LABEL_NODE)) {
+                        /* Walk forward to find the associated data/storage node */
                         data = def->next_sibling;
+                        while (data != NULL) {
+                            if (astnode_is_type(data, DATA_NODE) || astnode_is_type(data, STORAGE_NODE)) {
+                                break;
+                            }
+                            if (astnode_is_type(data, LABEL_NODE) ||
+                                astnode_is_type(data, TOMBSTONE_NODE) ||
+                                astnode_is_type(data, PUSH_BRANCH_SCOPE_NODE) ||
+                                astnode_is_type(data, POP_BRANCH_SCOPE_NODE) ||
+                                astnode_is_type(data, PUSH_MACRO_BODY_NODE) ||
+                                astnode_is_type(data, POP_MACRO_BODY_NODE)) {
+                                data = data->next_sibling;
+                                continue;
+                            }
+                            /* Found something else, stop looking */
+                            data = NULL;
+                            break;
+                        }
                     }
 
                     if (data != NULL && astnode_is_type(data, DATA_NODE)) {
@@ -2640,7 +2658,7 @@ static int process_do(astnode *do_node, void *arg, astnode **next)
         if (astnode_is_type(eval_expr, INTEGER_NODE)) {
             condition_met = eval_expr->integer;
         } else {
-            err(do_node->loc, "until expression does not evaluate to literal");
+            err(expr->loc, "until expression does not evaluate to literal");
             condition_met = 1; /* Stop loop on error */
         }
         astnode_finalize(eval_expr);
