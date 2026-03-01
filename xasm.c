@@ -748,7 +748,7 @@ static void verbose(const char *s)
  */
 static int total_errors()
 {
-    return yynerrs + astproc_err_count();
+    return yynerrs + err_count;
 }
 
 #define COMPARE_SOURCE_TEXT_MAX 1024
@@ -1142,22 +1142,42 @@ int main(int argc, char *argv[]) {
             xasm_args.output_file = default_outfile;
         }
         /* Attempt to open file for writing */
-        output_fp = fopen(xasm_args.output_file, "wb");
-        if (output_fp == NULL) {
-            fprintf(stderr, "error: could not open `%s' for writing\n", xasm_args.output_file);
+        size_t tmp_len = strlen(xasm_args.output_file) + 5;
+        char *tmp_outfile = (char *)malloc(tmp_len);
+        if (tmp_outfile == NULL) {
+            fprintf(stderr, "error: out of memory\n");
+            err_count++;
         } else {
-            verbose("Generating final output...");
-            if (xasm_args.pure_binary) {
-                astproc_fifth_pass(root_node, output_fp);
+            snprintf(tmp_outfile, tmp_len, "%s.tmp", xasm_args.output_file);
+            output_fp = fopen(tmp_outfile, "wb");
+            if (output_fp == NULL) {
+                fprintf(stderr, "error: could not open `%s' for writing\n", tmp_outfile);
+                err_count++;
+                free(tmp_outfile);
             } else {
-                codegen_write(root_node, output_fp);
-            }
-            fclose(output_fp);
-            if (total_errors() != 0) {
-                remove(xasm_args.output_file);
-                output_generated = 0;
-            } else {
-                output_generated = 1;
+                verbose("Generating final output...");
+                if (xasm_args.pure_binary) {
+                    astproc_fifth_pass(root_node, output_fp);
+                } else {
+                    codegen_write(root_node, output_fp);
+                }
+                fclose(output_fp);
+                if (total_errors() != 0) {
+                    remove(tmp_outfile);
+                    output_generated = 0;
+                } else {
+                    /* Ensure destination is removed first so rename() succeeds portably */
+                    remove(xasm_args.output_file);
+                    if (rename(tmp_outfile, xasm_args.output_file) != 0) {
+                        fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);
+                        err_count++;
+                        remove(tmp_outfile);
+                        output_generated = 0;
+                    } else {
+                        output_generated = 1;
+                    }
+                }
+                free(tmp_outfile);
             }
         }
     }

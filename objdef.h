@@ -39,6 +39,8 @@
 #ifndef OBJDEF_H
 #define OBJDEF_H
 
+#include <stdlib.h>
+
 /* "It's a kind of magic" */
 #define XASM_MAGIC 0xFACE
 
@@ -105,5 +107,7 @@
 #define XASM_LABEL_FLAG_ZEROPAGE 2
 #define XASM_LABEL_FLAG_ALIGN    4
 #define XASM_LABEL_FLAG_ADDR     8
+
+#define SAFE_FREE(m) if ((m) != NULL) { free(m); m = NULL; }
 
 #endif  /* !OBJDEF_H */

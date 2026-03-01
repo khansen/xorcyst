@@ -38,11 +38,11 @@
 #include "unit.h"
 #include "objdef.h"
 
-#define SAFE_FREE(m) if ((m) != NULL) { free(m); m = NULL; }
-
 /*---------------------------------------------------------------------------*/
 
 static int read_error = 0;
+
+static void finalize_expression(xasm_expression *e);
 
 /* Reads a byte */
 static unsigned char get_1(FILE *fp)
@@ -238,7 +238,7 @@ static void get_expr_recursive(FILE *fp, xasm_expression **dest, xasm_unit *u, i
         return;
     }
 
-    exp = (xasm_expression *)malloc( sizeof(xasm_expression) );
+    exp = (xasm_expression *)calloc(1, sizeof(xasm_expression));
     if (exp == NULL) {
         read_error = 1;
         *dest = NULL;
@@ -300,7 +300,12 @@ static void get_expr_recursive(FILE *fp, xasm_expression **dest, xasm_unit *u, i
         read_error = 1;
         break;
     }
-    *dest = exp;
+    if (read_error) {
+        finalize_expression(exp);
+        *dest = NULL;
+    } else {
+        *dest = exp;
+    }
 }
 
 /**
@@ -334,7 +339,6 @@ static void get_expressions(FILE *fp, xasm_unit *u)
  */
 static void get_segment(FILE *fp, xasm_segment *seg)
 {
-    seg->size = 0;
     seg->bytes = NULL;
     seg->size = get_3(fp);
     if (read_error) return;

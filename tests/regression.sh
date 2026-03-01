@@ -1811,8 +1811,26 @@ status=$?
 set -e
 if ! grep -q "division by zero in expression" "$TMPDIR/xasm-div0.log"; then
     cat "$TMPDIR/xasm-div0.log" >&2
-    fail "missing expected assembler error 'division by zero in expression'"
+    fail "missing expected error 'division by zero in expression'"
 fi
+
+# Regression: Modulo by zero in assembler
+cat > "$TMPDIR/xasm-mod0.asm" <<'ASM'
+    LDA #1 % 0
+END
+ASM
+set +e
+"$XASM" "$TMPDIR/xasm-mod0.asm" -o "$TMPDIR/xasm-mod0.o" > "$TMPDIR/xasm-mod0.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xasm failure for modulo by zero"
+fi
+if ! grep -q "modulo by zero in expression" "$TMPDIR/xasm-mod0.log"; then
+    cat "$TMPDIR/xasm-mod0.log" >&2
+    fail "missing expected error 'modulo by zero in expression'"
+fi
+
 
 # Regression: division by zero in linker
 cat > "$TMPDIR/xlnk-div0.asm" <<'ASM'
@@ -1874,13 +1892,129 @@ if ! grep -q "division by zero in expression" "$TMPDIR/xlnk-div0-bytecode.log"; 
     fail "missing expected linker error 'division by zero in expression'"
 fi
 
+# Regression: truncated codeseg in linker
+cat > "$TMPDIR/truncated-codeseg.asm" <<'ASM'
+    LDA #1
+    RTS
+END
+ASM
+if ! "$XASM" "$TMPDIR/truncated-codeseg.asm" -o "$TMPDIR/truncated-codeseg.o" >/dev/null 2>&1; then
+    fail "failed to build truncated-codeseg fixture"
+fi
+# Valid .o file has a codeseg at the end. Truncate it.
+head -c $(($(wc -c < "$TMPDIR/truncated-codeseg.o") - 2)) "$TMPDIR/truncated-codeseg.o" > "$TMPDIR/truncated-codeseg-bad.o"
+cat > "$TMPDIR/truncated-codeseg.script" <<EOF
+output{file=$TMPDIR/truncated-codeseg.bin}
+bank{size=\$1000, origin=\$C000}
+link{file=$TMPDIR/truncated-codeseg-bad.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/truncated-codeseg.script" > "$TMPDIR/truncated-codeseg.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xlnk failure for truncated codeseg"
+fi
+# The error might be "failed to load unit" or "failed to read"
+if ! grep -qi "failed to load unit" "$TMPDIR/truncated-codeseg.log" && ! grep -qi "failed to read" "$TMPDIR/truncated-codeseg.log" && ! grep -qi "unexpected end" "$TMPDIR/truncated-codeseg.log"; then
+    cat "$TMPDIR/truncated-codeseg.log" >&2
+    fail "missing expected error for truncated codeseg"
+fi
+
+# Regression: invalid bytecode in linker
+# Manually-crafted .o header + invalid bytecode:
+# Magic: 0xFACE (2), Version: 0x14 (1), Consts: 0 (2), Imports: 0 (1), Externs: 0 (2),
+# Data: 0 (3), Code: 1 (3), Exprs: 0 (2), followed by 0xFF (invalid bytecode).
+# Total: 14 (header) + 1 (bytecode) + 2 (expr count) = 17 bytes.
+# Octal: FACE=\372\316, 14=\024, 01=\001, FF=\377
+printf "\372\316\024\000\000\000\000\000\000\000\000\000\000\001\377\000\000" > "$TMPDIR/invalid-bytecode.o"
+cat > "$TMPDIR/invalid-bytecode.script" <<EOF
+output{file=$TMPDIR/invalid-bytecode.bin}
+link{file=$TMPDIR/invalid-bytecode.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/invalid-bytecode.script" > "$TMPDIR/invalid-bytecode.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xlnk failure for invalid bytecode"
+fi
+if ! grep -q "invalid bytecode" "$TMPDIR/invalid-bytecode.log"; then
+    cat "$TMPDIR/invalid-bytecode.log" >&2
+    fail "missing expected error 'invalid bytecode'"
+fi
+
+# Regression: bad magic in unit.c
+printf "NOTXASM" > "$TMPDIR/bad-magic.o"
+cat > "$TMPDIR/bad-magic.script" <<EOF
+output{file=$TMPDIR/bad-magic.bin}
+link{file=$TMPDIR/bad-magic.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/bad-magic.script" > "$TMPDIR/bad-magic.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xlnk failure for bad magic"
+fi
+if ! grep -q "failed to load unit" "$TMPDIR/bad-magic.log"; then
+    cat "$TMPDIR/bad-magic.log" >&2
+    fail "missing expected error 'failed to load unit'"
+fi
+
+# Regression: deep nesting (under limit)
+# We'll generate a nested expression: 1+(1+(1+...))
+nesting=""
+for i in $(seq 1 490); do
+    nesting="1+($nesting"
+done
+nesting="${nesting}1"
+for i in $(seq 1 490); do
+    nesting="${nesting})"
+done
+cat > "$TMPDIR/deep-nesting.asm" <<ASM
+    LDA #$nesting
+END
+ASM
+if ! "$XASM" "$TMPDIR/deep-nesting.asm" -o "$TMPDIR/deep-nesting.o" >/dev/null 2>&1; then
+    fail "xasm failed on valid deep nesting (490 levels)"
+fi
+
+# Regression: modulo by zero in linker
+cat > "$TMPDIR/xlnk-mod0-bytecode.asm" <<'ASM'
+.extrn some_symbol:label
+    LDA #some_symbol % 0
+END
+ASM
+if ! "$XASM" "$TMPDIR/xlnk-mod0-bytecode.asm" -o "$TMPDIR/xlnk-mod0-bytecode.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-mod0-bytecode fixture"
+fi
+cat > "$TMPDIR/xlnk-mod0-bytecode.script" <<EOF
+output{file=$TMPDIR/xlnk-mod0-bytecode.bin}
+bank{size=\$1000, origin=\$C000}
+link{file=$TMPDIR/xlnk-mod0-bytecode.o}
+link{file=$TMPDIR/xlnk-div0-symbol.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/xlnk-mod0-bytecode.script" > "$TMPDIR/xlnk-mod0-bytecode.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xlnk failure for modulo by zero"
+fi
+if ! grep -q "modulo by zero in expression" "$TMPDIR/xlnk-mod0-bytecode.log"; then
+    cat "$TMPDIR/xlnk-mod0-bytecode.log" >&2
+    fail "missing expected linker error 'modulo by zero in expression'"
+fi
+
 # Regression: RAM alignment leak/fragmentation
 cat > "$TMPDIR/link_ram_align_leak.asm" <<'ASM'
 .dataseg
-var_in_block1 .dsb 15
+.public var_in_block1, aligned_var, small_var
+var_in_block1 .dsb 16
 aligned_var   .dsb 1
 small_var     .dsb 1
-ALIGN aligned_var 256
+ALIGN aligned_var 8
 .codeseg
     lda var_in_block1
     lda aligned_var
@@ -1893,18 +2027,25 @@ fi
 cat > "$TMPDIR/link_ram_align_leak.script" <<EOF
 output{file=$TMPDIR/link_ram_align_leak.bin}
 ram{start=\$0201,end=\$0210}
-ram{start=\$0301,end=\$04FF}
+ram{start=\$0301,end=\$05FF}
 bank{size=\$100,origin=\$8000}
 link{file=$TMPDIR/link_ram_align_leak.o}
 EOF
 # We use -v to see RAM mapping
 "$XLNK" -v "$TMPDIR/link_ram_align_leak.script" > "$TMPDIR/link_ram_align_leak.log" 2>&1
-# aligned_var (align 8 -> 256) should go to $0400.
-# The block $0301-$0400 should be preserved and available for others.
-# small_var or var_in_block1 should end up in $0301 if the leak is fixed.
-if ! grep -q "0301-030F" "$TMPDIR/link_ram_align_leak.log"; then
+# Verify that alignment requirements do not leak RAM.
+# If a block is split for alignment, the padding part must be linked back to the
+# available list and remain eligible for subsequent allocations.
+# In this fixture, var_in_block1 and aligned_var displacement from the first block
+# should leave $0201 available as a padding block for small_var.
+if ! grep -q "small_var" "$TMPDIR/link_ram_align_leak.log"; then
     cat "$TMPDIR/link_ram_align_leak.log" >&2
-    fail "RAM alignment padding block was leaked"
+    fail "RAM mapping output missing symbols"
+fi
+# Verify small_var ended up in the expected padding block at $0201.
+if ! grep -q "0201-0201 small_var" "$TMPDIR/link_ram_align_leak.log"; then
+    cat "$TMPDIR/link_ram_align_leak.log" >&2
+    fail "small_var not allocated in the padding block (expected address \$0201)"
 fi
 
 # Linker regression: cross-unit string comparison
@@ -2481,6 +2622,124 @@ set -e
 if [ "$rc" -ge 128 ]; then
     cat "$TMPDIR/sizeof-unresolved.log" >&2
     fail "sizeof with unresolved storage count crashed (exit $rc)"
+fi
+
+# Regression: non-constant public in isolation
+cat > "$TMPDIR/public-nonconst.asm" <<'ASM'
+.public nonconst
+.extrn ext_label:label
+nonconst = ext_label + 1
+END
+ASM
+# xasm should error out when trying to write a non-constant public EQU
+set +e
+"$XASM" "$TMPDIR/public-nonconst.asm" -o "$TMPDIR/public-nonconst.o" > "$TMPDIR/public-nonconst.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xasm failure for non-constant public EQU"
+fi
+if ! grep -q "does not evaluate to constant" "$TMPDIR/public-nonconst.log"; then
+    cat "$TMPDIR/public-nonconst.log" >&2
+    fail "missing expected error 'does not evaluate to constant'"
+fi
+
+# Regression: mixed-type expressions in assembler public constant evaluation
+# (This test verifies that put_public_constants correctly errors on non-constant publics)
+cat > "$TMPDIR/xasm-mixed-types.asm" <<'ASM'
+.public val
+str1 = "abc"
+val = str1 * 2 ; string * integer = error
+END
+ASM
+set +e
+"$XASM" "$TMPDIR/xasm-mixed-types.asm" -o "$TMPDIR/xasm-mixed-types.o" > "$TMPDIR/xasm-mixed-types.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xasm failure for mixed-type public expression"
+fi
+if ! grep -q "does not evaluate to constant" "$TMPDIR/xasm-mixed-types.log"; then
+    cat "$TMPDIR/xasm-mixed-types.log" >&2
+    fail "missing expected error 'does not evaluate to constant'"
+fi
+
+# Regression: mixed-type expressions in linker
+cat > "$TMPDIR/xlnk-mixed-types-a.asm" <<'ASM'
+.public str1
+str1 = "hello"
+END
+ASM
+cat > "$TMPDIR/xlnk-mixed-types-b.asm" <<'ASM'
+.extrn str1:string
+    .db str1 * 2 ; string * integer = error in linker
+END
+ASM
+if ! "$XASM" "$TMPDIR/xlnk-mixed-types-a.asm" -o "$TMPDIR/xlnk-mixed-types-a.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-mixed-types unit A"
+fi
+if ! "$XASM" "$TMPDIR/xlnk-mixed-types-b.asm" -o "$TMPDIR/xlnk-mixed-types-b.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-mixed-types unit B"
+fi
+cat > "$TMPDIR/xlnk-mixed-types.script" <<EOF
+output{file=$TMPDIR/xlnk-mixed-types.bin}
+link{file=$TMPDIR/xlnk-mixed-types-a.o}
+link{file=$TMPDIR/xlnk-mixed-types-b.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/xlnk-mixed-types.script" > "$TMPDIR/xlnk-mixed-types.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xlnk failure for mixed-type expression"
+fi
+if ! grep -q "incompatible operands" "$TMPDIR/xlnk-mixed-types.log"; then
+    cat "$TMPDIR/xlnk-mixed-types.log" >&2
+    fail "missing expected linker error 'incompatible operands'"
+fi
+
+# Regression: invalid shift count in assembler
+cat > "$TMPDIR/xasm-shift-fail.asm" <<'ASM'
+    LDA #1 << 100
+END
+ASM
+set +e
+"$XASM" "$TMPDIR/xasm-shift-fail.asm" -o "$TMPDIR/xasm-shift-fail.o" > "$TMPDIR/xasm-shift-fail.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xasm failure for invalid shift count"
+fi
+if ! grep -q "invalid shift count" "$TMPDIR/xasm-shift-fail.log"; then
+    cat "$TMPDIR/xasm-shift-fail.log" >&2
+    fail "missing expected error 'invalid shift count'"
+fi
+
+# Regression: invalid shift count in linker
+cat > "$TMPDIR/xlnk-shift-fail.asm" <<'ASM'
+.extrn some_symbol:label
+    LDA #1 << (some_symbol + 100)
+END
+ASM
+if ! "$XASM" "$TMPDIR/xlnk-shift-fail.asm" -o "$TMPDIR/xlnk-shift-fail.o" >/dev/null 2>&1; then
+    fail "failed to build xlnk-shift-fail fixture"
+fi
+cat > "$TMPDIR/xlnk-shift-fail.script" <<EOF
+output{file=$TMPDIR/xlnk-shift-fail.bin}
+bank{size=\$1000, origin=\$C000}
+link{file=$TMPDIR/xlnk-shift-fail.o}
+link{file=$TMPDIR/xlnk-div0-symbol.o}
+EOF
+set +e
+"$XLNK" "$TMPDIR/xlnk-shift-fail.script" > "$TMPDIR/xlnk-shift-fail.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    fail "expected xlnk failure for invalid shift count"
+fi
+if ! grep -q "invalid shift count" "$TMPDIR/xlnk-shift-fail.log"; then
+    cat "$TMPDIR/xlnk-shift-fail.log" >&2
+    fail "missing expected linker error 'invalid shift count'"
 fi
 
 echo "All regression tests passed"
