@@ -656,9 +656,9 @@ void astnode_add_children(astnode *n, int count, ...)
 }
 
 /**
- * Adds sibling(s) to a node.
- * @param brother List of existing siblings
- * @param sister List of new siblings
+ * Adds node(s) to the END of a sibling list.
+ * @param brother Any node in the existing sibling list
+ * @param sister The new node (or list of siblings) to append
  */
 void astnode_add_sibling(astnode *brother, astnode *sister)
 {
@@ -675,9 +675,10 @@ void astnode_add_sibling(astnode *brother, astnode *sister)
 }
 
 /**
- * Adds a node as a sibling immediately after another.
- * @param brother Node to add after
- * @param sister Node to add
+ * Adds a node (or list of siblings) as a sibling IMMEDIATELY after another.
+ * This preserves the rest of the existing sibling chain.
+ * @param brother The node to insert after
+ * @param sister The new node (or list of siblings) to insert
  */
 void astnode_add_sibling_after(astnode *brother, astnode *sister)
 {
