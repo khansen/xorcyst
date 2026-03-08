@@ -1263,6 +1263,7 @@ typedef struct tag_xref_symbol {
     long output_offset;
     int has_value;
     long value;
+    int is_dataseg;
 } xref_symbol;
 
 typedef struct tag_xref_ref {
@@ -1704,6 +1705,13 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
                                    0,
                                    0)) {
         return 0;
+    }
+    /* Record section for the defined symbol */
+    {
+        int idx = find_xref_symbol_index(ctx, label->label);
+        if (idx >= 0) {
+            ctx->symbols[idx].is_dataseg = in_dataseg;
+        }
     }
     return 0;
 }
@@ -2173,6 +2181,1073 @@ static int emit_xref_csv(const char *filename, const xref_build_context *ctx)
     fclose(ref_fp);
     return 1;
 }
+
+/* ---- xref-summary implementation ---- */
+
+#include <regex.h>
+
+typedef struct tag_xref_summary_referrer {
+    char *routine;
+    int count;
+} xref_summary_referrer;
+
+typedef struct tag_xref_summary_entry {
+    char *label;
+    int cpu_address;
+    int jsr_count;
+    int jmp_count;
+    int branch_count;
+    int read_count;
+    int write_count;
+    int total_ref_count;
+    xref_summary_referrer *referrers;
+    int referrer_count;
+    char *first_run_terminator;
+    int next_symbol_distance_bytes; /* -1 = omit */
+    int has_refs_from_other_routines;
+    char **nearby_symbols;
+    int nearby_symbol_count;
+} xref_summary_entry;
+
+typedef struct tag_xref_summary_instr {
+    int cpu_address;
+    int mnemonic;
+    int length;
+} xref_summary_instr;
+
+static xref_summary_instr *summary_instrs = NULL;
+static int summary_instr_count = 0;
+static int summary_instr_capacity = 0;
+
+static int is_code_symbol(int addr);
+
+static int record_summary_instr(int cpu_address, int mnemonic, int length)
+{
+    if (summary_instr_count >= summary_instr_capacity) {
+        int new_cap = (summary_instr_capacity == 0) ? 256 : (summary_instr_capacity * 2);
+        xref_summary_instr *tmp = (xref_summary_instr *)realloc(
+            summary_instrs, (size_t)new_cap * sizeof(xref_summary_instr));
+        if (tmp == NULL) return 0;
+        summary_instrs = tmp;
+        summary_instr_capacity = new_cap;
+    }
+    summary_instrs[summary_instr_count].cpu_address = cpu_address;
+    summary_instrs[summary_instr_count].mnemonic = mnemonic;
+    summary_instrs[summary_instr_count].length = length;
+    summary_instr_count++;
+    return 1;
+}
+
+static int summary_visit_instruction(astnode *instr, void *arg, astnode **next)
+{
+    xref_build_context *ctx = (xref_build_context *)arg;
+    int addr = get_current_pc();
+    int len = opcode_length(instr->instr.opcode);
+    xref_meta meta;
+    char expr_buf[512];
+    (void)next;
+
+    if (len < 1) len = 1;
+
+    record_summary_instr(addr, instr->instr.mnemonic.value, len);
+
+    memset(&meta, 0, sizeof(meta));
+    meta.has_cpu_address = 1;
+    meta.cpu_address = addr;
+    meta.has_output_offset = ctx->pure_binary && !in_dataseg;
+    meta.output_offset = ctx->output_offset;
+    meta.opcode = opcode_to_string(instr->instr.opcode);
+    meta.addressing_mode = addressing_mode_name(instr->instr.mode);
+    meta.access = classify_instruction_access(meta.opcode, LHS(instr), instr->instr.mode);
+    extract_operand_from_line(instr->loc, expr_buf, sizeof(expr_buf));
+    meta.expression = expr_buf;
+
+    if (LHS(instr) != NULL) {
+        if (!collect_expr_refs_recursive(LHS(instr), ctx, &meta)) {
+            return 0;
+        }
+    }
+
+    add_current_pc(len);
+    if (ctx->pure_binary && !in_dataseg) {
+        ctx->output_offset += len;
+    }
+    return 0;
+}
+
+static void free_summary_entry(xref_summary_entry *e)
+{
+    int i;
+    free(e->label);
+    free(e->first_run_terminator);
+    for (i = 0; i < e->referrer_count; i++) {
+        free(e->referrers[i].routine);
+    }
+    free(e->referrers);
+    for (i = 0; i < e->nearby_symbol_count; i++) {
+        free(e->nearby_symbols[i]);
+    }
+    free(e->nearby_symbols);
+    memset(e, 0, sizeof(*e));
+}
+
+static int ensure_summary_entry_capacity(xref_summary_entry **entries, int *capacity, int count)
+{
+    xref_summary_entry *tmp;
+    int new_capacity;
+    if (count < *capacity) {
+        return 1;
+    }
+    new_capacity = (*capacity == 0) ? 16 : (*capacity * 2);
+    tmp = (xref_summary_entry *)realloc(*entries, (size_t)new_capacity * sizeof(xref_summary_entry));
+    if (tmp == NULL) {
+        return 0;
+    }
+    *entries = tmp;
+    *capacity = new_capacity;
+    return 1;
+}
+
+static int init_summary_entry(xref_summary_entry *entry,
+                              const char *sym_name,
+                              int sym_addr,
+                              int jsr_c,
+                              int jmp_c,
+                              int branch_c,
+                              int read_c,
+                              int write_c,
+                              int total_c,
+                              const xref_summary_referrer *tmp_refs,
+                              int tmp_ref_count,
+                              int top_referrers_limit,
+                              const char *terminator,
+                              int next_sym_dist,
+                              int has_external,
+                              char **nearby_symbols,
+                              int nearby_symbol_count)
+{
+    int i;
+    memset(entry, 0, sizeof(*entry));
+    entry->label = xstrdup(sym_name);
+    entry->cpu_address = sym_addr;
+    entry->jsr_count = jsr_c;
+    entry->jmp_count = jmp_c;
+    entry->branch_count = branch_c;
+    entry->read_count = read_c;
+    entry->write_count = write_c;
+    entry->total_ref_count = total_c;
+    entry->referrer_count = (tmp_ref_count < top_referrers_limit) ? tmp_ref_count : top_referrers_limit;
+    entry->first_run_terminator = xstrdup(terminator);
+    entry->next_symbol_distance_bytes = next_sym_dist;
+    entry->has_refs_from_other_routines = has_external;
+    entry->nearby_symbol_count = nearby_symbol_count;
+
+    if (entry->label == NULL || entry->first_run_terminator == NULL) {
+        free_summary_entry(entry);
+        return 0;
+    }
+
+    if (entry->referrer_count > 0) {
+        entry->referrers = (xref_summary_referrer *)calloc((size_t)entry->referrer_count, sizeof(xref_summary_referrer));
+        if (entry->referrers == NULL) {
+            free_summary_entry(entry);
+            return 0;
+        }
+        for (i = 0; i < entry->referrer_count; i++) {
+            entry->referrers[i].routine = xstrdup(tmp_refs[i].routine);
+            entry->referrers[i].count = tmp_refs[i].count;
+            if (entry->referrers[i].routine == NULL) {
+                free_summary_entry(entry);
+                return 0;
+            }
+        }
+    }
+
+    if (nearby_symbol_count > 0) {
+        entry->nearby_symbols = (char **)calloc((size_t)nearby_symbol_count, sizeof(char *));
+        if (entry->nearby_symbols == NULL) {
+            free_summary_entry(entry);
+            return 0;
+        }
+        for (i = 0; i < nearby_symbol_count; i++) {
+            entry->nearby_symbols[i] = xstrdup(nearby_symbols[i]);
+            if (entry->nearby_symbols[i] == NULL) {
+                free_summary_entry(entry);
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
+static void truncate_summary_entries(xref_summary_entry *entries, int *count, int limit)
+{
+    int i;
+    if (*count <= limit) {
+        return;
+    }
+    for (i = limit; i < *count; i++) {
+        free_summary_entry(&entries[i]);
+    }
+    *count = limit;
+}
+
+static int summary_instr_compare(const void *a, const void *b)
+{
+    const xref_summary_instr *ia = (const xref_summary_instr *)a;
+    const xref_summary_instr *ib = (const xref_summary_instr *)b;
+    if (ia->cpu_address != ib->cpu_address) {
+        return ia->cpu_address - ib->cpu_address;
+    }
+    return ia->length - ib->length;
+}
+
+static const char *determine_first_run_terminator(int sym_addr, int next_sym_addr)
+{
+    int i;
+    /* Find the first instruction at or after sym_addr */
+    for (i = 0; i < summary_instr_count; i++) {
+        if (summary_instrs[i].cpu_address >= sym_addr) {
+            break;
+        }
+    }
+    /* Scan forward looking for a terminator */
+    for (; i < summary_instr_count; i++) {
+        int addr = summary_instrs[i].cpu_address;
+        int mnem = summary_instrs[i].mnemonic;
+        int len = summary_instrs[i].length;
+        if (next_sym_addr >= 0 && addr >= next_sym_addr) {
+            break; /* reached next symbol without terminator */
+        }
+        if (mnem == RTS_MNEMONIC) return "rts";
+        if (mnem == RTI_MNEMONIC) return "rti";
+        if (mnem == JMP_MNEMONIC) return "jmp";
+        /* Check if next instruction would be at or past next symbol */
+        if (next_sym_addr >= 0 && (addr + len) >= next_sym_addr) {
+            return "fallthrough";
+        }
+    }
+    if (next_sym_addr >= 0) return "fallthrough";
+    return "unknown";
+}
+
+/* Find routine owner: nearest preceding non-local code label */
+static const char *find_routine_owner(const xref_build_context *ctx,
+                                      int site_addr)
+{
+    int i;
+    const char *best = NULL;
+    int best_addr = -1;
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *s = &ctx->symbols[i];
+        if (!s->has_cpu_address) continue;
+        if (s->cpu_address > site_addr) continue;
+        if (strcmp(s->scope, "global") != 0) continue;
+        if (strcmp(s->kind, "label") != 0) continue;
+        if (!is_code_symbol(s->cpu_address)) continue;
+        if (s->cpu_address > best_addr) {
+            best_addr = s->cpu_address;
+            best = s->name;
+        }
+    }
+    return best;
+}
+
+/* Check if symbol address has an instruction (code label) */
+static int is_code_symbol(int addr)
+{
+    int lo = 0, hi = summary_instr_count - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (summary_instrs[mid].cpu_address == addr) return 1;
+        if (summary_instrs[mid].cpu_address < addr) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    return 0;
+}
+
+static int callable_compare(const void *a, const void *b)
+{
+    const xref_summary_entry *la = (const xref_summary_entry *)a;
+    const xref_summary_entry *lb = (const xref_summary_entry *)b;
+    if (lb->jsr_count != la->jsr_count) return lb->jsr_count - la->jsr_count;
+    if (lb->total_ref_count != la->total_ref_count) return lb->total_ref_count - la->total_ref_count;
+    return la->cpu_address - lb->cpu_address;
+}
+
+static int jump_target_compare(const void *a, const void *b)
+{
+    const xref_summary_entry *la = (const xref_summary_entry *)a;
+    const xref_summary_entry *lb = (const xref_summary_entry *)b;
+    int la_sum = la->jmp_count + la->branch_count;
+    int lb_sum = lb->jmp_count + lb->branch_count;
+    if (lb_sum != la_sum) return lb_sum - la_sum;
+    return la->cpu_address - lb->cpu_address;
+}
+
+static int data_label_compare(const void *a, const void *b)
+{
+    const xref_summary_entry *la = (const xref_summary_entry *)a;
+    const xref_summary_entry *lb = (const xref_summary_entry *)b;
+    int la_sum = la->read_count + la->write_count;
+    int lb_sum = lb->read_count + lb->write_count;
+    if (lb_sum != la_sum) return lb_sum - la_sum;
+    return la->cpu_address - lb->cpu_address;
+}
+
+static int referrer_sort_compare(const void *a, const void *b)
+{
+    const xref_summary_referrer *ra = (const xref_summary_referrer *)a;
+    const xref_summary_referrer *rb = (const xref_summary_referrer *)b;
+    if (rb->count != ra->count) return rb->count - ra->count;
+    return strcmp(ra->routine, rb->routine);
+}
+
+/* Build sorted list of non-local symbols with CPU addresses */
+typedef struct tag_sorted_sym {
+    const char *name;
+    int cpu_address;
+    int is_code;
+    int is_dataseg;
+} sorted_sym;
+
+static int sorted_sym_compare(const void *a, const void *b)
+{
+    const sorted_sym *sa = (const sorted_sym *)a;
+    const sorted_sym *sb = (const sorted_sym *)b;
+    if (sa->cpu_address != sb->cpu_address) return sa->cpu_address - sb->cpu_address;
+    return strcmp(sa->name, sb->name);
+}
+
+static void emit_xref_summary_json(FILE *fp,
+                                    const xref_summary_entry *callables, int callable_count,
+                                    const xref_summary_entry *jump_targets, int jump_target_count,
+                                    const xref_summary_entry *data_labels, int data_label_count,
+                                    const char *kind_filter)
+{
+    int i, j;
+    int first_section = 1;
+    fprintf(fp, "{\n");
+
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "callable") == 0) {
+        if (!first_section) fprintf(fp, ",\n");
+        first_section = 0;
+        fprintf(fp, "  \"top_callables\": [");
+        for (i = 0; i < callable_count; i++) {
+            const xref_summary_entry *e = &callables[i];
+            fprintf(fp, "%s\n    {", i > 0 ? "," : "");
+            fprintf(fp, "\"label\":");
+            print_json_string(fp, e->label);
+            fprintf(fp, ",\"addr\":\"0x%04X\"", e->cpu_address & 0xFFFF);
+            fprintf(fp, ",\"jsr_count\":%d", e->jsr_count);
+            fprintf(fp, ",\"jmp_count\":%d", e->jmp_count);
+            fprintf(fp, ",\"total_ref_count\":%d", e->total_ref_count);
+            fprintf(fp, ",\"top_referring_routines\":[");
+            for (j = 0; j < e->referrer_count; j++) {
+                fprintf(fp, "%s{\"routine\":", j > 0 ? "," : "");
+                print_json_string(fp, e->referrers[j].routine);
+                fprintf(fp, ",\"count\":%d}", e->referrers[j].count);
+            }
+            fprintf(fp, "]");
+            fprintf(fp, ",\"first_run_terminator\":");
+            print_json_string(fp, e->first_run_terminator);
+            if (e->next_symbol_distance_bytes >= 0) {
+                fprintf(fp, ",\"next_symbol_distance_bytes\":%d", e->next_symbol_distance_bytes);
+            }
+            fprintf(fp, ",\"has_refs_from_other_routines\":%s",
+                    e->has_refs_from_other_routines ? "true" : "false");
+            if (e->nearby_symbol_count > 0) {
+                fprintf(fp, ",\"nearby_symbols\":[");
+                for (j = 0; j < e->nearby_symbol_count; j++) {
+                    fprintf(fp, "%s", j > 0 ? "," : "");
+                    print_json_string(fp, e->nearby_symbols[j]);
+                }
+                fprintf(fp, "]");
+            }
+            fprintf(fp, "}");
+        }
+        if (callable_count > 0) fprintf(fp, "\n  ");
+        fprintf(fp, "]");
+    }
+
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "jump_target") == 0) {
+        if (!first_section) fprintf(fp, ",\n");
+        first_section = 0;
+        fprintf(fp, "  \"top_jump_targets\": [");
+        for (i = 0; i < jump_target_count; i++) {
+            const xref_summary_entry *e = &jump_targets[i];
+            fprintf(fp, "%s\n    {", i > 0 ? "," : "");
+            fprintf(fp, "\"label\":");
+            print_json_string(fp, e->label);
+            fprintf(fp, ",\"addr\":\"0x%04X\"", e->cpu_address & 0xFFFF);
+            fprintf(fp, ",\"jmp_count\":%d", e->jmp_count);
+            fprintf(fp, ",\"branch_count\":%d", e->branch_count);
+            fprintf(fp, ",\"total_ref_count\":%d", e->total_ref_count);
+            fprintf(fp, ",\"top_referring_routines\":[");
+            for (j = 0; j < e->referrer_count; j++) {
+                fprintf(fp, "%s{\"routine\":", j > 0 ? "," : "");
+                print_json_string(fp, e->referrers[j].routine);
+                fprintf(fp, ",\"count\":%d}", e->referrers[j].count);
+            }
+            fprintf(fp, "]");
+            fprintf(fp, ",\"first_run_terminator\":");
+            print_json_string(fp, e->first_run_terminator);
+            if (e->next_symbol_distance_bytes >= 0) {
+                fprintf(fp, ",\"next_symbol_distance_bytes\":%d", e->next_symbol_distance_bytes);
+            }
+            fprintf(fp, ",\"has_refs_from_other_routines\":%s",
+                    e->has_refs_from_other_routines ? "true" : "false");
+            if (e->nearby_symbol_count > 0) {
+                fprintf(fp, ",\"nearby_symbols\":[");
+                for (j = 0; j < e->nearby_symbol_count; j++) {
+                    fprintf(fp, "%s", j > 0 ? "," : "");
+                    print_json_string(fp, e->nearby_symbols[j]);
+                }
+                fprintf(fp, "]");
+            }
+            fprintf(fp, "}");
+        }
+        if (jump_target_count > 0) fprintf(fp, "\n  ");
+        fprintf(fp, "]");
+    }
+
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "data") == 0) {
+        if (!first_section) fprintf(fp, ",\n");
+        first_section = 0;
+        fprintf(fp, "  \"top_data_labels\": [");
+        for (i = 0; i < data_label_count; i++) {
+            const xref_summary_entry *e = &data_labels[i];
+            fprintf(fp, "%s\n    {", i > 0 ? "," : "");
+            fprintf(fp, "\"label\":");
+            print_json_string(fp, e->label);
+            fprintf(fp, ",\"addr\":\"0x%04X\"", e->cpu_address & 0xFFFF);
+            fprintf(fp, ",\"read_count\":%d", e->read_count);
+            fprintf(fp, ",\"write_count\":%d", e->write_count);
+            fprintf(fp, ",\"total_ref_count\":%d", e->total_ref_count);
+            fprintf(fp, ",\"top_referring_routines\":[");
+            for (j = 0; j < e->referrer_count; j++) {
+                fprintf(fp, "%s{\"routine\":", j > 0 ? "," : "");
+                print_json_string(fp, e->referrers[j].routine);
+                fprintf(fp, ",\"count\":%d}", e->referrers[j].count);
+            }
+            fprintf(fp, "]");
+            if (e->next_symbol_distance_bytes >= 0) {
+                fprintf(fp, ",\"next_symbol_distance_bytes\":%d", e->next_symbol_distance_bytes);
+            }
+            fprintf(fp, ",\"has_refs_from_other_routines\":%s",
+                    e->has_refs_from_other_routines ? "true" : "false");
+            if (e->nearby_symbol_count > 0) {
+                fprintf(fp, ",\"nearby_symbols\":[");
+                for (j = 0; j < e->nearby_symbol_count; j++) {
+                    fprintf(fp, "%s", j > 0 ? "," : "");
+                    print_json_string(fp, e->nearby_symbols[j]);
+                }
+                fprintf(fp, "]");
+            }
+            fprintf(fp, "}");
+        }
+        if (data_label_count > 0) fprintf(fp, "\n  ");
+        fprintf(fp, "]");
+    }
+
+    fprintf(fp, "\n}\n");
+}
+
+static void emit_xref_summary_entry_ndjson(FILE *fp, const char *section, const xref_summary_entry *e, int is_code)
+{
+    int j;
+    fprintf(fp, "{\"section\":");
+    print_json_string(fp, section);
+    fprintf(fp, ",\"label\":");
+    print_json_string(fp, e->label);
+    fprintf(fp, ",\"addr\":\"0x%04X\"", e->cpu_address & 0xFFFF);
+    if (is_code) {
+        fprintf(fp, ",\"jsr_count\":%d,\"jmp_count\":%d", e->jsr_count, e->jmp_count);
+        if (strcmp(section, "top_jump_targets") == 0) {
+            fprintf(fp, ",\"branch_count\":%d", e->branch_count);
+        }
+    } else {
+        fprintf(fp, ",\"read_count\":%d,\"write_count\":%d", e->read_count, e->write_count);
+    }
+    fprintf(fp, ",\"total_ref_count\":%d", e->total_ref_count);
+    fprintf(fp, ",\"top_referring_routines\":[");
+    for (j = 0; j < e->referrer_count; j++) {
+        fprintf(fp, "%s{\"routine\":", j > 0 ? "," : "");
+        print_json_string(fp, e->referrers[j].routine);
+        fprintf(fp, ",\"count\":%d}", e->referrers[j].count);
+    }
+    fprintf(fp, "]");
+    if (is_code) {
+        fprintf(fp, ",\"first_run_terminator\":");
+        print_json_string(fp, e->first_run_terminator);
+    }
+    if (e->next_symbol_distance_bytes >= 0) {
+        fprintf(fp, ",\"next_symbol_distance_bytes\":%d", e->next_symbol_distance_bytes);
+    }
+    fprintf(fp, ",\"has_refs_from_other_routines\":%s",
+            e->has_refs_from_other_routines ? "true" : "false");
+    if (e->nearby_symbol_count > 0) {
+        fprintf(fp, ",\"nearby_symbols\":[");
+        for (j = 0; j < e->nearby_symbol_count; j++) {
+            fprintf(fp, "%s", j > 0 ? "," : "");
+            print_json_string(fp, e->nearby_symbols[j]);
+        }
+        fprintf(fp, "]");
+    }
+    fprintf(fp, "}\n");
+}
+
+static void emit_xref_summary_ndjson(FILE *fp,
+                                      const xref_summary_entry *callables, int callable_count,
+                                      const xref_summary_entry *jump_targets, int jump_target_count,
+                                      const xref_summary_entry *data_labels, int data_label_count,
+                                      const char *kind_filter)
+{
+    int i;
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "callable") == 0) {
+        for (i = 0; i < callable_count; i++)
+            emit_xref_summary_entry_ndjson(fp, "top_callables", &callables[i], 1);
+    }
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "jump_target") == 0) {
+        for (i = 0; i < jump_target_count; i++)
+            emit_xref_summary_entry_ndjson(fp, "top_jump_targets", &jump_targets[i], 1);
+    }
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "data") == 0) {
+        for (i = 0; i < data_label_count; i++)
+            emit_xref_summary_entry_ndjson(fp, "top_data_labels", &data_labels[i], 0);
+    }
+}
+
+static void emit_xref_summary_text(FILE *fp,
+                                    const xref_summary_entry *callables, int callable_count,
+                                    const xref_summary_entry *jump_targets, int jump_target_count,
+                                    const xref_summary_entry *data_labels, int data_label_count,
+                                    const char *kind_filter)
+{
+    int i, j;
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "callable") == 0) {
+        fprintf(fp, "top_callables\n");
+        for (i = 0; i < callable_count; i++) {
+            const xref_summary_entry *e = &callables[i];
+            fprintf(fp, "  %s @ 0x%04X jsr=%d jmp=%d total=%d term=%s",
+                    e->label, e->cpu_address & 0xFFFF,
+                    e->jsr_count, e->jmp_count, e->total_ref_count,
+                    e->first_run_terminator);
+            if (e->next_symbol_distance_bytes >= 0) fprintf(fp, " size=%d", e->next_symbol_distance_bytes);
+            fprintf(fp, " external=%s\n", e->has_refs_from_other_routines ? "true" : "false");
+            if (e->referrer_count > 0) {
+                fprintf(fp, "    referrers:");
+                for (j = 0; j < e->referrer_count; j++)
+                    fprintf(fp, "%s %s(%d)", j > 0 ? "," : "", e->referrers[j].routine, e->referrers[j].count);
+                fprintf(fp, "\n");
+            }
+            if (e->nearby_symbol_count > 0) {
+                fprintf(fp, "    nearby:");
+                for (j = 0; j < e->nearby_symbol_count; j++)
+                    fprintf(fp, "%s %s", j > 0 ? "," : "", e->nearby_symbols[j]);
+                fprintf(fp, "\n");
+            }
+        }
+        fprintf(fp, "\n");
+    }
+
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "jump_target") == 0) {
+        fprintf(fp, "top_jump_targets\n");
+        for (i = 0; i < jump_target_count; i++) {
+            const xref_summary_entry *e = &jump_targets[i];
+            fprintf(fp, "  %s @ 0x%04X jmp=%d branch=%d total=%d term=%s",
+                    e->label, e->cpu_address & 0xFFFF,
+                    e->jmp_count, e->branch_count, e->total_ref_count,
+                    e->first_run_terminator);
+            if (e->next_symbol_distance_bytes >= 0) fprintf(fp, " size=%d", e->next_symbol_distance_bytes);
+            fprintf(fp, " external=%s\n", e->has_refs_from_other_routines ? "true" : "false");
+            if (e->referrer_count > 0) {
+                fprintf(fp, "    referrers:");
+                for (j = 0; j < e->referrer_count; j++)
+                    fprintf(fp, "%s %s(%d)", j > 0 ? "," : "", e->referrers[j].routine, e->referrers[j].count);
+                fprintf(fp, "\n");
+            }
+            if (e->nearby_symbol_count > 0) {
+                fprintf(fp, "    nearby:");
+                for (j = 0; j < e->nearby_symbol_count; j++)
+                    fprintf(fp, "%s %s", j > 0 ? "," : "", e->nearby_symbols[j]);
+                fprintf(fp, "\n");
+            }
+        }
+        fprintf(fp, "\n");
+    }
+
+    if (strcmp(kind_filter, "all") == 0 || strcmp(kind_filter, "data") == 0) {
+        fprintf(fp, "top_data_labels\n");
+        for (i = 0; i < data_label_count; i++) {
+            const xref_summary_entry *e = &data_labels[i];
+            fprintf(fp, "  %s @ 0x%04X read=%d write=%d total=%d",
+                    e->label, e->cpu_address & 0xFFFF,
+                    e->read_count, e->write_count, e->total_ref_count);
+            if (e->next_symbol_distance_bytes >= 0) fprintf(fp, " size=%d", e->next_symbol_distance_bytes);
+            fprintf(fp, " external=%s\n", e->has_refs_from_other_routines ? "true" : "false");
+            if (e->referrer_count > 0) {
+                fprintf(fp, "    referrers:");
+                for (j = 0; j < e->referrer_count; j++)
+                    fprintf(fp, "%s %s(%d)", j > 0 ? "," : "", e->referrers[j].routine, e->referrers[j].count);
+                fprintf(fp, "\n");
+            }
+            if (e->nearby_symbol_count > 0) {
+                fprintf(fp, "    nearby:");
+                for (j = 0; j < e->nearby_symbol_count; j++)
+                    fprintf(fp, "%s %s", j > 0 ? "," : "", e->nearby_symbols[j]);
+                fprintf(fp, "\n");
+            }
+        }
+        fprintf(fp, "\n");
+    }
+}
+
+int generate_xref_summary(astnode *root,
+                          const char *output_path,
+                          xref_summary_format format,
+                          int include_locals,
+                          int include_anon,
+                          const char *kind_filter,
+                          int limit,
+                          int top_referrers_limit,
+                          int nearby_window,
+                          const char *include_regex,
+                          const char *exclude_regex,
+                          const char *source_file,
+                          const char *output_file,
+                          int pure_binary)
+{
+    static astnodeprocmap map[] = {
+        { DATASEG_NODE, xref_visit_dataseg },
+        { CODESEG_NODE, xref_visit_codeseg },
+        { ORG_NODE, xref_visit_org },
+        { LABEL_NODE, xref_visit_label },
+        { INSTRUCTION_NODE, summary_visit_instruction },
+        { DATA_NODE, xref_visit_data },
+        { STORAGE_NODE, xref_visit_storage },
+        { BINARY_NODE, xref_visit_binary },
+        { STRUC_DECL_NODE, list_noop },
+        { UNION_DECL_NODE, list_noop },
+        { ENUM_DECL_NODE, list_noop },
+        { RECORD_DECL_NODE, list_noop },
+        { MACRO_NODE, list_noop },
+        { MACRO_DECL_NODE, list_noop },
+        { PROC_NODE, list_noop },
+        { REPT_NODE, list_noop },
+        { WHILE_NODE, list_noop },
+        { DO_NODE, list_noop },
+        { EXITM_NODE, list_noop },
+        { PUSH_MACRO_BODY_NODE, list_noop },
+        { POP_MACRO_BODY_NODE, list_noop },
+        { PUSH_BRANCH_SCOPE_NODE, list_noop },
+        { POP_BRANCH_SCOPE_NODE, list_noop },
+        { UNDEF_NODE, list_noop },
+        { TOMBSTONE_NODE, list_noop },
+        { 0, NULL }
+    };
+
+    xref_build_context ctx;
+    sorted_sym *all_syms = NULL;
+    int all_sym_count = 0;
+
+    xref_summary_entry *callables = NULL;
+    xref_summary_entry *jump_targets = NULL;
+    xref_summary_entry *data_labels = NULL;
+    int callable_count = 0, jump_target_count = 0, data_label_count = 0;
+    int callable_cap = 0, jump_target_cap = 0, data_label_cap = 0;
+
+    regex_t inc_re, exc_re;
+    int have_inc_re = 0, have_exc_re = 0;
+
+    FILE *fp = NULL;
+    int ok = 1;
+    int i, j;
+
+    (void)source_file;
+    (void)output_file;
+
+    /* Compile regex filters if provided */
+    if (include_regex != NULL && include_regex[0] != '\0') {
+        if (regcomp(&inc_re, include_regex, REG_EXTENDED | REG_NOSUB) != 0) {
+            fprintf(stderr, "error: invalid regex for --xref-summary-include: `%s'\n", include_regex);
+            return 0;
+        }
+        have_inc_re = 1;
+    }
+    if (exclude_regex != NULL && exclude_regex[0] != '\0') {
+        if (regcomp(&exc_re, exclude_regex, REG_EXTENDED | REG_NOSUB) != 0) {
+            fprintf(stderr, "error: invalid regex for --xref-summary-exclude: `%s'\n", exclude_regex);
+            if (have_inc_re) regfree(&inc_re);
+            return 0;
+        }
+        have_exc_re = 1;
+    }
+
+    /* Collect xref data with instruction recording */
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.include_locals = include_locals;
+    ctx.include_anon = include_anon;
+    ctx.pure_binary = pure_binary;
+    ctx.output_offset = 0;
+
+    summary_instrs = NULL;
+    summary_instr_count = 0;
+    summary_instr_capacity = 0;
+
+    in_dataseg = 0;
+    dataseg_pc = 0;
+    codeseg_pc = 0;
+    close_source_cache();
+    astproc_walk(root, &ctx, map);
+    if (summary_instr_count > 1) {
+        qsort(summary_instrs, (size_t)summary_instr_count, sizeof(xref_summary_instr), summary_instr_compare);
+    }
+
+    /* Build sorted symbol list respecting scope filters */
+    for (i = 0; i < ctx.symbol_count; i++) {
+        const xref_symbol *s = &ctx.symbols[i];
+        if (!s->has_cpu_address) continue;
+        if (!scope_allowed(s->scope, include_locals, include_anon)) continue;
+        all_sym_count++;
+    }
+    all_syms = (sorted_sym *)calloc((size_t)(all_sym_count > 0 ? all_sym_count : 1), sizeof(sorted_sym));
+    if (all_syms == NULL) { ok = 0; goto cleanup; }
+    j = 0;
+    for (i = 0; i < ctx.symbol_count; i++) {
+        const xref_symbol *s = &ctx.symbols[i];
+        if (!s->has_cpu_address) continue;
+        if (!scope_allowed(s->scope, include_locals, include_anon)) continue;
+        all_syms[j].name = s->name;
+        all_syms[j].cpu_address = s->cpu_address;
+        all_syms[j].is_code = is_code_symbol(s->cpu_address);
+        all_syms[j].is_dataseg = s->is_dataseg;
+        j++;
+    }
+    qsort(all_syms, (size_t)all_sym_count, sizeof(sorted_sym), sorted_sym_compare);
+
+    /* For each non-local symbol, aggregate references and classify */
+    for (i = 0; i < all_sym_count; i++) {
+        const char *sym_name = all_syms[i].name;
+        int sym_addr = all_syms[i].cpu_address;
+        int sym_is_code = all_syms[i].is_code;
+        int jsr_c = 0, jmp_c = 0, branch_c = 0, read_c = 0, write_c = 0, total_c = 0;
+        int is_callable = 0, is_jump_target = 0, is_data_label = 0;
+
+        /* Temporary referrer aggregation */
+        xref_summary_referrer *tmp_refs = NULL;
+        int tmp_ref_count = 0, tmp_ref_cap = 0;
+
+        int next_sym_dist = -1;
+        const char *terminator = "unknown";
+        int has_external = 0;
+
+        /* Apply regex filters */
+        if (have_inc_re && regexec(&inc_re, sym_name, 0, NULL, 0) != 0) continue;
+        if (have_exc_re && regexec(&exc_re, sym_name, 0, NULL, 0) == 0) continue;
+
+        /* Count references to this symbol */
+        for (j = 0; j < ctx.ref_count; j++) {
+            const xref_ref *r = &ctx.refs[j];
+            const char *routine;
+            int k, found;
+            if (strcmp(r->symbol, sym_name) != 0) continue;
+            total_c++;
+            if (strcmp(r->access, "call") == 0) { jsr_c++; is_callable = 1; }
+            else if (strcmp(r->access, "jump") == 0) { jmp_c++; is_jump_target = 1; }
+            else if (strcmp(r->access, "branch") == 0) { branch_c++; is_jump_target = 1; }
+            else if (strcmp(r->access, "read") == 0) { read_c++; is_data_label = 1; }
+            else if (strcmp(r->access, "write") == 0) { write_c++; is_data_label = 1; }
+
+            /* Aggregate referrer */
+            routine = r->has_cpu_address ? find_routine_owner(&ctx, r->cpu_address) : NULL;
+            if (routine == NULL) routine = "(unknown)";
+
+            found = -1;
+            for (k = 0; k < tmp_ref_count; k++) {
+                if (strcmp(tmp_refs[k].routine, routine) == 0) { found = k; break; }
+            }
+            if (found >= 0) {
+                tmp_refs[found].count++;
+            } else {
+                if (tmp_ref_count >= tmp_ref_cap) {
+                    int nc = (tmp_ref_cap == 0) ? 8 : (tmp_ref_cap * 2);
+                    xref_summary_referrer *nr = (xref_summary_referrer *)realloc(
+                        tmp_refs, (size_t)nc * sizeof(xref_summary_referrer));
+                    if (nr == NULL) { free(tmp_refs); ok = 0; goto cleanup; }
+                    tmp_refs = nr;
+                    tmp_ref_cap = nc;
+                }
+                tmp_refs[tmp_ref_count].routine = xstrdup(routine);
+                tmp_refs[tmp_ref_count].count = 1;
+                tmp_ref_count++;
+            }
+        }
+
+        if (total_c == 0) { free(tmp_refs); continue; }
+
+        /* Sort referrers and truncate */
+        if (tmp_ref_count > 1) {
+            qsort(tmp_refs, (size_t)tmp_ref_count, sizeof(xref_summary_referrer), referrer_sort_compare);
+        }
+
+        /* Determine has_refs_from_other_routines.
+           Callable entries own themselves. Other symbols inherit the nearest
+           preceding code label in the same section, which matches the
+           lexical-routine grouping expected by the summary spec. */
+        {
+            const char *owner_name = NULL;
+            int ki;
+
+            if (is_callable) {
+                owner_name = sym_name;
+            } else {
+                int oi;
+                for (oi = i - 1; oi >= 0; oi--) {
+                    if (all_syms[oi].is_dataseg != all_syms[i].is_dataseg) continue;
+                    if (!all_syms[oi].is_code) continue;
+                    owner_name = all_syms[oi].name;
+                    break;
+                }
+                if (owner_name == NULL && sym_is_code) {
+                    owner_name = sym_name;
+                }
+            }
+
+            for (ki = 0; ki < tmp_ref_count; ki++) {
+                if (strcmp(tmp_refs[ki].routine, "(unknown)") == 0) continue;
+                if (owner_name == NULL || strcmp(tmp_refs[ki].routine, owner_name) != 0) {
+                    has_external = 1;
+                    break;
+                }
+            }
+        }
+
+        /* Compute next_symbol_distance_bytes (same section only) */
+        {
+            int ni2;
+            for (ni2 = i + 1; ni2 < all_sym_count; ni2++) {
+                if (all_syms[ni2].is_dataseg == all_syms[i].is_dataseg) {
+                    next_sym_dist = all_syms[ni2].cpu_address - sym_addr;
+                    break;
+                }
+            }
+        }
+
+        /* Compute first_run_terminator for code symbols (same section boundary) */
+        if (sym_is_code) {
+            int next_addr = -1;
+            int ni2;
+            for (ni2 = i + 1; ni2 < all_sym_count; ni2++) {
+                if (all_syms[ni2].is_dataseg == all_syms[i].is_dataseg) {
+                    next_addr = all_syms[ni2].cpu_address;
+                    break;
+                }
+            }
+            terminator = determine_first_run_terminator(sym_addr, next_addr);
+        }
+
+        /* Build nearby symbols list, sorted by absolute distance */
+        {
+            typedef struct { char *name; int abs_dist; } nearby_entry;
+            int ns_count = 0, ns_cap = 0;
+            char **ns_list = NULL;
+            nearby_entry *ne_list = NULL;
+            int ni;
+            for (ni = 0; ni < all_sym_count; ni++) {
+                int dist;
+                if (ni == i) continue;
+                dist = all_syms[ni].cpu_address - sym_addr;
+                if (dist < 0) dist = -dist;
+                if (dist > nearby_window) continue;
+                if (ns_count >= ns_cap) {
+                    int nnc = (ns_cap == 0) ? 8 : (ns_cap * 2);
+                    nearby_entry *nne = (nearby_entry *)realloc(ne_list, (size_t)nnc * sizeof(nearby_entry));
+                    if (nne == NULL) break;
+                    ne_list = nne;
+                    ns_cap = nnc;
+                }
+                ne_list[ns_count].name = xstrdup(all_syms[ni].name);
+                ne_list[ns_count].abs_dist = dist;
+                ns_count++;
+            }
+            /* Sort by absolute distance, then alphabetically */
+            if (ns_count > 1) {
+                int a_idx, b_idx;
+                for (a_idx = 0; a_idx < ns_count - 1; a_idx++) {
+                    for (b_idx = a_idx + 1; b_idx < ns_count; b_idx++) {
+                        int swap = 0;
+                        if (ne_list[b_idx].abs_dist < ne_list[a_idx].abs_dist) swap = 1;
+                        else if (ne_list[b_idx].abs_dist == ne_list[a_idx].abs_dist &&
+                                 strcmp(ne_list[b_idx].name, ne_list[a_idx].name) < 0) swap = 1;
+                        if (swap) {
+                            nearby_entry tmp_ne = ne_list[a_idx];
+                            ne_list[a_idx] = ne_list[b_idx];
+                            ne_list[b_idx] = tmp_ne;
+                        }
+                    }
+                }
+            }
+            /* Extract sorted names */
+            ns_list = (char **)calloc((size_t)(ns_count > 0 ? ns_count : 1), sizeof(char *));
+            if (ns_list != NULL) {
+                for (ni = 0; ni < ns_count; ni++) {
+                    ns_list[ni] = ne_list[ni].name;
+                }
+            } else {
+                for (ni = 0; ni < ns_count; ni++) free(ne_list[ni].name);
+                ns_count = 0;
+            }
+            free(ne_list);
+
+            if (is_callable) {
+                if (!ensure_summary_entry_capacity(&callables, &callable_cap, callable_count)
+                    || !init_summary_entry(&callables[callable_count],
+                                           sym_name,
+                                           sym_addr,
+                                           jsr_c,
+                                           jmp_c,
+                                           branch_c,
+                                           read_c,
+                                           write_c,
+                                           total_c,
+                                           tmp_refs,
+                                           tmp_ref_count,
+                                           top_referrers_limit,
+                                           terminator,
+                                           next_sym_dist,
+                                           has_external,
+                                           ns_list,
+                                           ns_count)) {
+                    ok = 0;
+                    goto entry_done;
+                }
+                callables[callable_count].nearby_symbol_count = ns_count;
+                callable_count++;
+            }
+            if (is_jump_target) {
+                if (!ensure_summary_entry_capacity(&jump_targets, &jump_target_cap, jump_target_count)
+                    || !init_summary_entry(&jump_targets[jump_target_count],
+                                           sym_name,
+                                           sym_addr,
+                                           jsr_c,
+                                           jmp_c,
+                                           branch_c,
+                                           read_c,
+                                           write_c,
+                                           total_c,
+                                           tmp_refs,
+                                           tmp_ref_count,
+                                           top_referrers_limit,
+                                           terminator,
+                                           next_sym_dist,
+                                           has_external,
+                                           ns_list,
+                                           ns_count)) {
+                    ok = 0;
+                    goto entry_done;
+                }
+                jump_targets[jump_target_count].nearby_symbol_count = ns_count;
+                jump_target_count++;
+            }
+            if (is_data_label) {
+                if (!ensure_summary_entry_capacity(&data_labels, &data_label_cap, data_label_count)
+                    || !init_summary_entry(&data_labels[data_label_count],
+                                           sym_name,
+                                           sym_addr,
+                                           jsr_c,
+                                           jmp_c,
+                                           branch_c,
+                                           read_c,
+                                           write_c,
+                                           total_c,
+                                           tmp_refs,
+                                           tmp_ref_count,
+                                           top_referrers_limit,
+                                           terminator,
+                                           next_sym_dist,
+                                           has_external,
+                                           ns_list,
+                                           ns_count)) {
+                    ok = 0;
+                    goto entry_done;
+                }
+                data_labels[data_label_count].nearby_symbol_count = ns_count;
+                data_label_count++;
+            }
+
+entry_done:
+            for (ni = 0; ni < ns_count; ni++) free(ns_list[ni]);
+            free(ns_list);
+        }
+
+        for (j = 0; j < tmp_ref_count; j++) {
+            free(tmp_refs[j].routine);
+        }
+        free(tmp_refs);
+        if (!ok) goto cleanup;
+    }
+
+    /* Sort each category */
+    if (callable_count > 1) qsort(callables, (size_t)callable_count, sizeof(xref_summary_entry), callable_compare);
+    if (jump_target_count > 1) qsort(jump_targets, (size_t)jump_target_count, sizeof(xref_summary_entry), jump_target_compare);
+    if (data_label_count > 1) qsort(data_labels, (size_t)data_label_count, sizeof(xref_summary_entry), data_label_compare);
+
+    /* Truncate to limit */
+    truncate_summary_entries(callables, &callable_count, limit);
+    truncate_summary_entries(jump_targets, &jump_target_count, limit);
+    truncate_summary_entries(data_labels, &data_label_count, limit);
+
+    /* Open output */
+    if (output_path != NULL) {
+        fp = fopen(output_path, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
+            ok = 0;
+            goto cleanup;
+        }
+    } else {
+        fp = stdout;
+    }
+
+    /* Emit */
+    if (format == XREF_SUMMARY_FORMAT_JSON) {
+        emit_xref_summary_json(fp, callables, callable_count, jump_targets, jump_target_count, data_labels, data_label_count, kind_filter);
+    } else if (format == XREF_SUMMARY_FORMAT_NDJSON) {
+        emit_xref_summary_ndjson(fp, callables, callable_count, jump_targets, jump_target_count, data_labels, data_label_count, kind_filter);
+    } else if (format == XREF_SUMMARY_FORMAT_TEXT) {
+        emit_xref_summary_text(fp, callables, callable_count, jump_targets, jump_target_count, data_labels, data_label_count, kind_filter);
+    }
+
+    if (output_path != NULL && fp != NULL) {
+        fclose(fp);
+    }
+
+cleanup:
+    /* Free entries */
+    for (i = 0; i < callable_count; i++) free_summary_entry(&callables[i]);
+    free(callables);
+    for (i = 0; i < jump_target_count; i++) free_summary_entry(&jump_targets[i]);
+    free(jump_targets);
+    for (i = 0; i < data_label_count; i++) free_summary_entry(&data_labels[i]);
+    free(data_labels);
+
+    free(all_syms);
+    free(summary_instrs);
+    summary_instrs = NULL;
+    summary_instr_count = 0;
+    summary_instr_capacity = 0;
+
+    if (have_inc_re) regfree(&inc_re);
+    if (have_exc_re) regfree(&exc_re);
+
+    close_source_cache();
+    free_xref_context(&ctx);
+    return ok;
+}
+
+/* ---- end xref-summary ---- */
 
 int generate_xref(astnode *root,
                   const char *filename,
