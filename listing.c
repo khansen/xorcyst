@@ -5408,6 +5408,222 @@ static int build_uncovered_ranges(const data_consumer_record *record,
     return 1;
 }
 
+static int sum_data_consumer_ranges(const data_consumer_range *ranges, int count)
+{
+    int total = 0;
+    int i;
+    for (i = 0; i < count; i++) {
+        total += ranges[i].end_exclusive - ranges[i].start;
+    }
+    return total;
+}
+
+static int data_consumer_access_count(const data_consumer_record *record)
+{
+    return record->read_site_count + record->write_site_count;
+}
+
+static void free_data_consumer_records(data_consumer_record *records, int count)
+{
+    int i;
+    if (records == NULL) {
+        return;
+    }
+    for (i = 0; i < count; i++) {
+        free_data_consumer_record(&records[i]);
+    }
+    free(records);
+}
+
+static int build_data_consumer_records(astnode *root,
+                                       int include_overlaps,
+                                       const char *split_pairs,
+                                       data_consumer_record **records_out,
+                                       int *record_count_out)
+{
+    index_analysis_context ctx;
+    index_suffix_pair *pairs = NULL;
+    int pair_count = 0;
+    int parse_result;
+    data_consumer_span *spans = NULL;
+    int span_count = 0;
+    data_consumer_record *records = NULL;
+    int ok = 1;
+    int i;
+
+    memset(&ctx, 0, sizeof(ctx));
+
+    parse_result = parse_index_suffix_pairs(split_pairs, &pairs, &pair_count);
+    if (parse_result == -1) {
+        fprintf(stderr, "error: invalid value for --index-patterns-split-pairs\n");
+        return 0;
+    }
+    if (!parse_result) {
+        return 0;
+    }
+    if (!build_index_analysis_context(root, &ctx)) {
+        ok = 0;
+        goto cleanup;
+    }
+    if (!build_data_consumer_spans(&ctx, include_overlaps, &spans, &span_count)) {
+        ok = 0;
+        goto cleanup;
+    }
+
+    records = (data_consumer_record *)calloc((size_t)(span_count > 0 ? span_count : 1),
+                                             sizeof(data_consumer_record));
+    if (records == NULL) {
+        ok = 0;
+        goto cleanup;
+    }
+    for (i = 0; i < span_count; i++) {
+        records[i].label = xstrdup(spans[i].label);
+        records[i].declared_start = spans[i].start;
+        records[i].declared_end_exclusive = spans[i].end_exclusive;
+        records[i].declared_size = spans[i].end_exclusive - spans[i].start;
+        if (records[i].label == NULL) {
+            ok = 0;
+            goto cleanup;
+        }
+    }
+
+    for (i = 0; i < ctx.instr_count; i++) {
+        const index_instr *instr;
+        const index_label *base_label;
+        int record_index;
+        int constant_addr;
+        int aggregate_displacement;
+        const char *routine_name;
+        int access_pattern;
+        int estimated_width;
+        int source_kind;
+        char *split_stem;
+        const char *split_lo;
+        const char *split_hi;
+
+        instr = &ctx.instrs[i];
+        if (!instr->has_symbol_access || instr->base_symbol == NULL || instr->access_kind == INDEX_ACCESS_NONE) {
+            continue;
+        }
+        base_label = find_label_record(&ctx, instr->base_symbol);
+        if (base_label == NULL || base_label->is_code) {
+            continue;
+        }
+
+        record_index = find_data_consumer_span_by_label(spans, span_count, instr->base_symbol);
+        constant_addr = base_label->cpu_address + instr->displacement;
+        if (record_index < 0) {
+            record_index = find_data_consumer_span_for_addr(spans,
+                                                            span_count,
+                                                            base_label->segment_id,
+                                                            constant_addr);
+        }
+        if (record_index < 0) {
+            continue;
+        }
+
+        aggregate_displacement = constant_addr - records[record_index].declared_start;
+        routine_name = find_index_routine_owner(&ctx,
+                                                instr->event_index,
+                                                instr->cpu_address,
+                                                instr->is_dataseg,
+                                                instr->segment_id);
+        if (!add_data_consumer_site(&records[record_index],
+                                    instr->access_kind == INDEX_ACCESS_WRITE,
+                                    routine_name,
+                                    instr->cpu_address,
+                                    aggregate_displacement,
+                                    addressing_mode_name(instr->mode))) {
+            ok = 0;
+            goto cleanup;
+        }
+        if (!add_data_consumer_displacement(&records[record_index], aggregate_displacement)) {
+            ok = 0;
+            goto cleanup;
+        }
+
+        if (instr->is_indexed_access && base_label->cpu_address == records[record_index].declared_start) {
+            split_stem = NULL;
+            split_lo = NULL;
+            split_hi = NULL;
+            if (!analyze_index_site_pattern(&ctx,
+                                            instr,
+                                            pairs,
+                                            pair_count,
+                                            &source_kind,
+                                            &access_pattern,
+                                            &estimated_width,
+                                            &split_stem,
+                                            &split_lo,
+                                            &split_hi)) {
+                ok = 0;
+                free(split_stem);
+                goto cleanup;
+            }
+            free(split_stem);
+        } else if (aggregate_displacement < 0) {
+            access_pattern = INDEX_PATTERN_BASE_MINUS_CONST;
+        } else if (aggregate_displacement > 0) {
+            access_pattern = INDEX_PATTERN_BASE_PLUS_CONST;
+        } else {
+            access_pattern = INDEX_PATTERN_BASE;
+        }
+        records[record_index].access_pattern_seen[access_pattern] = 1;
+
+        if (instr->is_indexed_access) {
+            int resolved_disp;
+            int resolved_addr;
+            if (resolve_exact_indexed_offset(&ctx, instr, &resolved_disp)) {
+                resolved_addr = base_label->cpu_address + resolved_disp;
+                if (resolved_addr >= records[record_index].declared_start
+                    && resolved_addr < records[record_index].declared_end_exclusive) {
+                    if (!add_data_consumer_covered_byte(&records[record_index], resolved_addr)) {
+                        ok = 0;
+                        goto cleanup;
+                    }
+                }
+            } else {
+                records[record_index].has_indexed_accesses_without_exact_coverage = 1;
+            }
+        } else if (constant_addr >= records[record_index].declared_start
+                   && constant_addr < records[record_index].declared_end_exclusive) {
+            if (!add_data_consumer_covered_byte(&records[record_index], constant_addr)) {
+                ok = 0;
+                goto cleanup;
+            }
+        }
+    }
+
+    for (i = 0; i < span_count; i++) {
+        finalize_data_consumer_record(&records[i]);
+    }
+
+    *records_out = records;
+    *record_count_out = span_count;
+    records = NULL;
+
+cleanup:
+    free_data_consumer_records(records, span_count);
+    if (spans != NULL) {
+        for (i = 0; i < span_count; i++) {
+            free(spans[i].label);
+        }
+    }
+    free(spans);
+    if (pairs != NULL) {
+        for (i = 0; i < pair_count; i++) {
+            free(pairs[i].lo);
+            free(pairs[i].hi);
+        }
+    }
+    free(pairs);
+    if (ctx.labels != NULL || ctx.instrs != NULL || ctx.events != NULL
+        || ctx.segments != NULL || ctx.data_ranges != NULL) {
+        free_index_analysis_context(&ctx);
+    }
+    return ok;
+}
+
 static int emit_data_consumer_record_json(FILE *fp,
                                           const data_consumer_record *record,
                                           int first)
@@ -5618,6 +5834,137 @@ static int emit_data_consumers_text(FILE *fp, data_consumer_record *records, int
     return 1;
 }
 
+static int emit_data_coverage_record_json(FILE *fp,
+                                          const data_consumer_record *record,
+                                          int first)
+{
+    data_consumer_range *uncovered_ranges = NULL;
+    int uncovered_count = 0;
+    int covered_size;
+    int uncovered_size;
+    int i;
+    char addr_buf[16];
+
+    if (!build_uncovered_ranges(record, &uncovered_ranges, &uncovered_count)) {
+        return 0;
+    }
+    covered_size = sum_data_consumer_ranges(record->covered_ranges, record->covered_count);
+    uncovered_size = sum_data_consumer_ranges(uncovered_ranges, uncovered_count);
+
+    fprintf(fp, "%s  {", first ? "" : ",\n");
+    fprintf(fp, "\"label\":");
+    print_json_string(fp, record->label);
+    format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->declared_start);
+    fprintf(fp, ",\"declared_start\":");
+    print_json_string(fp, addr_buf);
+    format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->declared_end_exclusive);
+    fprintf(fp, ",\"declared_end_exclusive\":");
+    print_json_string(fp, addr_buf);
+    fprintf(fp, ",\"declared_size\":%d", record->declared_size);
+    fprintf(fp, ",\"covered_ranges\":[");
+    for (i = 0; i < record->covered_count; i++) {
+        fprintf(fp, "%s{\"start\":", i > 0 ? "," : "");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->covered_ranges[i].start);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, ",\"end_exclusive\":");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->covered_ranges[i].end_exclusive);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, "}");
+    }
+    fprintf(fp, "]");
+    fprintf(fp, ",\"covered_size\":%d", covered_size);
+    fprintf(fp, ",\"uncovered_ranges\":[");
+    for (i = 0; i < uncovered_count; i++) {
+        fprintf(fp, "%s{\"start\":", i > 0 ? "," : "");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[i].start);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, ",\"end_exclusive\":");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[i].end_exclusive);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, "}");
+    }
+    fprintf(fp, "]");
+    fprintf(fp, ",\"uncovered_size\":%d", uncovered_size);
+    fprintf(fp, ",\"access_count\":%d", data_consumer_access_count(record));
+    fprintf(fp, ",\"has_indexed_accesses_without_exact_coverage\":%s",
+            record->has_indexed_accesses_without_exact_coverage ? "true" : "false");
+    fprintf(fp, "}");
+
+    free(uncovered_ranges);
+    return 1;
+}
+
+static int emit_data_coverage_json(FILE *fp, data_consumer_record *records, int count)
+{
+    int i;
+    fprintf(fp, "[\n");
+    for (i = 0; i < count; i++) {
+        if (!emit_data_coverage_record_json(fp, &records[i], i == 0)) {
+            return 0;
+        }
+    }
+    if (count > 0) {
+        fprintf(fp, "\n");
+    }
+    fprintf(fp, "]\n");
+    return 1;
+}
+
+static int emit_data_coverage_ndjson(FILE *fp, data_consumer_record *records, int count)
+{
+    int i;
+    for (i = 0; i < count; i++) {
+        if (!emit_data_coverage_record_json(fp, &records[i], 1)) {
+            return 0;
+        }
+        fprintf(fp, "\n");
+    }
+    return 1;
+}
+
+static int emit_data_coverage_text(FILE *fp, data_consumer_record *records, int count)
+{
+    int i;
+    int j;
+    char addr_buf[16];
+    for (i = 0; i < count; i++) {
+        data_consumer_range *uncovered_ranges = NULL;
+        int uncovered_count = 0;
+        if (!build_uncovered_ranges(&records[i], &uncovered_ranges, &uncovered_count)) {
+            return 0;
+        }
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), records[i].declared_start);
+        fprintf(fp, "%s @ %s size=%d\n", records[i].label, addr_buf, records[i].declared_size);
+        fprintf(fp, "  covered_ranges:");
+        for (j = 0; j < records[i].covered_count; j++) {
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), records[i].covered_ranges[j].start);
+            fprintf(fp, "%s[%s,", j > 0 ? ", " : " ", addr_buf);
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), records[i].covered_ranges[j].end_exclusive);
+            fprintf(fp, "%s)", addr_buf);
+        }
+        if (records[i].covered_count == 0) {
+            fprintf(fp, " (none)");
+        }
+        fprintf(fp, "\n");
+        fprintf(fp, "  uncovered_ranges:");
+        for (j = 0; j < uncovered_count; j++) {
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[j].start);
+            fprintf(fp, "%s[%s,", j > 0 ? ", " : " ", addr_buf);
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[j].end_exclusive);
+            fprintf(fp, "%s)", addr_buf);
+        }
+        if (uncovered_count == 0) {
+            fprintf(fp, " (none)");
+        }
+        fprintf(fp, "\n");
+        fprintf(fp, "  access_count: %d\n", data_consumer_access_count(&records[i]));
+        fprintf(fp, "  has_indexed_accesses_without_exact_coverage: %s\n",
+                records[i].has_indexed_accesses_without_exact_coverage ? "true" : "false");
+        free(uncovered_ranges);
+    }
+    return 1;
+}
+
 int generate_data_consumers(astnode *root,
                             const char *output_path,
                             data_consumers_format format,
@@ -5625,178 +5972,28 @@ int generate_data_consumers(astnode *root,
                             const char *split_pairs,
                             int pure_binary)
 {
-    index_analysis_context ctx;
-    index_suffix_pair *pairs;
-    int pair_count;
-    int parse_result;
-    data_consumer_span *spans;
-    int span_count;
-    data_consumer_record *records;
-    FILE *fp;
+    data_consumer_record *records = NULL;
+    int span_count = 0;
+    FILE *fp = NULL;
     int ok;
-    int i;
 
     (void)pure_binary;
 
-    pairs = NULL;
-    pair_count = 0;
-    spans = NULL;
-    span_count = 0;
-    records = NULL;
-    fp = NULL;
-    ok = 1;
-
-    parse_result = parse_index_suffix_pairs(split_pairs, &pairs, &pair_count);
-    if (parse_result == -1) {
-        fprintf(stderr, "error: invalid value for --index-patterns-split-pairs\n");
+    ok = build_data_consumer_records(root,
+                                     include_overlaps,
+                                     split_pairs,
+                                     &records,
+                                     &span_count);
+    if (!ok) {
         return 0;
-    }
-    if (!parse_result) {
-        return 0;
-    }
-    if (!build_index_analysis_context(root, &ctx)) {
-        ok = 0;
-        goto cleanup;
-    }
-    if (!build_data_consumer_spans(&ctx, include_overlaps, &spans, &span_count)) {
-        ok = 0;
-        goto cleanup;
-    }
-
-    records = (data_consumer_record *)calloc((size_t)(span_count > 0 ? span_count : 1),
-                                             sizeof(data_consumer_record));
-    if (records == NULL) {
-        ok = 0;
-        goto cleanup;
-    }
-    for (i = 0; i < span_count; i++) {
-        records[i].label = xstrdup(spans[i].label);
-        records[i].declared_start = spans[i].start;
-        records[i].declared_end_exclusive = spans[i].end_exclusive;
-        records[i].declared_size = spans[i].end_exclusive - spans[i].start;
-        if (records[i].label == NULL) {
-            ok = 0;
-            goto cleanup;
-        }
-    }
-
-    for (i = 0; i < ctx.instr_count; i++) {
-        const index_instr *instr;
-        const index_label *base_label;
-        int record_index;
-        int constant_addr;
-        int aggregate_displacement;
-        const char *routine_name;
-        int access_pattern;
-        int estimated_width;
-        int source_kind;
-        char *split_stem;
-        const char *split_lo;
-        const char *split_hi;
-
-        instr = &ctx.instrs[i];
-        if (!instr->has_symbol_access || instr->base_symbol == NULL || instr->access_kind == INDEX_ACCESS_NONE) {
-            continue;
-        }
-        base_label = find_label_record(&ctx, instr->base_symbol);
-        if (base_label == NULL || base_label->is_code) {
-            continue;
-        }
-
-        record_index = find_data_consumer_span_by_label(spans, span_count, instr->base_symbol);
-        constant_addr = base_label->cpu_address + instr->displacement;
-        if (record_index < 0) {
-            record_index = find_data_consumer_span_for_addr(spans,
-                                                            span_count,
-                                                            base_label->segment_id,
-                                                            constant_addr);
-        }
-        if (record_index < 0) {
-            continue;
-        }
-
-        aggregate_displacement = constant_addr - records[record_index].declared_start;
-        routine_name = find_index_routine_owner(&ctx,
-                                                instr->event_index,
-                                                instr->cpu_address,
-                                                instr->is_dataseg,
-                                                instr->segment_id);
-        if (!add_data_consumer_site(&records[record_index],
-                                    instr->access_kind == INDEX_ACCESS_WRITE,
-                                    routine_name,
-                                    instr->cpu_address,
-                                    aggregate_displacement,
-                                    addressing_mode_name(instr->mode))) {
-            ok = 0;
-            goto cleanup;
-        }
-        if (!add_data_consumer_displacement(&records[record_index], aggregate_displacement)) {
-            ok = 0;
-            goto cleanup;
-        }
-
-        if (instr->is_indexed_access && base_label->cpu_address == records[record_index].declared_start) {
-            split_stem = NULL;
-            split_lo = NULL;
-            split_hi = NULL;
-            if (!analyze_index_site_pattern(&ctx,
-                                            instr,
-                                            pairs,
-                                            pair_count,
-                                            &source_kind,
-                                            &access_pattern,
-                                            &estimated_width,
-                                            &split_stem,
-                                            &split_lo,
-                                            &split_hi)) {
-                ok = 0;
-                free(split_stem);
-                goto cleanup;
-            }
-            free(split_stem);
-        } else if (aggregate_displacement < 0) {
-            access_pattern = INDEX_PATTERN_BASE_MINUS_CONST;
-        } else if (aggregate_displacement > 0) {
-            access_pattern = INDEX_PATTERN_BASE_PLUS_CONST;
-        } else {
-            access_pattern = INDEX_PATTERN_BASE;
-        }
-        records[record_index].access_pattern_seen[access_pattern] = 1;
-
-        if (instr->is_indexed_access) {
-            int resolved_disp;
-            int resolved_addr;
-            if (resolve_exact_indexed_offset(&ctx, instr, &resolved_disp)) {
-                resolved_addr = base_label->cpu_address + resolved_disp;
-                if (resolved_addr >= records[record_index].declared_start
-                    && resolved_addr < records[record_index].declared_end_exclusive) {
-                    if (!add_data_consumer_covered_byte(&records[record_index], resolved_addr)) {
-                        ok = 0;
-                        goto cleanup;
-                    }
-                }
-            } else {
-                records[record_index].has_indexed_accesses_without_exact_coverage = 1;
-            }
-        } else if (constant_addr >= records[record_index].declared_start
-                   && constant_addr < records[record_index].declared_end_exclusive) {
-            if (!add_data_consumer_covered_byte(&records[record_index], constant_addr)) {
-                ok = 0;
-                goto cleanup;
-            }
-        }
-    }
-
-    for (i = 0; i < span_count; i++) {
-        finalize_data_consumer_record(&records[i]);
     }
 
     if (output_path != NULL) {
         fp = fopen(output_path, "w");
         if (fp == NULL) {
             fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
-            ok = 0;
-            goto cleanup;
+            free_data_consumer_records(records, span_count);
+            return 0;
         }
     } else {
         fp = stdout;
@@ -5823,31 +6020,56 @@ cleanup:
     if (output_path != NULL && fp != NULL) {
         fclose(fp);
     }
-    if (records != NULL) {
-        for (i = 0; i < span_count; i++) {
-            free_data_consumer_record(&records[i]);
+    free_data_consumer_records(records, span_count);
+    return ok;
+}
+
+int generate_data_coverage(astnode *root,
+                           const char *output_path,
+                           data_coverage_format format,
+                           int include_overlaps,
+                           const char *split_pairs,
+                           int pure_binary)
+{
+    data_consumer_record *records = NULL;
+    int record_count = 0;
+    FILE *fp = NULL;
+    int ok;
+
+    (void)pure_binary;
+
+    ok = build_data_consumer_records(root,
+                                     include_overlaps,
+                                     split_pairs,
+                                     &records,
+                                     &record_count);
+    if (!ok) {
+        return 0;
+    }
+
+    if (output_path != NULL) {
+        fp = fopen(output_path, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
+            free_data_consumer_records(records, record_count);
+            return 0;
         }
+    } else {
+        fp = stdout;
     }
-    free(records);
-    if (spans != NULL) {
-        for (i = 0; i < span_count; i++) {
-            free(spans[i].label);
-        }
+
+    if (format == DATA_COVERAGE_FORMAT_JSON) {
+        ok = emit_data_coverage_json(fp, records, record_count);
+    } else if (format == DATA_COVERAGE_FORMAT_NDJSON) {
+        ok = emit_data_coverage_ndjson(fp, records, record_count);
+    } else {
+        ok = emit_data_coverage_text(fp, records, record_count);
     }
-    free(spans);
-    if (pairs != NULL) {
-        for (i = 0; i < pair_count; i++) {
-            free(pairs[i].lo);
-            free(pairs[i].hi);
-        }
+
+    if (output_path != NULL && fp != NULL) {
+        fclose(fp);
     }
-    free(pairs);
-    if (ok) {
-        free_index_analysis_context(&ctx);
-    } else if (ctx.labels != NULL || ctx.instrs != NULL || ctx.events != NULL
-               || ctx.segments != NULL || ctx.data_ranges != NULL) {
-        free_index_analysis_context(&ctx);
-    }
+    free_data_consumer_records(records, record_count);
     return ok;
 }
 

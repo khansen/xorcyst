@@ -53,6 +53,12 @@ int generate_data_consumers(astnode *root,
                             int include_overlaps,
                             const char *split_pairs,
                             int pure_binary);
+int generate_data_coverage(astnode *root,
+                           const char *output_path,
+                           data_coverage_format format,
+                           int include_overlaps,
+                           const char *split_pairs,
+                           int pure_binary);
 int run_raw_address_audit(astnode *root,
                           int level_error,
                           int output_json,

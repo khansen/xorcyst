@@ -72,6 +72,14 @@ enum tag_data_consumers_format {
 
 typedef enum tag_data_consumers_format data_consumers_format;
 
+enum tag_data_coverage_format {
+    DATA_COVERAGE_FORMAT_JSON = 0,
+    DATA_COVERAGE_FORMAT_NDJSON,
+    DATA_COVERAGE_FORMAT_TEXT
+};
+
+typedef enum tag_data_coverage_format data_coverage_format;
+
 struct tag_xasm_arguments {
     const char *input_file;
     int debug;
@@ -122,6 +130,9 @@ struct tag_xasm_arguments {
     int data_consumers;
     const char *data_consumers_output;
     int data_consumers_format;
+    int analyze_data_coverage;
+    const char *data_coverage_output;
+    int data_coverage_format;
     int include_overlaps;
 };
 

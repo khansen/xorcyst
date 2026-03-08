@@ -4243,7 +4243,8 @@ void astproc_second_pass(astnode *root)
         && !xasm_args.audit_raw_addresses
         && !xasm_args.xref_summary
         && !xasm_args.analyze_index_patterns
-        && !xasm_args.data_consumers) {
+        && !xasm_args.data_consumers
+        && !xasm_args.analyze_data_coverage) {
         remove_unused_labels();
     }
 }
