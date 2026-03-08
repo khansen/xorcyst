@@ -3249,6 +3249,1382 @@ cleanup:
 
 /* ---- end xref-summary ---- */
 
+/* ---- analyze-index-patterns implementation ---- */
+
+typedef enum tag_index_event_kind {
+    INDEX_EVENT_LABEL = 0,
+    INDEX_EVENT_INSTR,
+    INDEX_EVENT_BARRIER
+} index_event_kind;
+
+typedef enum tag_index_access_kind {
+    INDEX_ACCESS_NONE = 0,
+    INDEX_ACCESS_READ,
+    INDEX_ACCESS_WRITE
+} index_access_kind;
+
+typedef enum tag_index_value_source_kind {
+    INDEX_VALUE_SOURCE_REGISTER = 0,
+    INDEX_VALUE_SOURCE_IMMEDIATE,
+    INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR,
+    INDEX_VALUE_SOURCE_SCALED_REGISTER,
+    INDEX_VALUE_SOURCE_UNKNOWN
+} index_value_source_kind;
+
+typedef enum tag_index_access_pattern {
+    INDEX_PATTERN_BASE = 0,
+    INDEX_PATTERN_BASE_PLUS_CONST,
+    INDEX_PATTERN_BASE_MINUS_CONST,
+    INDEX_PATTERN_PAIRED_BYTE_READS,
+    INDEX_PATTERN_SCALED_INDEX_STRIDE_2,
+    INDEX_PATTERN_SCALED_INDEX_STRIDE_4,
+    INDEX_PATTERN_SPLIT_LO_HI_TABLES
+} index_access_pattern;
+
+typedef struct tag_index_label {
+    char *name;
+    char *scope;
+    int cpu_address;
+    int is_dataseg;
+    int segment_id;
+    int is_branch_target;
+    int is_code;
+    int event_index;
+} index_label;
+
+typedef struct tag_index_instr {
+    location loc;
+    int cpu_address;
+    int is_dataseg;
+    int mnemonic;
+    addressing_mode mode;
+    int length;
+    int event_index;
+    index_access_kind access_kind;
+    int supported_access;
+    char index_register;
+    char *base_symbol;
+    char *base_scope;
+    int displacement;
+    int segment_id;
+    char *branch_target_symbol;
+} index_instr;
+
+typedef struct tag_index_event {
+    int kind;
+    int index;
+} index_event;
+
+typedef struct tag_index_analysis_context {
+    index_label *labels;
+    int label_count;
+    int label_capacity;
+    index_instr *instrs;
+    int instr_count;
+    int instr_capacity;
+    index_event *events;
+    int event_count;
+    int event_capacity;
+    int failed;
+    int current_segment_id;
+    int next_segment_id;
+} index_analysis_context;
+
+typedef struct tag_index_suffix_pair {
+    char *lo;
+    char *hi;
+} index_suffix_pair;
+
+typedef struct tag_index_pattern_record {
+    char *table_label;
+    char *routine;
+    int site_addr;
+    int access_kind;
+    int access_pattern;
+    char index_register;
+    int displacement;
+    int source_kind;
+    int estimated_record_width;
+    char *table_label_lo;
+    char *table_label_hi;
+    int negative_displacement;
+    int adjacent_read_pair;
+    int scaled_index;
+    int split_named_lo_hi;
+    int write_access;
+} index_pattern_record;
+
+static int ensure_index_label_capacity(index_analysis_context *ctx)
+{
+    index_label *tmp;
+    int new_capacity;
+    if (ctx->label_count < ctx->label_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->label_capacity == 0) ? 32 : (ctx->label_capacity * 2);
+    tmp = (index_label *)realloc(ctx->labels, (size_t)new_capacity * sizeof(index_label));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->labels = tmp;
+    ctx->label_capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_index_instr_capacity(index_analysis_context *ctx)
+{
+    index_instr *tmp;
+    int new_capacity;
+    if (ctx->instr_count < ctx->instr_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->instr_capacity == 0) ? 64 : (ctx->instr_capacity * 2);
+    tmp = (index_instr *)realloc(ctx->instrs, (size_t)new_capacity * sizeof(index_instr));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->instrs = tmp;
+    ctx->instr_capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_index_event_capacity(index_analysis_context *ctx)
+{
+    index_event *tmp;
+    int new_capacity;
+    if (ctx->event_count < ctx->event_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->event_capacity == 0) ? 64 : (ctx->event_capacity * 2);
+    tmp = (index_event *)realloc(ctx->events, (size_t)new_capacity * sizeof(index_event));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->events = tmp;
+    ctx->event_capacity = new_capacity;
+    return 1;
+}
+
+static int add_index_event(index_analysis_context *ctx, int kind, int index)
+{
+    if (!ensure_index_event_capacity(ctx)) {
+        ctx->failed = 1;
+        return 0;
+    }
+    ctx->events[ctx->event_count].kind = kind;
+    ctx->events[ctx->event_count].index = index;
+    ctx->event_count++;
+    return 1;
+}
+
+static void start_index_segment(index_analysis_context *ctx)
+{
+    ctx->current_segment_id = ctx->next_segment_id++;
+}
+
+static int find_index_label_by_name(const index_analysis_context *ctx, const char *name)
+{
+    int i;
+    for (i = 0; i < ctx->label_count; i++) {
+        if (strcmp(ctx->labels[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int is_conditional_branch_mnemonic(int mnemonic)
+{
+    switch (mnemonic) {
+        case BCC_MNEMONIC:
+        case BCS_MNEMONIC:
+        case BEQ_MNEMONIC:
+        case BMI_MNEMONIC:
+        case BNE_MNEMONIC:
+        case BPL_MNEMONIC:
+        case BVC_MNEMONIC:
+        case BVS_MNEMONIC:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+static int is_unconditional_transfer_mnemonic(int mnemonic)
+{
+    return (mnemonic == JMP_MNEMONIC || mnemonic == RTS_MNEMONIC || mnemonic == RTI_MNEMONIC);
+}
+
+static int is_supported_index_addressing_mode(addressing_mode mode)
+{
+    return (mode == ABSOLUTE_X_MODE
+         || mode == ABSOLUTE_Y_MODE
+         || mode == ZEROPAGE_X_MODE
+         || mode == ZEROPAGE_Y_MODE);
+}
+
+static char index_register_for_mode(addressing_mode mode)
+{
+    switch (mode) {
+        case ABSOLUTE_X_MODE:
+        case ZEROPAGE_X_MODE:
+            return 'X';
+        case ABSOLUTE_Y_MODE:
+        case ZEROPAGE_Y_MODE:
+            return 'Y';
+        default:
+            return '\0';
+    }
+}
+
+static int extract_symbol_and_displacement_recursive(astnode *expr,
+                                                     const char **symbol,
+                                                     long *displacement,
+                                                     int sign)
+{
+    if (expr == NULL) {
+        return 0;
+    }
+    if (astnode_is_type(expr, IDENTIFIER_NODE)) {
+        if (*symbol != NULL && strcmp(*symbol, expr->ident) != 0) {
+            return 0;
+        }
+        *symbol = expr->ident;
+        return 1;
+    }
+    if (astnode_is_type(expr, INTEGER_NODE)) {
+        *displacement += (long)sign * expr->integer;
+        return 1;
+    }
+    if (astnode_is_type(expr, ARITHMETIC_NODE)) {
+        if (expr->oper == PLUS_OPERATOR) {
+            return extract_symbol_and_displacement_recursive(LHS(expr), symbol, displacement, sign)
+                && extract_symbol_and_displacement_recursive(RHS(expr), symbol, displacement, sign);
+        }
+        if (expr->oper == MINUS_OPERATOR) {
+            return extract_symbol_and_displacement_recursive(LHS(expr), symbol, displacement, sign)
+                && extract_symbol_and_displacement_recursive(RHS(expr), symbol, displacement, -sign);
+        }
+    }
+    return 0;
+}
+
+static int extract_symbol_and_displacement(astnode *expr, const char **symbol, int *displacement)
+{
+    const char *resolved_symbol = NULL;
+    long resolved_disp = 0;
+    if (!extract_symbol_and_displacement_recursive(expr, &resolved_symbol, &resolved_disp, 1)) {
+        return 0;
+    }
+    if (resolved_symbol == NULL || resolved_disp < -32768 || resolved_disp > 32767) {
+        return 0;
+    }
+    *symbol = resolved_symbol;
+    *displacement = (int)resolved_disp;
+    return 1;
+}
+
+static int writes_register(const index_instr *instr, char reg)
+{
+    switch (reg) {
+        case 'A':
+            return (instr->mnemonic == LDA_MNEMONIC
+                 || instr->mnemonic == ADC_MNEMONIC
+                 || instr->mnemonic == AND_MNEMONIC
+                 || instr->mnemonic == ASL_MNEMONIC
+                 || instr->mnemonic == EOR_MNEMONIC
+                 || instr->mnemonic == LSR_MNEMONIC
+                 || instr->mnemonic == ORA_MNEMONIC
+                 || instr->mnemonic == PLA_MNEMONIC
+                 || instr->mnemonic == ROL_MNEMONIC
+                 || instr->mnemonic == ROR_MNEMONIC
+                 || instr->mnemonic == SBC_MNEMONIC
+                 || instr->mnemonic == TXA_MNEMONIC
+                 || instr->mnemonic == TYA_MNEMONIC);
+        case 'X':
+            return (instr->mnemonic == LDX_MNEMONIC
+                 || instr->mnemonic == DEX_MNEMONIC
+                 || instr->mnemonic == INX_MNEMONIC
+                 || instr->mnemonic == TAX_MNEMONIC
+                 || instr->mnemonic == TSX_MNEMONIC);
+        case 'Y':
+            return (instr->mnemonic == LDY_MNEMONIC
+                 || instr->mnemonic == DEY_MNEMONIC
+                 || instr->mnemonic == INY_MNEMONIC
+                 || instr->mnemonic == TAY_MNEMONIC);
+        default:
+            return 0;
+    }
+}
+
+static const char *index_access_kind_name(int access_kind)
+{
+    switch (access_kind) {
+        case INDEX_ACCESS_READ: return "read";
+        case INDEX_ACCESS_WRITE: return "write";
+        default: return "unknown";
+    }
+}
+
+static const char *index_source_kind_name(int source_kind)
+{
+    switch (source_kind) {
+        case INDEX_VALUE_SOURCE_REGISTER: return "register";
+        case INDEX_VALUE_SOURCE_IMMEDIATE: return "immediate";
+        case INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR: return "scaled_accumulator";
+        case INDEX_VALUE_SOURCE_SCALED_REGISTER: return "scaled_register";
+        default: return "unknown";
+    }
+}
+
+static const char *index_access_pattern_name(int pattern)
+{
+    switch (pattern) {
+        case INDEX_PATTERN_BASE: return "base";
+        case INDEX_PATTERN_BASE_PLUS_CONST: return "base_plus_const";
+        case INDEX_PATTERN_BASE_MINUS_CONST: return "base_minus_const";
+        case INDEX_PATTERN_PAIRED_BYTE_READS: return "paired_byte_reads";
+        case INDEX_PATTERN_SCALED_INDEX_STRIDE_2: return "scaled_index_stride_2";
+        case INDEX_PATTERN_SCALED_INDEX_STRIDE_4: return "scaled_index_stride_4";
+        case INDEX_PATTERN_SPLIT_LO_HI_TABLES: return "split_lo_hi_tables";
+        default: return "base";
+    }
+}
+
+static int index_visit_dataseg(astnode *n, void *arg, astnode **next)
+{
+    index_analysis_context *ctx = (index_analysis_context *)arg;
+    (void)n;
+    (void)next;
+    in_dataseg = 1;
+    start_index_segment(ctx);
+    if (!add_index_event(ctx, INDEX_EVENT_BARRIER, 0)) {
+        return 0;
+    }
+    return 1;
+}
+
+static int index_visit_codeseg(astnode *n, void *arg, astnode **next)
+{
+    index_analysis_context *ctx = (index_analysis_context *)arg;
+    (void)n;
+    (void)next;
+    in_dataseg = 0;
+    start_index_segment(ctx);
+    if (!add_index_event(ctx, INDEX_EVENT_BARRIER, 0)) {
+        return 0;
+    }
+    return 1;
+}
+
+static int index_visit_org(astnode *org, void *arg, astnode **next)
+{
+    index_analysis_context *ctx = (index_analysis_context *)arg;
+    int addr = get_current_pc();
+    (void)next;
+    if (eval_expression_int(LHS(org), &addr, 0)) {
+        set_current_pc(addr);
+    }
+    start_index_segment(ctx);
+    if (!add_index_event(ctx, INDEX_EVENT_BARRIER, 0)) {
+        return 0;
+    }
+    return 0;
+}
+
+static int index_visit_label(astnode *label, void *arg, astnode **next)
+{
+    index_analysis_context *ctx = (index_analysis_context *)arg;
+    const char *kind;
+    const char *scope;
+    index_label *out;
+    (void)kind;
+    (void)next;
+    classify_symbol_name(label->label, &kind, &scope);
+    if (!ensure_index_label_capacity(ctx)) {
+        ctx->failed = 1;
+        return 0;
+    }
+    out = &ctx->labels[ctx->label_count];
+    memset(out, 0, sizeof(*out));
+    out->name = xstrdup(label->label);
+    out->scope = xstrdup(scope);
+    out->cpu_address = get_current_pc();
+    out->is_dataseg = in_dataseg;
+    out->segment_id = ctx->current_segment_id;
+    out->event_index = ctx->event_count;
+    if (out->name == NULL || out->scope == NULL) {
+        free(out->name);
+        free(out->scope);
+        out->name = NULL;
+        out->scope = NULL;
+        ctx->failed = 1;
+        return 0;
+    }
+    if (!add_index_event(ctx, INDEX_EVENT_LABEL, ctx->label_count)) {
+        free(out->name);
+        free(out->scope);
+        out->name = NULL;
+        out->scope = NULL;
+        return 0;
+    }
+    ctx->label_count++;
+    return 0;
+}
+
+static int index_visit_instruction(astnode *instr, void *arg, astnode **next)
+{
+    index_analysis_context *ctx = (index_analysis_context *)arg;
+    index_instr *out;
+    int addr = get_current_pc();
+    int len = opcode_length(instr->instr.opcode);
+    const char *symbol = NULL;
+    int displacement = 0;
+    const char *scope;
+    const char *kind;
+    const char *access;
+    (void)next;
+
+    if (len < 1) {
+        len = 1;
+    }
+    if (!ensure_index_instr_capacity(ctx)) {
+        ctx->failed = 1;
+        return 0;
+    }
+    out = &ctx->instrs[ctx->instr_count];
+    memset(out, 0, sizeof(*out));
+    out->loc = instr->loc;
+    out->cpu_address = addr;
+    out->is_dataseg = in_dataseg;
+    out->mnemonic = instr->instr.mnemonic.value;
+    out->mode = instr->instr.mode;
+    out->length = len;
+    out->event_index = ctx->event_count;
+    out->segment_id = ctx->current_segment_id;
+
+    access = classify_instruction_access(opcode_to_string(instr->instr.opcode), LHS(instr), instr->instr.mode);
+    if (strcmp(access, "read") == 0) {
+        out->access_kind = INDEX_ACCESS_READ;
+    } else if (strcmp(access, "write") == 0) {
+        out->access_kind = INDEX_ACCESS_WRITE;
+    } else {
+        out->access_kind = INDEX_ACCESS_NONE;
+    }
+
+    if (is_supported_index_addressing_mode(instr->instr.mode) && out->access_kind != INDEX_ACCESS_NONE) {
+        out->index_register = index_register_for_mode(instr->instr.mode);
+        if (LHS(instr) != NULL && extract_symbol_and_displacement(LHS(instr), &symbol, &displacement)) {
+            classify_symbol_name(symbol, &kind, &scope);
+            out->supported_access = 1;
+            out->base_symbol = xstrdup(symbol);
+            out->base_scope = xstrdup(scope);
+            out->displacement = displacement;
+            if (out->base_symbol == NULL || out->base_scope == NULL) {
+                free(out->base_symbol);
+                free(out->base_scope);
+                out->base_symbol = NULL;
+                out->base_scope = NULL;
+                ctx->failed = 1;
+                return 0;
+            }
+        }
+    }
+
+    if (is_conditional_branch_mnemonic(instr->instr.mnemonic.value) && LHS(instr) != NULL) {
+        if (extract_symbol_and_displacement(LHS(instr), &symbol, &displacement)) {
+            out->branch_target_symbol = xstrdup(symbol);
+            if (out->branch_target_symbol == NULL) {
+                ctx->failed = 1;
+                return 0;
+            }
+        }
+    }
+
+    if (!add_index_event(ctx, INDEX_EVENT_INSTR, ctx->instr_count)) {
+        return 0;
+    }
+    ctx->instr_count++;
+    add_current_pc(len);
+    return 0;
+}
+
+static int index_visit_data(astnode *data, void *arg, astnode **next)
+{
+    astnode *expr;
+    int bytes_per_item;
+    int count = 0;
+    (void)arg;
+    (void)next;
+    switch (LHS(data)->datatype) {
+        case BYTE_DATATYPE:
+        case CHAR_DATATYPE:
+            bytes_per_item = 1;
+            break;
+        case WORD_DATATYPE:
+            bytes_per_item = 2;
+            break;
+        case DWORD_DATATYPE:
+            bytes_per_item = 4;
+            break;
+        default:
+            bytes_per_item = 1;
+            break;
+    }
+    for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
+        count++;
+    }
+    add_current_pc(count * bytes_per_item);
+    return 0;
+}
+
+static int index_visit_storage(astnode *storage, void *arg, astnode **next)
+{
+    int count = 0;
+    (void)arg;
+    (void)next;
+    if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
+        add_current_pc(count);
+    }
+    return 0;
+}
+
+static int index_visit_binary(astnode *node, void *arg, astnode **next)
+{
+    (void)arg;
+    (void)next;
+    add_current_pc(node->binary.size);
+    return 0;
+}
+
+static int label_is_window_barrier(const index_label *label)
+{
+    if (strcmp(label->scope, "global") == 0) {
+        return 1;
+    }
+    return label->is_branch_target;
+}
+
+static int instr_is_window_barrier(const index_instr *instr)
+{
+    return is_conditional_branch_mnemonic(instr->mnemonic)
+        || instr->mnemonic == JSR_MNEMONIC
+        || is_unconditional_transfer_mnemonic(instr->mnemonic);
+}
+
+static int collect_window_instruction_indexes(const index_analysis_context *ctx,
+                                              int event_index,
+                                              int direction,
+                                              int *out_indexes,
+                                              int max_indexes)
+{
+    int count = 0;
+    int pos;
+    for (pos = event_index + direction;
+         pos >= 0 && pos < ctx->event_count;
+         pos += direction) {
+        const index_event *ev = &ctx->events[pos];
+        if (ev->kind == INDEX_EVENT_BARRIER) {
+            break;
+        }
+        if (ev->kind == INDEX_EVENT_LABEL) {
+            const index_label *label = &ctx->labels[ev->index];
+            if (label_is_window_barrier(label)) {
+                break;
+            }
+            continue;
+        }
+        if (ev->kind == INDEX_EVENT_INSTR) {
+            const index_instr *instr = &ctx->instrs[ev->index];
+            if (instr_is_window_barrier(instr)) {
+                break;
+            }
+            if (count < max_indexes) {
+                out_indexes[count++] = ev->index;
+            } else {
+                break;
+            }
+        }
+    }
+    return count;
+}
+
+static const index_label *find_label_record(const index_analysis_context *ctx, const char *name)
+{
+    int idx = find_index_label_by_name(ctx, name);
+    if (idx < 0) {
+        return NULL;
+    }
+    return &ctx->labels[idx];
+}
+
+static int has_instruction_at_address(const index_analysis_context *ctx, int addr, int segment_id)
+{
+    int i;
+    for (i = 0; i < ctx->instr_count; i++) {
+        if (ctx->instrs[i].cpu_address == addr && ctx->instrs[i].segment_id == segment_id) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static const char *find_index_routine_owner(const index_analysis_context *ctx,
+                                            int event_index,
+                                            int site_addr,
+                                            int is_dataseg,
+                                            int segment_id)
+{
+    int pos;
+    for (pos = event_index - 1; pos >= 0; pos--) {
+        const index_event *ev = &ctx->events[pos];
+        if (ev->kind != INDEX_EVENT_LABEL) {
+            continue;
+        }
+        if (ctx->labels[ev->index].is_dataseg != is_dataseg) {
+            continue;
+        }
+        if (ctx->labels[ev->index].segment_id != segment_id) {
+            continue;
+        }
+        if (strcmp(ctx->labels[ev->index].scope, "global") != 0) {
+            continue;
+        }
+        if (!ctx->labels[ev->index].is_code) {
+            continue;
+        }
+        if (ctx->labels[ev->index].cpu_address <= site_addr) {
+            return ctx->labels[ev->index].name;
+        }
+    }
+    return NULL;
+}
+
+static int count_contiguous_asl_a_before_transfer(const index_analysis_context *ctx, int transfer_event_index)
+{
+    int indexes[6];
+    int count;
+    int i;
+    count = collect_window_instruction_indexes(ctx, transfer_event_index, -1, indexes, 6);
+    for (i = 0; i < count; i++) {
+        const index_instr *instr = &ctx->instrs[indexes[i]];
+        if (instr->mnemonic == ASL_MNEMONIC && instr->mode == ACCUMULATOR_MODE) {
+            continue;
+        }
+        return i;
+    }
+    return count;
+}
+
+static int determine_index_source_kind(const index_analysis_context *ctx,
+                                       const index_instr *instr,
+                                       int *shift_count_out)
+{
+    int prev_indexes[6];
+    int prev_count;
+    int i;
+    char active_reg = instr->index_register;
+    *shift_count_out = 0;
+
+    if (active_reg == '\0') {
+        return INDEX_VALUE_SOURCE_UNKNOWN;
+    }
+
+    prev_count = collect_window_instruction_indexes(ctx, instr->event_index, -1, prev_indexes, 6);
+    for (i = 0; i < prev_count; i++) {
+        const index_instr *prev = &ctx->instrs[prev_indexes[i]];
+        if (!writes_register(prev, active_reg)) {
+            continue;
+        }
+        if (active_reg == 'X' && prev->mnemonic == LDX_MNEMONIC && prev->mode == IMMEDIATE_MODE) {
+            return INDEX_VALUE_SOURCE_IMMEDIATE;
+        }
+        if (active_reg == 'Y' && prev->mnemonic == LDY_MNEMONIC && prev->mode == IMMEDIATE_MODE) {
+            return INDEX_VALUE_SOURCE_IMMEDIATE;
+        }
+        if ((active_reg == 'X' && prev->mnemonic == TAX_MNEMONIC)
+            || (active_reg == 'Y' && prev->mnemonic == TAY_MNEMONIC)) {
+            int shift_count = count_contiguous_asl_a_before_transfer(ctx, prev->event_index);
+            if (shift_count > 0) {
+                *shift_count_out = shift_count;
+                return INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR;
+            }
+        }
+        return INDEX_VALUE_SOURCE_REGISTER;
+    }
+    return INDEX_VALUE_SOURCE_REGISTER;
+}
+
+static int find_forward_pair_candidate(const index_analysis_context *ctx,
+                                       const index_instr *anchor,
+                                       int anchor_source_kind)
+{
+    int next_indexes[6];
+    int next_count;
+    int i;
+    next_count = collect_window_instruction_indexes(ctx, anchor->event_index, 1, next_indexes, 6);
+    for (i = 0; i < next_count; i++) {
+        const index_instr *cand = &ctx->instrs[next_indexes[i]];
+        int cand_shift_count = 0;
+        if (writes_register(cand, anchor->index_register)) {
+            break;
+        }
+        if (!cand->supported_access || cand->access_kind != INDEX_ACCESS_READ) {
+            continue;
+        }
+        if (cand->base_symbol == NULL || anchor->base_symbol == NULL) {
+            continue;
+        }
+        if (strcmp(cand->base_symbol, anchor->base_symbol) != 0) {
+            continue;
+        }
+        if (cand->index_register != anchor->index_register) {
+            continue;
+        }
+        if (determine_index_source_kind(ctx, cand, &cand_shift_count) != anchor_source_kind) {
+            continue;
+        }
+        if ((cand->displacement - anchor->displacement == 1)
+            || (cand->displacement - anchor->displacement == -1)) {
+            return next_indexes[i];
+        }
+    }
+    return -1;
+}
+
+static int match_split_pair_labels(const char *lhs,
+                                   const char *rhs,
+                                   const index_suffix_pair *pairs,
+                                   int pair_count,
+                                   char **shared_stem_out,
+                                   const char **lo_out,
+                                   const char **hi_out)
+{
+    int i;
+    for (i = 0; i < pair_count; i++) {
+        size_t lhs_len = strlen(lhs);
+        size_t rhs_len = strlen(rhs);
+        size_t lo_len = strlen(pairs[i].lo);
+        size_t hi_len = strlen(pairs[i].hi);
+        if (lhs_len > lo_len && rhs_len > hi_len
+            && strcmp(lhs + lhs_len - lo_len, pairs[i].lo) == 0
+            && strcmp(rhs + rhs_len - hi_len, pairs[i].hi) == 0
+            && lhs_len - lo_len == rhs_len - hi_len
+            && strncmp(lhs, rhs, lhs_len - lo_len) == 0) {
+            *shared_stem_out = (char *)malloc(lhs_len - lo_len + 1);
+            if (*shared_stem_out == NULL) {
+                return -1;
+            }
+            memcpy(*shared_stem_out, lhs, lhs_len - lo_len);
+            (*shared_stem_out)[lhs_len - lo_len] = '\0';
+            *lo_out = lhs;
+            *hi_out = rhs;
+            return 1;
+        }
+        if (lhs_len > hi_len && rhs_len > lo_len
+            && strcmp(lhs + lhs_len - hi_len, pairs[i].hi) == 0
+            && strcmp(rhs + rhs_len - lo_len, pairs[i].lo) == 0
+            && lhs_len - hi_len == rhs_len - lo_len
+            && strncmp(lhs, rhs, lhs_len - hi_len) == 0) {
+            *shared_stem_out = (char *)malloc(lhs_len - hi_len + 1);
+            if (*shared_stem_out == NULL) {
+                return -1;
+            }
+            memcpy(*shared_stem_out, lhs, lhs_len - hi_len);
+            (*shared_stem_out)[lhs_len - hi_len] = '\0';
+            *lo_out = rhs;
+            *hi_out = lhs;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int find_forward_split_candidate(const index_analysis_context *ctx,
+                                        const index_instr *anchor,
+                                        int anchor_source_kind,
+                                        const index_suffix_pair *pairs,
+                                        int pair_count,
+                                        char **shared_stem_out,
+                                        const char **lo_out,
+                                        const char **hi_out)
+{
+    int next_indexes[6];
+    int next_count;
+    int i;
+    next_count = collect_window_instruction_indexes(ctx, anchor->event_index, 1, next_indexes, 6);
+    for (i = 0; i < next_count; i++) {
+        const index_instr *cand = &ctx->instrs[next_indexes[i]];
+        int cand_shift_count = 0;
+        int matched;
+        if (writes_register(cand, anchor->index_register)) {
+            break;
+        }
+        if (!cand->supported_access || cand->access_kind != INDEX_ACCESS_READ) {
+            continue;
+        }
+        if (cand->base_symbol == NULL || anchor->base_symbol == NULL) {
+            continue;
+        }
+        if (cand->index_register != anchor->index_register) {
+            continue;
+        }
+        if (cand->displacement != anchor->displacement) {
+            continue;
+        }
+        if (determine_index_source_kind(ctx, cand, &cand_shift_count) != anchor_source_kind) {
+            continue;
+        }
+        matched = match_split_pair_labels(anchor->base_symbol,
+                                          cand->base_symbol,
+                                          pairs,
+                                          pair_count,
+                                          shared_stem_out,
+                                          lo_out,
+                                          hi_out);
+        if (matched < 0) {
+            return -2;
+        }
+        if (matched > 0) {
+            return next_indexes[i];
+        }
+    }
+    return -1;
+}
+
+static int parse_index_suffix_pairs(const char *value,
+                                    index_suffix_pair **pairs_out,
+                                    int *pair_count_out)
+{
+    static const char *default_pairs = "Lo:Hi,Low:High,_lo:_hi,_low:_high";
+    char *buf;
+    char *token;
+    int capacity = 0;
+    int count = 0;
+    index_suffix_pair *pairs = NULL;
+    const char *src = (value != NULL && value[0] != '\0') ? value : default_pairs;
+
+    buf = xstrdup(src);
+    if (buf == NULL) {
+        return 0;
+    }
+    token = strtok(buf, ",");
+    while (token != NULL) {
+        char *sep = strchr(token, ':');
+        index_suffix_pair *tmp;
+        if (sep == NULL || sep == token || sep[1] == '\0') {
+            int j;
+            free(buf);
+            for (j = 0; j < count; j++) {
+                free(pairs[j].lo);
+                free(pairs[j].hi);
+            }
+            free(pairs);
+            return -1;
+        }
+        *sep = '\0';
+        if (count >= capacity) {
+            int new_capacity = (capacity == 0) ? 8 : (capacity * 2);
+            tmp = (index_suffix_pair *)realloc(pairs, (size_t)new_capacity * sizeof(index_suffix_pair));
+            if (tmp == NULL) {
+                int j;
+                free(buf);
+                for (j = 0; j < count; j++) {
+                    free(pairs[j].lo);
+                    free(pairs[j].hi);
+                }
+                free(pairs);
+                return 0;
+            }
+            pairs = tmp;
+            capacity = new_capacity;
+        }
+        pairs[count].lo = xstrdup(token);
+        pairs[count].hi = xstrdup(sep + 1);
+        if (pairs[count].lo == NULL || pairs[count].hi == NULL) {
+            int j;
+            free(buf);
+            for (j = 0; j <= count; j++) {
+                free(pairs[j].lo);
+                free(pairs[j].hi);
+            }
+            free(pairs);
+            return 0;
+        }
+        count++;
+        token = strtok(NULL, ",");
+    }
+    free(buf);
+    *pairs_out = pairs;
+    *pair_count_out = count;
+    return 1;
+}
+
+static int index_pattern_record_compare(const void *a, const void *b)
+{
+    const index_pattern_record *lhs = (const index_pattern_record *)a;
+    const index_pattern_record *rhs = (const index_pattern_record *)b;
+    int cmp;
+    if (lhs->site_addr != rhs->site_addr) {
+        return lhs->site_addr - rhs->site_addr;
+    }
+    cmp = strcmp(lhs->table_label, rhs->table_label);
+    if (cmp != 0) {
+        return cmp;
+    }
+    cmp = strcmp(index_access_pattern_name(lhs->access_pattern), index_access_pattern_name(rhs->access_pattern));
+    if (cmp != 0) {
+        return cmp;
+    }
+    if (lhs->routine == NULL && rhs->routine != NULL) {
+        return -1;
+    }
+    if (lhs->routine != NULL && rhs->routine == NULL) {
+        return 1;
+    }
+    if (lhs->routine == NULL && rhs->routine == NULL) {
+        return 0;
+    }
+    return strcmp(lhs->routine, rhs->routine);
+}
+
+static void free_index_analysis_context(index_analysis_context *ctx)
+{
+    int i;
+    for (i = 0; i < ctx->label_count; i++) {
+        free(ctx->labels[i].name);
+        free(ctx->labels[i].scope);
+    }
+    free(ctx->labels);
+    for (i = 0; i < ctx->instr_count; i++) {
+        free(ctx->instrs[i].base_symbol);
+        free(ctx->instrs[i].base_scope);
+        free(ctx->instrs[i].branch_target_symbol);
+    }
+    free(ctx->instrs);
+    free(ctx->events);
+}
+
+static void free_index_pattern_record(index_pattern_record *record)
+{
+    free(record->table_label);
+    free(record->routine);
+    free(record->table_label_lo);
+    free(record->table_label_hi);
+}
+
+static int emit_index_pattern_record_json(FILE *fp, const index_pattern_record *record, int first)
+{
+    int flags_emitted = 0;
+    fprintf(fp, "%s  {", first ? "" : ",\n");
+    fprintf(fp, "\"table_label\":");
+    print_json_string(fp, record->table_label);
+    if (record->routine != NULL) {
+        fprintf(fp, ",\"routine\":");
+        print_json_string(fp, record->routine);
+    }
+    fprintf(fp, ",\"site_addr\":\"0x%04X\"", record->site_addr & 0xFFFF);
+    fprintf(fp, ",\"access_kind\":");
+    print_json_string(fp, index_access_kind_name(record->access_kind));
+    fprintf(fp, ",\"access_pattern\":");
+    print_json_string(fp, index_access_pattern_name(record->access_pattern));
+    fprintf(fp, ",\"index_register\":\"%c\"", record->index_register);
+    fprintf(fp, ",\"displacement\":%d", record->displacement);
+    fprintf(fp, ",\"index_value_source_kind\":");
+    print_json_string(fp, index_source_kind_name(record->source_kind));
+    if (record->estimated_record_width > 0) {
+        fprintf(fp, ",\"estimated_record_width\":%d", record->estimated_record_width);
+    }
+    if (record->table_label_lo != NULL) {
+        fprintf(fp, ",\"table_label_lo\":");
+        print_json_string(fp, record->table_label_lo);
+    }
+    if (record->table_label_hi != NULL) {
+        fprintf(fp, ",\"table_label_hi\":");
+        print_json_string(fp, record->table_label_hi);
+    }
+    if (record->negative_displacement || record->adjacent_read_pair || record->scaled_index
+        || record->split_named_lo_hi || record->write_access) {
+        fprintf(fp, ",\"evidence_flags\":[");
+        if (record->negative_displacement) {
+            print_json_string(fp, "negative_displacement");
+            flags_emitted = 1;
+        }
+        if (record->adjacent_read_pair) {
+            fprintf(fp, "%s", flags_emitted ? "," : "");
+            print_json_string(fp, "adjacent_read_pair");
+            flags_emitted = 1;
+        }
+        if (record->scaled_index) {
+            fprintf(fp, "%s", flags_emitted ? "," : "");
+            print_json_string(fp, "scaled_index");
+            flags_emitted = 1;
+        }
+        if (record->split_named_lo_hi) {
+            fprintf(fp, "%s", flags_emitted ? "," : "");
+            print_json_string(fp, "split_named_lo_hi");
+            flags_emitted = 1;
+        }
+        if (record->write_access) {
+            fprintf(fp, "%s", flags_emitted ? "," : "");
+            print_json_string(fp, "write_access");
+        }
+        fprintf(fp, "]");
+    }
+    fprintf(fp, "}");
+    return 1;
+}
+
+static void emit_index_patterns_json(FILE *fp, index_pattern_record *records, int count)
+{
+    int i;
+    fprintf(fp, "[\n");
+    for (i = 0; i < count; i++) {
+        emit_index_pattern_record_json(fp, &records[i], i == 0);
+    }
+    if (count > 0) {
+        fprintf(fp, "\n");
+    }
+    fprintf(fp, "]\n");
+}
+
+static void emit_index_patterns_ndjson(FILE *fp, index_pattern_record *records, int count)
+{
+    int i;
+    for (i = 0; i < count; i++) {
+        emit_index_pattern_record_json(fp, &records[i], 1);
+        fprintf(fp, "\n");
+    }
+}
+
+static void emit_index_patterns_text(FILE *fp, index_pattern_record *records, int count)
+{
+    int i;
+    for (i = 0; i < count; i++) {
+        fprintf(fp, "%s %s @ 0x%04X",
+                records[i].table_label,
+                index_access_kind_name(records[i].access_kind),
+                records[i].site_addr & 0xFFFF);
+        if (records[i].routine != NULL) {
+            fprintf(fp, " in %s", records[i].routine);
+        }
+        fprintf(fp, "\n");
+        fprintf(fp, "  pattern=%s index=%c displacement=%d origin=%s\n",
+                index_access_pattern_name(records[i].access_pattern),
+                records[i].index_register,
+                records[i].displacement,
+                index_source_kind_name(records[i].source_kind));
+        if (records[i].estimated_record_width > 0) {
+            fprintf(fp, "  estimated_record_width=%d\n", records[i].estimated_record_width);
+        }
+        if (records[i].table_label_lo != NULL || records[i].table_label_hi != NULL) {
+            fprintf(fp, "  split_tables=%s/%s\n",
+                    records[i].table_label_lo != NULL ? records[i].table_label_lo : "",
+                    records[i].table_label_hi != NULL ? records[i].table_label_hi : "");
+        }
+        if (records[i].negative_displacement || records[i].adjacent_read_pair || records[i].scaled_index
+            || records[i].split_named_lo_hi || records[i].write_access) {
+            int first = 1;
+            fprintf(fp, "  evidence_flags=");
+            if (records[i].negative_displacement) {
+                fprintf(fp, "negative_displacement");
+                first = 0;
+            }
+            if (records[i].adjacent_read_pair) {
+                fprintf(fp, "%sadjacent_read_pair", first ? "" : ", ");
+                first = 0;
+            }
+            if (records[i].scaled_index) {
+                fprintf(fp, "%sscaled_index", first ? "" : ", ");
+                first = 0;
+            }
+            if (records[i].split_named_lo_hi) {
+                fprintf(fp, "%ssplit_named_lo_hi", first ? "" : ", ");
+                first = 0;
+            }
+            if (records[i].write_access) {
+                fprintf(fp, "%swrite_access", first ? "" : ", ");
+            }
+            fprintf(fp, "\n");
+        }
+    }
+}
+
+int generate_index_patterns(astnode *root,
+                            const char *output_path,
+                            index_patterns_format format,
+                            int include_locals,
+                            int include_anon,
+                            const char *split_pairs,
+                            int pure_binary)
+{
+    static astnodeprocmap map[] = {
+        { DATASEG_NODE, index_visit_dataseg },
+        { CODESEG_NODE, index_visit_codeseg },
+        { ORG_NODE, index_visit_org },
+        { LABEL_NODE, index_visit_label },
+        { INSTRUCTION_NODE, index_visit_instruction },
+        { DATA_NODE, index_visit_data },
+        { STORAGE_NODE, index_visit_storage },
+        { BINARY_NODE, index_visit_binary },
+        { STRUC_DECL_NODE, list_noop },
+        { UNION_DECL_NODE, list_noop },
+        { ENUM_DECL_NODE, list_noop },
+        { RECORD_DECL_NODE, list_noop },
+        { MACRO_NODE, list_noop },
+        { MACRO_DECL_NODE, list_noop },
+        { PROC_NODE, list_noop },
+        { REPT_NODE, list_noop },
+        { WHILE_NODE, list_noop },
+        { DO_NODE, list_noop },
+        { EXITM_NODE, list_noop },
+        { PUSH_MACRO_BODY_NODE, list_noop },
+        { POP_MACRO_BODY_NODE, list_noop },
+        { PUSH_BRANCH_SCOPE_NODE, list_noop },
+        { POP_BRANCH_SCOPE_NODE, list_noop },
+        { UNDEF_NODE, list_noop },
+        { TOMBSTONE_NODE, list_noop },
+        { 0, NULL }
+    };
+    index_analysis_context ctx;
+    index_suffix_pair *pairs = NULL;
+    index_pattern_record *records = NULL;
+    int record_count = 0;
+    int record_capacity = 0;
+    FILE *fp = NULL;
+    int ok = 1;
+    int i;
+    int parse_result = 0;
+    int pair_count = 0;
+    (void)pure_binary;
+
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.current_segment_id = -1;
+    parse_result = parse_index_suffix_pairs(split_pairs, &pairs, &pair_count);
+    if (parse_result == -1) {
+        fprintf(stderr, "error: invalid value for --index-patterns-split-pairs\n");
+        return 0;
+    }
+    if (!parse_result) {
+        return 0;
+    }
+
+    in_dataseg = 0;
+    dataseg_pc = 0;
+    codeseg_pc = 0;
+    start_index_segment(&ctx);
+    astproc_walk(root, &ctx, map);
+    if (ctx.failed) {
+        ok = 0;
+    }
+
+    if (ok) {
+        for (i = 0; i < ctx.instr_count; i++) {
+            if (ctx.instrs[i].branch_target_symbol != NULL) {
+                int idx = find_index_label_by_name(&ctx, ctx.instrs[i].branch_target_symbol);
+                if (idx >= 0) {
+                    ctx.labels[idx].is_branch_target = 1;
+                }
+            }
+        }
+        for (i = 0; i < ctx.label_count; i++) {
+            ctx.labels[i].is_code = has_instruction_at_address(&ctx,
+                                                               ctx.labels[i].cpu_address,
+                                                               ctx.labels[i].segment_id);
+        }
+    }
+
+    for (i = 0; ok && i < ctx.instr_count; i++) {
+        const index_instr *instr = &ctx.instrs[i];
+        const index_label *base_label;
+        index_pattern_record *record;
+        const char *routine_name;
+        int source_kind;
+        int shift_count;
+        int pair_candidate;
+        int split_candidate;
+        int access_pattern;
+        int estimated_width;
+        char *split_stem = NULL;
+        const char *split_lo = NULL;
+        const char *split_hi = NULL;
+
+        if (!instr->supported_access || instr->base_symbol == NULL) {
+            continue;
+        }
+        base_label = find_label_record(&ctx, instr->base_symbol);
+        if (base_label == NULL) {
+            continue;
+        }
+        if (!scope_allowed(base_label->scope, include_locals, include_anon)) {
+            continue;
+        }
+        if (base_label->is_code) {
+            continue;
+        }
+
+        source_kind = determine_index_source_kind(&ctx, instr, &shift_count);
+        pair_candidate = -1;
+        split_candidate = -1;
+        access_pattern = INDEX_PATTERN_BASE;
+        estimated_width = 0;
+
+        if (instr->access_kind == INDEX_ACCESS_READ) {
+            split_candidate = find_forward_split_candidate(&ctx,
+                                                           instr,
+                                                           source_kind,
+                                                           pairs,
+                                                           pair_count,
+                                                           &split_stem,
+                                                           &split_lo,
+                                                           &split_hi);
+            if (split_candidate == -2) {
+                ok = 0;
+                break;
+            }
+            pair_candidate = find_forward_pair_candidate(&ctx, instr, source_kind);
+        }
+
+        if (split_candidate >= 0) {
+            access_pattern = INDEX_PATTERN_SPLIT_LO_HI_TABLES;
+        } else if (pair_candidate >= 0) {
+            access_pattern = INDEX_PATTERN_PAIRED_BYTE_READS;
+            estimated_width = 2;
+        } else if ((source_kind == INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR
+                    || source_kind == INDEX_VALUE_SOURCE_SCALED_REGISTER)
+                   && shift_count >= 2) {
+            access_pattern = INDEX_PATTERN_SCALED_INDEX_STRIDE_4;
+            estimated_width = 4;
+        } else if ((source_kind == INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR
+                    || source_kind == INDEX_VALUE_SOURCE_SCALED_REGISTER)
+                   && shift_count >= 1) {
+            access_pattern = INDEX_PATTERN_SCALED_INDEX_STRIDE_2;
+            estimated_width = 2;
+        } else if (instr->displacement < 0) {
+            access_pattern = INDEX_PATTERN_BASE_MINUS_CONST;
+        } else if (instr->displacement > 0) {
+            access_pattern = INDEX_PATTERN_BASE_PLUS_CONST;
+        } else {
+            access_pattern = INDEX_PATTERN_BASE;
+        }
+
+        if (record_count >= record_capacity) {
+            int new_capacity = (record_capacity == 0) ? 16 : (record_capacity * 2);
+            index_pattern_record *tmp = (index_pattern_record *)realloc(
+                records, (size_t)new_capacity * sizeof(index_pattern_record));
+            if (tmp == NULL) {
+                ok = 0;
+                break;
+            }
+            records = tmp;
+            record_capacity = new_capacity;
+        }
+
+        record = &records[record_count];
+        memset(record, 0, sizeof(*record));
+        routine_name = find_index_routine_owner(&ctx,
+                                                instr->event_index,
+                                                instr->cpu_address,
+                                                instr->is_dataseg,
+                                                instr->segment_id);
+        record->table_label = xstrdup(split_stem != NULL ? split_stem : instr->base_symbol);
+        record->routine = routine_name != NULL ? xstrdup(routine_name) : NULL;
+        record->site_addr = instr->cpu_address;
+        record->access_kind = instr->access_kind;
+        record->access_pattern = access_pattern;
+        record->index_register = instr->index_register;
+        record->displacement = instr->displacement;
+        record->source_kind = source_kind;
+        record->estimated_record_width = estimated_width;
+        if (split_lo != NULL) {
+            record->table_label_lo = xstrdup(split_lo);
+        }
+        if (split_hi != NULL) {
+            record->table_label_hi = xstrdup(split_hi);
+        }
+        record->negative_displacement = (instr->displacement < 0);
+        record->adjacent_read_pair = (access_pattern == INDEX_PATTERN_PAIRED_BYTE_READS);
+        record->scaled_index = (access_pattern == INDEX_PATTERN_SCALED_INDEX_STRIDE_2
+                             || access_pattern == INDEX_PATTERN_SCALED_INDEX_STRIDE_4);
+        record->split_named_lo_hi = (access_pattern == INDEX_PATTERN_SPLIT_LO_HI_TABLES);
+        record->write_access = (instr->access_kind == INDEX_ACCESS_WRITE);
+        if (record->table_label == NULL
+            || (routine_name != NULL && record->routine == NULL)
+            || (split_lo != NULL && record->table_label_lo == NULL)
+            || (split_hi != NULL && record->table_label_hi == NULL)) {
+            ok = 0;
+            free_index_pattern_record(record);
+            free(split_stem);
+            break;
+        }
+        record_count++;
+        free(split_stem);
+    }
+
+    if (ok && record_count > 1) {
+        int out = 0;
+        qsort(records, (size_t)record_count, sizeof(index_pattern_record), index_pattern_record_compare);
+        for (i = 0; i < record_count; i++) {
+            if (out > 0
+                && records[i].site_addr == records[out - 1].site_addr
+                && strcmp(records[i].table_label, records[out - 1].table_label) == 0
+                && records[i].access_pattern == records[out - 1].access_pattern
+                && ((records[i].routine == NULL && records[out - 1].routine == NULL)
+                    || (records[i].routine != NULL && records[out - 1].routine != NULL
+                        && strcmp(records[i].routine, records[out - 1].routine) == 0))) {
+                free_index_pattern_record(&records[i]);
+                continue;
+            }
+            if (out != i) {
+                records[out] = records[i];
+            }
+            out++;
+        }
+        record_count = out;
+    }
+
+    if (ok) {
+        if (output_path != NULL) {
+            fp = fopen(output_path, "w");
+            if (fp == NULL) {
+                fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
+                ok = 0;
+            }
+        } else {
+            fp = stdout;
+        }
+    }
+
+    if (ok) {
+        if (format == INDEX_PATTERNS_FORMAT_JSON) {
+            emit_index_patterns_json(fp, records, record_count);
+        } else if (format == INDEX_PATTERNS_FORMAT_NDJSON) {
+            emit_index_patterns_ndjson(fp, records, record_count);
+        } else {
+            emit_index_patterns_text(fp, records, record_count);
+        }
+    }
+
+    if (output_path != NULL && fp != NULL) {
+        fclose(fp);
+    }
+    if (pairs != NULL) {
+        for (i = 0; i < pair_count; i++) {
+            free(pairs[i].lo);
+            free(pairs[i].hi);
+        }
+        free(pairs);
+    }
+    for (i = 0; i < record_count; i++) {
+        free_index_pattern_record(&records[i]);
+    }
+    free(records);
+    free_index_analysis_context(&ctx);
+    return ok;
+}
+
+/* ---- end analyze-index-patterns ---- */
+
 int generate_xref(astnode *root,
                   const char *filename,
                   xref_format format,

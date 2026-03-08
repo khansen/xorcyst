@@ -3165,4 +3165,352 @@ ASM
 
 run_expect_xref_summary_regressions
 
+run_expect_index_patterns() {
+    pair_asm="$TMPDIR/index-patterns-pair.asm"
+    pair_bin="$TMPDIR/index-patterns-pair.bin"
+    pair_json="$TMPDIR/index-patterns-pair.json"
+    ndjson_out="$TMPDIR/index-patterns.ndjson"
+    text_out="$TMPDIR/index-patterns.txt"
+    log_file="$TMPDIR/index-patterns.log"
+    pair_stdout=""
+    write_stdout=""
+    scaled_stdout=""
+    split_stdout=""
+    local_default=""
+    local_included=""
+    neg_stdout=""
+
+    cat > "$pair_asm" <<'ASM'
+.org $C000
+ReadPair:
+    LDY #$01
+    LDA WordTable-1,Y
+    STA $00
+    LDA WordTable,Y
+    STA $01
+    RTS
+WordTable:
+    .db $34,$12,$78,$56
+END
+ASM
+
+    if ! "$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-output "$pair_json" \
+        --index-patterns-format json \
+        "$pair_asm" -o "$pair_bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "analyze-index-patterns JSON generation failed"
+    fi
+    if [ ! -s "$pair_json" ]; then
+        fail "analyze-index-patterns JSON file not generated"
+    fi
+    if ! grep -q '^\[' "$pair_json"; then
+        fail "analyze-index-patterns JSON output should be an array"
+    fi
+    if ! grep -q '"table_label":"WordTable"' "$pair_json"; then
+        fail "analyze-index-patterns missing WordTable paired record"
+    fi
+    if ! grep -q '"access_kind":"read"' "$pair_json"; then
+        fail "analyze-index-patterns missing access_kind=read"
+    fi
+    if ! grep -q '"access_pattern":"paired_byte_reads"' "$pair_json"; then
+        fail "analyze-index-patterns missing paired_byte_reads pattern"
+    fi
+    if ! grep -q '"site_addr":"0xC002"' "$pair_json"; then
+        fail "analyze-index-patterns paired site_addr should anchor to first read"
+    fi
+    if ! grep -q '"index_value_source_kind":"immediate"' "$pair_json"; then
+        fail "analyze-index-patterns missing immediate source kind"
+    fi
+    if ! grep -q '"estimated_record_width":2' "$pair_json"; then
+        fail "analyze-index-patterns missing estimated_record_width=2 for paired reads"
+    fi
+
+    if ! "$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format ndjson \
+        "$pair_asm" -o "$pair_bin" >"$ndjson_out" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "analyze-index-patterns NDJSON generation failed"
+    fi
+    if ! grep -q '"access_pattern":"paired_byte_reads"' "$ndjson_out"; then
+        fail "analyze-index-patterns NDJSON missing paired record"
+    fi
+
+    if ! "$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format text \
+        "$pair_asm" -o "$pair_bin" >"$text_out" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "analyze-index-patterns text generation failed"
+    fi
+    if ! grep -q 'WordTable read @ 0xC002 in ReadPair' "$text_out"; then
+        fail "analyze-index-patterns text output missing anchored paired block"
+    fi
+
+    write_asm="$TMPDIR/index-patterns-write.asm"
+    cat > "$write_asm" <<'ASM'
+.org $C000
+WriteBuf:
+    LDX #$00
+    STA Buffer+2,X
+    RTS
+Buffer:
+    .db $00,$00,$00,$00
+END
+ASM
+    write_stdout=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$write_asm" -o "$TMPDIR/index-patterns-write.bin" 2>/dev/null)
+    if ! printf '%s\n' "$write_stdout" | grep -q '"access_kind":"write"'; then
+        fail "analyze-index-patterns missing access_kind=write for indexed write"
+    fi
+    if ! printf '%s\n' "$write_stdout" | grep -q '"access_pattern":"base_plus_const"'; then
+        fail "analyze-index-patterns indexed write should be base_plus_const"
+    fi
+    if ! printf '%s\n' "$write_stdout" | grep -q '"evidence_flags":\["write_access"\]'; then
+        fail "analyze-index-patterns indexed write missing write_access evidence flag"
+    fi
+
+    scaled_asm="$TMPDIR/index-patterns-scaled.asm"
+    cat > "$scaled_asm" <<'ASM'
+.org $C000
+ReadScaled:
+    ASL A
+    TAX
+    LDA Table+1,X
+    RTS
+Table:
+    .db $00,$01,$02,$03,$04,$05
+END
+ASM
+    scaled_stdout=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$scaled_asm" -o "$TMPDIR/index-patterns-scaled.bin" 2>/dev/null)
+    if ! printf '%s\n' "$scaled_stdout" | grep -q '"access_pattern":"scaled_index_stride_2"'; then
+        fail "analyze-index-patterns missing scaled_index_stride_2 pattern"
+    fi
+    if ! printf '%s\n' "$scaled_stdout" | grep -q '"index_value_source_kind":"scaled_accumulator"'; then
+        fail "analyze-index-patterns missing scaled_accumulator source kind"
+    fi
+    if ! printf '%s\n' "$scaled_stdout" | grep -q '"estimated_record_width":2'; then
+        fail "analyze-index-patterns missing estimated_record_width=2 for scaled stride"
+    fi
+
+    scaled4_asm="$TMPDIR/index-patterns-scaled4.asm"
+    cat > "$scaled4_asm" <<'ASM'
+.org $C000
+ReadScaled4:
+    ASL A
+    ASL A
+    TAX
+    LDA Table,X
+    RTS
+Table:
+    .db $00,$01,$02,$03,$04,$05,$06,$07
+END
+ASM
+    scaled4_stdout=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$scaled4_asm" -o "$TMPDIR/index-patterns-scaled4.bin" 2>/dev/null)
+    if ! printf '%s\n' "$scaled4_stdout" | grep -q '"access_pattern":"scaled_index_stride_4"'; then
+        fail "analyze-index-patterns missing scaled_index_stride_4 pattern"
+    fi
+    if ! printf '%s\n' "$scaled4_stdout" | grep -q '"estimated_record_width":4'; then
+        fail "analyze-index-patterns missing estimated_record_width=4 for scaled stride 4"
+    fi
+
+    split_asm="$TMPDIR/index-patterns-split.asm"
+    cat > "$split_asm" <<'ASM'
+.org $C000
+ReadPtr:
+    LDY #$00
+    LDA PtrLo,Y
+    STA $00
+    LDA PtrHi,Y
+    STA $01
+    RTS
+PtrLo:
+    .db $34,$78
+PtrHi:
+    .db $12,$56
+END
+ASM
+    split_stdout=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$split_asm" -o "$TMPDIR/index-patterns-split.bin" 2>/dev/null)
+    if ! printf '%s\n' "$split_stdout" | grep -q '"table_label":"Ptr"'; then
+        fail "analyze-index-patterns split tables should key output by shared stem"
+    fi
+    if ! printf '%s\n' "$split_stdout" | grep -q '"access_pattern":"split_lo_hi_tables"'; then
+        fail "analyze-index-patterns missing split_lo_hi_tables pattern"
+    fi
+    if ! printf '%s\n' "$split_stdout" | grep -q '"table_label_lo":"PtrLo"'; then
+        fail "analyze-index-patterns missing table_label_lo for split table"
+    fi
+    if ! printf '%s\n' "$split_stdout" | grep -q '"table_label_hi":"PtrHi"'; then
+        fail "analyze-index-patterns missing table_label_hi for split table"
+    fi
+
+    split_custom_asm="$TMPDIR/index-patterns-split-custom.asm"
+    cat > "$split_custom_asm" <<'ASM'
+.org $C000
+ReadPtr:
+    LDY #$00
+    LDA PtrLow,Y
+    STA $00
+    LDA PtrHigh,Y
+    STA $01
+    RTS
+PtrLow:
+    .db $34,$78
+PtrHigh:
+    .db $12,$56
+END
+ASM
+    split_custom_out=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        --index-patterns-split-pairs Low:High \
+        "$split_custom_asm" -o "$TMPDIR/index-patterns-split-custom.bin" 2>/dev/null)
+    if ! printf '%s\n' "$split_custom_out" | grep -q '"table_label":"Ptr"'; then
+        fail "analyze-index-patterns custom split pairs should key output by shared stem"
+    fi
+    if ! printf '%s\n' "$split_custom_out" | grep -q '"table_label_lo":"PtrLow"'; then
+        fail "analyze-index-patterns custom split pairs should recognize custom low suffix"
+    fi
+    if ! printf '%s\n' "$split_custom_out" | grep -q '"table_label_hi":"PtrHigh"'; then
+        fail "analyze-index-patterns custom split pairs should recognize custom high suffix"
+    fi
+
+    local_asm="$TMPDIR/index-patterns-local.asm"
+    cat > "$local_asm" <<'ASM'
+.org $C000
+Main:
+    LDX #$00
+    LDA @@tbl,X
+    RTS
+@@tbl:
+    .db $01,$02,$03
+END
+ASM
+    local_default=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$local_asm" -o "$TMPDIR/index-patterns-local.bin" 2>/dev/null)
+    local_included=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json --include-locals=true \
+        "$local_asm" -o "$TMPDIR/index-patterns-local.bin" 2>/dev/null)
+    if printf '%s\n' "$local_default" | grep -q '@@tbl'; then
+        fail "analyze-index-patterns should exclude local labels by default"
+    fi
+    if ! printf '%s\n' "$local_included" | grep -q '@@tbl#'; then
+        fail "analyze-index-patterns --include-locals=true did not include local table label"
+    fi
+
+    neg_asm="$TMPDIR/index-patterns-negative.asm"
+    cat > "$neg_asm" <<'ASM'
+.org $C000
+ReadNoPair:
+    LDY #$01
+    LDA Table-1,Y
+    BEQ Skip
+    LDA Table,Y
+Skip:
+    RTS
+Table:
+    .db $34,$12,$78,$56
+END
+ASM
+    neg_stdout=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$neg_asm" -o "$TMPDIR/index-patterns-negative.bin" 2>/dev/null)
+    if printf '%s\n' "$neg_stdout" | grep -q '"access_pattern":"paired_byte_reads"'; then
+        fail "analyze-index-patterns should not pair reads across a conditional branch boundary"
+    fi
+
+    clobber_asm="$TMPDIR/index-patterns-clobber.asm"
+    cat > "$clobber_asm" <<'ASM'
+.org $C000
+ReadClobberedPair:
+    LDY #$00
+    LDA Table,Y
+    TAY
+    LDA Table,Y
+    LDA Table+1,Y
+    RTS
+Table:
+    .db $10,$20,$30,$40
+END
+ASM
+    clobber_out=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$clobber_asm" -o "$TMPDIR/index-patterns-clobber.bin" 2>/dev/null)
+    if printf '%s\n' "$clobber_out" | grep -q '"site_addr":"0xC002".*"access_pattern":"paired_byte_reads"'; then
+        fail "analyze-index-patterns should not anchor paired reads across an intervening index-register clobber"
+    fi
+    if ! printf '%s\n' "$clobber_out" | grep -q '"site_addr":"0xC006".*"access_pattern":"paired_byte_reads"'; then
+        fail "analyze-index-patterns should anchor paired reads at the post-clobber adjacent pair"
+    fi
+
+    owner_segment_asm="$TMPDIR/index-patterns-owner-segment.asm"
+    cat > "$owner_segment_asm" <<'ASM'
+.org $C000
+FirstRoutine:
+    RTS
+
+.org $C000
+    LDX #$00
+    LDA SecondTable,X
+    RTS
+SecondTable:
+    .db $10,$20
+END
+ASM
+    owner_segment_out=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$owner_segment_asm" -o "$TMPDIR/index-patterns-owner-segment.bin" 2>/dev/null)
+    if ! printf '%s\n' "$owner_segment_out" | grep -q '"table_label":"SecondTable"'; then
+        fail "analyze-index-patterns segment-owner fixture should emit a record for SecondTable"
+    fi
+    if printf '%s\n' "$owner_segment_out" | grep -q '"table_label":"SecondTable","routine":"FirstRoutine"'; then
+        fail "analyze-index-patterns should not inherit routine ownership across segment boundaries"
+    fi
+    if printf '%s\n' "$owner_segment_out" | grep -q '"table_label":"SecondTable".*"routine":'; then
+        fail "analyze-index-patterns ownerless segment fixture should omit routine"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format badformat \
+        "$pair_asm" -o "$pair_bin" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        fail "analyze-index-patterns invalid format should exit 2 (got $rc)"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-split-pairs brokenpair \
+        "$pair_asm" -o "$pair_bin" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 7 ]; then
+        fail "analyze-index-patterns invalid split-pair syntax should exit 7 (got $rc)"
+    fi
+
+    empty_asm="$TMPDIR/index-patterns-empty.asm"
+    cat > "$empty_asm" <<'ASM'
+.org $C000
+Start:
+    RTS
+END
+ASM
+    empty_out=$("$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-format json \
+        "$empty_asm" -o "$TMPDIR/index-patterns-empty.bin" 2>/dev/null)
+    if [ "$(printf '%s' "$empty_out" | tr -d '[:space:]')" != "[]" ]; then
+        fail "analyze-index-patterns empty input should emit an empty JSON array"
+    fi
+}
+
+run_expect_index_patterns
+
 echo "All regression tests passed"

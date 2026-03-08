@@ -172,6 +172,10 @@ static struct option long_options[] = {
   { "xref-summary-nearby-window", required_argument, 0, 0 },
   { "xref-summary-include", required_argument, 0, 0 },
   { "xref-summary-exclude", required_argument, 0, 0 },
+  { "analyze-index-patterns", no_argument, 0, 0 },
+  { "index-patterns-output", required_argument, 0, 0 },
+  { "index-patterns-format", required_argument, 0, 0 },
+  { "index-patterns-split-pairs", required_argument, 0, 0 },
   { "include-locals", required_argument, 0, 0 },
   { "include-anon", required_argument, 0, 0 },
   { 0 }
@@ -196,6 +200,9 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--xref-summary-nearby-window=BYTES]\n\
             [--xref-summary-include=REGEX]\n\
             [--xref-summary-exclude=REGEX]\n\
+            [--analyze-index-patterns] [--index-patterns-output=FILE]\n\
+            [--index-patterns-format=json|ndjson|text]\n\
+            [--index-patterns-split-pairs=LO:HI,...]\n\
             [--include-locals=true|false] [--include-anon=true|false]\n\
             [--audit-raw-addresses] [--audit-level=warn|error]\n\
             [--audit-rom-range=LO-HI] [--audit-output-format=text|json]\n\
@@ -244,6 +251,14 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
                             Include symbols matching regex\n\
     --xref-summary-exclude=REGEX\n\
                             Exclude symbols matching regex\n\
+    --analyze-index-patterns\n\
+                            Analyze indexed direct table accesses\n\
+    --index-patterns-output=FILE\n\
+                            Write index-pattern analysis to FILE (default stdout)\n\
+    --index-patterns-format=FMT\n\
+                            Index-pattern format: json|ndjson|text (default json)\n\
+    --index-patterns-split-pairs=PAIRS\n\
+                            Split-table suffix pairs, e.g. Lo:Hi,_lo:_hi\n\
     --include-locals=BOOL  Include local labels (default false)\n\
     --include-anon=BOOL    Include anonymous labels (default false)\n\
     --audit-raw-addresses   Enable raw-address audit diagnostics\n\
@@ -468,6 +483,23 @@ static int parse_xref_summary_kind_value(const char *value)
          || strcmp(value, "data") == 0);
 }
 
+static int parse_index_patterns_format_value(const char *value, index_patterns_format *out)
+{
+    if (strcmp(value, "json") == 0) {
+        *out = INDEX_PATTERNS_FORMAT_JSON;
+        return 1;
+    }
+    if (strcmp(value, "ndjson") == 0) {
+        *out = INDEX_PATTERNS_FORMAT_NDJSON;
+        return 1;
+    }
+    if (strcmp(value, "text") == 0) {
+        *out = INDEX_PATTERNS_FORMAT_TEXT;
+        return 1;
+    }
+    return 0;
+}
+
 static void warn_global(const char *code, const char *fmt, ...)
 {
     va_list ap;
@@ -570,6 +602,10 @@ parse_arguments (int argc, char **argv)
     xasm_args.xref_summary_nearby_window = 128;
     xasm_args.xref_summary_include = NULL;
     xasm_args.xref_summary_exclude = NULL;
+    xasm_args.analyze_index_patterns = 0;
+    xasm_args.index_patterns_output = NULL;
+    xasm_args.index_patterns_format = INDEX_PATTERNS_FORMAT_JSON;
+    xasm_args.index_patterns_split_pairs = NULL;
 
     /* Parse options. */
     while ((key = getopt_long(argc, argv, "D:I:L:o:qsvV", long_options, &index)) != -1) {
@@ -779,6 +815,18 @@ parse_arguments (int argc, char **argv)
                 xasm_args.xref_summary_include = optarg;
             } else if (strcmp(long_options[index].name, "xref-summary-exclude") == 0) {
                 xasm_args.xref_summary_exclude = optarg;
+            } else if (strcmp(long_options[index].name, "analyze-index-patterns") == 0) {
+                xasm_args.analyze_index_patterns = 1;
+            } else if (strcmp(long_options[index].name, "index-patterns-output") == 0) {
+                xasm_args.index_patterns_output = optarg;
+            } else if (strcmp(long_options[index].name, "index-patterns-format") == 0) {
+                index_patterns_format fmt;
+                if (!parse_index_patterns_format_value(optarg, &fmt)) {
+                    cli_error("invalid value for --index-patterns-format: `%s' (expected json|ndjson|text)", optarg);
+                }
+                xasm_args.index_patterns_format = fmt;
+            } else if (strcmp(long_options[index].name, "index-patterns-split-pairs") == 0) {
+                xasm_args.index_patterns_split_pairs = optarg;
             } else if (strcmp(long_options[index].name, "include-locals") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_locals)) {
                     cli_error("invalid value for --include-locals: `%s' (expected true|false)", optarg);
@@ -1340,6 +1388,19 @@ int main(int argc, char *argv[]) {
                                    xasm_args.output_file,
                                    xasm_args.pure_binary)) {
             exit_code = 6;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.analyze_index_patterns) {
+        verbose("Analyzing index patterns...");
+        if (!generate_index_patterns(root_node,
+                                     xasm_args.index_patterns_output,
+                                     (index_patterns_format)xasm_args.index_patterns_format,
+                                     xasm_args.xref_include_locals,
+                                     xasm_args.xref_include_anon,
+                                     xasm_args.index_patterns_split_pairs,
+                                     xasm_args.pure_binary)) {
+            exit_code = 7;
         }
     }
 

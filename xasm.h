@@ -56,6 +56,14 @@ enum tag_xref_summary_format {
 
 typedef enum tag_xref_summary_format xref_summary_format;
 
+enum tag_index_patterns_format {
+    INDEX_PATTERNS_FORMAT_JSON = 0,
+    INDEX_PATTERNS_FORMAT_NDJSON,
+    INDEX_PATTERNS_FORMAT_TEXT
+};
+
+typedef enum tag_index_patterns_format index_patterns_format;
+
 struct tag_xasm_arguments {
     const char *input_file;
     int debug;
@@ -99,6 +107,10 @@ struct tag_xasm_arguments {
     int xref_summary_nearby_window;
     const char *xref_summary_include;
     const char *xref_summary_exclude;
+    int analyze_index_patterns;
+    const char *index_patterns_output;
+    int index_patterns_format;
+    const char *index_patterns_split_pairs;
 };
 
 typedef struct tag_xasm_arguments xasm_arguments;
