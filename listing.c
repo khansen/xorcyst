@@ -1297,11 +1297,49 @@ typedef struct tag_xref_build_context {
     xref_ref *refs;
     int ref_count;
     int ref_capacity;
+    struct tag_xref_instr *instrs;
+    int instr_count;
+    int instr_capacity;
     int include_locals;
     int include_anon;
+    int include_data;
     int pure_binary;
     long output_offset;
+    int failed;
 } xref_build_context;
+
+typedef struct tag_xref_instr {
+    int cpu_address;
+    int is_dataseg;
+    int mnemonic;
+    addressing_mode mode;
+    char *direct_symbol;
+    int direct_displacement;
+    int direct_access_kind; /* 1=read, 2=write */
+    int zp_write_addr_known;
+    int zp_write_addr;
+    int indirect_ptr_addr_known;
+    int indirect_ptr_addr;
+    int indirect_access_kind; /* 1=read, 2=write */
+} xref_instr;
+
+typedef struct tag_xref_data_edge {
+    char *symbol;
+    int site_addr;
+    char *routine;
+    int displacement;
+    char *addressing_mode;
+} xref_data_edge;
+
+typedef struct tag_xref_indirect_flow {
+    char *ptr_symbol;
+    int producer_site;
+    int consumer_site;
+    char *access_kind;
+    char *routine;
+} xref_indirect_flow;
+
+static int extract_symbol_and_displacement(astnode *expr, const char **symbol, int *displacement);
 
 static int starts_with(const char *s, const char *prefix)
 {
@@ -1379,6 +1417,7 @@ static int ensure_xref_symbol_capacity(xref_build_context *ctx)
     new_capacity = (ctx->symbol_capacity == 0) ? 32 : (ctx->symbol_capacity * 2);
     tmp = (xref_symbol *)realloc(ctx->symbols, (size_t)new_capacity * sizeof(xref_symbol));
     if (tmp == NULL) {
+        ctx->failed = 1;
         return 0;
     }
     ctx->symbols = tmp;
@@ -1396,10 +1435,29 @@ static int ensure_xref_ref_capacity(xref_build_context *ctx)
     new_capacity = (ctx->ref_capacity == 0) ? 64 : (ctx->ref_capacity * 2);
     tmp = (xref_ref *)realloc(ctx->refs, (size_t)new_capacity * sizeof(xref_ref));
     if (tmp == NULL) {
+        ctx->failed = 1;
         return 0;
     }
     ctx->refs = tmp;
     ctx->ref_capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_xref_instr_capacity(xref_build_context *ctx)
+{
+    xref_instr *tmp;
+    int new_capacity;
+    if (ctx->instr_count < ctx->instr_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->instr_capacity == 0) ? 64 : (ctx->instr_capacity * 2);
+    tmp = (xref_instr *)realloc(ctx->instrs, (size_t)new_capacity * sizeof(xref_instr));
+    if (tmp == NULL) {
+        ctx->failed = 1;
+        return 0;
+    }
+    ctx->instrs = tmp;
+    ctx->instr_capacity = new_capacity;
     return 1;
 }
 
@@ -1445,6 +1503,7 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
         s->kind = xstrdup(kind);
         s->scope = xstrdup(scope);
         if (s->name == NULL || s->kind == NULL || s->scope == NULL) {
+            ctx->failed = 1;
             return 0;
         }
     } else {
@@ -1455,6 +1514,7 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
             s->kind = xstrdup(kind);
             s->scope = xstrdup(scope);
             if (s->kind == NULL || s->scope == NULL) {
+                ctx->failed = 1;
                 return 0;
             }
         }
@@ -1522,6 +1582,7 @@ static int add_xref_reference(xref_build_context *ctx,
     r->expression = xstrdup(meta->expression != NULL ? meta->expression : "");
     if (r->symbol == NULL || r->opcode == NULL || r->addressing_mode == NULL
         || r->access == NULL || r->expression == NULL) {
+        ctx->failed = 1;
         return 0;
     }
     return 1;
@@ -1635,6 +1696,27 @@ static const char *classify_instruction_access(const char *opcode, astnode *oper
     return "other";
 }
 
+static int xref_data_access_kind_from_string(const char *access)
+{
+    if (strcmp(access, "read") == 0) {
+        return 1;
+    }
+    if (strcmp(access, "write") == 0) {
+        return 2;
+    }
+    return 0;
+}
+
+static int is_supported_xref_data_direct_mode(addressing_mode mode)
+{
+    return (mode == ABSOLUTE_MODE
+         || mode == ABSOLUTE_X_MODE
+         || mode == ABSOLUTE_Y_MODE
+         || mode == ZEROPAGE_MODE
+         || mode == ZEROPAGE_X_MODE
+         || mode == ZEROPAGE_Y_MODE);
+}
+
 static int collect_expr_refs_recursive(astnode *expr, xref_build_context *ctx, const xref_meta *meta)
 {
     astnode *child;
@@ -1722,11 +1804,27 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     int addr = get_current_pc();
     int len = opcode_length(instr->instr.opcode);
     xref_meta meta;
+    xref_instr *out = NULL;
     char expr_buf[512];
+    const char *resolved_symbol = NULL;
+    int resolved_displacement = 0;
+    int resolved_value = 0;
+    int record_instruction = 0;
     (void)next;
 
     if (len < 1) {
         len = 1;
+    }
+    if (ctx->include_data) {
+        if (!ensure_xref_instr_capacity(ctx)) {
+            goto finish;
+        }
+        out = &ctx->instrs[ctx->instr_count];
+        memset(out, 0, sizeof(*out));
+        out->cpu_address = addr;
+        out->is_dataseg = in_dataseg;
+        out->mnemonic = instr->instr.mnemonic.value;
+        out->mode = instr->instr.mode;
     }
 
     memset(&meta, 0, sizeof(meta));
@@ -1740,12 +1838,53 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     extract_operand_from_line(instr->loc, expr_buf, sizeof(expr_buf));
     meta.expression = expr_buf;
 
-    if (LHS(instr) != NULL) {
-        if (!collect_expr_refs_recursive(LHS(instr), ctx, &meta)) {
-            return 0;
+    if (ctx->include_data) {
+        if (LHS(instr) != NULL
+            && is_supported_xref_data_direct_mode(instr->instr.mode)
+            && extract_symbol_and_displacement(LHS(instr), &resolved_symbol, &resolved_displacement)) {
+            out->direct_symbol = xstrdup(resolved_symbol);
+            out->direct_displacement = resolved_displacement;
+            out->direct_access_kind = xref_data_access_kind_from_string(meta.access);
+            if (out->direct_symbol == NULL) {
+                ctx->failed = 1;
+                goto finish;
+            }
+        }
+
+        if (LHS(instr) != NULL
+            && xref_data_access_kind_from_string(meta.access) == 2
+            && (instr->instr.mode == ABSOLUTE_MODE || instr->instr.mode == ZEROPAGE_MODE)
+            && eval_expression_int(LHS(instr), &resolved_value, 0)
+            && resolved_value >= 0 && resolved_value <= 0xFF) {
+            out->zp_write_addr_known = 1;
+            out->zp_write_addr = resolved_value;
+        }
+
+        if (LHS(instr) != NULL
+            && xref_data_access_kind_from_string(meta.access) != 0
+            && (instr->instr.mode == PREINDEXED_INDIRECT_MODE
+                || instr->instr.mode == POSTINDEXED_INDIRECT_MODE)
+            && eval_expression_int(LHS(instr), &resolved_value, 0)
+            && resolved_value >= 0 && resolved_value <= 0xFF) {
+            out->indirect_ptr_addr_known = 1;
+            out->indirect_ptr_addr = resolved_value;
+            out->indirect_access_kind = xref_data_access_kind_from_string(meta.access);
         }
     }
 
+    if (LHS(instr) != NULL) {
+        if (!collect_expr_refs_recursive(LHS(instr), ctx, &meta)) {
+            ctx->failed = 1;
+            goto finish;
+        }
+    }
+
+    record_instruction = ctx->include_data;
+
+finish:
+    if (record_instruction) {
+        ctx->instr_count++;
+    }
     add_current_pc(len);
     if (ctx->pure_binary && !in_dataseg) {
         ctx->output_offset += len;
@@ -1759,6 +1898,7 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
     astnode *expr;
     int bytes_per_item;
     int addr = get_current_pc();
+    int item_count = 0;
     int index = 0;
     xref_meta meta;
     char expr_buf[512];
@@ -1783,6 +1923,10 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
     extract_operand_from_line(data->loc, expr_buf, sizeof(expr_buf));
 
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
+        item_count++;
+    }
+
+    for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
         memset(&meta, 0, sizeof(meta));
         meta.has_cpu_address = 1;
         meta.cpu_address = addr + (index * bytes_per_item);
@@ -1793,14 +1937,15 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
         meta.access = "address_compute";
         meta.expression = expr_buf;
         if (!collect_expr_refs_recursive(expr, ctx, &meta)) {
-            return 0;
+            ctx->failed = 1;
+            break;
         }
         index++;
     }
 
-    add_current_pc(index * bytes_per_item);
+    add_current_pc(item_count * bytes_per_item);
     if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += index * bytes_per_item;
+        ctx->output_offset += item_count * bytes_per_item;
     }
     return 0;
 }
@@ -1854,6 +1999,14 @@ static void free_xref_context(xref_build_context *ctx)
     ctx->refs = NULL;
     ctx->ref_count = 0;
     ctx->ref_capacity = 0;
+
+    for (i = 0; i < ctx->instr_count; ++i) {
+        free(ctx->instrs[i].direct_symbol);
+    }
+    free(ctx->instrs);
+    ctx->instrs = NULL;
+    ctx->instr_count = 0;
+    ctx->instr_capacity = 0;
 }
 
 static int xref_symbol_compare(const void *a, const void *b)
@@ -1886,6 +2039,494 @@ static int xref_ref_compare(const void *a, const void *b)
         return (lhs->output_offset < rhs->output_offset) ? -1 : 1;
     }
     return strcmp(lhs->symbol, rhs->symbol);
+}
+
+static int has_xref_instruction_at_address(const xref_build_context *ctx, int addr, int is_dataseg)
+{
+    int i;
+    for (i = 0; i < ctx->instr_count; i++) {
+        if (ctx->instrs[i].cpu_address == addr && ctx->instrs[i].is_dataseg == is_dataseg) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static const char *find_xref_routine_owner(const xref_build_context *ctx, int site_addr, int is_dataseg)
+{
+    int i;
+    const char *best = NULL;
+    int best_addr = -1;
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *s = &ctx->symbols[i];
+        if (!s->defined || !s->has_cpu_address) {
+            continue;
+        }
+        if (s->is_dataseg != is_dataseg) {
+            continue;
+        }
+        if (strcmp(s->scope, "global") != 0 || strcmp(s->kind, "label") != 0) {
+            continue;
+        }
+        if (s->cpu_address > site_addr) {
+            continue;
+        }
+        if (!has_xref_instruction_at_address(ctx, s->cpu_address, is_dataseg)) {
+            continue;
+        }
+        if (s->cpu_address > best_addr) {
+            best = s->name;
+            best_addr = s->cpu_address;
+        }
+    }
+    return best;
+}
+
+static int ensure_xref_data_edge_capacity(xref_data_edge **edges, int *count, int *capacity)
+{
+    xref_data_edge *tmp;
+    int new_capacity;
+    if (*count < *capacity) {
+        return 1;
+    }
+    new_capacity = (*capacity == 0) ? 16 : (*capacity * 2);
+    tmp = (xref_data_edge *)realloc(*edges, (size_t)new_capacity * sizeof(xref_data_edge));
+    if (tmp == NULL) {
+        return 0;
+    }
+    *edges = tmp;
+    *capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_xref_indirect_flow_capacity(xref_indirect_flow **flows, int *count, int *capacity)
+{
+    xref_indirect_flow *tmp;
+    int new_capacity;
+    if (*count < *capacity) {
+        return 1;
+    }
+    new_capacity = (*capacity == 0) ? 8 : (*capacity * 2);
+    tmp = (xref_indirect_flow *)realloc(*flows, (size_t)new_capacity * sizeof(xref_indirect_flow));
+    if (tmp == NULL) {
+        return 0;
+    }
+    *flows = tmp;
+    *capacity = new_capacity;
+    return 1;
+}
+
+static void free_xref_data_edge(xref_data_edge *edge)
+{
+    free(edge->symbol);
+    free(edge->routine);
+    free(edge->addressing_mode);
+}
+
+static void free_xref_indirect_flow(xref_indirect_flow *flow)
+{
+    free(flow->ptr_symbol);
+    free(flow->access_kind);
+    free(flow->routine);
+}
+
+static int xref_data_edge_compare(const void *a, const void *b)
+{
+    const xref_data_edge *lhs = (const xref_data_edge *)a;
+    const xref_data_edge *rhs = (const xref_data_edge *)b;
+    int cmp;
+    if (lhs->site_addr != rhs->site_addr) {
+        return lhs->site_addr - rhs->site_addr;
+    }
+    cmp = strcmp(lhs->symbol, rhs->symbol);
+    if (cmp != 0) {
+        return cmp;
+    }
+    if (lhs->routine == NULL && rhs->routine != NULL) {
+        return -1;
+    }
+    if (lhs->routine != NULL && rhs->routine == NULL) {
+        return 1;
+    }
+    if (lhs->routine != NULL && rhs->routine != NULL) {
+        cmp = strcmp(lhs->routine, rhs->routine);
+        if (cmp != 0) {
+            return cmp;
+        }
+    }
+    if (lhs->displacement != rhs->displacement) {
+        return lhs->displacement - rhs->displacement;
+    }
+    return strcmp(lhs->addressing_mode, rhs->addressing_mode);
+}
+
+static int xref_indirect_flow_compare(const void *a, const void *b)
+{
+    const xref_indirect_flow *lhs = (const xref_indirect_flow *)a;
+    const xref_indirect_flow *rhs = (const xref_indirect_flow *)b;
+    int cmp;
+    cmp = strcmp(lhs->ptr_symbol, rhs->ptr_symbol);
+    if (cmp != 0) {
+        return cmp;
+    }
+    if (lhs->producer_site != rhs->producer_site) {
+        return lhs->producer_site - rhs->producer_site;
+    }
+    if (lhs->consumer_site != rhs->consumer_site) {
+        return lhs->consumer_site - rhs->consumer_site;
+    }
+    cmp = strcmp(lhs->access_kind, rhs->access_kind);
+    if (cmp != 0) {
+        return cmp;
+    }
+    if (lhs->routine == NULL && rhs->routine != NULL) {
+        return -1;
+    }
+    if (lhs->routine != NULL && rhs->routine == NULL) {
+        return 1;
+    }
+    if (lhs->routine == NULL) {
+        return 0;
+    }
+    return strcmp(lhs->routine, rhs->routine);
+}
+
+static const char *find_symbol_at_address(const xref_build_context *ctx, int addr, int is_dataseg)
+{
+    int i;
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *s = &ctx->symbols[i];
+        if (!s->defined || !s->has_cpu_address) {
+            continue;
+        }
+        if (s->cpu_address == addr && s->is_dataseg == is_dataseg) {
+            return s->name;
+        }
+    }
+    return NULL;
+}
+
+static const char *find_symbol_at_any_section(const xref_build_context *ctx, int addr)
+{
+    int i;
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *s = &ctx->symbols[i];
+        if (!s->defined || !s->has_cpu_address) {
+            continue;
+        }
+        if (s->cpu_address == addr) {
+            return s->name;
+        }
+    }
+    return NULL;
+}
+
+static const char *resolve_pointer_pair_symbol(const xref_build_context *ctx,
+                                               int low_addr,
+                                               int is_dataseg)
+{
+    const char *low_name = find_symbol_at_address(ctx, low_addr, is_dataseg);
+    if (low_name == NULL) {
+        low_name = find_symbol_at_any_section(ctx, low_addr);
+    }
+    if (low_name != NULL) {
+        return low_name;
+    }
+    return NULL;
+}
+
+static int nullable_string_equal(const char *lhs, const char *rhs)
+{
+    if (lhs == NULL && rhs == NULL) {
+        return 1;
+    }
+    if (lhs == NULL || rhs == NULL) {
+        return 0;
+    }
+    return strcmp(lhs, rhs) == 0;
+}
+
+static void format_xref_addr(char *buf, int buf_size, int addr)
+{
+    if (buf_size <= 0) {
+        return;
+    }
+    if (addr >= 0 && addr <= 0xFFFF) {
+        snprintf(buf, (size_t)buf_size, "0x%04X", addr & 0xFFFF);
+    } else {
+        snprintf(buf, (size_t)buf_size, "0x%X", addr);
+    }
+}
+
+static int append_xref_data_edge(xref_data_edge **edges,
+                                 int *count,
+                                 int *capacity,
+                                 const char *symbol,
+                                 int site_addr,
+                                 const char *routine,
+                                 int displacement,
+                                 const char *addressing_mode)
+{
+    xref_data_edge *edge;
+    if (!ensure_xref_data_edge_capacity(edges, count, capacity)) {
+        return 0;
+    }
+    edge = &(*edges)[*count];
+    memset(edge, 0, sizeof(*edge));
+    edge->symbol = xstrdup(symbol);
+    edge->site_addr = site_addr;
+    edge->routine = routine != NULL ? xstrdup(routine) : NULL;
+    edge->displacement = displacement;
+    edge->addressing_mode = xstrdup(addressing_mode);
+    if (edge->symbol == NULL || edge->addressing_mode == NULL || (routine != NULL && edge->routine == NULL)) {
+        free_xref_data_edge(edge);
+        memset(edge, 0, sizeof(*edge));
+        return 0;
+    }
+    (*count)++;
+    return 1;
+}
+
+static int append_xref_indirect_flow(xref_indirect_flow **flows,
+                                     int *count,
+                                     int *capacity,
+                                     const char *ptr_symbol,
+                                     int producer_site,
+                                     int consumer_site,
+                                     const char *access_kind,
+                                     const char *routine)
+{
+    xref_indirect_flow *flow;
+    if (!ensure_xref_indirect_flow_capacity(flows, count, capacity)) {
+        return 0;
+    }
+    flow = &(*flows)[*count];
+    memset(flow, 0, sizeof(*flow));
+    flow->ptr_symbol = xstrdup(ptr_symbol);
+    flow->producer_site = producer_site;
+    flow->consumer_site = consumer_site;
+    flow->access_kind = xstrdup(access_kind);
+    flow->routine = routine != NULL ? xstrdup(routine) : NULL;
+    if (flow->ptr_symbol == NULL || flow->access_kind == NULL || (routine != NULL && flow->routine == NULL)) {
+        free_xref_indirect_flow(flow);
+        memset(flow, 0, sizeof(*flow));
+        return 0;
+    }
+    (*count)++;
+    return 1;
+}
+
+static void dedupe_xref_data_edges(xref_data_edge *edges, int *count)
+{
+    int write_index;
+    int i;
+    if (*count <= 1) {
+        return;
+    }
+    qsort(edges, (size_t)*count, sizeof(*edges), xref_data_edge_compare);
+    write_index = 1;
+    for (i = 1; i < *count; i++) {
+        if (xref_data_edge_compare(&edges[write_index - 1], &edges[i]) == 0) {
+            free_xref_data_edge(&edges[i]);
+            memset(&edges[i], 0, sizeof(edges[i]));
+            continue;
+        }
+        if (write_index != i) {
+            edges[write_index] = edges[i];
+            memset(&edges[i], 0, sizeof(edges[i]));
+        }
+        write_index++;
+    }
+    *count = write_index;
+}
+
+static void dedupe_xref_indirect_flows(xref_indirect_flow *flows, int *count)
+{
+    int write_index;
+    int i;
+    if (*count <= 1) {
+        return;
+    }
+    qsort(flows, (size_t)*count, sizeof(*flows), xref_indirect_flow_compare);
+    write_index = 1;
+    for (i = 1; i < *count; i++) {
+        if (xref_indirect_flow_compare(&flows[write_index - 1], &flows[i]) == 0) {
+            free_xref_indirect_flow(&flows[i]);
+            memset(&flows[i], 0, sizeof(flows[i]));
+            continue;
+        }
+        if (write_index != i) {
+            flows[write_index] = flows[i];
+            memset(&flows[i], 0, sizeof(flows[i]));
+        }
+        write_index++;
+    }
+    *count = write_index;
+}
+
+static int build_xref_data_edges(const xref_build_context *ctx,
+                                 xref_data_edge **reads_out,
+                                 int *read_count_out,
+                                 xref_data_edge **writes_out,
+                                 int *write_count_out)
+{
+    xref_data_edge *reads = NULL;
+    xref_data_edge *writes = NULL;
+    int read_count = 0;
+    int read_capacity = 0;
+    int write_count = 0;
+    int write_capacity = 0;
+    int i;
+
+    for (i = 0; i < ctx->instr_count; i++) {
+        const xref_instr *instr = &ctx->instrs[i];
+        const char *kind;
+        const char *scope;
+        const char *routine;
+        if (instr->direct_symbol == NULL || instr->direct_access_kind == 0) {
+            continue;
+        }
+        classify_symbol_name(instr->direct_symbol, &kind, &scope);
+        if (!scope_allowed(scope, ctx->include_locals, ctx->include_anon)) {
+            continue;
+        }
+        routine = find_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg);
+        if (instr->direct_access_kind == 1) {
+            if (!append_xref_data_edge(&reads,
+                                       &read_count,
+                                       &read_capacity,
+                                       instr->direct_symbol,
+                                       instr->cpu_address,
+                                       routine,
+                                       instr->direct_displacement,
+                                       addressing_mode_name(instr->mode))) {
+                goto fail;
+            }
+        } else if (instr->direct_access_kind == 2) {
+            if (!append_xref_data_edge(&writes,
+                                       &write_count,
+                                       &write_capacity,
+                                       instr->direct_symbol,
+                                       instr->cpu_address,
+                                       routine,
+                                       instr->direct_displacement,
+                                       addressing_mode_name(instr->mode))) {
+                goto fail;
+            }
+        }
+    }
+
+    dedupe_xref_data_edges(reads, &read_count);
+    dedupe_xref_data_edges(writes, &write_count);
+
+    *reads_out = reads;
+    *read_count_out = read_count;
+    *writes_out = writes;
+    *write_count_out = write_count;
+    return 1;
+
+fail:
+    for (i = 0; i < read_count; i++) {
+        free_xref_data_edge(&reads[i]);
+    }
+    free(reads);
+    for (i = 0; i < write_count; i++) {
+        free_xref_data_edge(&writes[i]);
+    }
+    free(writes);
+    return 0;
+}
+
+static int build_xref_indirect_flows(const xref_build_context *ctx,
+                                     xref_indirect_flow **flows_out,
+                                     int *flow_count_out)
+{
+    typedef struct tag_xref_pair_state {
+        int last_low_write;
+        int last_high_write;
+        int valid_mask;
+    } xref_pair_state;
+
+    xref_indirect_flow *flows = NULL;
+    int flow_count = 0;
+    int flow_capacity = 0;
+    xref_pair_state pair_states[255];
+    const char *current_routine = NULL;
+    int current_section = -1;
+    int i;
+    int j;
+
+    for (j = 0; j < 255; j++) {
+        pair_states[j].last_low_write = -1;
+        pair_states[j].last_high_write = -1;
+        pair_states[j].valid_mask = 0;
+    }
+
+    for (i = 0; i < ctx->instr_count; i++) {
+        const xref_instr *instr = &ctx->instrs[i];
+        const char *routine = find_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg);
+        if (instr->is_dataseg != current_section || !nullable_string_equal(routine, current_routine)) {
+            for (j = 0; j < 255; j++) {
+                pair_states[j].last_low_write = -1;
+                pair_states[j].last_high_write = -1;
+                pair_states[j].valid_mask = 0;
+            }
+            current_section = instr->is_dataseg;
+            current_routine = routine;
+        }
+
+        if (instr->zp_write_addr_known) {
+            if (instr->zp_write_addr >= 0 && instr->zp_write_addr <= 0xFE) {
+                pair_states[instr->zp_write_addr].last_low_write = instr->cpu_address;
+                if (pair_states[instr->zp_write_addr].valid_mask == 3) {
+                    pair_states[instr->zp_write_addr].valid_mask = 1;
+                } else {
+                    pair_states[instr->zp_write_addr].valid_mask |= 1;
+                }
+            }
+            if (instr->zp_write_addr >= 1 && instr->zp_write_addr <= 0xFF) {
+                pair_states[instr->zp_write_addr - 1].last_high_write = instr->cpu_address;
+                if (pair_states[instr->zp_write_addr - 1].valid_mask == 3) {
+                    pair_states[instr->zp_write_addr - 1].valid_mask = 2;
+                } else {
+                    pair_states[instr->zp_write_addr - 1].valid_mask |= 2;
+                }
+            }
+        }
+
+        if (instr->indirect_ptr_addr_known && instr->indirect_ptr_addr >= 0 && instr->indirect_ptr_addr <= 0xFE) {
+            const xref_pair_state *pair = &pair_states[instr->indirect_ptr_addr];
+            if (pair->valid_mask == 3) {
+                const char *ptr_symbol = resolve_pointer_pair_symbol(ctx, instr->indirect_ptr_addr, instr->is_dataseg);
+                if (ptr_symbol != NULL) {
+                    if (!append_xref_indirect_flow(&flows,
+                                                   &flow_count,
+                                                   &flow_capacity,
+                                                   ptr_symbol,
+                                                   pair->last_low_write > pair->last_high_write
+                                                       ? pair->last_low_write
+                                                       : pair->last_high_write,
+                                                   instr->cpu_address,
+                                                   instr->indirect_access_kind == 1 ? "read" : "write",
+                                                   routine)) {
+                        goto fail;
+                    }
+                }
+            }
+        }
+    }
+
+    dedupe_xref_indirect_flows(flows, &flow_count);
+    *flows_out = flows;
+    *flow_count_out = flow_count;
+    return 1;
+
+fail:
+    for (i = 0; i < flow_count; i++) {
+        free_xref_indirect_flow(&flows[i]);
+    }
+    free(flows);
+    return 0;
 }
 
 static void format_timestamp_utc(char *buf, int buf_size)
@@ -1933,6 +2574,7 @@ static void csv_write_field(FILE *fp, const char *s)
 
 static int emit_xref_json(const char *filename,
                           const xref_build_context *ctx,
+                          int include_data,
                           const char *source_file,
                           const char *output_file,
                           int pure_binary)
@@ -1940,10 +2582,36 @@ static int emit_xref_json(const char *filename,
     FILE *fp;
     int i;
     char ts[64];
+    xref_data_edge *data_reads = NULL;
+    xref_data_edge *data_writes = NULL;
+    xref_indirect_flow *indirect_flows = NULL;
+    int data_read_count = 0;
+    int data_write_count = 0;
+    int indirect_flow_count = 0;
     fp = fopen(filename, "w");
     if (fp == NULL) {
         fprintf(stderr, "error: could not open `%s' for writing\n", filename);
         return 0;
+    }
+    if (include_data) {
+        if (!build_xref_data_edges(ctx, &data_reads, &data_read_count, &data_writes, &data_write_count)
+            || !build_xref_indirect_flows(ctx, &indirect_flows, &indirect_flow_count)) {
+            for (i = 0; i < data_read_count; i++) {
+                free_xref_data_edge(&data_reads[i]);
+            }
+            for (i = 0; i < data_write_count; i++) {
+                free_xref_data_edge(&data_writes[i]);
+            }
+            for (i = 0; i < indirect_flow_count; i++) {
+                free_xref_indirect_flow(&indirect_flows[i]);
+            }
+            fclose(fp);
+            free(data_reads);
+            free(data_writes);
+            free(indirect_flows);
+            fprintf(stderr, "error: could not build xref data records\n");
+            return 0;
+        }
     }
     format_timestamp_utc(ts, sizeof(ts));
     fprintf(fp, "{\n");
@@ -2051,9 +2719,102 @@ static int emit_xref_json(const char *filename,
     if (ctx->ref_count > 0) {
         fprintf(fp, "\n  ");
     }
-    fprintf(fp, "]\n");
+    fprintf(fp, "]");
+    if (include_data) {
+        fprintf(fp, ",\n");
+        fprintf(fp, "  \"data_reads\": [");
+        for (i = 0; i < data_read_count; ++i) {
+            char site_addr[16];
+            const xref_data_edge *edge = &data_reads[i];
+            format_xref_addr(site_addr, sizeof(site_addr), edge->site_addr);
+            fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+            fprintf(fp, "\"symbol\":");
+            print_json_string(fp, edge->symbol);
+            fprintf(fp, ",\"site_addr\":");
+            print_json_string(fp, site_addr);
+            if (edge->routine != NULL) {
+                fprintf(fp, ",\"routine\":");
+                print_json_string(fp, edge->routine);
+            }
+            fprintf(fp, ",\"displacement\":%d", edge->displacement);
+            fprintf(fp, ",\"addressing_mode\":");
+            print_json_string(fp, edge->addressing_mode);
+            fprintf(fp, "}");
+        }
+        if (data_read_count > 0) {
+            fprintf(fp, "\n  ");
+        }
+        fprintf(fp, "],\n");
+
+        fprintf(fp, "  \"data_writes\": [");
+        for (i = 0; i < data_write_count; ++i) {
+            char site_addr[16];
+            const xref_data_edge *edge = &data_writes[i];
+            format_xref_addr(site_addr, sizeof(site_addr), edge->site_addr);
+            fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+            fprintf(fp, "\"symbol\":");
+            print_json_string(fp, edge->symbol);
+            fprintf(fp, ",\"site_addr\":");
+            print_json_string(fp, site_addr);
+            if (edge->routine != NULL) {
+                fprintf(fp, ",\"routine\":");
+                print_json_string(fp, edge->routine);
+            }
+            fprintf(fp, ",\"displacement\":%d", edge->displacement);
+            fprintf(fp, ",\"addressing_mode\":");
+            print_json_string(fp, edge->addressing_mode);
+            fprintf(fp, "}");
+        }
+        if (data_write_count > 0) {
+            fprintf(fp, "\n  ");
+        }
+        fprintf(fp, "],\n");
+
+        fprintf(fp, "  \"indirect_data_flows\": [");
+        for (i = 0; i < indirect_flow_count; ++i) {
+            char producer_site[16];
+            char consumer_site[16];
+            const xref_indirect_flow *flow = &indirect_flows[i];
+            format_xref_addr(producer_site, sizeof(producer_site), flow->producer_site);
+            format_xref_addr(consumer_site, sizeof(consumer_site), flow->consumer_site);
+            fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+            fprintf(fp, "\"ptr_symbol\":");
+            print_json_string(fp, flow->ptr_symbol);
+            fprintf(fp, ",\"producer_site\":");
+            print_json_string(fp, producer_site);
+            fprintf(fp, ",\"consumer_site\":");
+            print_json_string(fp, consumer_site);
+            fprintf(fp, ",\"access_kind\":");
+            print_json_string(fp, flow->access_kind);
+            if (flow->routine != NULL) {
+                fprintf(fp, ",\"routine\":");
+                print_json_string(fp, flow->routine);
+            }
+            fprintf(fp, "}");
+        }
+        if (indirect_flow_count > 0) {
+            fprintf(fp, "\n  ");
+        }
+        fprintf(fp, "]\n");
+    } else {
+        fprintf(fp, "\n");
+    }
     fprintf(fp, "}\n");
     fclose(fp);
+    if (include_data) {
+        for (i = 0; i < data_read_count; i++) {
+            free_xref_data_edge(&data_reads[i]);
+        }
+        free(data_reads);
+        for (i = 0; i < data_write_count; i++) {
+            free_xref_data_edge(&data_writes[i]);
+        }
+        free(data_writes);
+        for (i = 0; i < indirect_flow_count; i++) {
+            free_xref_indirect_flow(&indirect_flows[i]);
+        }
+        free(indirect_flows);
+    }
     return 1;
 }
 
@@ -6078,6 +6839,7 @@ int generate_data_coverage(astnode *root,
 int generate_xref(astnode *root,
                   const char *filename,
                   xref_format format,
+                  int include_data,
                   int include_locals,
                   int include_anon,
                   const char *source_file,
@@ -6120,6 +6882,7 @@ int generate_xref(astnode *root,
     memset(&ctx, 0, sizeof(ctx));
     ctx.include_locals = include_locals;
     ctx.include_anon = include_anon;
+    ctx.include_data = include_data;
     ctx.pure_binary = pure_binary;
     ctx.output_offset = 0;
 
@@ -6128,61 +6891,66 @@ int generate_xref(astnode *root,
     codeseg_pc = 0;
     close_source_cache();
     astproc_walk(root, &ctx, map);
+    if (ctx.failed) {
+        ok = 0;
+    }
 
-    symtab_list_type(CONSTANT_SYMBOL, &constants);
-    for (i = 0; i < constants.size; ++i) {
-        symtab_entry *e = symtab_lookup(constants.idents[i]);
-        int value = 0;
-        if (e == NULL) {
-            continue;
-        }
-        if (!(e->flags & EQU_FLAG) || (e->flags & VOLATILE_FLAG)) {
-            continue;
-        }
-        if (e->def != NULL) {
-            if (eval_expression_int(e->def, (int *)&value, 0)) {
-                if (!add_or_update_xref_symbol(&ctx,
-                                               e->id,
-                                               "equ",
-                                               "global",
-                                               1,
-                                               &e->def->loc,
-                                               0,
-                                               0,
-                                               0,
-                                               0,
-                                               1,
-                                               (long)value)) {
-                    ok = 0;
-                    break;
-                }
-            } else {
-                if (!add_or_update_xref_symbol(&ctx,
-                                               e->id,
-                                               "equ",
-                                               "global",
-                                               1,
-                                               &e->def->loc,
-                                               0,
-                                               0,
-                                               0,
-                                               0,
-                                               0,
-                                               0)) {
-                    ok = 0;
-                    break;
+    if (ok) {
+        symtab_list_type(CONSTANT_SYMBOL, &constants);
+        for (i = 0; i < constants.size; ++i) {
+            symtab_entry *e = symtab_lookup(constants.idents[i]);
+            int value = 0;
+            if (e == NULL) {
+                continue;
+            }
+            if (!(e->flags & EQU_FLAG) || (e->flags & VOLATILE_FLAG)) {
+                continue;
+            }
+            if (e->def != NULL) {
+                if (eval_expression_int(e->def, (int *)&value, 0)) {
+                    if (!add_or_update_xref_symbol(&ctx,
+                                                   e->id,
+                                                   "equ",
+                                                   "global",
+                                                   1,
+                                                   &e->def->loc,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   1,
+                                                   (long)value)) {
+                        ok = 0;
+                        break;
+                    }
+                } else {
+                    if (!add_or_update_xref_symbol(&ctx,
+                                                   e->id,
+                                                   "equ",
+                                                   "global",
+                                                   1,
+                                                   &e->def->loc,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0)) {
+                        ok = 0;
+                        break;
+                    }
                 }
             }
         }
+        symtab_list_finalize(&constants);
     }
-    symtab_list_finalize(&constants);
 
     if (ok) {
         qsort(ctx.symbols, (size_t)ctx.symbol_count, sizeof(xref_symbol), xref_symbol_compare);
         qsort(ctx.refs, (size_t)ctx.ref_count, sizeof(xref_ref), xref_ref_compare);
 
         if (format == XREF_FORMAT_JSON) {
-            ok = emit_xref_json(filename, &ctx, source_file, output_file, pure_binary);
+            ok = emit_xref_json(filename, &ctx, include_data, source_file, output_file, pure_binary);
         } else if (format == XREF_FORMAT_TEXT) {
             ok = emit_xref_text(filename, &ctx);
         } else if (format == XREF_FORMAT_CSV) {

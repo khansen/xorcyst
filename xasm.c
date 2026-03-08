@@ -137,6 +137,7 @@ static struct option long_options[] = {
   { "listing-format", required_argument, 0, 0 },
   { "xref", required_argument, 0, 0 },
   { "xref-format", required_argument, 0, 0 },
+  { "xref-data", required_argument, 0, 0 },
   { "xref-include-locals", required_argument, 0, 0 },
   { "xref-include-anon", required_argument, 0, 0 },
   { "audit-raw-addresses", no_argument, 0, 0 },
@@ -198,6 +199,7 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--case-insensitive] [--listing=FILE]\n\
             [--listing-format=text|json|ndjson]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
+            [--xref-data=true|false]\n\
             [--xref-include-locals=true|false]\n\
             [--xref-include-anon=true|false]\n\
             [--xref-summary] [--xref-summary-output=FILE]\n\
@@ -243,6 +245,7 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
     --listing-format=FMT   Listing format: text|json|ndjson\n\
     --xref=FILE            Generate cross-reference output\n\
     --xref-format=FMT      Xref format: text|csv|json\n\
+    --xref-data=BOOL       Extend JSON xref with data read/write edges\n\
     --xref-include-locals=BOOL\n\
                             Include local labels in xref (default false)\n\
     --xref-include-anon=BOOL\n\
@@ -650,6 +653,7 @@ parse_arguments (int argc, char **argv)
     xasm_args.compare_cpu_base = 0;
     xasm_args.xref_file = NULL;
     xasm_args.xref_format = XREF_FORMAT_JSON;
+    xasm_args.xref_data = 0;
     xasm_args.xref_include_locals = 0;
     xasm_args.xref_include_anon = 0;
     xasm_args.xref_summary = 0;
@@ -807,6 +811,10 @@ parse_arguments (int argc, char **argv)
                     cli_error("invalid value for --xref-format: `%s' (expected text|csv|json)", optarg);
                 }
                 xasm_args.xref_format = fmt;
+            } else if (strcmp(long_options[index].name, "xref-data") == 0) {
+                if (!parse_bool_value(optarg, &xasm_args.xref_data)) {
+                    cli_error("invalid value for --xref-data: `%s' (expected true|false)", optarg);
+                }
             } else if (strcmp(long_options[index].name, "xref-include-locals") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_locals)) {
                     cli_error("invalid value for --xref-include-locals: `%s' (expected true|false)", optarg);
@@ -952,6 +960,15 @@ parse_arguments (int argc, char **argv)
     }
     else {
         xasm_args.input_file = argv[optind];
+    }
+
+    if (xasm_args.xref_data) {
+        if (xasm_args.xref_file == NULL) {
+            cli_error("--xref-data=true requires --xref=FILE");
+        }
+        if (xasm_args.xref_format != XREF_FORMAT_JSON) {
+            cli_error("--xref-data=true requires --xref-format=json in the initial implementation");
+        }
     }
 
     if (xasm_args.listing_file == NULL && xasm_args.listing_format_set) {
@@ -1452,6 +1469,7 @@ int main(int argc, char *argv[]) {
         if (!generate_xref(root_node,
                            xasm_args.xref_file,
                            (xref_format)xasm_args.xref_format,
+                           xasm_args.xref_data,
                            xasm_args.xref_include_locals,
                            xasm_args.xref_include_anon,
                            xasm_args.input_file,

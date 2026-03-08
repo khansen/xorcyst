@@ -21,6 +21,7 @@ int listing_lookup_output_offset(astnode *root, long output_offset, listing_look
 int generate_xref(astnode *root,
                   const char *filename,
                   xref_format format,
+                  int include_data,
                   int include_locals,
                   int include_anon,
                   const char *source_file,
