@@ -40,6 +40,13 @@ int generate_xref_summary(astnode *root,
                           const char *source_file,
                           const char *output_file,
                           int pure_binary);
+int generate_index_patterns(astnode *root,
+                            const char *output_path,
+                            index_patterns_format format,
+                            int include_locals,
+                            int include_anon,
+                            const char *split_pairs,
+                            int pure_binary);
 int run_raw_address_audit(astnode *root,
                           int level_error,
                           int output_json,
