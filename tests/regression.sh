@@ -3513,4 +3513,265 @@ ASM
 
 run_expect_index_patterns
 
+run_expect_data_consumers() {
+    basic_asm="$TMPDIR/data-consumers-basic.asm"
+    basic_bin="$TMPDIR/data-consumers-basic.bin"
+    basic_json="$TMPDIR/data-consumers-basic.json"
+    basic_ndjson="$TMPDIR/data-consumers-basic.ndjson"
+    basic_text="$TMPDIR/data-consumers-basic.txt"
+    log_file="$TMPDIR/data-consumers.log"
+    ownerless_out=""
+    unresolved_out=""
+    overlap_default=""
+    overlap_included=""
+    outside_out=""
+    bank_end_out=""
+
+    cat > "$basic_asm" <<'ASM'
+.org $C000
+CoordTable:
+    .db $10,$20,$30,$40
+ReadCoords:
+    LDX #$00
+    LDA CoordTable,X
+    STA $00
+    LDA CoordTable+1,X
+    STA $01
+    RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --data-consumers \
+        --data-consumers-output "$basic_json" \
+        --data-consumers-format json \
+        "$basic_asm" -o "$basic_bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "data-consumers JSON generation failed"
+    fi
+    if [ ! -s "$basic_json" ]; then
+        fail "data-consumers JSON file not generated"
+    fi
+    if ! grep -q '^\[' "$basic_json"; then
+        fail "data-consumers JSON output should be an array"
+    fi
+    if ! grep -q '"label":"CoordTable"' "$basic_json"; then
+        fail "data-consumers missing CoordTable record"
+    fi
+    if ! grep -q '"declared_start":"0xC000"' "$basic_json"; then
+        fail "data-consumers declared_start mismatch for CoordTable"
+    fi
+    if ! grep -q '"declared_end_exclusive":"0xC004"' "$basic_json"; then
+        fail "data-consumers declared_end_exclusive mismatch for CoordTable"
+    fi
+    if ! grep -q '"declared_size":4' "$basic_json"; then
+        fail "data-consumers declared_size mismatch for CoordTable"
+    fi
+    if ! grep -q '"read_site_count":2' "$basic_json"; then
+        fail "data-consumers read_site_count mismatch for CoordTable"
+    fi
+    if ! grep -q '"write_site_count":0' "$basic_json"; then
+        fail "data-consumers write_site_count mismatch for CoordTable"
+    fi
+    if ! grep -q '"distinct_routine_count":1' "$basic_json"; then
+        fail "data-consumers distinct_routine_count mismatch for CoordTable"
+    fi
+    if ! grep -q '"observed_constant_displacements":\[0,1\]' "$basic_json"; then
+        fail "data-consumers observed displacements mismatch for CoordTable"
+    fi
+    if ! grep -Fq '"covered_ranges":[{"start":"0xC000","end_exclusive":"0xC002"}]' "$basic_json"; then
+        fail "data-consumers covered_ranges mismatch for CoordTable"
+    fi
+    if ! grep -Fq '"uncovered_ranges":[{"start":"0xC002","end_exclusive":"0xC004"}]' "$basic_json"; then
+        fail "data-consumers uncovered_ranges mismatch for CoordTable"
+    fi
+    if ! grep -q '"has_indexed_accesses_without_exact_coverage":false' "$basic_json"; then
+        fail "data-consumers should report exact coverage for immediate-indexed reads"
+    fi
+    if ! grep -Fq '"access_patterns":["base_plus_const","paired_byte_reads"]' "$basic_json"; then
+        fail "data-consumers access_patterns mismatch for CoordTable"
+    fi
+    if ! grep -Fq '"read_sites":[{"routine":"ReadCoords","site_addr":"0xC006","displacement":0,"addressing_mode":"absolute_x"},{"routine":"ReadCoords","site_addr":"0xC00B","displacement":1,"addressing_mode":"absolute_x"}]' "$basic_json"; then
+        fail "data-consumers read_sites mismatch for CoordTable"
+    fi
+
+    if ! "$XASM" --pure-binary --data-consumers \
+        --data-consumers-format ndjson \
+        "$basic_asm" -o "$basic_bin" >"$basic_ndjson" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "data-consumers NDJSON generation failed"
+    fi
+    if ! grep -q '"label":"CoordTable"' "$basic_ndjson"; then
+        fail "data-consumers NDJSON missing CoordTable record"
+    fi
+
+    if ! "$XASM" --pure-binary --data-consumers \
+        --data-consumers-format text \
+        "$basic_asm" -o "$basic_bin" >"$basic_text" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "data-consumers text generation failed"
+    fi
+    if ! grep -q 'CoordTable @ 0xC000 size=4' "$basic_text"; then
+        fail "data-consumers text output missing CoordTable header"
+    fi
+
+    cat > "$TMPDIR/data-consumers-write.asm" <<'ASM'
+.org $C000
+Buffer:
+    .db $00,$00,$00,$00
+WriteBuffer:
+    LDX #$00
+    STA Buffer+2,X
+    RTS
+END
+ASM
+    write_out=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json \
+        "$TMPDIR/data-consumers-write.asm" -o "$TMPDIR/data-consumers-write.bin" 2>/dev/null)
+    if ! printf '%s\n' "$write_out" | grep -q '"read_site_count":0'; then
+        fail "data-consumers write fixture should have no read sites"
+    fi
+    if ! printf '%s\n' "$write_out" | grep -q '"write_site_count":1'; then
+        fail "data-consumers write fixture should report one write site"
+    fi
+    if ! printf '%s\n' "$write_out" | grep -Fq '"write_sites":[{"routine":"WriteBuffer","site_addr":"0xC006","displacement":2,"addressing_mode":"absolute_x"}]'; then
+        fail "data-consumers write fixture should preserve write site details"
+    fi
+
+    cat > "$TMPDIR/data-consumers-segments.asm" <<'ASM'
+.dataseg
+.org $0020
+DataBuf:
+    .db $AA,$BB
+.codeseg
+.org $C000
+Main:
+    LDA DataBuf
+    RTS
+END
+ASM
+    segment_out=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json \
+        "$TMPDIR/data-consumers-segments.asm" -o "$TMPDIR/data-consumers-segments.bin" 2>/dev/null)
+    if ! printf '%s\n' "$segment_out" | grep -q '"label":"DataBuf"'; then
+        fail "data-consumers should include dataseg symbols"
+    fi
+    if ! printf '%s\n' "$segment_out" | grep -q '"declared_start":"0x0020"'; then
+        fail "data-consumers should preserve dataseg start addresses"
+    fi
+    if ! printf '%s\n' "$segment_out" | grep -Fq '"read_sites":[{"routine":"Main","site_addr":"0xC000","displacement":0,"addressing_mode":"absolute"}]'; then
+        fail "data-consumers should connect codeseg reads to dataseg symbols"
+    fi
+
+    cat > "$TMPDIR/data-consumers-overlap.asm" <<'ASM'
+.org $C000
+Primary:
+Alias:
+    .db $11,$22
+UseOverlap:
+    LDA Primary
+    LDA Alias+1
+    RTS
+END
+ASM
+    overlap_default=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json \
+        "$TMPDIR/data-consumers-overlap.asm" -o "$TMPDIR/data-consumers-overlap.bin" 2>/dev/null)
+    overlap_included=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json --include-overlaps=true \
+        "$TMPDIR/data-consumers-overlap.asm" -o "$TMPDIR/data-consumers-overlap.bin" 2>/dev/null)
+    if printf '%s\n' "$overlap_default" | grep -q '"label":"Alias"'; then
+        fail "data-consumers should exclude overlap symbols by default"
+    fi
+    if ! printf '%s\n' "$overlap_included" | grep -q '"label":"Alias"'; then
+        fail "data-consumers --include-overlaps=true did not include overlap symbol"
+    fi
+
+    cat > "$TMPDIR/data-consumers-ownerless.asm" <<'ASM'
+.org $C000
+    LDA Table
+    RTS
+Table:
+    .db $AA
+END
+ASM
+    ownerless_out=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json \
+        "$TMPDIR/data-consumers-ownerless.asm" -o "$TMPDIR/data-consumers-ownerless.bin" 2>/dev/null)
+    if ! printf '%s\n' "$ownerless_out" | grep -q '"distinct_routine_count":0'; then
+        fail "data-consumers ownerless site should not contribute to distinct_routine_count"
+    fi
+    if ! printf '%s\n' "$ownerless_out" | grep -Fq '"read_sites":[{"site_addr":"0xC000","displacement":0,"addressing_mode":"absolute"}]'; then
+        fail "data-consumers ownerless site should omit routine field"
+    fi
+
+    cat > "$TMPDIR/data-consumers-unresolved.asm" <<'ASM'
+.org $C000
+Main:
+    LDA Table,X
+    RTS
+Table:
+    .db $00,$01
+END
+ASM
+    unresolved_out=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json \
+        "$TMPDIR/data-consumers-unresolved.asm" -o "$TMPDIR/data-consumers-unresolved.bin" 2>/dev/null)
+    if ! printf '%s\n' "$unresolved_out" | grep -q '"has_indexed_accesses_without_exact_coverage":true'; then
+        fail "data-consumers unresolved indexed access should set has_indexed_accesses_without_exact_coverage"
+    fi
+    if ! printf '%s\n' "$unresolved_out" | grep -q '"covered_ranges":\[\]'; then
+        fail "data-consumers unresolved indexed access should not contribute exact coverage"
+    fi
+
+    cat > "$TMPDIR/data-consumers-outside.asm" <<'ASM'
+.org $C000
+Table:
+    .db $00,$01
+Main:
+    LDA Table+3
+    RTS
+END
+ASM
+    outside_out=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json \
+        "$TMPDIR/data-consumers-outside.asm" -o "$TMPDIR/data-consumers-outside.bin" 2>/dev/null)
+    if ! printf '%s\n' "$outside_out" | grep -q '"observed_constant_displacements":\[3\]'; then
+        fail "data-consumers should retain constant displacements outside the declared span"
+    fi
+    if ! printf '%s\n' "$outside_out" | grep -q '"covered_ranges":\[\]'; then
+        fail "data-consumers out-of-span displacement should not contribute exact coverage"
+    fi
+    if ! printf '%s\n' "$outside_out" | grep -Fq '"uncovered_ranges":[{"start":"0xC000","end_exclusive":"0xC002"}]'; then
+        fail "data-consumers out-of-span displacement should leave the full span uncovered"
+    fi
+
+    cat > "$TMPDIR/data-consumers-bank-end.asm" <<'ASM'
+.org $FFFC
+TailTable:
+    .db $01,$02,$03,$04
+END
+ASM
+    bank_end_out=$("$XASM" --pure-binary --data-consumers \
+        --data-consumers-format json \
+        "$TMPDIR/data-consumers-bank-end.asm" -o "$TMPDIR/data-consumers-bank-end.bin" 2>/dev/null)
+    if ! printf '%s\n' "$bank_end_out" | grep -Fq '"declared_end_exclusive":"0x10000"'; then
+        fail "data-consumers should preserve a non-wrapping end-exclusive address at bank end"
+    fi
+    if ! printf '%s\n' "$bank_end_out" | grep -Fq '"uncovered_ranges":[{"start":"0xFFFC","end_exclusive":"0x10000"}]'; then
+        fail "data-consumers bank-end spans should preserve a non-wrapping uncovered range end"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --data-consumers \
+        --data-consumers-format badformat \
+        "$basic_asm" -o "$basic_bin" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        fail "data-consumers invalid format should exit 2 (got $rc)"
+    fi
+}
+
+run_expect_data_consumers
+
 echo "All regression tests passed"

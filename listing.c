@@ -3302,10 +3302,14 @@ typedef struct tag_index_instr {
     int event_index;
     index_access_kind access_kind;
     int supported_access;
+    int has_symbol_access;
+    int is_indexed_access;
     char index_register;
     char *base_symbol;
     char *base_scope;
     int displacement;
+    int immediate_value_known;
+    int immediate_value;
     int segment_id;
     char *branch_target_symbol;
 } index_instr;
@@ -3314,6 +3318,17 @@ typedef struct tag_index_event {
     int kind;
     int index;
 } index_event;
+
+typedef struct tag_index_segment {
+    int is_dataseg;
+    int end_exclusive;
+} index_segment;
+
+typedef struct tag_index_data_range {
+    int start;
+    int end_exclusive;
+    int segment_id;
+} index_data_range;
 
 typedef struct tag_index_analysis_context {
     index_label *labels;
@@ -3326,8 +3341,13 @@ typedef struct tag_index_analysis_context {
     int event_count;
     int event_capacity;
     int failed;
+    index_segment *segments;
+    int segment_count;
+    int segment_capacity;
     int current_segment_id;
-    int next_segment_id;
+    index_data_range *data_ranges;
+    int data_range_count;
+    int data_range_capacity;
 } index_analysis_context;
 
 typedef struct tag_index_suffix_pair {
@@ -3405,6 +3425,78 @@ static int ensure_index_event_capacity(index_analysis_context *ctx)
     return 1;
 }
 
+static int ensure_index_segment_capacity(index_analysis_context *ctx)
+{
+    index_segment *tmp;
+    int new_capacity;
+    if (ctx->segment_count < ctx->segment_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->segment_capacity == 0) ? 8 : (ctx->segment_capacity * 2);
+    tmp = (index_segment *)realloc(ctx->segments, (size_t)new_capacity * sizeof(index_segment));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->segments = tmp;
+    ctx->segment_capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_index_data_range_capacity(index_analysis_context *ctx)
+{
+    index_data_range *tmp;
+    int new_capacity;
+    if (ctx->data_range_count < ctx->data_range_capacity) {
+        return 1;
+    }
+    new_capacity = (ctx->data_range_capacity == 0) ? 16 : (ctx->data_range_capacity * 2);
+    tmp = (index_data_range *)realloc(ctx->data_ranges, (size_t)new_capacity * sizeof(index_data_range));
+    if (tmp == NULL) {
+        return 0;
+    }
+    ctx->data_ranges = tmp;
+    ctx->data_range_capacity = new_capacity;
+    return 1;
+}
+
+static int start_index_segment(index_analysis_context *ctx)
+{
+    if (!ensure_index_segment_capacity(ctx)) {
+        return 0;
+    }
+    ctx->current_segment_id = ctx->segment_count;
+    ctx->segments[ctx->segment_count].is_dataseg = in_dataseg;
+    ctx->segments[ctx->segment_count].end_exclusive = get_current_pc();
+    ctx->segment_count++;
+    return 1;
+}
+
+static void update_index_segment_end(index_analysis_context *ctx, int end_exclusive)
+{
+    if (ctx->current_segment_id < 0 || ctx->current_segment_id >= ctx->segment_count) {
+        return;
+    }
+    if (end_exclusive > ctx->segments[ctx->current_segment_id].end_exclusive) {
+        ctx->segments[ctx->current_segment_id].end_exclusive = end_exclusive;
+    }
+}
+
+static int record_index_data_range(index_analysis_context *ctx, int start, int end_exclusive)
+{
+    if (end_exclusive <= start) {
+        return 1;
+    }
+    if (!ensure_index_data_range_capacity(ctx)) {
+        return 0;
+    }
+    ctx->data_ranges[ctx->data_range_count].start = start;
+    ctx->data_ranges[ctx->data_range_count].end_exclusive = end_exclusive;
+    ctx->data_ranges[ctx->data_range_count].segment_id = ctx->current_segment_id;
+    ctx->data_range_count++;
+    update_index_segment_end(ctx, end_exclusive);
+    return 1;
+}
+
 static int add_index_event(index_analysis_context *ctx, int kind, int index)
 {
     if (!ensure_index_event_capacity(ctx)) {
@@ -3415,11 +3507,6 @@ static int add_index_event(index_analysis_context *ctx, int kind, int index)
     ctx->events[ctx->event_count].index = index;
     ctx->event_count++;
     return 1;
-}
-
-static void start_index_segment(index_analysis_context *ctx)
-{
-    ctx->current_segment_id = ctx->next_segment_id++;
 }
 
 static int find_index_label_by_name(const index_analysis_context *ctx, const char *name)
@@ -3458,6 +3545,16 @@ static int is_unconditional_transfer_mnemonic(int mnemonic)
 static int is_supported_index_addressing_mode(addressing_mode mode)
 {
     return (mode == ABSOLUTE_X_MODE
+         || mode == ABSOLUTE_Y_MODE
+         || mode == ZEROPAGE_X_MODE
+         || mode == ZEROPAGE_Y_MODE);
+}
+
+static int is_supported_direct_data_addressing_mode(addressing_mode mode)
+{
+    return (mode == ABSOLUTE_MODE
+         || mode == ZEROPAGE_MODE
+         || mode == ABSOLUTE_X_MODE
          || mode == ABSOLUTE_Y_MODE
          || mode == ZEROPAGE_X_MODE
          || mode == ZEROPAGE_Y_MODE);
@@ -3597,7 +3694,10 @@ static int index_visit_dataseg(astnode *n, void *arg, astnode **next)
     (void)n;
     (void)next;
     in_dataseg = 1;
-    start_index_segment(ctx);
+    if (!start_index_segment(ctx)) {
+        ctx->failed = 1;
+        return 0;
+    }
     if (!add_index_event(ctx, INDEX_EVENT_BARRIER, 0)) {
         return 0;
     }
@@ -3610,7 +3710,10 @@ static int index_visit_codeseg(astnode *n, void *arg, astnode **next)
     (void)n;
     (void)next;
     in_dataseg = 0;
-    start_index_segment(ctx);
+    if (!start_index_segment(ctx)) {
+        ctx->failed = 1;
+        return 0;
+    }
     if (!add_index_event(ctx, INDEX_EVENT_BARRIER, 0)) {
         return 0;
     }
@@ -3625,7 +3728,10 @@ static int index_visit_org(astnode *org, void *arg, astnode **next)
     if (eval_expression_int(LHS(org), &addr, 0)) {
         set_current_pc(addr);
     }
-    start_index_segment(ctx);
+    if (!start_index_segment(ctx)) {
+        ctx->failed = 1;
+        return 0;
+    }
     if (!add_index_event(ctx, INDEX_EVENT_BARRIER, 0)) {
         return 0;
     }
@@ -3712,22 +3818,33 @@ static int index_visit_instruction(astnode *instr, void *arg, astnode **next)
         out->access_kind = INDEX_ACCESS_NONE;
     }
 
-    if (is_supported_index_addressing_mode(instr->instr.mode) && out->access_kind != INDEX_ACCESS_NONE) {
+    if (out->access_kind != INDEX_ACCESS_NONE
+        && is_supported_direct_data_addressing_mode(instr->instr.mode)
+        && LHS(instr) != NULL
+        && extract_symbol_and_displacement(LHS(instr), &symbol, &displacement)) {
+        classify_symbol_name(symbol, &kind, &scope);
+        out->has_symbol_access = 1;
+        out->is_indexed_access = is_supported_index_addressing_mode(instr->instr.mode);
         out->index_register = index_register_for_mode(instr->instr.mode);
-        if (LHS(instr) != NULL && extract_symbol_and_displacement(LHS(instr), &symbol, &displacement)) {
-            classify_symbol_name(symbol, &kind, &scope);
-            out->supported_access = 1;
-            out->base_symbol = xstrdup(symbol);
-            out->base_scope = xstrdup(scope);
-            out->displacement = displacement;
-            if (out->base_symbol == NULL || out->base_scope == NULL) {
-                free(out->base_symbol);
-                free(out->base_scope);
-                out->base_symbol = NULL;
-                out->base_scope = NULL;
-                ctx->failed = 1;
-                return 0;
-            }
+        out->base_symbol = xstrdup(symbol);
+        out->base_scope = xstrdup(scope);
+        out->displacement = displacement;
+        out->supported_access = out->is_indexed_access;
+        if (out->base_symbol == NULL || out->base_scope == NULL) {
+            free(out->base_symbol);
+            free(out->base_scope);
+            out->base_symbol = NULL;
+            out->base_scope = NULL;
+            ctx->failed = 1;
+            return 0;
+        }
+    }
+
+    if (instr->instr.mode == IMMEDIATE_MODE && LHS(instr) != NULL) {
+        int immediate_value;
+        if (eval_expression_int(LHS(instr), &immediate_value, 0)) {
+            out->immediate_value_known = 1;
+            out->immediate_value = immediate_value;
         }
     }
 
@@ -3746,15 +3863,16 @@ static int index_visit_instruction(astnode *instr, void *arg, astnode **next)
     }
     ctx->instr_count++;
     add_current_pc(len);
+    update_index_segment_end(ctx, get_current_pc());
     return 0;
 }
 
 static int index_visit_data(astnode *data, void *arg, astnode **next)
 {
+    index_analysis_context *ctx = (index_analysis_context *)arg;
     astnode *expr;
     int bytes_per_item;
     int count = 0;
-    (void)arg;
     (void)next;
     switch (LHS(data)->datatype) {
         case BYTE_DATATYPE:
@@ -3774,16 +3892,22 @@ static int index_visit_data(astnode *data, void *arg, astnode **next)
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
         count++;
     }
+    if (!record_index_data_range(ctx, get_current_pc(), get_current_pc() + (count * bytes_per_item))) {
+        return 0;
+    }
     add_current_pc(count * bytes_per_item);
     return 0;
 }
 
 static int index_visit_storage(astnode *storage, void *arg, astnode **next)
 {
+    index_analysis_context *ctx = (index_analysis_context *)arg;
     int count = 0;
-    (void)arg;
     (void)next;
     if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
+        if (!record_index_data_range(ctx, get_current_pc(), get_current_pc() + count)) {
+            return 0;
+        }
         add_current_pc(count);
     }
     return 0;
@@ -3791,8 +3915,11 @@ static int index_visit_storage(astnode *storage, void *arg, astnode **next)
 
 static int index_visit_binary(astnode *node, void *arg, astnode **next)
 {
-    (void)arg;
+    index_analysis_context *ctx = (index_analysis_context *)arg;
     (void)next;
+    if (!record_index_data_range(ctx, get_current_pc(), get_current_pc() + node->binary.size)) {
+        return 0;
+    }
     add_current_pc(node->binary.size);
     return 0;
 }
@@ -4160,6 +4287,166 @@ static int parse_index_suffix_pairs(const char *value,
     return 1;
 }
 
+static int resolve_exact_indexed_offset(const index_analysis_context *ctx,
+                                        const index_instr *instr,
+                                        int *resolved_displacement_out)
+{
+    int prev_indexes[3];
+    int prev_count;
+    int i;
+    char active_reg = instr->index_register;
+
+    if (!instr->is_indexed_access || active_reg == '\0') {
+        return 0;
+    }
+
+    prev_count = collect_window_instruction_indexes(ctx, instr->event_index, -1, prev_indexes, 3);
+    for (i = 0; i < prev_count; i++) {
+        const index_instr *prev = &ctx->instrs[prev_indexes[i]];
+        if (!writes_register(prev, active_reg)) {
+            continue;
+        }
+        if (((active_reg == 'X' && prev->mnemonic == LDX_MNEMONIC)
+             || (active_reg == 'Y' && prev->mnemonic == LDY_MNEMONIC))
+            && prev->mode == IMMEDIATE_MODE
+            && prev->immediate_value_known) {
+            *resolved_displacement_out = instr->displacement + prev->immediate_value;
+            return 1;
+        }
+        return 0;
+    }
+    return 0;
+}
+
+static int analyze_index_site_pattern(const index_analysis_context *ctx,
+                                      const index_instr *instr,
+                                      const index_suffix_pair *pairs,
+                                      int pair_count,
+                                      int *source_kind_out,
+                                      int *access_pattern_out,
+                                      int *estimated_width_out,
+                                      char **split_stem_out,
+                                      const char **split_lo_out,
+                                      const char **split_hi_out)
+{
+    int source_kind;
+    int shift_count;
+    int pair_candidate;
+    int split_candidate;
+
+    *split_stem_out = NULL;
+    *split_lo_out = NULL;
+    *split_hi_out = NULL;
+    *estimated_width_out = 0;
+
+    source_kind = determine_index_source_kind(ctx, instr, &shift_count);
+    pair_candidate = -1;
+    split_candidate = -1;
+
+    if (instr->access_kind == INDEX_ACCESS_READ && instr->is_indexed_access) {
+        split_candidate = find_forward_split_candidate(ctx,
+                                                       instr,
+                                                       source_kind,
+                                                       pairs,
+                                                       pair_count,
+                                                       split_stem_out,
+                                                       split_lo_out,
+                                                       split_hi_out);
+        if (split_candidate == -2) {
+            return 0;
+        }
+        pair_candidate = find_forward_pair_candidate(ctx, instr, source_kind);
+    }
+
+    if (split_candidate >= 0) {
+        *access_pattern_out = INDEX_PATTERN_SPLIT_LO_HI_TABLES;
+    } else if (pair_candidate >= 0) {
+        *access_pattern_out = INDEX_PATTERN_PAIRED_BYTE_READS;
+        *estimated_width_out = 2;
+    } else if ((source_kind == INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR
+                || source_kind == INDEX_VALUE_SOURCE_SCALED_REGISTER)
+               && shift_count >= 2) {
+        *access_pattern_out = INDEX_PATTERN_SCALED_INDEX_STRIDE_4;
+        *estimated_width_out = 4;
+    } else if ((source_kind == INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR
+                || source_kind == INDEX_VALUE_SOURCE_SCALED_REGISTER)
+               && shift_count >= 1) {
+        *access_pattern_out = INDEX_PATTERN_SCALED_INDEX_STRIDE_2;
+        *estimated_width_out = 2;
+    } else if (instr->displacement < 0) {
+        *access_pattern_out = INDEX_PATTERN_BASE_MINUS_CONST;
+    } else if (instr->displacement > 0) {
+        *access_pattern_out = INDEX_PATTERN_BASE_PLUS_CONST;
+    } else {
+        *access_pattern_out = INDEX_PATTERN_BASE;
+    }
+
+    *source_kind_out = source_kind;
+    return 1;
+}
+
+static int build_index_analysis_context(astnode *root, index_analysis_context *ctx)
+{
+    static astnodeprocmap map[] = {
+        { DATASEG_NODE, index_visit_dataseg },
+        { CODESEG_NODE, index_visit_codeseg },
+        { ORG_NODE, index_visit_org },
+        { LABEL_NODE, index_visit_label },
+        { INSTRUCTION_NODE, index_visit_instruction },
+        { DATA_NODE, index_visit_data },
+        { STORAGE_NODE, index_visit_storage },
+        { BINARY_NODE, index_visit_binary },
+        { STRUC_DECL_NODE, list_noop },
+        { UNION_DECL_NODE, list_noop },
+        { ENUM_DECL_NODE, list_noop },
+        { RECORD_DECL_NODE, list_noop },
+        { MACRO_NODE, list_noop },
+        { MACRO_DECL_NODE, list_noop },
+        { PROC_NODE, list_noop },
+        { REPT_NODE, list_noop },
+        { WHILE_NODE, list_noop },
+        { DO_NODE, list_noop },
+        { EXITM_NODE, list_noop },
+        { PUSH_MACRO_BODY_NODE, list_noop },
+        { POP_MACRO_BODY_NODE, list_noop },
+        { PUSH_BRANCH_SCOPE_NODE, list_noop },
+        { POP_BRANCH_SCOPE_NODE, list_noop },
+        { UNDEF_NODE, list_noop },
+        { TOMBSTONE_NODE, list_noop },
+        { 0, NULL }
+    };
+    int i;
+
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->current_segment_id = -1;
+
+    in_dataseg = 0;
+    dataseg_pc = 0;
+    codeseg_pc = 0;
+    if (!start_index_segment(ctx)) {
+        return 0;
+    }
+    astproc_walk(root, ctx, map);
+    if (ctx->failed) {
+        return 0;
+    }
+
+    for (i = 0; i < ctx->instr_count; i++) {
+        if (ctx->instrs[i].branch_target_symbol != NULL) {
+            int idx = find_index_label_by_name(ctx, ctx->instrs[i].branch_target_symbol);
+            if (idx >= 0) {
+                ctx->labels[idx].is_branch_target = 1;
+            }
+        }
+    }
+    for (i = 0; i < ctx->label_count; i++) {
+        ctx->labels[i].is_code = has_instruction_at_address(ctx,
+                                                            ctx->labels[i].cpu_address,
+                                                            ctx->labels[i].segment_id);
+    }
+    return 1;
+}
+
 static int index_pattern_record_compare(const void *a, const void *b)
 {
     const index_pattern_record *lhs = (const index_pattern_record *)a;
@@ -4203,6 +4490,8 @@ static void free_index_analysis_context(index_analysis_context *ctx)
     }
     free(ctx->instrs);
     free(ctx->events);
+    free(ctx->segments);
+    free(ctx->data_ranges);
 }
 
 static void free_index_pattern_record(index_pattern_record *record)
@@ -4358,34 +4647,6 @@ int generate_index_patterns(astnode *root,
                             const char *split_pairs,
                             int pure_binary)
 {
-    static astnodeprocmap map[] = {
-        { DATASEG_NODE, index_visit_dataseg },
-        { CODESEG_NODE, index_visit_codeseg },
-        { ORG_NODE, index_visit_org },
-        { LABEL_NODE, index_visit_label },
-        { INSTRUCTION_NODE, index_visit_instruction },
-        { DATA_NODE, index_visit_data },
-        { STORAGE_NODE, index_visit_storage },
-        { BINARY_NODE, index_visit_binary },
-        { STRUC_DECL_NODE, list_noop },
-        { UNION_DECL_NODE, list_noop },
-        { ENUM_DECL_NODE, list_noop },
-        { RECORD_DECL_NODE, list_noop },
-        { MACRO_NODE, list_noop },
-        { MACRO_DECL_NODE, list_noop },
-        { PROC_NODE, list_noop },
-        { REPT_NODE, list_noop },
-        { WHILE_NODE, list_noop },
-        { DO_NODE, list_noop },
-        { EXITM_NODE, list_noop },
-        { PUSH_MACRO_BODY_NODE, list_noop },
-        { POP_MACRO_BODY_NODE, list_noop },
-        { PUSH_BRANCH_SCOPE_NODE, list_noop },
-        { POP_BRANCH_SCOPE_NODE, list_noop },
-        { UNDEF_NODE, list_noop },
-        { TOMBSTONE_NODE, list_noop },
-        { 0, NULL }
-    };
     index_analysis_context ctx;
     index_suffix_pair *pairs = NULL;
     index_pattern_record *records = NULL;
@@ -4398,8 +4659,6 @@ int generate_index_patterns(astnode *root,
     int pair_count = 0;
     (void)pure_binary;
 
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.current_segment_id = -1;
     parse_result = parse_index_suffix_pairs(split_pairs, &pairs, &pair_count);
     if (parse_result == -1) {
         fprintf(stderr, "error: invalid value for --index-patterns-split-pairs\n");
@@ -4409,29 +4668,15 @@ int generate_index_patterns(astnode *root,
         return 0;
     }
 
-    in_dataseg = 0;
-    dataseg_pc = 0;
-    codeseg_pc = 0;
-    start_index_segment(&ctx);
-    astproc_walk(root, &ctx, map);
-    if (ctx.failed) {
-        ok = 0;
-    }
-
-    if (ok) {
-        for (i = 0; i < ctx.instr_count; i++) {
-            if (ctx.instrs[i].branch_target_symbol != NULL) {
-                int idx = find_index_label_by_name(&ctx, ctx.instrs[i].branch_target_symbol);
-                if (idx >= 0) {
-                    ctx.labels[idx].is_branch_target = 1;
-                }
+    if (!build_index_analysis_context(root, &ctx)) {
+        if (pairs != NULL) {
+            for (i = 0; i < pair_count; i++) {
+                free(pairs[i].lo);
+                free(pairs[i].hi);
             }
+            free(pairs);
         }
-        for (i = 0; i < ctx.label_count; i++) {
-            ctx.labels[i].is_code = has_instruction_at_address(&ctx,
-                                                               ctx.labels[i].cpu_address,
-                                                               ctx.labels[i].segment_id);
-        }
+        return 0;
     }
 
     for (i = 0; ok && i < ctx.instr_count; i++) {
@@ -4440,9 +4685,6 @@ int generate_index_patterns(astnode *root,
         index_pattern_record *record;
         const char *routine_name;
         int source_kind;
-        int shift_count;
-        int pair_candidate;
-        int split_candidate;
         int access_pattern;
         int estimated_width;
         char *split_stem = NULL;
@@ -4463,49 +4705,18 @@ int generate_index_patterns(astnode *root,
             continue;
         }
 
-        source_kind = determine_index_source_kind(&ctx, instr, &shift_count);
-        pair_candidate = -1;
-        split_candidate = -1;
-        access_pattern = INDEX_PATTERN_BASE;
-        estimated_width = 0;
-
-        if (instr->access_kind == INDEX_ACCESS_READ) {
-            split_candidate = find_forward_split_candidate(&ctx,
-                                                           instr,
-                                                           source_kind,
-                                                           pairs,
-                                                           pair_count,
-                                                           &split_stem,
-                                                           &split_lo,
-                                                           &split_hi);
-            if (split_candidate == -2) {
-                ok = 0;
-                break;
-            }
-            pair_candidate = find_forward_pair_candidate(&ctx, instr, source_kind);
-        }
-
-        if (split_candidate >= 0) {
-            access_pattern = INDEX_PATTERN_SPLIT_LO_HI_TABLES;
-        } else if (pair_candidate >= 0) {
-            access_pattern = INDEX_PATTERN_PAIRED_BYTE_READS;
-            estimated_width = 2;
-        } else if ((source_kind == INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR
-                    || source_kind == INDEX_VALUE_SOURCE_SCALED_REGISTER)
-                   && shift_count >= 2) {
-            access_pattern = INDEX_PATTERN_SCALED_INDEX_STRIDE_4;
-            estimated_width = 4;
-        } else if ((source_kind == INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR
-                    || source_kind == INDEX_VALUE_SOURCE_SCALED_REGISTER)
-                   && shift_count >= 1) {
-            access_pattern = INDEX_PATTERN_SCALED_INDEX_STRIDE_2;
-            estimated_width = 2;
-        } else if (instr->displacement < 0) {
-            access_pattern = INDEX_PATTERN_BASE_MINUS_CONST;
-        } else if (instr->displacement > 0) {
-            access_pattern = INDEX_PATTERN_BASE_PLUS_CONST;
-        } else {
-            access_pattern = INDEX_PATTERN_BASE;
+        if (!analyze_index_site_pattern(&ctx,
+                                        instr,
+                                        pairs,
+                                        pair_count,
+                                        &source_kind,
+                                        &access_pattern,
+                                        &estimated_width,
+                                        &split_stem,
+                                        &split_lo,
+                                        &split_hi)) {
+            ok = 0;
+            break;
         }
 
         if (record_count >= record_capacity) {
@@ -4620,6 +4831,1023 @@ int generate_index_patterns(astnode *root,
     }
     free(records);
     free_index_analysis_context(&ctx);
+    return ok;
+}
+
+typedef struct tag_data_consumer_span {
+    char *label;
+    int start;
+    int end_exclusive;
+    int segment_id;
+    int label_index;
+} data_consumer_span;
+
+typedef struct tag_data_consumer_site {
+    char *routine;
+    int site_addr;
+    int displacement;
+    char *addressing_mode;
+} data_consumer_site;
+
+typedef struct tag_data_consumer_range {
+    int start;
+    int end_exclusive;
+} data_consumer_range;
+
+typedef struct tag_data_consumer_record {
+    char *label;
+    int declared_start;
+    int declared_end_exclusive;
+    int declared_size;
+    data_consumer_site *read_sites;
+    int read_site_count;
+    int read_site_capacity;
+    data_consumer_site *write_sites;
+    int write_site_count;
+    int write_site_capacity;
+    int *observed_constant_displacements;
+    int observed_count;
+    int observed_capacity;
+    data_consumer_range *covered_ranges;
+    int covered_count;
+    int covered_capacity;
+    int has_indexed_accesses_without_exact_coverage;
+    unsigned char access_pattern_seen[INDEX_PATTERN_SPLIT_LO_HI_TABLES + 1];
+} data_consumer_record;
+
+static int data_consumer_span_compare(const void *a, const void *b)
+{
+    const data_consumer_span *lhs = (const data_consumer_span *)a;
+    const data_consumer_span *rhs = (const data_consumer_span *)b;
+    if (lhs->start != rhs->start) {
+        return lhs->start - rhs->start;
+    }
+    return lhs->label_index - rhs->label_index;
+}
+
+static int data_consumer_site_compare(const void *a, const void *b)
+{
+    const data_consumer_site *lhs = (const data_consumer_site *)a;
+    const data_consumer_site *rhs = (const data_consumer_site *)b;
+    int cmp;
+    if (lhs->site_addr != rhs->site_addr) {
+        return lhs->site_addr - rhs->site_addr;
+    }
+    if (lhs->routine == NULL && rhs->routine != NULL) {
+        return -1;
+    }
+    if (lhs->routine != NULL && rhs->routine == NULL) {
+        return 1;
+    }
+    if (lhs->routine != NULL && rhs->routine != NULL) {
+        cmp = strcmp(lhs->routine, rhs->routine);
+        if (cmp != 0) {
+            return cmp;
+        }
+    }
+    if (lhs->displacement != rhs->displacement) {
+        return lhs->displacement - rhs->displacement;
+    }
+    return strcmp(lhs->addressing_mode, rhs->addressing_mode);
+}
+
+static int data_consumer_range_compare(const void *a, const void *b)
+{
+    const data_consumer_range *lhs = (const data_consumer_range *)a;
+    const data_consumer_range *rhs = (const data_consumer_range *)b;
+    if (lhs->start != rhs->start) {
+        return lhs->start - rhs->start;
+    }
+    return lhs->end_exclusive - rhs->end_exclusive;
+}
+
+static int int_compare(const void *a, const void *b)
+{
+    const int *lhs = (const int *)a;
+    const int *rhs = (const int *)b;
+    return *lhs - *rhs;
+}
+
+static void format_data_consumer_addr(char *buf, int buf_size, int addr)
+{
+    if (buf_size <= 0) {
+        return;
+    }
+    if (addr >= 0 && addr <= 0xFFFF) {
+        snprintf(buf, (size_t)buf_size, "0x%04X", addr & 0xFFFF);
+    } else {
+        snprintf(buf, (size_t)buf_size, "0x%X", addr);
+    }
+}
+
+static int label_has_data_address(const index_analysis_context *ctx, const index_label *label)
+{
+    int i;
+    for (i = 0; i < ctx->data_range_count; i++) {
+        if (ctx->data_ranges[i].segment_id != label->segment_id) {
+            continue;
+        }
+        if (label->cpu_address >= ctx->data_ranges[i].start
+            && label->cpu_address < ctx->data_ranges[i].end_exclusive) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int find_next_non_local_symbol_addr(const index_analysis_context *ctx, const index_label *label)
+{
+    int i;
+    int best = -1;
+    for (i = 0; i < ctx->label_count; i++) {
+        const index_label *cand = &ctx->labels[i];
+        if (strcmp(cand->scope, "global") != 0) {
+            continue;
+        }
+        if (cand->segment_id != label->segment_id) {
+            continue;
+        }
+        if (cand->cpu_address <= label->cpu_address) {
+            continue;
+        }
+        if (best < 0 || cand->cpu_address < best) {
+            best = cand->cpu_address;
+        }
+    }
+    if (best >= 0) {
+        return best;
+    }
+    if (label->segment_id >= 0 && label->segment_id < ctx->segment_count) {
+        return ctx->segments[label->segment_id].end_exclusive;
+    }
+    return label->cpu_address;
+}
+
+static int build_data_consumer_spans(const index_analysis_context *ctx,
+                                     int include_overlaps,
+                                     data_consumer_span **spans_out,
+                                     int *count_out)
+{
+    data_consumer_span *spans;
+    int count;
+    int capacity;
+    int i;
+
+    spans = NULL;
+    count = 0;
+    capacity = 0;
+    for (i = 0; i < ctx->label_count; i++) {
+        const index_label *label;
+        int is_first_at_address;
+        int j;
+        int include_label;
+        int end_exclusive;
+        data_consumer_span *tmp;
+
+        label = &ctx->labels[i];
+        if (strcmp(label->scope, "global") != 0) {
+            continue;
+        }
+        if (label->is_code) {
+            continue;
+        }
+        if (!label_has_data_address(ctx, label)) {
+            continue;
+        }
+
+        is_first_at_address = 1;
+        for (j = 0; j < i; j++) {
+            if (strcmp(ctx->labels[j].scope, "global") != 0) {
+                continue;
+            }
+            if (ctx->labels[j].segment_id != label->segment_id) {
+                continue;
+            }
+            if (ctx->labels[j].cpu_address == label->cpu_address) {
+                is_first_at_address = 0;
+                break;
+            }
+        }
+        include_label = is_first_at_address || include_overlaps;
+        if (!include_label) {
+            continue;
+        }
+
+        end_exclusive = find_next_non_local_symbol_addr(ctx, label);
+        if (count >= capacity) {
+            int new_capacity = (capacity == 0) ? 16 : (capacity * 2);
+            tmp = (data_consumer_span *)realloc(spans, (size_t)new_capacity * sizeof(data_consumer_span));
+            if (tmp == NULL) {
+                int k;
+                for (k = 0; k < count; k++) {
+                    free(spans[k].label);
+                }
+                free(spans);
+                return 0;
+            }
+            spans = tmp;
+            capacity = new_capacity;
+        }
+        spans[count].label = xstrdup(label->name);
+        spans[count].start = label->cpu_address;
+        spans[count].end_exclusive = end_exclusive;
+        spans[count].segment_id = label->segment_id;
+        spans[count].label_index = i;
+        if (spans[count].label == NULL) {
+            int k;
+            for (k = 0; k < count; k++) {
+                free(spans[k].label);
+            }
+            free(spans);
+            return 0;
+        }
+        count++;
+    }
+
+    if (count > 1) {
+        qsort(spans, (size_t)count, sizeof(data_consumer_span), data_consumer_span_compare);
+    }
+
+    *spans_out = spans;
+    *count_out = count;
+    return 1;
+}
+
+static int find_data_consumer_span_by_label(const data_consumer_span *spans,
+                                            int span_count,
+                                            const char *label)
+{
+    int i;
+    for (i = 0; i < span_count; i++) {
+        if (strcmp(spans[i].label, label) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int find_data_consumer_span_for_addr(const data_consumer_span *spans,
+                                            int span_count,
+                                            int segment_id,
+                                            int addr)
+{
+    int i;
+    int best = -1;
+    for (i = 0; i < span_count; i++) {
+        if (spans[i].segment_id != segment_id) {
+            continue;
+        }
+        if (spans[i].start > addr || addr >= spans[i].end_exclusive) {
+            continue;
+        }
+        if (best < 0 || spans[i].start >= spans[best].start) {
+            best = i;
+        }
+    }
+    return best;
+}
+
+static int ensure_data_consumer_site_capacity(data_consumer_record *record, int is_write)
+{
+    data_consumer_site **sites;
+    int *count;
+    int *capacity;
+    data_consumer_site *tmp;
+    int new_capacity;
+
+    if (is_write) {
+        sites = &record->write_sites;
+        count = &record->write_site_count;
+        capacity = &record->write_site_capacity;
+    } else {
+        sites = &record->read_sites;
+        count = &record->read_site_count;
+        capacity = &record->read_site_capacity;
+    }
+    if (*count < *capacity) {
+        return 1;
+    }
+    new_capacity = (*capacity == 0) ? 8 : (*capacity * 2);
+    tmp = (data_consumer_site *)realloc(*sites, (size_t)new_capacity * sizeof(data_consumer_site));
+    if (tmp == NULL) {
+        return 0;
+    }
+    *sites = tmp;
+    *capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_data_consumer_int_capacity(int **values, int *count, int *capacity)
+{
+    int *tmp;
+    int new_capacity;
+    if (*count < *capacity) {
+        return 1;
+    }
+    new_capacity = (*capacity == 0) ? 8 : (*capacity * 2);
+    tmp = (int *)realloc(*values, (size_t)new_capacity * sizeof(int));
+    if (tmp == NULL) {
+        return 0;
+    }
+    *values = tmp;
+    *capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_data_consumer_range_capacity(data_consumer_record *record)
+{
+    data_consumer_range *tmp;
+    int new_capacity;
+    if (record->covered_count < record->covered_capacity) {
+        return 1;
+    }
+    new_capacity = (record->covered_capacity == 0) ? 8 : (record->covered_capacity * 2);
+    tmp = (data_consumer_range *)realloc(record->covered_ranges,
+                                         (size_t)new_capacity * sizeof(data_consumer_range));
+    if (tmp == NULL) {
+        return 0;
+    }
+    record->covered_ranges = tmp;
+    record->covered_capacity = new_capacity;
+    return 1;
+}
+
+static int add_data_consumer_site(data_consumer_record *record,
+                                  int is_write,
+                                  const char *routine,
+                                  int site_addr,
+                                  int displacement,
+                                  const char *addressing_mode)
+{
+    data_consumer_site *site;
+    if (!ensure_data_consumer_site_capacity(record, is_write)) {
+        return 0;
+    }
+    if (is_write) {
+        site = &record->write_sites[record->write_site_count++];
+    } else {
+        site = &record->read_sites[record->read_site_count++];
+    }
+    memset(site, 0, sizeof(*site));
+    site->routine = routine != NULL ? xstrdup(routine) : NULL;
+    site->site_addr = site_addr;
+    site->displacement = displacement;
+    site->addressing_mode = xstrdup(addressing_mode);
+    if ((routine != NULL && site->routine == NULL) || site->addressing_mode == NULL) {
+        return 0;
+    }
+    return 1;
+}
+
+static int add_data_consumer_displacement(data_consumer_record *record, int displacement)
+{
+    if (!ensure_data_consumer_int_capacity(&record->observed_constant_displacements,
+                                           &record->observed_count,
+                                           &record->observed_capacity)) {
+        return 0;
+    }
+    record->observed_constant_displacements[record->observed_count++] = displacement;
+    return 1;
+}
+
+static int add_data_consumer_covered_byte(data_consumer_record *record, int addr)
+{
+    if (!ensure_data_consumer_range_capacity(record)) {
+        return 0;
+    }
+    record->covered_ranges[record->covered_count].start = addr;
+    record->covered_ranges[record->covered_count].end_exclusive = addr + 1;
+    record->covered_count++;
+    return 1;
+}
+
+static void free_data_consumer_site(data_consumer_site *site)
+{
+    free(site->routine);
+    free(site->addressing_mode);
+}
+
+static void free_data_consumer_record(data_consumer_record *record)
+{
+    int i;
+    free(record->label);
+    for (i = 0; i < record->read_site_count; i++) {
+        free_data_consumer_site(&record->read_sites[i]);
+    }
+    free(record->read_sites);
+    for (i = 0; i < record->write_site_count; i++) {
+        free_data_consumer_site(&record->write_sites[i]);
+    }
+    free(record->write_sites);
+    free(record->observed_constant_displacements);
+    free(record->covered_ranges);
+}
+
+static void dedupe_data_consumer_sites(data_consumer_site *sites, int *count)
+{
+    int i;
+    int out;
+    if (*count <= 1) {
+        return;
+    }
+    qsort(sites, (size_t)(*count), sizeof(data_consumer_site), data_consumer_site_compare);
+    out = 0;
+    for (i = 0; i < *count; i++) {
+        if (out > 0 && data_consumer_site_compare(&sites[i], &sites[out - 1]) == 0) {
+            free_data_consumer_site(&sites[i]);
+            continue;
+        }
+        if (out != i) {
+            sites[out] = sites[i];
+        }
+        out++;
+    }
+    *count = out;
+}
+
+static void finalize_data_consumer_record(data_consumer_record *record)
+{
+    int i;
+    int out;
+
+    dedupe_data_consumer_sites(record->read_sites, &record->read_site_count);
+    dedupe_data_consumer_sites(record->write_sites, &record->write_site_count);
+
+    if (record->observed_count > 1) {
+        qsort(record->observed_constant_displacements,
+              (size_t)record->observed_count,
+              sizeof(int),
+              int_compare);
+        out = 0;
+        for (i = 0; i < record->observed_count; i++) {
+            if (out > 0
+                && record->observed_constant_displacements[i]
+                   == record->observed_constant_displacements[out - 1]) {
+                continue;
+            }
+            record->observed_constant_displacements[out++] =
+                record->observed_constant_displacements[i];
+        }
+        record->observed_count = out;
+    }
+
+    if (record->covered_count > 1) {
+        qsort(record->covered_ranges,
+              (size_t)record->covered_count,
+              sizeof(data_consumer_range),
+              data_consumer_range_compare);
+        out = 0;
+        for (i = 0; i < record->covered_count; i++) {
+            if (out > 0
+                && record->covered_ranges[i].start <= record->covered_ranges[out - 1].end_exclusive) {
+                if (record->covered_ranges[i].end_exclusive > record->covered_ranges[out - 1].end_exclusive) {
+                    record->covered_ranges[out - 1].end_exclusive = record->covered_ranges[i].end_exclusive;
+                }
+                continue;
+            }
+            record->covered_ranges[out++] = record->covered_ranges[i];
+        }
+        record->covered_count = out;
+    }
+}
+
+static int count_data_consumer_distinct_routines(const data_consumer_record *record)
+{
+    char **seen;
+    int seen_count;
+    int seen_capacity;
+    int i;
+    int j;
+
+    seen = NULL;
+    seen_count = 0;
+    seen_capacity = 0;
+
+    for (i = 0; i < record->read_site_count + record->write_site_count; i++) {
+        const data_consumer_site *site;
+        int found;
+        if (i < record->read_site_count) {
+            site = &record->read_sites[i];
+        } else {
+            site = &record->write_sites[i - record->read_site_count];
+        }
+        if (site->routine == NULL) {
+            continue;
+        }
+        found = 0;
+        for (j = 0; j < seen_count; j++) {
+            if (strcmp(seen[j], site->routine) == 0) {
+                found = 1;
+                break;
+            }
+        }
+        if (found) {
+            continue;
+        }
+        if (seen_count >= seen_capacity) {
+            int new_capacity = (seen_capacity == 0) ? 8 : (seen_capacity * 2);
+            char **tmp = (char **)realloc(seen, (size_t)new_capacity * sizeof(char *));
+            if (tmp == NULL) {
+                free(seen);
+                return -1;
+            }
+            seen = tmp;
+            seen_capacity = new_capacity;
+        }
+        seen[seen_count++] = site->routine;
+    }
+    free(seen);
+    return seen_count;
+}
+
+static int build_uncovered_ranges(const data_consumer_record *record,
+                                  data_consumer_range **ranges_out,
+                                  int *count_out)
+{
+    data_consumer_range *ranges;
+    int count;
+    int pos;
+    int i;
+
+    ranges = NULL;
+    count = 0;
+    pos = record->declared_start;
+    for (i = 0; i < record->covered_count; i++) {
+        int start = record->covered_ranges[i].start;
+        int end_exclusive = record->covered_ranges[i].end_exclusive;
+        data_consumer_range *tmp;
+        if (start > pos) {
+            tmp = (data_consumer_range *)realloc(ranges, (size_t)(count + 1) * sizeof(data_consumer_range));
+            if (tmp == NULL) {
+                free(ranges);
+                return 0;
+            }
+            ranges = tmp;
+            ranges[count].start = pos;
+            ranges[count].end_exclusive = start;
+            count++;
+        }
+        if (end_exclusive > pos) {
+            pos = end_exclusive;
+        }
+    }
+    if (pos < record->declared_end_exclusive) {
+        data_consumer_range *tmp = (data_consumer_range *)realloc(
+            ranges, (size_t)(count + 1) * sizeof(data_consumer_range));
+        if (tmp == NULL) {
+            free(ranges);
+            return 0;
+        }
+        ranges = tmp;
+        ranges[count].start = pos;
+        ranges[count].end_exclusive = record->declared_end_exclusive;
+        count++;
+    }
+    *ranges_out = ranges;
+    *count_out = count;
+    return 1;
+}
+
+static int emit_data_consumer_record_json(FILE *fp,
+                                          const data_consumer_record *record,
+                                          int first)
+{
+    data_consumer_range *uncovered_ranges;
+    int uncovered_count;
+    int distinct_routine_count;
+    int i;
+    int first_pattern;
+    char addr_buf[16];
+
+    uncovered_ranges = NULL;
+    uncovered_count = 0;
+    if (!build_uncovered_ranges(record, &uncovered_ranges, &uncovered_count)) {
+        return 0;
+    }
+    distinct_routine_count = count_data_consumer_distinct_routines(record);
+    if (distinct_routine_count < 0) {
+        free(uncovered_ranges);
+        return 0;
+    }
+
+    fprintf(fp, "%s  {", first ? "" : ",\n");
+    fprintf(fp, "\"label\":");
+    print_json_string(fp, record->label);
+    format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->declared_start);
+    fprintf(fp, ",\"declared_start\":");
+    print_json_string(fp, addr_buf);
+    format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->declared_end_exclusive);
+    fprintf(fp, ",\"declared_end_exclusive\":");
+    print_json_string(fp, addr_buf);
+    fprintf(fp, ",\"declared_size\":%d", record->declared_size);
+    fprintf(fp, ",\"read_site_count\":%d", record->read_site_count);
+    fprintf(fp, ",\"write_site_count\":%d", record->write_site_count);
+    fprintf(fp, ",\"distinct_routine_count\":%d", distinct_routine_count);
+    fprintf(fp, ",\"observed_constant_displacements\":[");
+    for (i = 0; i < record->observed_count; i++) {
+        fprintf(fp, "%s%d", i > 0 ? "," : "", record->observed_constant_displacements[i]);
+    }
+    fprintf(fp, "]");
+    fprintf(fp, ",\"covered_ranges\":[");
+    for (i = 0; i < record->covered_count; i++) {
+        fprintf(fp, "%s{\"start\":", i > 0 ? "," : "");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->covered_ranges[i].start);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, ",\"end_exclusive\":");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), record->covered_ranges[i].end_exclusive);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, "}");
+    }
+    fprintf(fp, "]");
+    fprintf(fp, ",\"uncovered_ranges\":[");
+    for (i = 0; i < uncovered_count; i++) {
+        fprintf(fp, "%s{\"start\":", i > 0 ? "," : "");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[i].start);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, ",\"end_exclusive\":");
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[i].end_exclusive);
+        print_json_string(fp, addr_buf);
+        fprintf(fp, "}");
+    }
+    fprintf(fp, "]");
+    fprintf(fp, ",\"has_indexed_accesses_without_exact_coverage\":%s",
+            record->has_indexed_accesses_without_exact_coverage ? "true" : "false");
+    fprintf(fp, ",\"access_patterns\":[");
+    first_pattern = 1;
+    for (i = 0; i <= INDEX_PATTERN_SPLIT_LO_HI_TABLES; i++) {
+        if (!record->access_pattern_seen[i]) {
+            continue;
+        }
+        fprintf(fp, "%s", first_pattern ? "" : ",");
+        print_json_string(fp, index_access_pattern_name(i));
+        first_pattern = 0;
+    }
+    fprintf(fp, "]");
+    fprintf(fp, ",\"read_sites\":[");
+    for (i = 0; i < record->read_site_count; i++) {
+        fprintf(fp, "%s{", i > 0 ? "," : "");
+        if (record->read_sites[i].routine != NULL) {
+            fprintf(fp, "\"routine\":");
+            print_json_string(fp, record->read_sites[i].routine);
+            fprintf(fp, ",");
+        }
+        fprintf(fp, "\"site_addr\":\"0x%04X\",\"displacement\":%d,\"addressing_mode\":",
+                record->read_sites[i].site_addr & 0xFFFF,
+                record->read_sites[i].displacement);
+        print_json_string(fp, record->read_sites[i].addressing_mode);
+        fprintf(fp, "}");
+    }
+    fprintf(fp, "]");
+    fprintf(fp, ",\"write_sites\":[");
+    for (i = 0; i < record->write_site_count; i++) {
+        fprintf(fp, "%s{", i > 0 ? "," : "");
+        if (record->write_sites[i].routine != NULL) {
+            fprintf(fp, "\"routine\":");
+            print_json_string(fp, record->write_sites[i].routine);
+            fprintf(fp, ",");
+        }
+        fprintf(fp, "\"site_addr\":\"0x%04X\",\"displacement\":%d,\"addressing_mode\":",
+                record->write_sites[i].site_addr & 0xFFFF,
+                record->write_sites[i].displacement);
+        print_json_string(fp, record->write_sites[i].addressing_mode);
+        fprintf(fp, "}");
+    }
+    fprintf(fp, "]}");
+
+    free(uncovered_ranges);
+    return 1;
+}
+
+static int emit_data_consumers_json(FILE *fp, data_consumer_record *records, int count)
+{
+    int i;
+    fprintf(fp, "[\n");
+    for (i = 0; i < count; i++) {
+        if (!emit_data_consumer_record_json(fp, &records[i], i == 0)) {
+            return 0;
+        }
+    }
+    if (count > 0) {
+        fprintf(fp, "\n");
+    }
+    fprintf(fp, "]\n");
+    return 1;
+}
+
+static int emit_data_consumers_ndjson(FILE *fp, data_consumer_record *records, int count)
+{
+    int i;
+    for (i = 0; i < count; i++) {
+        if (!emit_data_consumer_record_json(fp, &records[i], 1)) {
+            return 0;
+        }
+        fprintf(fp, "\n");
+    }
+    return 1;
+}
+
+static int emit_data_consumers_text(FILE *fp, data_consumer_record *records, int count)
+{
+    int i;
+    int j;
+    for (i = 0; i < count; i++) {
+        data_consumer_range *uncovered_ranges;
+        int uncovered_count;
+        int distinct_routine_count;
+        int first_pattern;
+        char addr_buf[16];
+        if (!build_uncovered_ranges(&records[i], &uncovered_ranges, &uncovered_count)) {
+            return 0;
+        }
+        distinct_routine_count = count_data_consumer_distinct_routines(&records[i]);
+        if (distinct_routine_count < 0) {
+            free(uncovered_ranges);
+            return 0;
+        }
+        format_data_consumer_addr(addr_buf, sizeof(addr_buf), records[i].declared_start);
+        fprintf(fp, "%s @ %s size=%d\n", records[i].label, addr_buf, records[i].declared_size);
+        fprintf(fp, "  reads=%d writes=%d routines=%d\n",
+                records[i].read_site_count,
+                records[i].write_site_count,
+                distinct_routine_count);
+        fprintf(fp, "  observed_constant_displacements:");
+        for (j = 0; j < records[i].observed_count; j++) {
+            fprintf(fp, "%s%d", j > 0 ? ", " : " ", records[i].observed_constant_displacements[j]);
+        }
+        if (records[i].observed_count == 0) {
+            fprintf(fp, " (none)");
+        }
+        fprintf(fp, "\n");
+        fprintf(fp, "  covered_ranges:");
+        for (j = 0; j < records[i].covered_count; j++) {
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), records[i].covered_ranges[j].start);
+            fprintf(fp, "%s[%s,", j > 0 ? ", " : " ", addr_buf);
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), records[i].covered_ranges[j].end_exclusive);
+            fprintf(fp, "%s)", addr_buf);
+        }
+        if (records[i].covered_count == 0) {
+            fprintf(fp, " (none)");
+        }
+        fprintf(fp, "\n");
+        fprintf(fp, "  uncovered_ranges:");
+        for (j = 0; j < uncovered_count; j++) {
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[j].start);
+            fprintf(fp, "%s[%s,", j > 0 ? ", " : " ", addr_buf);
+            format_data_consumer_addr(addr_buf, sizeof(addr_buf), uncovered_ranges[j].end_exclusive);
+            fprintf(fp, "%s)", addr_buf);
+        }
+        if (uncovered_count == 0) {
+            fprintf(fp, " (none)");
+        }
+        fprintf(fp, "\n");
+        fprintf(fp, "  access_patterns:");
+        first_pattern = 1;
+        for (j = 0; j <= INDEX_PATTERN_SPLIT_LO_HI_TABLES; j++) {
+            if (!records[i].access_pattern_seen[j]) {
+                continue;
+            }
+            fprintf(fp, "%s%s", first_pattern ? " " : ", ", index_access_pattern_name(j));
+            first_pattern = 0;
+        }
+        if (first_pattern) {
+            fprintf(fp, " (none)");
+        }
+        fprintf(fp, "\n");
+        free(uncovered_ranges);
+    }
+    return 1;
+}
+
+int generate_data_consumers(astnode *root,
+                            const char *output_path,
+                            data_consumers_format format,
+                            int include_overlaps,
+                            const char *split_pairs,
+                            int pure_binary)
+{
+    index_analysis_context ctx;
+    index_suffix_pair *pairs;
+    int pair_count;
+    int parse_result;
+    data_consumer_span *spans;
+    int span_count;
+    data_consumer_record *records;
+    FILE *fp;
+    int ok;
+    int i;
+
+    (void)pure_binary;
+
+    pairs = NULL;
+    pair_count = 0;
+    spans = NULL;
+    span_count = 0;
+    records = NULL;
+    fp = NULL;
+    ok = 1;
+
+    parse_result = parse_index_suffix_pairs(split_pairs, &pairs, &pair_count);
+    if (parse_result == -1) {
+        fprintf(stderr, "error: invalid value for --index-patterns-split-pairs\n");
+        return 0;
+    }
+    if (!parse_result) {
+        return 0;
+    }
+    if (!build_index_analysis_context(root, &ctx)) {
+        ok = 0;
+        goto cleanup;
+    }
+    if (!build_data_consumer_spans(&ctx, include_overlaps, &spans, &span_count)) {
+        ok = 0;
+        goto cleanup;
+    }
+
+    records = (data_consumer_record *)calloc((size_t)(span_count > 0 ? span_count : 1),
+                                             sizeof(data_consumer_record));
+    if (records == NULL) {
+        ok = 0;
+        goto cleanup;
+    }
+    for (i = 0; i < span_count; i++) {
+        records[i].label = xstrdup(spans[i].label);
+        records[i].declared_start = spans[i].start;
+        records[i].declared_end_exclusive = spans[i].end_exclusive;
+        records[i].declared_size = spans[i].end_exclusive - spans[i].start;
+        if (records[i].label == NULL) {
+            ok = 0;
+            goto cleanup;
+        }
+    }
+
+    for (i = 0; i < ctx.instr_count; i++) {
+        const index_instr *instr;
+        const index_label *base_label;
+        int record_index;
+        int constant_addr;
+        int aggregate_displacement;
+        const char *routine_name;
+        int access_pattern;
+        int estimated_width;
+        int source_kind;
+        char *split_stem;
+        const char *split_lo;
+        const char *split_hi;
+
+        instr = &ctx.instrs[i];
+        if (!instr->has_symbol_access || instr->base_symbol == NULL || instr->access_kind == INDEX_ACCESS_NONE) {
+            continue;
+        }
+        base_label = find_label_record(&ctx, instr->base_symbol);
+        if (base_label == NULL || base_label->is_code) {
+            continue;
+        }
+
+        record_index = find_data_consumer_span_by_label(spans, span_count, instr->base_symbol);
+        constant_addr = base_label->cpu_address + instr->displacement;
+        if (record_index < 0) {
+            record_index = find_data_consumer_span_for_addr(spans,
+                                                            span_count,
+                                                            base_label->segment_id,
+                                                            constant_addr);
+        }
+        if (record_index < 0) {
+            continue;
+        }
+
+        aggregate_displacement = constant_addr - records[record_index].declared_start;
+        routine_name = find_index_routine_owner(&ctx,
+                                                instr->event_index,
+                                                instr->cpu_address,
+                                                instr->is_dataseg,
+                                                instr->segment_id);
+        if (!add_data_consumer_site(&records[record_index],
+                                    instr->access_kind == INDEX_ACCESS_WRITE,
+                                    routine_name,
+                                    instr->cpu_address,
+                                    aggregate_displacement,
+                                    addressing_mode_name(instr->mode))) {
+            ok = 0;
+            goto cleanup;
+        }
+        if (!add_data_consumer_displacement(&records[record_index], aggregate_displacement)) {
+            ok = 0;
+            goto cleanup;
+        }
+
+        if (instr->is_indexed_access && base_label->cpu_address == records[record_index].declared_start) {
+            split_stem = NULL;
+            split_lo = NULL;
+            split_hi = NULL;
+            if (!analyze_index_site_pattern(&ctx,
+                                            instr,
+                                            pairs,
+                                            pair_count,
+                                            &source_kind,
+                                            &access_pattern,
+                                            &estimated_width,
+                                            &split_stem,
+                                            &split_lo,
+                                            &split_hi)) {
+                ok = 0;
+                free(split_stem);
+                goto cleanup;
+            }
+            free(split_stem);
+        } else if (aggregate_displacement < 0) {
+            access_pattern = INDEX_PATTERN_BASE_MINUS_CONST;
+        } else if (aggregate_displacement > 0) {
+            access_pattern = INDEX_PATTERN_BASE_PLUS_CONST;
+        } else {
+            access_pattern = INDEX_PATTERN_BASE;
+        }
+        records[record_index].access_pattern_seen[access_pattern] = 1;
+
+        if (instr->is_indexed_access) {
+            int resolved_disp;
+            int resolved_addr;
+            if (resolve_exact_indexed_offset(&ctx, instr, &resolved_disp)) {
+                resolved_addr = base_label->cpu_address + resolved_disp;
+                if (resolved_addr >= records[record_index].declared_start
+                    && resolved_addr < records[record_index].declared_end_exclusive) {
+                    if (!add_data_consumer_covered_byte(&records[record_index], resolved_addr)) {
+                        ok = 0;
+                        goto cleanup;
+                    }
+                }
+            } else {
+                records[record_index].has_indexed_accesses_without_exact_coverage = 1;
+            }
+        } else if (constant_addr >= records[record_index].declared_start
+                   && constant_addr < records[record_index].declared_end_exclusive) {
+            if (!add_data_consumer_covered_byte(&records[record_index], constant_addr)) {
+                ok = 0;
+                goto cleanup;
+            }
+        }
+    }
+
+    for (i = 0; i < span_count; i++) {
+        finalize_data_consumer_record(&records[i]);
+    }
+
+    if (output_path != NULL) {
+        fp = fopen(output_path, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
+            ok = 0;
+            goto cleanup;
+        }
+    } else {
+        fp = stdout;
+    }
+
+    if (format == DATA_CONSUMERS_FORMAT_JSON) {
+        if (!emit_data_consumers_json(fp, records, span_count)) {
+            ok = 0;
+            goto cleanup;
+        }
+    } else if (format == DATA_CONSUMERS_FORMAT_NDJSON) {
+        if (!emit_data_consumers_ndjson(fp, records, span_count)) {
+            ok = 0;
+            goto cleanup;
+        }
+    } else {
+        if (!emit_data_consumers_text(fp, records, span_count)) {
+            ok = 0;
+            goto cleanup;
+        }
+    }
+
+cleanup:
+    if (output_path != NULL && fp != NULL) {
+        fclose(fp);
+    }
+    if (records != NULL) {
+        for (i = 0; i < span_count; i++) {
+            free_data_consumer_record(&records[i]);
+        }
+    }
+    free(records);
+    if (spans != NULL) {
+        for (i = 0; i < span_count; i++) {
+            free(spans[i].label);
+        }
+    }
+    free(spans);
+    if (pairs != NULL) {
+        for (i = 0; i < pair_count; i++) {
+            free(pairs[i].lo);
+            free(pairs[i].hi);
+        }
+    }
+    free(pairs);
+    if (ok) {
+        free_index_analysis_context(&ctx);
+    } else if (ctx.labels != NULL || ctx.instrs != NULL || ctx.events != NULL
+               || ctx.segments != NULL || ctx.data_ranges != NULL) {
+        free_index_analysis_context(&ctx);
+    }
     return ok;
 }
 

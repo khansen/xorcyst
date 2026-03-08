@@ -64,6 +64,14 @@ enum tag_index_patterns_format {
 
 typedef enum tag_index_patterns_format index_patterns_format;
 
+enum tag_data_consumers_format {
+    DATA_CONSUMERS_FORMAT_JSON = 0,
+    DATA_CONSUMERS_FORMAT_NDJSON,
+    DATA_CONSUMERS_FORMAT_TEXT
+};
+
+typedef enum tag_data_consumers_format data_consumers_format;
+
 struct tag_xasm_arguments {
     const char *input_file;
     int debug;
@@ -111,6 +119,10 @@ struct tag_xasm_arguments {
     const char *index_patterns_output;
     int index_patterns_format;
     const char *index_patterns_split_pairs;
+    int data_consumers;
+    const char *data_consumers_output;
+    int data_consumers_format;
+    int include_overlaps;
 };
 
 typedef struct tag_xasm_arguments xasm_arguments;
