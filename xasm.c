@@ -176,8 +176,12 @@ static struct option long_options[] = {
   { "index-patterns-output", required_argument, 0, 0 },
   { "index-patterns-format", required_argument, 0, 0 },
   { "index-patterns-split-pairs", required_argument, 0, 0 },
+  { "data-consumers", no_argument, 0, 0 },
+  { "data-consumers-output", required_argument, 0, 0 },
+  { "data-consumers-format", required_argument, 0, 0 },
   { "include-locals", required_argument, 0, 0 },
   { "include-anon", required_argument, 0, 0 },
+  { "include-overlaps", required_argument, 0, 0 },
   { 0 }
 };
 
@@ -203,7 +207,10 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--analyze-index-patterns] [--index-patterns-output=FILE]\n\
             [--index-patterns-format=json|ndjson|text]\n\
             [--index-patterns-split-pairs=LO:HI,...]\n\
+            [--data-consumers] [--data-consumers-output=FILE]\n\
+            [--data-consumers-format=json|ndjson|text]\n\
             [--include-locals=true|false] [--include-anon=true|false]\n\
+            [--include-overlaps=true|false]\n\
             [--audit-raw-addresses] [--audit-level=warn|error]\n\
             [--audit-rom-range=LO-HI] [--audit-output-format=text|json]\n\
             [--compare=FILE] [--compare-format=text|json]\n\
@@ -259,8 +266,15 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
                             Index-pattern format: json|ndjson|text (default json)\n\
     --index-patterns-split-pairs=PAIRS\n\
                             Split-table suffix pairs, e.g. Lo:Hi,_lo:_hi\n\
+    --data-consumers\n\
+                            Aggregate direct data consumers by symbol span\n\
+    --data-consumers-output=FILE\n\
+                            Write data-consumer analysis to FILE (default stdout)\n\
+    --data-consumers-format=FMT\n\
+                            Data-consumer format: json|ndjson|text (default json)\n\
     --include-locals=BOOL  Include local labels (default false)\n\
     --include-anon=BOOL    Include anonymous labels (default false)\n\
+    --include-overlaps=BOOL Include overlap symbols in span analyses (default false)\n\
     --audit-raw-addresses   Enable raw-address audit diagnostics\n\
     --audit-level=LVL       Audit severity level: warn|error\n\
     --audit-rom-range=RNG   Audit ROM range, e.g. $C000-$FFFF\n\
@@ -500,6 +514,23 @@ static int parse_index_patterns_format_value(const char *value, index_patterns_f
     return 0;
 }
 
+static int parse_data_consumers_format_value(const char *value, data_consumers_format *out)
+{
+    if (strcmp(value, "json") == 0) {
+        *out = DATA_CONSUMERS_FORMAT_JSON;
+        return 1;
+    }
+    if (strcmp(value, "ndjson") == 0) {
+        *out = DATA_CONSUMERS_FORMAT_NDJSON;
+        return 1;
+    }
+    if (strcmp(value, "text") == 0) {
+        *out = DATA_CONSUMERS_FORMAT_TEXT;
+        return 1;
+    }
+    return 0;
+}
+
 static void warn_global(const char *code, const char *fmt, ...)
 {
     va_list ap;
@@ -606,6 +637,10 @@ parse_arguments (int argc, char **argv)
     xasm_args.index_patterns_output = NULL;
     xasm_args.index_patterns_format = INDEX_PATTERNS_FORMAT_JSON;
     xasm_args.index_patterns_split_pairs = NULL;
+    xasm_args.data_consumers = 0;
+    xasm_args.data_consumers_output = NULL;
+    xasm_args.data_consumers_format = DATA_CONSUMERS_FORMAT_JSON;
+    xasm_args.include_overlaps = 0;
 
     /* Parse options. */
     while ((key = getopt_long(argc, argv, "D:I:L:o:qsvV", long_options, &index)) != -1) {
@@ -827,6 +862,16 @@ parse_arguments (int argc, char **argv)
                 xasm_args.index_patterns_format = fmt;
             } else if (strcmp(long_options[index].name, "index-patterns-split-pairs") == 0) {
                 xasm_args.index_patterns_split_pairs = optarg;
+            } else if (strcmp(long_options[index].name, "data-consumers") == 0) {
+                xasm_args.data_consumers = 1;
+            } else if (strcmp(long_options[index].name, "data-consumers-output") == 0) {
+                xasm_args.data_consumers_output = optarg;
+            } else if (strcmp(long_options[index].name, "data-consumers-format") == 0) {
+                data_consumers_format fmt;
+                if (!parse_data_consumers_format_value(optarg, &fmt)) {
+                    cli_error("invalid value for --data-consumers-format: `%s' (expected json|ndjson|text)", optarg);
+                }
+                xasm_args.data_consumers_format = fmt;
             } else if (strcmp(long_options[index].name, "include-locals") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_locals)) {
                     cli_error("invalid value for --include-locals: `%s' (expected true|false)", optarg);
@@ -834,6 +879,10 @@ parse_arguments (int argc, char **argv)
             } else if (strcmp(long_options[index].name, "include-anon") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_anon)) {
                     cli_error("invalid value for --include-anon: `%s' (expected true|false)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "include-overlaps") == 0) {
+                if (!parse_bool_value(optarg, &xasm_args.include_overlaps)) {
+                    cli_error("invalid value for --include-overlaps: `%s' (expected true|false)", optarg);
                 }
             }
             break;
@@ -1401,6 +1450,18 @@ int main(int argc, char *argv[]) {
                                      xasm_args.index_patterns_split_pairs,
                                      xasm_args.pure_binary)) {
             exit_code = 7;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.data_consumers) {
+        verbose("Aggregating data consumers...");
+        if (!generate_data_consumers(root_node,
+                                     xasm_args.data_consumers_output,
+                                     (data_consumers_format)xasm_args.data_consumers_format,
+                                     xasm_args.include_overlaps,
+                                     xasm_args.index_patterns_split_pairs,
+                                     xasm_args.pure_binary)) {
+            exit_code = 8;
         }
     }
 

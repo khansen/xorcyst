@@ -47,6 +47,12 @@ int generate_index_patterns(astnode *root,
                             int include_anon,
                             const char *split_pairs,
                             int pure_binary);
+int generate_data_consumers(astnode *root,
+                            const char *output_path,
+                            data_consumers_format format,
+                            int include_overlaps,
+                            const char *split_pairs,
+                            int pure_binary);
 int run_raw_address_audit(astnode *root,
                           int level_error,
                           int output_json,
