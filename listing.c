@@ -1264,6 +1264,7 @@ typedef struct tag_xref_symbol {
     int has_value;
     long value;
     int is_dataseg;
+    int segment_id;
 } xref_symbol;
 
 typedef struct tag_xref_ref {
@@ -1277,6 +1278,8 @@ typedef struct tag_xref_ref {
     char *addressing_mode;
     char *access;
     char *expression;
+    int is_dataseg;
+    int segment_id;
 } xref_ref;
 
 typedef struct tag_xref_meta {
@@ -1288,6 +1291,8 @@ typedef struct tag_xref_meta {
     const char *addressing_mode;
     const char *access;
     const char *expression;
+    int is_dataseg;
+    int segment_id;
 } xref_meta;
 
 typedef struct tag_xref_build_context {
@@ -1303,14 +1308,18 @@ typedef struct tag_xref_build_context {
     int include_locals;
     int include_anon;
     int include_data;
+    int include_owner;
     int pure_binary;
     long output_offset;
+    int current_segment_id;
+    int next_segment_id;
     int failed;
 } xref_build_context;
 
 typedef struct tag_xref_instr {
     int cpu_address;
     int is_dataseg;
+    int segment_id;
     int mnemonic;
     addressing_mode mode;
     char *direct_symbol;
@@ -1326,7 +1335,11 @@ typedef struct tag_xref_instr {
 typedef struct tag_xref_data_edge {
     char *symbol;
     int site_addr;
+    int segment_id;
     char *routine;
+    char *owner_routine;
+    int owner_routine_addr;
+    int has_owner_routine_addr;
     int displacement;
     char *addressing_mode;
 } xref_data_edge;
@@ -1335,9 +1348,19 @@ typedef struct tag_xref_indirect_flow {
     char *ptr_symbol;
     int producer_site;
     int consumer_site;
+    int segment_id;
     char *access_kind;
     char *routine;
+    char *owner_routine;
+    int owner_routine_addr;
+    int has_owner_routine_addr;
 } xref_indirect_flow;
+
+typedef struct tag_xref_owner_info {
+    const char *name;
+    int has_addr;
+    int addr;
+} xref_owner_info;
 
 static int extract_symbol_and_displacement(astnode *expr, const char **symbol, int *displacement);
 
@@ -1480,6 +1503,7 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
                                      const location *loc,
                                      int has_cpu_address,
                                      int cpu_address,
+                                     int segment_id,
                                      int has_output_offset,
                                      long output_offset,
                                      int has_value,
@@ -1527,6 +1551,7 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
         }
         s->has_cpu_address = has_cpu_address;
         s->cpu_address = cpu_address;
+        s->segment_id = segment_id;
         s->has_output_offset = has_output_offset;
         s->output_offset = output_offset;
         s->has_value = has_value;
@@ -1557,6 +1582,7 @@ static int add_xref_reference(xref_build_context *ctx,
                                    NULL,
                                    0,
                                    0,
+                                   -1,
                                    0,
                                    0,
                                    0,
@@ -1580,12 +1606,19 @@ static int add_xref_reference(xref_build_context *ctx,
     r->addressing_mode = xstrdup(meta->addressing_mode != NULL ? meta->addressing_mode : "");
     r->access = xstrdup(meta->access != NULL ? meta->access : "other");
     r->expression = xstrdup(meta->expression != NULL ? meta->expression : "");
+    r->is_dataseg = meta->is_dataseg;
+    r->segment_id = meta->segment_id;
     if (r->symbol == NULL || r->opcode == NULL || r->addressing_mode == NULL
         || r->access == NULL || r->expression == NULL) {
         ctx->failed = 1;
         return 0;
     }
     return 1;
+}
+
+static void start_xref_segment(xref_build_context *ctx)
+{
+    ctx->current_segment_id = ctx->next_segment_id++;
 }
 
 static void trim_line_copy(char *dst, int dst_size, const char *src)
@@ -1738,30 +1771,33 @@ static int collect_expr_refs_recursive(astnode *expr, xref_build_context *ctx, c
 
 static int xref_visit_dataseg(astnode *n, void *arg, astnode **next)
 {
+    xref_build_context *ctx = (xref_build_context *)arg;
     (void)n;
-    (void)arg;
     (void)next;
     in_dataseg = 1;
+    start_xref_segment(ctx);
     return 0;
 }
 
 static int xref_visit_codeseg(astnode *n, void *arg, astnode **next)
 {
+    xref_build_context *ctx = (xref_build_context *)arg;
     (void)n;
-    (void)arg;
     (void)next;
     in_dataseg = 0;
+    start_xref_segment(ctx);
     return 0;
 }
 
 static int xref_visit_org(astnode *org, void *arg, astnode **next)
 {
     int addr = get_current_pc();
-    (void)arg;
+    xref_build_context *ctx = (xref_build_context *)arg;
     (void)next;
     if (eval_expression_int(LHS(org), &addr, 0)) {
         set_current_pc(addr);
     }
+    start_xref_segment(ctx);
     return 0;
 }
 
@@ -1782,6 +1818,7 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
                                    &label->loc,
                                    1,
                                    addr,
+                                   ctx->current_segment_id,
                                    ctx->pure_binary && !in_dataseg,
                                    ctx->output_offset,
                                    0,
@@ -1815,7 +1852,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     if (len < 1) {
         len = 1;
     }
-    if (ctx->include_data) {
+    if (ctx->include_data || ctx->include_owner) {
         if (!ensure_xref_instr_capacity(ctx)) {
             goto finish;
         }
@@ -1823,6 +1860,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         memset(out, 0, sizeof(*out));
         out->cpu_address = addr;
         out->is_dataseg = in_dataseg;
+        out->segment_id = ctx->current_segment_id;
         out->mnemonic = instr->instr.mnemonic.value;
         out->mode = instr->instr.mode;
     }
@@ -1837,6 +1875,8 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     meta.access = classify_instruction_access(meta.opcode, LHS(instr), instr->instr.mode);
     extract_operand_from_line(instr->loc, expr_buf, sizeof(expr_buf));
     meta.expression = expr_buf;
+    meta.is_dataseg = in_dataseg;
+    meta.segment_id = ctx->current_segment_id;
 
     if (ctx->include_data) {
         if (LHS(instr) != NULL
@@ -1879,7 +1919,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         }
     }
 
-    record_instruction = ctx->include_data;
+    record_instruction = (ctx->include_data || ctx->include_owner);
 
 finish:
     if (record_instruction) {
@@ -1936,6 +1976,8 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
         meta.addressing_mode = NULL;
         meta.access = "address_compute";
         meta.expression = expr_buf;
+        meta.is_dataseg = in_dataseg;
+        meta.segment_id = ctx->current_segment_id;
         if (!collect_expr_refs_recursive(expr, ctx, &meta)) {
             ctx->failed = 1;
             break;
@@ -2019,6 +2061,9 @@ static int xref_symbol_compare(const void *a, const void *b)
     if (lhs->has_cpu_address && rhs->has_cpu_address && lhs->cpu_address != rhs->cpu_address) {
         return lhs->cpu_address - rhs->cpu_address;
     }
+    if (lhs->segment_id != rhs->segment_id) {
+        return lhs->segment_id - rhs->segment_id;
+    }
     return strcmp(lhs->name, rhs->name);
 }
 
@@ -2032,6 +2077,9 @@ static int xref_ref_compare(const void *a, const void *b)
     if (lhs->has_cpu_address && rhs->has_cpu_address && lhs->cpu_address != rhs->cpu_address) {
         return lhs->cpu_address - rhs->cpu_address;
     }
+    if (lhs->segment_id != rhs->segment_id) {
+        return lhs->segment_id - rhs->segment_id;
+    }
     if (lhs->has_output_offset != rhs->has_output_offset) {
         return rhs->has_output_offset - lhs->has_output_offset;
     }
@@ -2041,28 +2089,40 @@ static int xref_ref_compare(const void *a, const void *b)
     return strcmp(lhs->symbol, rhs->symbol);
 }
 
-static int has_xref_instruction_at_address(const xref_build_context *ctx, int addr, int is_dataseg)
+static int has_xref_instruction_at_address(const xref_build_context *ctx,
+                                           int addr,
+                                           int is_dataseg,
+                                           int segment_id)
 {
     int i;
     for (i = 0; i < ctx->instr_count; i++) {
-        if (ctx->instrs[i].cpu_address == addr && ctx->instrs[i].is_dataseg == is_dataseg) {
+        if (ctx->instrs[i].cpu_address == addr
+            && ctx->instrs[i].is_dataseg == is_dataseg
+            && ctx->instrs[i].segment_id == segment_id) {
             return 1;
         }
     }
     return 0;
 }
 
-static const char *find_xref_routine_owner(const xref_build_context *ctx, int site_addr, int is_dataseg)
+static void lookup_xref_routine_owner(const xref_build_context *ctx,
+                                      int site_addr,
+                                      int is_dataseg,
+                                      int segment_id,
+                                      xref_owner_info *out)
 {
     int i;
-    const char *best = NULL;
+    const xref_symbol *best = NULL;
     int best_addr = -1;
+    out->name = NULL;
+    out->has_addr = 0;
+    out->addr = 0;
     for (i = 0; i < ctx->symbol_count; i++) {
         const xref_symbol *s = &ctx->symbols[i];
         if (!s->defined || !s->has_cpu_address) {
             continue;
         }
-        if (s->is_dataseg != is_dataseg) {
+        if (s->is_dataseg != is_dataseg || s->segment_id != segment_id) {
             continue;
         }
         if (strcmp(s->scope, "global") != 0 || strcmp(s->kind, "label") != 0) {
@@ -2071,15 +2131,19 @@ static const char *find_xref_routine_owner(const xref_build_context *ctx, int si
         if (s->cpu_address > site_addr) {
             continue;
         }
-        if (!has_xref_instruction_at_address(ctx, s->cpu_address, is_dataseg)) {
+        if (!has_xref_instruction_at_address(ctx, s->cpu_address, is_dataseg, segment_id)) {
             continue;
         }
         if (s->cpu_address > best_addr) {
-            best = s->name;
+            best = s;
             best_addr = s->cpu_address;
         }
     }
-    return best;
+    if (best != NULL) {
+        out->name = best->name;
+        out->has_addr = 1;
+        out->addr = best->cpu_address;
+    }
 }
 
 static int ensure_xref_data_edge_capacity(xref_data_edge **edges, int *count, int *capacity)
@@ -2120,6 +2184,7 @@ static void free_xref_data_edge(xref_data_edge *edge)
 {
     free(edge->symbol);
     free(edge->routine);
+    free(edge->owner_routine);
     free(edge->addressing_mode);
 }
 
@@ -2128,6 +2193,7 @@ static void free_xref_indirect_flow(xref_indirect_flow *flow)
     free(flow->ptr_symbol);
     free(flow->access_kind);
     free(flow->routine);
+    free(flow->owner_routine);
 }
 
 static int xref_data_edge_compare(const void *a, const void *b)
@@ -2137,6 +2203,9 @@ static int xref_data_edge_compare(const void *a, const void *b)
     int cmp;
     if (lhs->site_addr != rhs->site_addr) {
         return lhs->site_addr - rhs->site_addr;
+    }
+    if (lhs->segment_id != rhs->segment_id) {
+        return lhs->segment_id - rhs->segment_id;
     }
     cmp = strcmp(lhs->symbol, rhs->symbol);
     if (cmp != 0) {
@@ -2150,6 +2219,18 @@ static int xref_data_edge_compare(const void *a, const void *b)
     }
     if (lhs->routine != NULL && rhs->routine != NULL) {
         cmp = strcmp(lhs->routine, rhs->routine);
+        if (cmp != 0) {
+            return cmp;
+        }
+    }
+    if (lhs->owner_routine == NULL && rhs->owner_routine != NULL) {
+        return -1;
+    }
+    if (lhs->owner_routine != NULL && rhs->owner_routine == NULL) {
+        return 1;
+    }
+    if (lhs->owner_routine != NULL && rhs->owner_routine != NULL) {
+        cmp = strcmp(lhs->owner_routine, rhs->owner_routine);
         if (cmp != 0) {
             return cmp;
         }
@@ -2175,6 +2256,9 @@ static int xref_indirect_flow_compare(const void *a, const void *b)
     if (lhs->consumer_site != rhs->consumer_site) {
         return lhs->consumer_site - rhs->consumer_site;
     }
+    if (lhs->segment_id != rhs->segment_id) {
+        return lhs->segment_id - rhs->segment_id;
+    }
     cmp = strcmp(lhs->access_kind, rhs->access_kind);
     if (cmp != 0) {
         return cmp;
@@ -2185,13 +2269,28 @@ static int xref_indirect_flow_compare(const void *a, const void *b)
     if (lhs->routine != NULL && rhs->routine == NULL) {
         return 1;
     }
-    if (lhs->routine == NULL) {
+    if (lhs->routine != NULL && rhs->routine != NULL) {
+        cmp = strcmp(lhs->routine, rhs->routine);
+        if (cmp != 0) {
+            return cmp;
+        }
+    }
+    if (lhs->owner_routine == NULL && rhs->owner_routine != NULL) {
+        return -1;
+    }
+    if (lhs->owner_routine != NULL && rhs->owner_routine == NULL) {
+        return 1;
+    }
+    if (lhs->owner_routine == NULL) {
         return 0;
     }
-    return strcmp(lhs->routine, rhs->routine);
+    return strcmp(lhs->owner_routine, rhs->owner_routine);
 }
 
-static const char *find_symbol_at_address(const xref_build_context *ctx, int addr, int is_dataseg)
+static const char *find_symbol_at_address(const xref_build_context *ctx,
+                                          int addr,
+                                          int is_dataseg,
+                                          int segment_id)
 {
     int i;
     for (i = 0; i < ctx->symbol_count; i++) {
@@ -2199,7 +2298,7 @@ static const char *find_symbol_at_address(const xref_build_context *ctx, int add
         if (!s->defined || !s->has_cpu_address) {
             continue;
         }
-        if (s->cpu_address == addr && s->is_dataseg == is_dataseg) {
+        if (s->cpu_address == addr && s->is_dataseg == is_dataseg && s->segment_id == segment_id) {
             return s->name;
         }
     }
@@ -2223,9 +2322,10 @@ static const char *find_symbol_at_any_section(const xref_build_context *ctx, int
 
 static const char *resolve_pointer_pair_symbol(const xref_build_context *ctx,
                                                int low_addr,
-                                               int is_dataseg)
+                                               int is_dataseg,
+                                               int segment_id)
 {
-    const char *low_name = find_symbol_at_address(ctx, low_addr, is_dataseg);
+    const char *low_name = find_symbol_at_address(ctx, low_addr, is_dataseg, segment_id);
     if (low_name == NULL) {
         low_name = find_symbol_at_any_section(ctx, low_addr);
     }
@@ -2258,12 +2358,28 @@ static void format_xref_addr(char *buf, int buf_size, int addr)
     }
 }
 
+static void format_xref_owner_addr(char *buf, int buf_size, int addr)
+{
+    if (buf_size <= 0) {
+        return;
+    }
+    if (addr >= 0 && addr <= 0xFFFF) {
+        snprintf(buf, (size_t)buf_size, "0x%04x", addr & 0xFFFF);
+    } else {
+        snprintf(buf, (size_t)buf_size, "0x%x", addr);
+    }
+}
+
 static int append_xref_data_edge(xref_data_edge **edges,
                                  int *count,
                                  int *capacity,
                                  const char *symbol,
                                  int site_addr,
+                                 int segment_id,
                                  const char *routine,
+                                 const char *owner_routine,
+                                 int owner_routine_addr,
+                                 int has_owner_routine_addr,
                                  int displacement,
                                  const char *addressing_mode)
 {
@@ -2275,10 +2391,16 @@ static int append_xref_data_edge(xref_data_edge **edges,
     memset(edge, 0, sizeof(*edge));
     edge->symbol = xstrdup(symbol);
     edge->site_addr = site_addr;
+    edge->segment_id = segment_id;
     edge->routine = routine != NULL ? xstrdup(routine) : NULL;
+    edge->owner_routine = owner_routine != NULL ? xstrdup(owner_routine) : NULL;
+    edge->owner_routine_addr = owner_routine_addr;
+    edge->has_owner_routine_addr = has_owner_routine_addr;
     edge->displacement = displacement;
     edge->addressing_mode = xstrdup(addressing_mode);
-    if (edge->symbol == NULL || edge->addressing_mode == NULL || (routine != NULL && edge->routine == NULL)) {
+    if (edge->symbol == NULL || edge->addressing_mode == NULL
+        || (routine != NULL && edge->routine == NULL)
+        || (owner_routine != NULL && edge->owner_routine == NULL)) {
         free_xref_data_edge(edge);
         memset(edge, 0, sizeof(*edge));
         return 0;
@@ -2293,8 +2415,12 @@ static int append_xref_indirect_flow(xref_indirect_flow **flows,
                                      const char *ptr_symbol,
                                      int producer_site,
                                      int consumer_site,
+                                     int segment_id,
                                      const char *access_kind,
-                                     const char *routine)
+                                     const char *routine,
+                                     const char *owner_routine,
+                                     int owner_routine_addr,
+                                     int has_owner_routine_addr)
 {
     xref_indirect_flow *flow;
     if (!ensure_xref_indirect_flow_capacity(flows, count, capacity)) {
@@ -2305,9 +2431,15 @@ static int append_xref_indirect_flow(xref_indirect_flow **flows,
     flow->ptr_symbol = xstrdup(ptr_symbol);
     flow->producer_site = producer_site;
     flow->consumer_site = consumer_site;
+    flow->segment_id = segment_id;
     flow->access_kind = xstrdup(access_kind);
     flow->routine = routine != NULL ? xstrdup(routine) : NULL;
-    if (flow->ptr_symbol == NULL || flow->access_kind == NULL || (routine != NULL && flow->routine == NULL)) {
+    flow->owner_routine = owner_routine != NULL ? xstrdup(owner_routine) : NULL;
+    flow->owner_routine_addr = owner_routine_addr;
+    flow->has_owner_routine_addr = has_owner_routine_addr;
+    if (flow->ptr_symbol == NULL || flow->access_kind == NULL
+        || (routine != NULL && flow->routine == NULL)
+        || (owner_routine != NULL && flow->owner_routine == NULL)) {
         free_xref_indirect_flow(flow);
         memset(flow, 0, sizeof(*flow));
         return 0;
@@ -2382,7 +2514,7 @@ static int build_xref_data_edges(const xref_build_context *ctx,
         const xref_instr *instr = &ctx->instrs[i];
         const char *kind;
         const char *scope;
-        const char *routine;
+        xref_owner_info owner;
         if (instr->direct_symbol == NULL || instr->direct_access_kind == 0) {
             continue;
         }
@@ -2390,14 +2522,18 @@ static int build_xref_data_edges(const xref_build_context *ctx,
         if (!scope_allowed(scope, ctx->include_locals, ctx->include_anon)) {
             continue;
         }
-        routine = find_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg);
+        lookup_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg, instr->segment_id, &owner);
         if (instr->direct_access_kind == 1) {
             if (!append_xref_data_edge(&reads,
                                        &read_count,
                                        &read_capacity,
                                        instr->direct_symbol,
                                        instr->cpu_address,
-                                       routine,
+                                       instr->segment_id,
+                                       owner.name,
+                                       ctx->include_owner ? owner.name : NULL,
+                                       owner.addr,
+                                       ctx->include_owner && owner.has_addr,
                                        instr->direct_displacement,
                                        addressing_mode_name(instr->mode))) {
                 goto fail;
@@ -2408,7 +2544,11 @@ static int build_xref_data_edges(const xref_build_context *ctx,
                                        &write_capacity,
                                        instr->direct_symbol,
                                        instr->cpu_address,
-                                       routine,
+                                       instr->segment_id,
+                                       owner.name,
+                                       ctx->include_owner ? owner.name : NULL,
+                                       owner.addr,
+                                       ctx->include_owner && owner.has_addr,
                                        instr->direct_displacement,
                                        addressing_mode_name(instr->mode))) {
                 goto fail;
@@ -2453,6 +2593,7 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
     xref_pair_state pair_states[255];
     const char *current_routine = NULL;
     int current_section = -1;
+    int current_segment_id = -1;
     int i;
     int j;
 
@@ -2464,15 +2605,19 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
 
     for (i = 0; i < ctx->instr_count; i++) {
         const xref_instr *instr = &ctx->instrs[i];
-        const char *routine = find_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg);
-        if (instr->is_dataseg != current_section || !nullable_string_equal(routine, current_routine)) {
+        xref_owner_info owner;
+        lookup_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg, instr->segment_id, &owner);
+        if (instr->is_dataseg != current_section
+            || instr->segment_id != current_segment_id
+            || !nullable_string_equal(owner.name, current_routine)) {
             for (j = 0; j < 255; j++) {
                 pair_states[j].last_low_write = -1;
                 pair_states[j].last_high_write = -1;
                 pair_states[j].valid_mask = 0;
             }
             current_section = instr->is_dataseg;
-            current_routine = routine;
+            current_segment_id = instr->segment_id;
+            current_routine = owner.name;
         }
 
         if (instr->zp_write_addr_known) {
@@ -2497,7 +2642,10 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
         if (instr->indirect_ptr_addr_known && instr->indirect_ptr_addr >= 0 && instr->indirect_ptr_addr <= 0xFE) {
             const xref_pair_state *pair = &pair_states[instr->indirect_ptr_addr];
             if (pair->valid_mask == 3) {
-                const char *ptr_symbol = resolve_pointer_pair_symbol(ctx, instr->indirect_ptr_addr, instr->is_dataseg);
+                const char *ptr_symbol = resolve_pointer_pair_symbol(ctx,
+                                                                    instr->indirect_ptr_addr,
+                                                                    instr->is_dataseg,
+                                                                    instr->segment_id);
                 if (ptr_symbol != NULL) {
                     if (!append_xref_indirect_flow(&flows,
                                                    &flow_count,
@@ -2507,8 +2655,12 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
                                                        ? pair->last_low_write
                                                        : pair->last_high_write,
                                                    instr->cpu_address,
+                                                   instr->segment_id,
                                                    instr->indirect_access_kind == 1 ? "read" : "write",
-                                                   routine)) {
+                                                   owner.name,
+                                                   ctx->include_owner ? owner.name : NULL,
+                                                   owner.addr,
+                                                   ctx->include_owner && owner.has_addr)) {
                         goto fail;
                     }
                 }
@@ -2678,6 +2830,7 @@ static int emit_xref_json(const char *filename,
     fprintf(fp, "  \"references\": [");
     for (i = 0; i < ctx->ref_count; ++i) {
         const xref_ref *r = &ctx->refs[i];
+        xref_owner_info owner;
         fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
         fprintf(fp, "\"symbol\":");
         print_json_string(fp, r->symbol);
@@ -2714,6 +2867,17 @@ static int emit_xref_json(const char *filename,
         print_json_string(fp, r->access != NULL ? r->access : "other");
         fprintf(fp, ",\"expression\":");
         print_json_string(fp, r->expression != NULL ? r->expression : "");
+        if (ctx->include_owner && r->has_cpu_address) {
+            lookup_xref_routine_owner(ctx, r->cpu_address, r->is_dataseg, r->segment_id, &owner);
+            if (owner.name != NULL && owner.has_addr) {
+                char owner_addr[16];
+                format_xref_owner_addr(owner_addr, sizeof(owner_addr), owner.addr);
+                fprintf(fp, ",\"owner_routine\":");
+                print_json_string(fp, owner.name);
+                fprintf(fp, ",\"owner_routine_addr\":");
+                print_json_string(fp, owner_addr);
+            }
+        }
         fprintf(fp, "}");
     }
     if (ctx->ref_count > 0) {
@@ -2735,6 +2899,14 @@ static int emit_xref_json(const char *filename,
             if (edge->routine != NULL) {
                 fprintf(fp, ",\"routine\":");
                 print_json_string(fp, edge->routine);
+            }
+            if (edge->owner_routine != NULL && edge->has_owner_routine_addr) {
+                char owner_addr[16];
+                format_xref_owner_addr(owner_addr, sizeof(owner_addr), edge->owner_routine_addr);
+                fprintf(fp, ",\"owner_routine\":");
+                print_json_string(fp, edge->owner_routine);
+                fprintf(fp, ",\"owner_routine_addr\":");
+                print_json_string(fp, owner_addr);
             }
             fprintf(fp, ",\"displacement\":%d", edge->displacement);
             fprintf(fp, ",\"addressing_mode\":");
@@ -2759,6 +2931,14 @@ static int emit_xref_json(const char *filename,
             if (edge->routine != NULL) {
                 fprintf(fp, ",\"routine\":");
                 print_json_string(fp, edge->routine);
+            }
+            if (edge->owner_routine != NULL && edge->has_owner_routine_addr) {
+                char owner_addr[16];
+                format_xref_owner_addr(owner_addr, sizeof(owner_addr), edge->owner_routine_addr);
+                fprintf(fp, ",\"owner_routine\":");
+                print_json_string(fp, edge->owner_routine);
+                fprintf(fp, ",\"owner_routine_addr\":");
+                print_json_string(fp, owner_addr);
             }
             fprintf(fp, ",\"displacement\":%d", edge->displacement);
             fprintf(fp, ",\"addressing_mode\":");
@@ -2789,6 +2969,14 @@ static int emit_xref_json(const char *filename,
             if (flow->routine != NULL) {
                 fprintf(fp, ",\"routine\":");
                 print_json_string(fp, flow->routine);
+            }
+            if (flow->owner_routine != NULL && flow->has_owner_routine_addr) {
+                char owner_addr[16];
+                format_xref_owner_addr(owner_addr, sizeof(owner_addr), flow->owner_routine_addr);
+                fprintf(fp, ",\"owner_routine\":");
+                print_json_string(fp, flow->owner_routine);
+                fprintf(fp, ",\"owner_routine_addr\":");
+                print_json_string(fp, owner_addr);
             }
             fprintf(fp, "}");
         }
@@ -6840,6 +7028,7 @@ int generate_xref(astnode *root,
                   const char *filename,
                   xref_format format,
                   int include_data,
+                  int include_owner,
                   int include_locals,
                   int include_anon,
                   const char *source_file,
@@ -6883,8 +7072,11 @@ int generate_xref(astnode *root,
     ctx.include_locals = include_locals;
     ctx.include_anon = include_anon;
     ctx.include_data = include_data;
+    ctx.include_owner = include_owner;
     ctx.pure_binary = pure_binary;
     ctx.output_offset = 0;
+    ctx.current_segment_id = 0;
+    ctx.next_segment_id = 1;
 
     in_dataseg = 0;
     dataseg_pc = 0;
@@ -6916,6 +7108,7 @@ int generate_xref(astnode *root,
                                                    &e->def->loc,
                                                    0,
                                                    0,
+                                                   -1,
                                                    0,
                                                    0,
                                                    1,
@@ -6932,6 +7125,7 @@ int generate_xref(astnode *root,
                                                    &e->def->loc,
                                                    0,
                                                    0,
+                                                   -1,
                                                    0,
                                                    0,
                                                    0,
