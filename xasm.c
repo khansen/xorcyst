@@ -163,6 +163,17 @@ static struct option long_options[] = {
   { "warn-unused-equ", no_argument, 0, 0 },
   { "Werror", required_argument, 0, 0 },
   { "Wno-unused-equ", no_argument, 0, 0 },
+  { "xref-summary", no_argument, 0, 0 },
+  { "xref-summary-output", required_argument, 0, 0 },
+  { "xref-summary-format", required_argument, 0, 0 },
+  { "xref-summary-kind", required_argument, 0, 0 },
+  { "xref-summary-limit", required_argument, 0, 0 },
+  { "xref-summary-top-referrers", required_argument, 0, 0 },
+  { "xref-summary-nearby-window", required_argument, 0, 0 },
+  { "xref-summary-include", required_argument, 0, 0 },
+  { "xref-summary-exclude", required_argument, 0, 0 },
+  { "include-locals", required_argument, 0, 0 },
+  { "include-anon", required_argument, 0, 0 },
   { 0 }
 };
 
@@ -178,6 +189,14 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
             [--xref-include-locals=true|false]\n\
             [--xref-include-anon=true|false]\n\
+            [--xref-summary] [--xref-summary-output=FILE]\n\
+            [--xref-summary-format=json|ndjson|text]\n\
+            [--xref-summary-kind=callable|jump_target|data|all]\n\
+            [--xref-summary-limit=N] [--xref-summary-top-referrers=N]\n\
+            [--xref-summary-nearby-window=BYTES]\n\
+            [--xref-summary-include=REGEX]\n\
+            [--xref-summary-exclude=REGEX]\n\
+            [--include-locals=true|false] [--include-anon=true|false]\n\
             [--audit-raw-addresses] [--audit-level=warn|error]\n\
             [--audit-rom-range=LO-HI] [--audit-output-format=text|json]\n\
             [--compare=FILE] [--compare-format=text|json]\n\
@@ -209,6 +228,24 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
                             Include local labels in xref (default false)\n\
     --xref-include-anon=BOOL\n\
                             Include anonymous labels in xref (default false)\n\
+    --xref-summary         Generate cross-reference summary\n\
+    --xref-summary-output=FILE\n\
+                            Write summary to FILE (default stdout)\n\
+    --xref-summary-format=FMT\n\
+                            Summary format: json|ndjson|text (default json)\n\
+    --xref-summary-kind=KIND\n\
+                            Filter: callable|jump_target|data|all (default all)\n\
+    --xref-summary-limit=N Entries per section (default 25)\n\
+    --xref-summary-top-referrers=N\n\
+                            Top referrers per entry (default 5)\n\
+    --xref-summary-nearby-window=BYTES\n\
+                            Nearby symbol window (default 128)\n\
+    --xref-summary-include=REGEX\n\
+                            Include symbols matching regex\n\
+    --xref-summary-exclude=REGEX\n\
+                            Exclude symbols matching regex\n\
+    --include-locals=BOOL  Include local labels (default false)\n\
+    --include-anon=BOOL    Include anonymous labels (default false)\n\
     --audit-raw-addresses   Enable raw-address audit diagnostics\n\
     --audit-level=LVL       Audit severity level: warn|error\n\
     --audit-rom-range=RNG   Audit ROM range, e.g. $C000-$FFFF\n\
@@ -406,6 +443,31 @@ static int parse_audit_rom_range_value(const char *value, long *out_lo, long *ou
     return 1;
 }
 
+static int parse_xref_summary_format_value(const char *value, xref_summary_format *out)
+{
+    if (strcmp(value, "json") == 0) {
+        *out = XREF_SUMMARY_FORMAT_JSON;
+        return 1;
+    }
+    if (strcmp(value, "ndjson") == 0) {
+        *out = XREF_SUMMARY_FORMAT_NDJSON;
+        return 1;
+    }
+    if (strcmp(value, "text") == 0) {
+        *out = XREF_SUMMARY_FORMAT_TEXT;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_xref_summary_kind_value(const char *value)
+{
+    return (strcmp(value, "all") == 0
+         || strcmp(value, "callable") == 0
+         || strcmp(value, "jump_target") == 0
+         || strcmp(value, "data") == 0);
+}
+
 static void warn_global(const char *code, const char *fmt, ...)
 {
     va_list ap;
@@ -499,6 +561,15 @@ parse_arguments (int argc, char **argv)
     xasm_args.xref_format = XREF_FORMAT_JSON;
     xasm_args.xref_include_locals = 0;
     xasm_args.xref_include_anon = 0;
+    xasm_args.xref_summary = 0;
+    xasm_args.xref_summary_output = NULL;
+    xasm_args.xref_summary_format = XREF_SUMMARY_FORMAT_JSON;
+    xasm_args.xref_summary_kind = "all";
+    xasm_args.xref_summary_limit = 25;
+    xasm_args.xref_summary_top_referrers = 5;
+    xasm_args.xref_summary_nearby_window = 128;
+    xasm_args.xref_summary_include = NULL;
+    xasm_args.xref_summary_exclude = NULL;
 
     /* Parse options. */
     while ((key = getopt_long(argc, argv, "D:I:L:o:qsvV", long_options, &index)) != -1) {
@@ -671,6 +742,51 @@ parse_arguments (int argc, char **argv)
                 }
                 xasm_args.compare_cpu_base_set = 1;
                 xasm_args.compare_cpu_base = cpu_base;
+            } else if (strcmp(long_options[index].name, "xref-summary") == 0) {
+                xasm_args.xref_summary = 1;
+            } else if (strcmp(long_options[index].name, "xref-summary-output") == 0) {
+                xasm_args.xref_summary_output = optarg;
+            } else if (strcmp(long_options[index].name, "xref-summary-format") == 0) {
+                xref_summary_format fmt;
+                if (!parse_xref_summary_format_value(optarg, &fmt)) {
+                    cli_error("invalid value for --xref-summary-format: `%s' (expected json|ndjson|text)", optarg);
+                }
+                xasm_args.xref_summary_format = fmt;
+            } else if (strcmp(long_options[index].name, "xref-summary-kind") == 0) {
+                if (!parse_xref_summary_kind_value(optarg)) {
+                    cli_error("invalid value for --xref-summary-kind: `%s' (expected callable|jump_target|data|all)", optarg);
+                }
+                xasm_args.xref_summary_kind = optarg;
+            } else if (strcmp(long_options[index].name, "xref-summary-limit") == 0) {
+                long lim;
+                if (!parse_long_value(optarg, &lim) || lim <= 0) {
+                    cli_error("invalid value for --xref-summary-limit: `%s' (must be >= 1)", optarg);
+                }
+                xasm_args.xref_summary_limit = (int)lim;
+            } else if (strcmp(long_options[index].name, "xref-summary-top-referrers") == 0) {
+                long n;
+                if (!parse_long_value(optarg, &n) || n <= 0) {
+                    cli_error("invalid value for --xref-summary-top-referrers: `%s' (must be >= 1)", optarg);
+                }
+                xasm_args.xref_summary_top_referrers = (int)n;
+            } else if (strcmp(long_options[index].name, "xref-summary-nearby-window") == 0) {
+                long w;
+                if (!parse_long_value(optarg, &w) || w < 0) {
+                    cli_error("invalid value for --xref-summary-nearby-window: `%s' (must be >= 0)", optarg);
+                }
+                xasm_args.xref_summary_nearby_window = (int)w;
+            } else if (strcmp(long_options[index].name, "xref-summary-include") == 0) {
+                xasm_args.xref_summary_include = optarg;
+            } else if (strcmp(long_options[index].name, "xref-summary-exclude") == 0) {
+                xasm_args.xref_summary_exclude = optarg;
+            } else if (strcmp(long_options[index].name, "include-locals") == 0) {
+                if (!parse_bool_value(optarg, &xasm_args.xref_include_locals)) {
+                    cli_error("invalid value for --include-locals: `%s' (expected true|false)", optarg);
+                }
+            } else if (strcmp(long_options[index].name, "include-anon") == 0) {
+                if (!parse_bool_value(optarg, &xasm_args.xref_include_anon)) {
+                    cli_error("invalid value for --include-anon: `%s' (expected true|false)", optarg);
+                }
             }
             break;
 
@@ -1204,6 +1320,26 @@ int main(int argc, char *argv[]) {
                            xasm_args.output_file,
                            xasm_args.pure_binary)) {
             exit_code = 3;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.xref_summary) {
+        verbose("Generating xref summary...");
+        if (!generate_xref_summary(root_node,
+                                   xasm_args.xref_summary_output,
+                                   (xref_summary_format)xasm_args.xref_summary_format,
+                                   xasm_args.xref_include_locals,
+                                   xasm_args.xref_include_anon,
+                                   xasm_args.xref_summary_kind,
+                                   xasm_args.xref_summary_limit,
+                                   xasm_args.xref_summary_top_referrers,
+                                   xasm_args.xref_summary_nearby_window,
+                                   xasm_args.xref_summary_include,
+                                   xasm_args.xref_summary_exclude,
+                                   xasm_args.input_file,
+                                   xasm_args.output_file,
+                                   xasm_args.pure_binary)) {
+            exit_code = 6;
         }
     }
 

@@ -2742,4 +2742,427 @@ if ! grep -q "invalid shift count" "$TMPDIR/xlnk-shift-fail.log"; then
     fail "missing expected linker error 'invalid shift count'"
 fi
 
+# === xref-summary regression tests ===
+
+run_expect_xref_summary() {
+    asm_file="$TMPDIR/xref-summary-fixture.asm"
+    out_file="$TMPDIR/xref-summary.bin"
+    summary_json="$TMPDIR/xref-summary.json"
+    summary_ndjson="$TMPDIR/xref-summary.ndjson"
+    summary_text="$TMPDIR/xref-summary.txt"
+    log_file="$TMPDIR/xref-summary.log"
+
+    cat > "$asm_file" <<'ASM'
+.org $C000
+
+Main:
+    JSR SubroutineA
+    JSR SubroutineB
+    JMP Main
+
+SubroutineA:
+    LDA $44
+    RTS
+
+SubroutineB:
+    LDX #$10
+    JSR SubroutineA
+    RTS
+
+DataTable:
+    .db $01, $02, $03
+END
+ASM
+
+    # --- JSON output to file ---
+    if ! "$XASM" --pure-binary --xref-summary \
+        --xref-summary-output "$summary_json" \
+        --xref-summary-format json \
+        "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-summary JSON generation failed"
+    fi
+
+    if [ ! -s "$summary_json" ]; then
+        fail "xref-summary JSON file not generated"
+    fi
+
+    # Verify top-level sections exist
+    if ! grep -q '"top_callables"' "$summary_json"; then
+        fail "xref-summary JSON missing top_callables"
+    fi
+    if ! grep -q '"top_jump_targets"' "$summary_json"; then
+        fail "xref-summary JSON missing top_jump_targets"
+    fi
+    if ! grep -q '"top_data_labels"' "$summary_json"; then
+        fail "xref-summary JSON missing top_data_labels"
+    fi
+
+    # SubroutineA should be top callable with jsr_count=2
+    if ! grep -q '"label":"SubroutineA"' "$summary_json"; then
+        fail "xref-summary JSON missing SubroutineA"
+    fi
+    if ! grep -q '"jsr_count":2' "$summary_json"; then
+        fail "xref-summary JSON missing jsr_count=2 for SubroutineA"
+    fi
+
+    # Routine ownership: referrers should include Main
+    if ! grep -q '"routine":"Main"' "$summary_json"; then
+        fail "xref-summary JSON missing routine ownership for Main"
+    fi
+
+    # first_run_terminator should be present
+    if ! grep -q '"first_run_terminator":"rts"' "$summary_json"; then
+        fail "xref-summary JSON missing first_run_terminator rts"
+    fi
+    if ! grep -q '"first_run_terminator":"jmp"' "$summary_json"; then
+        fail "xref-summary JSON missing first_run_terminator jmp for Main"
+    fi
+
+    # Addresses should be uppercase 0x-prefixed hex
+    if ! grep -q '"addr":"0xC0' "$summary_json"; then
+        fail "xref-summary JSON address not in expected hex format"
+    fi
+
+    # --- NDJSON output to stdout ---
+    if ! "$XASM" --pure-binary --xref-summary \
+        --xref-summary-format ndjson \
+        "$asm_file" -o "$out_file" >"$summary_ndjson" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "xref-summary NDJSON generation failed"
+    fi
+
+    if [ ! -s "$summary_ndjson" ]; then
+        fail "xref-summary NDJSON output is empty"
+    fi
+
+    # Each line should have a "section" tag
+    if ! grep -q '"section":"top_callables"' "$summary_ndjson"; then
+        fail "xref-summary NDJSON missing section tag for top_callables"
+    fi
+
+    # --- text output to stdout ---
+    if ! "$XASM" --pure-binary --xref-summary \
+        --xref-summary-format text \
+        "$asm_file" -o "$out_file" >"$summary_text" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "xref-summary text generation failed"
+    fi
+
+    if [ ! -s "$summary_text" ]; then
+        fail "xref-summary text output is empty"
+    fi
+
+    if ! grep -q 'top_callables' "$summary_text"; then
+        fail "xref-summary text missing top_callables header"
+    fi
+
+    # --- kind filter ---
+    callable_only=$("$XASM" --pure-binary --xref-summary \
+        --xref-summary-format text \
+        --xref-summary-kind callable \
+        "$asm_file" -o "$out_file" 2>/dev/null)
+    if echo "$callable_only" | grep -q 'top_jump_targets'; then
+        fail "xref-summary kind=callable should not include jump_targets section"
+    fi
+
+    # --- limit filter ---
+    limited=$("$XASM" --pure-binary --xref-summary \
+        --xref-summary-format json \
+        --xref-summary-limit 1 \
+        "$asm_file" -o "$out_file" 2>/dev/null)
+    # Only SubroutineA (top callable) should appear, not SubroutineB
+    if echo "$limited" | grep -q '"label":"SubroutineB"'; then
+        fail "xref-summary limit=1 should exclude SubroutineB from callables"
+    fi
+
+    # --- include regex ---
+    inc_out=$("$XASM" --pure-binary --xref-summary \
+        --xref-summary-format text \
+        --xref-summary-include "^Sub" \
+        "$asm_file" -o "$out_file" 2>/dev/null)
+    if echo "$inc_out" | grep -q 'Main @'; then
+        fail "xref-summary include=^Sub should filter out Main entries"
+    fi
+    if ! echo "$inc_out" | grep -q 'SubroutineA @'; then
+        fail "xref-summary include=^Sub should retain matching entries"
+    fi
+
+    # --- exclude regex ---
+    exc_out=$("$XASM" --pure-binary --xref-summary \
+        --xref-summary-format text \
+        --xref-summary-exclude "SubroutineB" \
+        "$asm_file" -o "$out_file" 2>/dev/null)
+    if echo "$exc_out" | grep -q 'SubroutineB @'; then
+        fail "xref-summary exclude=SubroutineB should filter out SubroutineB"
+    fi
+
+    # --- coexistence with --xref ---
+    xref_coexist="$TMPDIR/xref-coexist.json"
+    summary_coexist="$TMPDIR/summary-coexist.json"
+    if ! "$XASM" --pure-binary \
+        --xref="$xref_coexist" \
+        --xref-summary --xref-summary-output "$summary_coexist" \
+        --xref-summary-format json \
+        "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-summary coexistence with --xref failed"
+    fi
+    if [ ! -s "$xref_coexist" ]; then
+        fail "xref file not generated when coexisting with xref-summary"
+    fi
+    if [ ! -s "$summary_coexist" ]; then
+        fail "xref-summary file not generated when coexisting with --xref"
+    fi
+
+    # --- invalid format should exit 2 ---
+    set +e
+    "$XASM" --pure-binary --xref-summary \
+        --xref-summary-format badformat \
+        "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        fail "xref-summary invalid format should exit 2 (got $rc)"
+    fi
+}
+
+run_expect_xref_summary
+
+run_expect_xref_summary_regressions() {
+    preserve_asm="$TMPDIR/xref-summary-preserve.asm"
+    preserve_bin="$TMPDIR/xref-summary-preserve.bin"
+    preserve_out=""
+    main_line=""
+    branch_line=""
+
+    cat > "$preserve_asm" <<'ASM'
+.org $C000
+Caller:
+    JSR Main
+    RTS
+Main:
+    BNE BranchTarget
+    RTS
+BranchTarget:
+    NOP
+    RTS
+END
+ASM
+    preserve_out=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        "$preserve_asm" -o "$preserve_bin" 2>/dev/null)
+    main_line=$(printf '%s\n' "$preserve_out" | grep '"label":"Main"' || true)
+    branch_line=$(printf '%s\n' "$preserve_out" | grep '"label":"BranchTarget"' || true)
+    if [ -z "$main_line" ] || [ -z "$branch_line" ]; then
+        fail "xref-summary regression: expected Main and BranchTarget entries in summary-only run"
+    fi
+    if ! printf '%s\n' "$main_line" | grep -q '"routine":"Caller"'; then
+        fail "xref-summary label preservation: missing Caller as referrer in summary-only run"
+    fi
+    if printf '%s\n' "$preserve_out" | grep -q '"routine":"(unknown)"'; then
+        fail "xref-summary label preservation: routine ownership shows (unknown) in summary-only run"
+    fi
+
+    scope_asm="$TMPDIR/xref-summary-scope.asm"
+    scope_bin="$TMPDIR/xref-summary-scope.bin"
+    scope_default=""
+    scope_locals=""
+    scope_anon=""
+    scope_both=""
+
+    cat > "$scope_asm" <<'ASM'
+.org $C000
+Main:
+    BEQ @@loop
+    BEQ +
+    RTS
+@@loop:
+    RTS
++:
+    RTS
+END
+ASM
+    scope_default=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        "$scope_asm" -o "$scope_bin" 2>/dev/null)
+    scope_locals=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        --include-locals=true "$scope_asm" -o "$scope_bin" 2>/dev/null)
+    scope_anon=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        --include-anon=true "$scope_asm" -o "$scope_bin" 2>/dev/null)
+    scope_both=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        --include-locals=true --include-anon=true "$scope_asm" -o "$scope_bin" 2>/dev/null)
+    if printf '%s\n' "$scope_default" | grep -q '@@loop'; then
+        fail "xref-summary scope filtering: locals should be excluded by default"
+    fi
+    if printf '%s\n' "$scope_default" | grep -Eq '"label":"\+#0(#[0-9]+)?"'; then
+        fail "xref-summary scope filtering: anonymous labels should be excluded by default"
+    fi
+    if ! printf '%s\n' "$scope_locals" | grep -q '@@loop'; then
+        fail "xref-summary scope filtering: --include-locals=true did not include local labels"
+    fi
+    if printf '%s\n' "$scope_locals" | grep -Eq '"label":"\+#0(#[0-9]+)?"'; then
+        fail "xref-summary scope filtering: --include-locals=true should not include anonymous labels"
+    fi
+    if printf '%s\n' "$scope_anon" | grep -q '@@loop'; then
+        fail "xref-summary scope filtering: --include-anon=true should not include local labels"
+    fi
+    if ! printf '%s\n' "$scope_anon" | grep -Eq '"label":"\+#0(#[0-9]+)?"'; then
+        fail "xref-summary scope filtering: --include-anon=true did not include anonymous labels"
+    fi
+    if ! printf '%s\n' "$scope_both" | grep -q '@@loop' || \
+       ! printf '%s\n' "$scope_both" | grep -Eq '"label":"\+#0(#[0-9]+)?"'; then
+        fail "xref-summary scope filtering: combined include flags should include both local and anonymous labels"
+    fi
+
+    ext_asm="$TMPDIR/xref-summary-external.asm"
+    ext_bin="$TMPDIR/xref-summary-external.bin"
+    ext_out=""
+
+    cat > "$ext_asm" <<'ASM'
+.org $C000
+Main:
+    JMP BranchTarget
+BranchTarget:
+    NOP
+    RTS
+END
+ASM
+    ext_out=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        "$ext_asm" -o "$ext_bin" 2>/dev/null)
+    branch_line=$(printf '%s\n' "$ext_out" | grep '"label":"BranchTarget"' || true)
+    if [ -z "$branch_line" ]; then
+        fail "xref-summary external detection: missing BranchTarget jump-target entry"
+    fi
+    if ! printf '%s\n' "$branch_line" | grep -q '"has_refs_from_other_routines":false'; then
+        fail "xref-summary has_refs_from_other_routines wrongly true for same-routine target"
+    fi
+
+    section_asm="$TMPDIR/xref-summary-sections.asm"
+    section_bin="$TMPDIR/xref-summary-sections.bin"
+    section_out=""
+
+    cat > "$section_asm" <<'ASM'
+.codeseg
+.org $BFF0
+Caller:
+    JSR Main
+    RTS
+.org $C000
+Main:
+    LDA DataA
+    RTS
+.dataseg
+.org $C005
+DataA:
+    .db $01
+END
+ASM
+    section_out=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        "$section_asm" -o "$section_bin" 2>/dev/null)
+    main_line=$(printf '%s\n' "$section_out" | grep '"label":"Main"' || true)
+    if [ -z "$main_line" ]; then
+        fail "xref-summary same-section distance: missing Main callable entry"
+    fi
+    if printf '%s\n' "$main_line" | grep -q '"next_symbol_distance_bytes"'; then
+        fail "xref-summary same-section distance: cross-section symbol should not define next_symbol_distance_bytes"
+    fi
+
+    nearby_asm="$TMPDIR/xref-summary-nearby.asm"
+    nearby_bin="$TMPDIR/xref-summary-nearby.bin"
+    nearby_out=""
+    anchor_line=""
+
+    cat > "$nearby_asm" <<'ASM'
+.org $C000
+LeftFar:
+    .db $00
+.org $C009
+Anchor:
+    RTS
+.org $C00A
+RightNear:
+    .db $00
+.org $C100
+Caller:
+    LDA LeftFar
+    LDA RightNear
+    JSR Anchor
+    RTS
+END
+ASM
+    nearby_out=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        --xref-summary-nearby-window 16 \
+        "$nearby_asm" -o "$nearby_bin" 2>/dev/null)
+    anchor_line=$(printf '%s\n' "$nearby_out" | grep '"label":"Anchor"' || true)
+    if [ -z "$anchor_line" ]; then
+        fail "xref-summary nearby sorting: missing Anchor callable entry"
+    fi
+    if ! printf '%s\n' "$anchor_line" | grep -q '"nearby_symbols":\["RightNear","LeftFar"\]'; then
+        fail "xref-summary nearby_symbols not sorted by absolute distance"
+    fi
+
+    ref_limit_asm="$TMPDIR/xref-summary-top-referrers.asm"
+    ref_limit_bin="$TMPDIR/xref-summary-top-referrers.bin"
+    limited_referrers=""
+    cat > "$ref_limit_asm" <<'ASM'
+.org $C000
+CallerA:
+    JSR Shared
+    RTS
+CallerB:
+    JSR Shared
+    RTS
+Shared:
+    RTS
+END
+ASM
+    limited_referrers=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        --xref-summary-top-referrers 1 \
+        "$ref_limit_asm" -o "$ref_limit_bin" 2>/dev/null)
+    main_line=$(printf '%s\n' "$limited_referrers" | grep '"label":"Main"' || true)
+    if [ -z "$main_line" ]; then
+        main_line=$(printf '%s\n' "$limited_referrers" | grep '"label":"Shared"' || true)
+    fi
+    if [ -z "$main_line" ]; then
+        fail "xref-summary top-referrers limit: missing callable entry"
+    fi
+    if ! printf '%s\n' "$main_line" | grep -q '"top_referring_routines":\['; then
+        fail "xref-summary top-referrers limit: missing top_referring_routines array"
+    fi
+    if printf '%s\n' "$main_line" | grep -q '"routine":"CallerB"'; then
+        fail "xref-summary top-referrers limit should truncate extra referrers"
+    fi
+
+    zero_nearby=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        --xref-summary-nearby-window 0 \
+        "$nearby_asm" -o "$nearby_bin" 2>/dev/null)
+    anchor_line=$(printf '%s\n' "$zero_nearby" | grep '"label":"Anchor"' || true)
+    if [ -z "$anchor_line" ]; then
+        fail "xref-summary nearby-window=0: missing Anchor entry"
+    fi
+    if printf '%s\n' "$anchor_line" | grep -q '"nearby_symbols":\['; then
+        fail "xref-summary nearby-window=0 should not report nearby symbols"
+    fi
+
+    empty_asm="$TMPDIR/xref-summary-empty.asm"
+    empty_bin="$TMPDIR/xref-summary-empty.bin"
+    empty_out=""
+    cat > "$empty_asm" <<'ASM'
+.org $C000
+END
+ASM
+    empty_out=$("$XASM" --pure-binary --xref-summary --xref-summary-format json \
+        "$empty_asm" -o "$empty_bin" 2>/dev/null)
+    if ! printf '%s\n' "$empty_out" | grep -Fq '"top_callables": []'; then
+        fail "xref-summary empty input should emit an empty top_callables array"
+    fi
+    if ! printf '%s\n' "$empty_out" | grep -Fq '"top_jump_targets": []'; then
+        fail "xref-summary empty input should emit an empty top_jump_targets array"
+    fi
+    if ! printf '%s\n' "$empty_out" | grep -Fq '"top_data_labels": []'; then
+        fail "xref-summary empty input should emit an empty top_data_labels array"
+    fi
+}
+
+run_expect_xref_summary_regressions
+
 echo "All regression tests passed"

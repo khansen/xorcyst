@@ -4240,7 +4240,8 @@ void astproc_second_pass(astnode *root)
     /* Preserve labels when generating a listing, so they can be emitted. */
     if (xasm_args.listing_file == NULL
         && xasm_args.xref_file == NULL
-        && !xasm_args.audit_raw_addresses) {
+        && !xasm_args.audit_raw_addresses
+        && !xasm_args.xref_summary) {
         remove_unused_labels();
     }
 }

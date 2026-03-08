@@ -48,6 +48,14 @@ enum tag_xref_format {
 
 typedef enum tag_xref_format xref_format;
 
+enum tag_xref_summary_format {
+    XREF_SUMMARY_FORMAT_JSON = 0,
+    XREF_SUMMARY_FORMAT_NDJSON,
+    XREF_SUMMARY_FORMAT_TEXT
+};
+
+typedef enum tag_xref_summary_format xref_summary_format;
+
 struct tag_xasm_arguments {
     const char *input_file;
     int debug;
@@ -82,6 +90,15 @@ struct tag_xasm_arguments {
     int xref_include_anon;
     char **include_paths;
     int include_path_count;
+    int xref_summary;
+    const char *xref_summary_output;
+    int xref_summary_format;
+    const char *xref_summary_kind;
+    int xref_summary_limit;
+    int xref_summary_top_referrers;
+    int xref_summary_nearby_window;
+    const char *xref_summary_include;
+    const char *xref_summary_exclude;
 };
 
 typedef struct tag_xasm_arguments xasm_arguments;
