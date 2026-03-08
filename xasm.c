@@ -138,6 +138,7 @@ static struct option long_options[] = {
   { "xref", required_argument, 0, 0 },
   { "xref-format", required_argument, 0, 0 },
   { "xref-data", required_argument, 0, 0 },
+  { "xref-include-owner", required_argument, 0, 0 },
   { "xref-include-locals", required_argument, 0, 0 },
   { "xref-include-anon", required_argument, 0, 0 },
   { "audit-raw-addresses", no_argument, 0, 0 },
@@ -200,6 +201,7 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--listing-format=text|json|ndjson]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
             [--xref-data=true|false]\n\
+            [--xref-include-owner=true|false]\n\
             [--xref-include-locals=true|false]\n\
             [--xref-include-anon=true|false]\n\
             [--xref-summary] [--xref-summary-output=FILE]\n\
@@ -654,6 +656,7 @@ parse_arguments (int argc, char **argv)
     xasm_args.xref_file = NULL;
     xasm_args.xref_format = XREF_FORMAT_JSON;
     xasm_args.xref_data = 0;
+    xasm_args.xref_include_owner = 0;
     xasm_args.xref_include_locals = 0;
     xasm_args.xref_include_anon = 0;
     xasm_args.xref_summary = 0;
@@ -815,6 +818,10 @@ parse_arguments (int argc, char **argv)
                 if (!parse_bool_value(optarg, &xasm_args.xref_data)) {
                     cli_error("invalid value for --xref-data: `%s' (expected true|false)", optarg);
                 }
+            } else if (strcmp(long_options[index].name, "xref-include-owner") == 0) {
+                if (!parse_bool_value(optarg, &xasm_args.xref_include_owner)) {
+                    cli_error("invalid value for --xref-include-owner: `%s' (expected true|false)", optarg);
+                }
             } else if (strcmp(long_options[index].name, "xref-include-locals") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_locals)) {
                     cli_error("invalid value for --xref-include-locals: `%s' (expected true|false)", optarg);
@@ -968,6 +975,15 @@ parse_arguments (int argc, char **argv)
         }
         if (xasm_args.xref_format != XREF_FORMAT_JSON) {
             cli_error("--xref-data=true requires --xref-format=json in the initial implementation");
+        }
+    }
+
+    if (xasm_args.xref_include_owner) {
+        if (xasm_args.xref_file == NULL) {
+            cli_error("--xref-include-owner=true requires --xref=FILE");
+        }
+        if (xasm_args.xref_format != XREF_FORMAT_JSON) {
+            cli_error("--xref-include-owner=true requires --xref-format=json in the initial implementation");
         }
     }
 
@@ -1470,6 +1486,7 @@ int main(int argc, char *argv[]) {
                            xasm_args.xref_file,
                            (xref_format)xasm_args.xref_format,
                            xasm_args.xref_data,
+                           xasm_args.xref_include_owner,
                            xasm_args.xref_include_locals,
                            xasm_args.xref_include_anon,
                            xasm_args.input_file,

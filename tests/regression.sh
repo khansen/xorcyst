@@ -461,6 +461,129 @@ ASM
         cat "$log_file" >&2
         fail "xref-data without --xref should exit 2 (got $rc)"
     fi
+
+    cat > "$TMPDIR/xref-data-reused-site.asm" <<'ASM'
+ORG $C000
+TableA:
+  DB 1
+RoutineA:
+  LDA TableA
+  RTS
+ORG $C000
+TableB:
+  DB 2
+RoutineB:
+  LDA TableB
+  RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --xref="$TMPDIR/xref-data-reused-site.json" --xref-data=true "$TMPDIR/xref-data-reused-site.asm" -o "$TMPDIR/xref-data-reused-site.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-data reused-site fixture failed"
+    fi
+
+    if [ "$(grep -o '"site_addr":"0xC001"' "$TMPDIR/xref-data-reused-site.json" | wc -l | tr -d ' ')" -ne 2 ]; then
+        cat "$TMPDIR/xref-data-reused-site.json" >&2
+        fail "xref-data should retain distinct data reads for reused CPU addresses across segments"
+    fi
+}
+
+run_expect_xref_include_owner() {
+    asm_file="$TMPDIR/xref-owner-fixture.asm"
+    out_file="$TMPDIR/xref-owner-fixture.bin"
+    xref_json="$TMPDIR/xref-owner.json"
+    xref_data_asm="$TMPDIR/xref-owner-data-fixture.asm"
+    xref_data_json="$TMPDIR/xref-owner-data.json"
+    log_file="$TMPDIR/xref-owner.log"
+
+    cat > "$asm_file" <<'ASM'
+ORG $C000
+First:
+  RTS
+ORG $C000
+  DW First
+Second:
+  JSR First
+  RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --xref="$xref_json" --xref-format=json --xref-include-owner=true "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-include-owner JSON generation failed"
+    fi
+
+    if ! grep -q '"symbol":"First".*"use_cpu_address":"0xC000".*"access":"address_compute".*"expression":"First"' "$xref_json"; then
+        fail "xref-include-owner should include directive-based reference record"
+    fi
+
+    if grep -q '"symbol":"First".*"use_cpu_address":"0xC000".*"owner_routine"' "$xref_json"; then
+        fail "xref-include-owner should omit owner fields for ownerless directive references"
+    fi
+
+    if ! grep -q '"symbol":"First".*"use_cpu_address":"0xC002".*"access":"call".*"owner_routine":"Second","owner_routine_addr":"0xc002"' "$xref_json"; then
+        fail "xref-include-owner should emit owner fields for instruction references"
+    fi
+
+    cat > "$xref_data_asm" <<'ASM'
+.DATASEG ZEROPAGE
+Ptr:
+  DSB 2
+.CODESEG
+ORG $C000
+Table:
+  DB 1,2,3
+Start:
+  LDA Table,X
+  LDA #<Table
+  STA Ptr
+  LDA #>Table
+  STA Ptr+1
+  LDA [Ptr],Y
+  RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --xref="$xref_data_json" --xref-format=json --xref-data=true --xref-include-owner=true "$xref_data_asm" -o "$TMPDIR/xref-owner-data.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-include-owner with xref-data fixture failed"
+    fi
+
+    if ! grep -q '"symbol":"Table","site_addr":"0xC003","routine":"Start","owner_routine":"Start","owner_routine_addr":"0xc003","displacement":0,"addressing_mode":"absolute_x"' "$xref_data_json"; then
+        fail "xref-include-owner should annotate direct data reads"
+    fi
+
+    if ! grep -q '"ptr_symbol":"Ptr","producer_site":"0xC00C","consumer_site":"0xC00E","access_kind":"read","routine":"Start","owner_routine":"Start","owner_routine_addr":"0xc003"' "$xref_data_json"; then
+        fail "xref-include-owner should annotate indirect data flows"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --xref-include-owner=true "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        cat "$log_file" >&2
+        fail "xref-include-owner without --xref should exit 2 (got $rc)"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --xref="$TMPDIR/xref-owner-text.out" --xref-format=text --xref-include-owner=true "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        cat "$log_file" >&2
+        fail "xref-include-owner with --xref-format=text should exit 2 (got $rc)"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --xref="$TMPDIR/xref-owner-csv.out" --xref-format=csv --xref-include-owner=true "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        cat "$log_file" >&2
+        fail "xref-include-owner with --xref-format=csv should exit 2 (got $rc)"
+    fi
 }
 
 run_expect_phase1_spec_parity() {
@@ -988,6 +1111,7 @@ run_expect_compare_match "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_compare_mismatch "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_xref_outputs
 run_expect_xref_data
+run_expect_xref_include_owner
 run_expect_phase1_spec_parity
 run_expect_unused_equ_feature
 run_expect_audit_raw_addresses_feature

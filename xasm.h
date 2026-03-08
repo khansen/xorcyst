@@ -111,6 +111,7 @@ struct tag_xasm_arguments {
     const char *xref_file;
     int xref_format;
     int xref_data;
+    int xref_include_owner;
     int xref_include_locals;
     int xref_include_anon;
     char **include_paths;
