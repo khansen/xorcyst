@@ -179,6 +179,9 @@ static struct option long_options[] = {
   { "data-consumers", no_argument, 0, 0 },
   { "data-consumers-output", required_argument, 0, 0 },
   { "data-consumers-format", required_argument, 0, 0 },
+  { "analyze-data-coverage", no_argument, 0, 0 },
+  { "data-coverage-output", required_argument, 0, 0 },
+  { "data-coverage-format", required_argument, 0, 0 },
   { "include-locals", required_argument, 0, 0 },
   { "include-anon", required_argument, 0, 0 },
   { "include-overlaps", required_argument, 0, 0 },
@@ -209,6 +212,8 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--index-patterns-split-pairs=LO:HI,...]\n\
             [--data-consumers] [--data-consumers-output=FILE]\n\
             [--data-consumers-format=json|ndjson|text]\n\
+            [--analyze-data-coverage] [--data-coverage-output=FILE]\n\
+            [--data-coverage-format=json|ndjson|text]\n\
             [--include-locals=true|false] [--include-anon=true|false]\n\
             [--include-overlaps=true|false]\n\
             [--audit-raw-addresses] [--audit-level=warn|error]\n\
@@ -272,6 +277,12 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
                             Write data-consumer analysis to FILE (default stdout)\n\
     --data-consumers-format=FMT\n\
                             Data-consumer format: json|ndjson|text (default json)\n\
+    --analyze-data-coverage\n\
+                            Report span coverage metrics only\n\
+    --data-coverage-output=FILE\n\
+                            Write data-coverage analysis to FILE (default stdout)\n\
+    --data-coverage-format=FMT\n\
+                            Data-coverage format: json|ndjson|text (default json)\n\
     --include-locals=BOOL  Include local labels (default false)\n\
     --include-anon=BOOL    Include anonymous labels (default false)\n\
     --include-overlaps=BOOL Include overlap symbols in span analyses (default false)\n\
@@ -531,6 +542,23 @@ static int parse_data_consumers_format_value(const char *value, data_consumers_f
     return 0;
 }
 
+static int parse_data_coverage_format_value(const char *value, data_coverage_format *out)
+{
+    if (strcmp(value, "json") == 0) {
+        *out = DATA_COVERAGE_FORMAT_JSON;
+        return 1;
+    }
+    if (strcmp(value, "ndjson") == 0) {
+        *out = DATA_COVERAGE_FORMAT_NDJSON;
+        return 1;
+    }
+    if (strcmp(value, "text") == 0) {
+        *out = DATA_COVERAGE_FORMAT_TEXT;
+        return 1;
+    }
+    return 0;
+}
+
 static void warn_global(const char *code, const char *fmt, ...)
 {
     va_list ap;
@@ -640,6 +668,9 @@ parse_arguments (int argc, char **argv)
     xasm_args.data_consumers = 0;
     xasm_args.data_consumers_output = NULL;
     xasm_args.data_consumers_format = DATA_CONSUMERS_FORMAT_JSON;
+    xasm_args.analyze_data_coverage = 0;
+    xasm_args.data_coverage_output = NULL;
+    xasm_args.data_coverage_format = DATA_COVERAGE_FORMAT_JSON;
     xasm_args.include_overlaps = 0;
 
     /* Parse options. */
@@ -872,6 +903,16 @@ parse_arguments (int argc, char **argv)
                     cli_error("invalid value for --data-consumers-format: `%s' (expected json|ndjson|text)", optarg);
                 }
                 xasm_args.data_consumers_format = fmt;
+            } else if (strcmp(long_options[index].name, "analyze-data-coverage") == 0) {
+                xasm_args.analyze_data_coverage = 1;
+            } else if (strcmp(long_options[index].name, "data-coverage-output") == 0) {
+                xasm_args.data_coverage_output = optarg;
+            } else if (strcmp(long_options[index].name, "data-coverage-format") == 0) {
+                data_coverage_format fmt;
+                if (!parse_data_coverage_format_value(optarg, &fmt)) {
+                    cli_error("invalid value for --data-coverage-format: `%s' (expected json|ndjson|text)", optarg);
+                }
+                xasm_args.data_coverage_format = fmt;
             } else if (strcmp(long_options[index].name, "include-locals") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_locals)) {
                     cli_error("invalid value for --include-locals: `%s' (expected true|false)", optarg);
@@ -1462,6 +1503,18 @@ int main(int argc, char *argv[]) {
                                      xasm_args.index_patterns_split_pairs,
                                      xasm_args.pure_binary)) {
             exit_code = 8;
+        }
+    }
+
+    if ((exit_code == 0) && output_generated && xasm_args.analyze_data_coverage) {
+        verbose("Analyzing data coverage...");
+        if (!generate_data_coverage(root_node,
+                                    xasm_args.data_coverage_output,
+                                    (data_coverage_format)xasm_args.data_coverage_format,
+                                    xasm_args.include_overlaps,
+                                    xasm_args.index_patterns_split_pairs,
+                                    xasm_args.pure_binary)) {
+            exit_code = 9;
         }
     }
 

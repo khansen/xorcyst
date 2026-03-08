@@ -3774,4 +3774,217 @@ ASM
 
 run_expect_data_consumers
 
+run_expect_data_coverage() {
+    basic_asm="$TMPDIR/data-coverage-basic.asm"
+    basic_bin="$TMPDIR/data-coverage-basic.bin"
+    basic_json="$TMPDIR/data-coverage-basic.json"
+    basic_ndjson="$TMPDIR/data-coverage-basic.ndjson"
+    basic_text="$TMPDIR/data-coverage-basic.txt"
+    log_file="$TMPDIR/data-coverage.log"
+    unresolved_out=""
+    overlap_default=""
+    overlap_included=""
+    bank_end_out=""
+
+    cat > "$basic_asm" <<'ASM'
+.org $C000
+CoordTable:
+    .db $10,$20,$30,$40
+ReadCoords:
+    LDX #$00
+    LDA CoordTable,X
+    STA $00
+    LDA CoordTable+1,X
+    STA $01
+    RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-output "$basic_json" \
+        --data-coverage-format json \
+        "$basic_asm" -o "$basic_bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "data-coverage JSON generation failed"
+    fi
+    if [ ! -s "$basic_json" ]; then
+        fail "data-coverage JSON file not generated"
+    fi
+    if ! grep -q '^\[' "$basic_json"; then
+        fail "data-coverage JSON output should be an array"
+    fi
+    if ! grep -q '"label":"CoordTable"' "$basic_json"; then
+        fail "data-coverage missing CoordTable record"
+    fi
+    if ! grep -q '"declared_start":"0xC000"' "$basic_json"; then
+        fail "data-coverage declared_start mismatch for CoordTable"
+    fi
+    if ! grep -q '"declared_end_exclusive":"0xC004"' "$basic_json"; then
+        fail "data-coverage declared_end_exclusive mismatch for CoordTable"
+    fi
+    if ! grep -q '"declared_size":4' "$basic_json"; then
+        fail "data-coverage declared_size mismatch for CoordTable"
+    fi
+    if ! grep -Fq '"covered_ranges":[{"start":"0xC000","end_exclusive":"0xC002"}]' "$basic_json"; then
+        fail "data-coverage covered_ranges mismatch for CoordTable"
+    fi
+    if ! grep -q '"covered_size":2' "$basic_json"; then
+        fail "data-coverage covered_size mismatch for CoordTable"
+    fi
+    if ! grep -Fq '"uncovered_ranges":[{"start":"0xC002","end_exclusive":"0xC004"}]' "$basic_json"; then
+        fail "data-coverage uncovered_ranges mismatch for CoordTable"
+    fi
+    if ! grep -q '"uncovered_size":2' "$basic_json"; then
+        fail "data-coverage uncovered_size mismatch for CoordTable"
+    fi
+    if ! grep -q '"access_count":2' "$basic_json"; then
+        fail "data-coverage access_count mismatch for CoordTable"
+    fi
+    if ! grep -q '"has_indexed_accesses_without_exact_coverage":false' "$basic_json"; then
+        fail "data-coverage should report exact coverage for immediate-indexed reads"
+    fi
+
+    if ! "$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format ndjson \
+        "$basic_asm" -o "$basic_bin" >"$basic_ndjson" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "data-coverage NDJSON generation failed"
+    fi
+    if ! grep -q '"label":"CoordTable"' "$basic_ndjson"; then
+        fail "data-coverage NDJSON missing CoordTable record"
+    fi
+
+    if ! "$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format text \
+        "$basic_asm" -o "$basic_bin" >"$basic_text" 2>"$log_file"; then
+        cat "$log_file" >&2
+        fail "data-coverage text generation failed"
+    fi
+    if ! grep -q 'CoordTable @ 0xC000 size=4' "$basic_text"; then
+        fail "data-coverage text output missing CoordTable header"
+    fi
+    if ! grep -q 'access_count: 2' "$basic_text"; then
+        fail "data-coverage text output missing access_count"
+    fi
+    if ! grep -q 'has_indexed_accesses_without_exact_coverage: false' "$basic_text"; then
+        fail "data-coverage text output missing indexed coverage flag"
+    fi
+
+    cat > "$TMPDIR/data-coverage-full.asm" <<'ASM'
+.org $C000
+Table:
+    .db $10,$20
+Main:
+    LDA Table
+    LDA Table+1
+    RTS
+END
+ASM
+    full_out=$("$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format json \
+        "$TMPDIR/data-coverage-full.asm" -o "$TMPDIR/data-coverage-full.bin" 2>/dev/null)
+    if ! printf '%s\n' "$full_out" | grep -Fq '"covered_ranges":[{"start":"0xC000","end_exclusive":"0xC002"}]'; then
+        fail "data-coverage full coverage fixture should cover the entire span"
+    fi
+    if ! printf '%s\n' "$full_out" | grep -q '"uncovered_ranges":\[\]'; then
+        fail "data-coverage full coverage fixture should leave no uncovered ranges"
+    fi
+    if ! printf '%s\n' "$full_out" | grep -q '"uncovered_size":0'; then
+        fail "data-coverage full coverage fixture should report uncovered_size=0"
+    fi
+
+    cat > "$TMPDIR/data-coverage-unresolved.asm" <<'ASM'
+.org $C000
+Main:
+    LDA Table,X
+    STA Table+1,X
+    RTS
+Table:
+    .db $00,$01,$02
+END
+ASM
+    unresolved_out=$("$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format json \
+        "$TMPDIR/data-coverage-unresolved.asm" -o "$TMPDIR/data-coverage-unresolved.bin" 2>/dev/null)
+    if ! printf '%s\n' "$unresolved_out" | grep -q '"access_count":2'; then
+        fail "data-coverage should count unresolved indexed accesses in access_count"
+    fi
+    if ! printf '%s\n' "$unresolved_out" | grep -q '"covered_ranges":\[\]'; then
+        fail "data-coverage unresolved indexed access should not contribute exact coverage"
+    fi
+    if ! printf '%s\n' "$unresolved_out" | grep -q '"covered_size":0'; then
+        fail "data-coverage unresolved indexed access should keep covered_size at 0"
+    fi
+    if ! printf '%s\n' "$unresolved_out" | grep -q '"uncovered_size":3'; then
+        fail "data-coverage unresolved indexed access should leave the full span uncovered"
+    fi
+    if ! printf '%s\n' "$unresolved_out" | grep -q '"has_indexed_accesses_without_exact_coverage":true'; then
+        fail "data-coverage unresolved indexed access should set has_indexed_accesses_without_exact_coverage"
+    fi
+
+    cat > "$TMPDIR/data-coverage-overlap.asm" <<'ASM'
+.org $C000
+Primary:
+Alias:
+    .db $11,$22
+Main:
+    LDA Primary
+    RTS
+END
+ASM
+    overlap_default=$("$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format json \
+        "$TMPDIR/data-coverage-overlap.asm" -o "$TMPDIR/data-coverage-overlap.bin" 2>/dev/null)
+    overlap_included=$("$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format json --include-overlaps=true \
+        "$TMPDIR/data-coverage-overlap.asm" -o "$TMPDIR/data-coverage-overlap.bin" 2>/dev/null)
+    if printf '%s\n' "$overlap_default" | grep -q '"label":"Alias"'; then
+        fail "data-coverage should exclude overlap symbols by default"
+    fi
+    if ! printf '%s\n' "$overlap_included" | grep -q '"label":"Alias"'; then
+        fail "data-coverage --include-overlaps=true did not include overlap symbol"
+    fi
+
+    cat > "$TMPDIR/data-coverage-bank-end.asm" <<'ASM'
+.org $FFFC
+TailTable:
+    .db $01,$02,$03,$04
+END
+ASM
+    bank_end_out=$("$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format json \
+        "$TMPDIR/data-coverage-bank-end.asm" -o "$TMPDIR/data-coverage-bank-end.bin" 2>/dev/null)
+    if ! printf '%s\n' "$bank_end_out" | grep -Fq '"declared_end_exclusive":"0x10000"'; then
+        fail "data-coverage should preserve a non-wrapping end-exclusive address at bank end"
+    fi
+    if ! printf '%s\n' "$bank_end_out" | grep -Fq '"uncovered_ranges":[{"start":"0xFFFC","end_exclusive":"0x10000"}]'; then
+        fail "data-coverage bank-end spans should preserve a non-wrapping uncovered range end"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format badformat \
+        "$basic_asm" -o "$basic_bin" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        fail "data-coverage invalid format should exit 2 (got $rc)"
+    fi
+
+    cat > "$TMPDIR/data-coverage-empty.asm" <<'ASM'
+.org $C000
+Start:
+    RTS
+END
+ASM
+    empty_out=$("$XASM" --pure-binary --analyze-data-coverage \
+        --data-coverage-format json \
+        "$TMPDIR/data-coverage-empty.asm" -o "$TMPDIR/data-coverage-empty.bin" 2>/dev/null)
+    if [ "$(printf '%s' "$empty_out" | tr -d '[:space:]')" != "[]" ]; then
+        fail "data-coverage empty input should emit an empty JSON array"
+    fi
+}
+
+run_expect_data_coverage
+
 echo "All regression tests passed"
