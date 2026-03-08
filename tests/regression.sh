@@ -321,6 +321,148 @@ ASM
     fi
 }
 
+run_expect_xref_data() {
+    asm_file="$TMPDIR/xref-data-fixture.asm"
+    out_file="$TMPDIR/xref-data-fixture.bin"
+    xref_json="$TMPDIR/xref-data.json"
+    ownerless_asm="$TMPDIR/xref-data-ownerless.asm"
+    ownerless_json="$TMPDIR/xref-data-ownerless.json"
+    log_file="$TMPDIR/xref-data.log"
+
+    cat > "$asm_file" <<'ASM'
+.DATASEG ZEROPAGE
+Ptr:
+  DSB 2
+.CODESEG
+ORG $C000
+DataTable:
+  DB 1,2,3
+OtherTable:
+  DB 4,5,6
+StateBuf:
+  DB 0,0,0
+Start:
+  LDA DataTable,X
+  STA StateBuf+2,Y
+  LDA #<DataTable
+  STA Ptr
+  LDA #>DataTable
+  STA Ptr+1
+  LDA [Ptr],Y
+  LDA #<OtherTable
+  STA Ptr
+  LDA [Ptr],Y
+  LDA #>OtherTable
+  STA Ptr+1
+  STA [Ptr],Y
+  RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --xref="$xref_json" --xref-data=true "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-data JSON generation failed"
+    fi
+
+    if [ ! -s "$xref_json" ]; then
+        fail "xref-data JSON file not generated"
+    fi
+
+    for key in '"symbols"' '"references"' '"data_reads"' '"data_writes"' '"indirect_data_flows"'; do
+        if ! grep -Fq "$key" "$xref_json"; then
+            fail "xref-data JSON missing key: $key"
+        fi
+    done
+
+    if ! grep -q '"symbol":"DataTable","site_addr":"0xC009","routine":"Start","displacement":0,"addressing_mode":"absolute_x"' "$xref_json"; then
+        fail "xref-data direct read record mismatch for DataTable"
+    fi
+
+    if ! grep -q '"symbol":"StateBuf","site_addr":"0xC00C","routine":"Start","displacement":2,"addressing_mode":"absolute_y"' "$xref_json"; then
+        fail "xref-data direct write record mismatch for StateBuf"
+    fi
+
+    if ! grep -q '"symbol":"Ptr","site_addr":"0xC011","routine":"Start","displacement":0,"addressing_mode":"absolute"' "$xref_json"; then
+        fail "xref-data pointer low-byte write missing"
+    fi
+
+    if ! grep -q '"symbol":"Ptr","site_addr":"0xC015","routine":"Start","displacement":1,"addressing_mode":"absolute"' "$xref_json"; then
+        fail "xref-data pointer high-byte write missing"
+    fi
+
+    if ! grep -q '"ptr_symbol":"Ptr","producer_site":"0xC015","consumer_site":"0xC017","access_kind":"read","routine":"Start"' "$xref_json"; then
+        fail "xref-data indirect read flow missing"
+    fi
+
+    if ! grep -q '"ptr_symbol":"Ptr","producer_site":"0xC021","consumer_site":"0xC023","access_kind":"write","routine":"Start"' "$xref_json"; then
+        fail "xref-data indirect write flow missing"
+    fi
+
+    if grep -q '"consumer_site":"0xC01D"' "$xref_json"; then
+        fail "xref-data should not emit indirect flow after pointer invalidation and before pair refresh"
+    fi
+
+    cat > "$ownerless_asm" <<'ASM'
+ORG $C000
+DataTable:
+  DB 1
+  LDA DataTable
+  RTS
+END
+ASM
+
+    if ! "$XASM" --pure-binary --xref="$ownerless_json" --xref-data=true "$ownerless_asm" -o "$TMPDIR/xref-data-ownerless.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-data ownerless fixture failed"
+    fi
+
+    if ! grep -q '"symbol":"DataTable","site_addr":"0xC001","displacement":0,"addressing_mode":"absolute"' "$ownerless_json"; then
+        fail "xref-data ownerless direct read record missing"
+    fi
+
+    if grep -q '"symbol":"DataTable","site_addr":"0xC001","routine":' "$ownerless_json"; then
+        fail "xref-data ownerless direct read should omit routine"
+    fi
+
+    if ! "$XASM" --pure-binary --xref="$TMPDIR/xref-data-disabled.json" --xref-data=false "$asm_file" -o "$TMPDIR/xref-data-disabled.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "xref-data explicit opt-out fixture failed"
+    fi
+
+    for key in '"data_reads"' '"data_writes"' '"indirect_data_flows"'; do
+        if grep -Fq "$key" "$TMPDIR/xref-data-disabled.json"; then
+            fail "xref-data explicit opt-out should omit key: $key"
+        fi
+    done
+
+    set +e
+    "$XASM" --pure-binary --xref="$TMPDIR/xref-data-text.out" --xref-format=text --xref-data=true "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        cat "$log_file" >&2
+        fail "xref-data with --xref-format=text should exit 2 (got $rc)"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --xref="$TMPDIR/xref-data-csv.out" --xref-format=csv --xref-data=true "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        cat "$log_file" >&2
+        fail "xref-data with --xref-format=csv should exit 2 (got $rc)"
+    fi
+
+    set +e
+    "$XASM" --pure-binary --xref-data=true "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 2 ]; then
+        cat "$log_file" >&2
+        fail "xref-data without --xref should exit 2 (got $rc)"
+    fi
+}
+
 run_expect_phase1_spec_parity() {
     asm_file="$TMPDIR/spec-phase1.asm"
     out_file="$TMPDIR/spec-phase1.bin"
@@ -845,6 +987,7 @@ run_expect_success_pure_binary_with_listing_ndjson "$ROOT_DIR/tests/coverage_org
 run_expect_compare_match "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_compare_mismatch "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_xref_outputs
+run_expect_xref_data
 run_expect_phase1_spec_parity
 run_expect_unused_equ_feature
 run_expect_audit_raw_addresses_feature
