@@ -7722,7 +7722,9 @@ static int audit_visit_data(astnode *data, void *arg, astnode **next)
             if (label_name == NULL) {
                 continue;
             }
-            snprintf(pair_expr, sizeof(pair_expr), "%s,%s", operands[byte_index], operands[byte_index + 1]);
+            snprintf(pair_expr, sizeof(pair_expr), "%.*s,%.*s",
+                    (int)(sizeof operands[0] - 1), operands[byte_index],
+                    (int)(sizeof operands[0] - 1), operands[byte_index + 1]);
             add_audit_finding(ctx,
                               "A131",
                               expr_list[byte_index]->loc,
