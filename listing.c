@@ -2783,7 +2783,7 @@ static int emit_xref_json(const char *filename,
     fprintf(fp, "  \"symbols\": [");
     for (i = 0; i < ctx->symbol_count; ++i) {
         const xref_symbol *s = &ctx->symbols[i];
-        fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+        fprintf(fp, "%s\n    {", (i == 0) ? "" : ",");
         fprintf(fp, "\"name\":");
         print_json_string(fp, s->name);
         fprintf(fp, ",\"kind\":");
@@ -2831,7 +2831,7 @@ static int emit_xref_json(const char *filename,
     for (i = 0; i < ctx->ref_count; ++i) {
         const xref_ref *r = &ctx->refs[i];
         xref_owner_info owner;
-        fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+        fprintf(fp, "%s\n    {", (i == 0) ? "" : ",");
         fprintf(fp, "\"symbol\":");
         print_json_string(fp, r->symbol);
         fprintf(fp, ",\"file\":");
@@ -2891,7 +2891,7 @@ static int emit_xref_json(const char *filename,
             char site_addr[16];
             const xref_data_edge *edge = &data_reads[i];
             format_xref_addr(site_addr, sizeof(site_addr), edge->site_addr);
-            fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+            fprintf(fp, "%s\n    {", (i == 0) ? "" : ",");
             fprintf(fp, "\"symbol\":");
             print_json_string(fp, edge->symbol);
             fprintf(fp, ",\"site_addr\":");
@@ -2923,7 +2923,7 @@ static int emit_xref_json(const char *filename,
             char site_addr[16];
             const xref_data_edge *edge = &data_writes[i];
             format_xref_addr(site_addr, sizeof(site_addr), edge->site_addr);
-            fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+            fprintf(fp, "%s\n    {", (i == 0) ? "" : ",");
             fprintf(fp, "\"symbol\":");
             print_json_string(fp, edge->symbol);
             fprintf(fp, ",\"site_addr\":");
@@ -2957,7 +2957,7 @@ static int emit_xref_json(const char *filename,
             const xref_indirect_flow *flow = &indirect_flows[i];
             format_xref_addr(producer_site, sizeof(producer_site), flow->producer_site);
             format_xref_addr(consumer_site, sizeof(consumer_site), flow->consumer_site);
-            fprintf(fp, "%s\n    {", (i == 0) ? "\n" : ",\n");
+            fprintf(fp, "%s\n    {", (i == 0) ? "" : ",");
             fprintf(fp, "\"ptr_symbol\":");
             print_json_string(fp, flow->ptr_symbol);
             fprintf(fp, ",\"producer_site\":");

@@ -264,6 +264,11 @@ ASM
         fail "xref JSON missing call access classification"
     fi
 
+    if grep -Eq '^[[:space:]]*$' "$xref_json"; then
+        cat "$xref_json" >&2
+        fail "xref JSON should not contain blank lines"
+    fi
+
     if grep -q '@@loop' "$xref_json"; then
         fail "xref JSON should exclude locals by default"
     fi
@@ -400,6 +405,11 @@ ASM
 
     if grep -q '"consumer_site":"0xC01D"' "$xref_json"; then
         fail "xref-data should not emit indirect flow after pointer invalidation and before pair refresh"
+    fi
+
+    if grep -Eq '^[[:space:]]*$' "$xref_json"; then
+        cat "$xref_json" >&2
+        fail "xref-data JSON should not contain blank lines"
     fi
 
     cat > "$ownerless_asm" <<'ASM'
