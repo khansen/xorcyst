@@ -1362,6 +1362,19 @@ typedef struct tag_xref_owner_info {
     int addr;
 } xref_owner_info;
 
+typedef struct tag_xref_owner_entry {
+    int is_dataseg;
+    int segment_id;
+    int cpu_address;
+    int symbol_index;
+    int insertion_index;
+} xref_owner_entry;
+
+typedef struct tag_xref_owner_index {
+    xref_owner_entry *entries;
+    int count;
+} xref_owner_index;
+
 static int extract_symbol_and_displacement(astnode *expr, const char **symbol, int *displacement);
 
 static int starts_with(const char *s, const char *prefix)
@@ -2089,60 +2102,238 @@ static int xref_ref_compare(const void *a, const void *b)
     return strcmp(lhs->symbol, rhs->symbol);
 }
 
-static int has_xref_instruction_at_address(const xref_build_context *ctx,
-                                           int addr,
-                                           int is_dataseg,
-                                           int segment_id)
+/* Sorted-key helpers backing the owner index. Owner lookup used to be an
+   O(symbol_count * instr_count) double scan per call; the index below lets us
+   build the required data once and answer each lookup with binary search. */
+
+typedef struct tag_xref_instr_key {
+    int is_dataseg;
+    int segment_id;
+    int cpu_address;
+} xref_instr_key;
+
+static int compare_xref_instr_key(const void *a, const void *b)
 {
-    int i;
-    for (i = 0; i < ctx->instr_count; i++) {
-        if (ctx->instrs[i].cpu_address == addr
-            && ctx->instrs[i].is_dataseg == is_dataseg
-            && ctx->instrs[i].segment_id == segment_id) {
+    const xref_instr_key *ka = (const xref_instr_key *)a;
+    const xref_instr_key *kb = (const xref_instr_key *)b;
+    if (ka->is_dataseg != kb->is_dataseg) {
+        return (ka->is_dataseg < kb->is_dataseg) ? -1 : 1;
+    }
+    if (ka->segment_id != kb->segment_id) {
+        return (ka->segment_id < kb->segment_id) ? -1 : 1;
+    }
+    if (ka->cpu_address != kb->cpu_address) {
+        return (ka->cpu_address < kb->cpu_address) ? -1 : 1;
+    }
+    return 0;
+}
+
+static int xref_instr_key_present(const xref_instr_key *keys,
+                                  int count,
+                                  int is_dataseg,
+                                  int segment_id,
+                                  int cpu_address)
+{
+    int lo = 0;
+    int hi = count;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        const xref_instr_key *k = &keys[mid];
+        int cmp;
+        if (k->is_dataseg != is_dataseg) {
+            cmp = (k->is_dataseg < is_dataseg) ? -1 : 1;
+        } else if (k->segment_id != segment_id) {
+            cmp = (k->segment_id < segment_id) ? -1 : 1;
+        } else if (k->cpu_address != cpu_address) {
+            cmp = (k->cpu_address < cpu_address) ? -1 : 1;
+        } else {
+            cmp = 0;
+        }
+        if (cmp == 0) {
             return 1;
+        } else if (cmp < 0) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
         }
     }
     return 0;
 }
 
-static void lookup_xref_routine_owner(const xref_build_context *ctx,
-                                      int site_addr,
-                                      int is_dataseg,
-                                      int segment_id,
-                                      xref_owner_info *out)
+static int compare_xref_owner_entry(const void *a, const void *b)
 {
+    const xref_owner_entry *ea = (const xref_owner_entry *)a;
+    const xref_owner_entry *eb = (const xref_owner_entry *)b;
+    if (ea->is_dataseg != eb->is_dataseg) {
+        return (ea->is_dataseg < eb->is_dataseg) ? -1 : 1;
+    }
+    if (ea->segment_id != eb->segment_id) {
+        return (ea->segment_id < eb->segment_id) ? -1 : 1;
+    }
+    if (ea->cpu_address != eb->cpu_address) {
+        return (ea->cpu_address < eb->cpu_address) ? -1 : 1;
+    }
+    /* Break ties by position in ctx->symbols so qsort() instability cannot
+       change which label wins for a given address. */
+    if (ea->insertion_index != eb->insertion_index) {
+        return (ea->insertion_index < eb->insertion_index) ? -1 : 1;
+    }
+    return 0;
+}
+
+static void free_xref_owner_index(xref_owner_index *index)
+{
+    if (index == NULL) {
+        return;
+    }
+    free(index->entries);
+    index->entries = NULL;
+    index->count = 0;
+}
+
+/* Build, once per xref context, the sorted owner index used by
+   lookup_xref_routine_owner(). An entry is a valid routine owner under the
+   existing semantics: defined, has a CPU address, global-scoped label, and has
+   an instruction at that (is_dataseg, segment_id, cpu_address). Returns 0 on
+   allocation failure. */
+static int build_xref_owner_index(const xref_build_context *ctx, xref_owner_index *index)
+{
+    xref_instr_key *keys = NULL;
+    xref_owner_entry *entries = NULL;
+    int entry_count = 0;
     int i;
-    const xref_symbol *best = NULL;
-    int best_addr = -1;
-    out->name = NULL;
-    out->has_addr = 0;
-    out->addr = 0;
+    int w;
+
+    index->entries = NULL;
+    index->count = 0;
+
+    if (ctx->instr_count > 0) {
+        keys = (xref_instr_key *)malloc((size_t)ctx->instr_count * sizeof(xref_instr_key));
+        if (keys == NULL) {
+            return 0;
+        }
+        for (i = 0; i < ctx->instr_count; i++) {
+            keys[i].is_dataseg = ctx->instrs[i].is_dataseg;
+            keys[i].segment_id = ctx->instrs[i].segment_id;
+            keys[i].cpu_address = ctx->instrs[i].cpu_address;
+        }
+        qsort(keys, (size_t)ctx->instr_count, sizeof(xref_instr_key), compare_xref_instr_key);
+    }
+
+    if (ctx->symbol_count > 0) {
+        entries = (xref_owner_entry *)malloc((size_t)ctx->symbol_count * sizeof(xref_owner_entry));
+        if (entries == NULL) {
+            free(keys);
+            return 0;
+        }
+    }
+
     for (i = 0; i < ctx->symbol_count; i++) {
         const xref_symbol *s = &ctx->symbols[i];
         if (!s->defined || !s->has_cpu_address) {
             continue;
         }
-        if (s->is_dataseg != is_dataseg || s->segment_id != segment_id) {
-            continue;
-        }
         if (strcmp(s->scope, "global") != 0 || strcmp(s->kind, "label") != 0) {
             continue;
         }
-        if (s->cpu_address > site_addr) {
+        if (!xref_instr_key_present(keys, ctx->instr_count, s->is_dataseg, s->segment_id, s->cpu_address)) {
             continue;
         }
-        if (!has_xref_instruction_at_address(ctx, s->cpu_address, is_dataseg, segment_id)) {
-            continue;
+        entries[entry_count].is_dataseg = s->is_dataseg;
+        entries[entry_count].segment_id = s->segment_id;
+        entries[entry_count].cpu_address = s->cpu_address;
+        entries[entry_count].symbol_index = i;
+        /* Tie-break key = position in ctx->symbols. generate_xref() sorts the
+           symbol table (xref_symbol_compare) before emit, so this is the xref
+           symbol sort order, not raw insertion order -- but it is exactly the
+           order the old linear owner scan walked, so ownership is unchanged. */
+        entries[entry_count].insertion_index = i;
+        entry_count++;
+    }
+
+    free(keys);
+
+    if (entry_count > 0) {
+        qsort(entries, (size_t)entry_count, sizeof(xref_owner_entry), compare_xref_owner_entry);
+        /* Collapse duplicate addresses, keeping the entry that sorts first
+           (lowest position in ctx->symbols, i.e. earliest in the xref symbol
+           sort order). This matches the old linear scan, which took the first
+           qualifying symbol it walked in that same array. */
+        w = 1;
+        for (i = 1; i < entry_count; i++) {
+            const xref_owner_entry *prev = &entries[w - 1];
+            const xref_owner_entry *cur = &entries[i];
+            if (cur->is_dataseg == prev->is_dataseg
+                && cur->segment_id == prev->segment_id
+                && cur->cpu_address == prev->cpu_address) {
+                continue;
+            }
+            entries[w++] = *cur;
         }
-        if (s->cpu_address > best_addr) {
-            best = s;
-            best_addr = s->cpu_address;
+        entry_count = w;
+    }
+
+    index->entries = entries;
+    index->count = entry_count;
+    return 1;
+}
+
+/* Find the owner of site_addr: the nearest preceding global code label in the
+   same section whose address is <= site_addr and is itself an instruction
+   address. Binary search over the sorted owner index. */
+static void lookup_xref_routine_owner(const xref_build_context *ctx,
+                                      const xref_owner_index *index,
+                                      int site_addr,
+                                      int is_dataseg,
+                                      int segment_id,
+                                      xref_owner_info *out)
+{
+    int lo = 0;
+    int hi;
+    int result = -1;
+
+    out->name = NULL;
+    out->has_addr = 0;
+    out->addr = 0;
+
+    if (index == NULL) {
+        return;
+    }
+
+    hi = index->count;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        const xref_owner_entry *e = &index->entries[mid];
+        int cmp;
+        if (e->is_dataseg != is_dataseg) {
+            cmp = (e->is_dataseg < is_dataseg) ? -1 : 1;
+        } else if (e->segment_id != segment_id) {
+            cmp = (e->segment_id < segment_id) ? -1 : 1;
+        } else if (e->cpu_address != site_addr) {
+            cmp = (e->cpu_address < site_addr) ? -1 : 1;
+        } else {
+            cmp = 0;
+        }
+        if (cmp <= 0) {
+            /* entry <= target key: candidate owner, keep looking right for a
+               later (higher-address) match in the same section. */
+            result = mid;
+            lo = mid + 1;
+        } else {
+            hi = mid;
         }
     }
-    if (best != NULL) {
-        out->name = best->name;
-        out->has_addr = 1;
-        out->addr = best->cpu_address;
+
+    if (result >= 0) {
+        const xref_owner_entry *e = &index->entries[result];
+        if (e->is_dataseg == is_dataseg
+            && e->segment_id == segment_id
+            && e->cpu_address <= site_addr) {
+            const xref_symbol *s = &ctx->symbols[e->symbol_index];
+            out->name = s->name;
+            out->has_addr = 1;
+            out->addr = s->cpu_address;
+        }
     }
 }
 
@@ -2497,6 +2688,7 @@ static void dedupe_xref_indirect_flows(xref_indirect_flow *flows, int *count)
 }
 
 static int build_xref_data_edges(const xref_build_context *ctx,
+                                 const xref_owner_index *owner_index,
                                  xref_data_edge **reads_out,
                                  int *read_count_out,
                                  xref_data_edge **writes_out,
@@ -2522,7 +2714,7 @@ static int build_xref_data_edges(const xref_build_context *ctx,
         if (!scope_allowed(scope, ctx->include_locals, ctx->include_anon)) {
             continue;
         }
-        lookup_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg, instr->segment_id, &owner);
+        lookup_xref_routine_owner(ctx, owner_index, instr->cpu_address, instr->is_dataseg, instr->segment_id, &owner);
         if (instr->direct_access_kind == 1) {
             if (!append_xref_data_edge(&reads,
                                        &read_count,
@@ -2578,6 +2770,7 @@ fail:
 }
 
 static int build_xref_indirect_flows(const xref_build_context *ctx,
+                                     const xref_owner_index *owner_index,
                                      xref_indirect_flow **flows_out,
                                      int *flow_count_out)
 {
@@ -2606,7 +2799,7 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
     for (i = 0; i < ctx->instr_count; i++) {
         const xref_instr *instr = &ctx->instrs[i];
         xref_owner_info owner;
-        lookup_xref_routine_owner(ctx, instr->cpu_address, instr->is_dataseg, instr->segment_id, &owner);
+        lookup_xref_routine_owner(ctx, owner_index, instr->cpu_address, instr->is_dataseg, instr->segment_id, &owner);
         if (instr->is_dataseg != current_section
             || instr->segment_id != current_segment_id
             || !nullable_string_equal(owner.name, current_routine)) {
@@ -2740,14 +2933,26 @@ static int emit_xref_json(const char *filename,
     int data_read_count = 0;
     int data_write_count = 0;
     int indirect_flow_count = 0;
+    xref_owner_index owner_index;
+    owner_index.entries = NULL;
+    owner_index.count = 0;
     fp = fopen(filename, "w");
     if (fp == NULL) {
         fprintf(stderr, "error: could not open `%s' for writing\n", filename);
         return 0;
     }
+    /* Owner lookup is the xref-data hot path. Build the index once here and
+       reuse it for data edges, indirect flows, and per-reference owner fields. */
+    if (include_data || ctx->include_owner) {
+        if (!build_xref_owner_index(ctx, &owner_index)) {
+            fclose(fp);
+            fprintf(stderr, "error: could not build xref owner index\n");
+            return 0;
+        }
+    }
     if (include_data) {
-        if (!build_xref_data_edges(ctx, &data_reads, &data_read_count, &data_writes, &data_write_count)
-            || !build_xref_indirect_flows(ctx, &indirect_flows, &indirect_flow_count)) {
+        if (!build_xref_data_edges(ctx, &owner_index, &data_reads, &data_read_count, &data_writes, &data_write_count)
+            || !build_xref_indirect_flows(ctx, &owner_index, &indirect_flows, &indirect_flow_count)) {
             for (i = 0; i < data_read_count; i++) {
                 free_xref_data_edge(&data_reads[i]);
             }
@@ -2757,6 +2962,7 @@ static int emit_xref_json(const char *filename,
             for (i = 0; i < indirect_flow_count; i++) {
                 free_xref_indirect_flow(&indirect_flows[i]);
             }
+            free_xref_owner_index(&owner_index);
             fclose(fp);
             free(data_reads);
             free(data_writes);
@@ -2868,7 +3074,7 @@ static int emit_xref_json(const char *filename,
         fprintf(fp, ",\"expression\":");
         print_json_string(fp, r->expression != NULL ? r->expression : "");
         if (ctx->include_owner && r->has_cpu_address) {
-            lookup_xref_routine_owner(ctx, r->cpu_address, r->is_dataseg, r->segment_id, &owner);
+            lookup_xref_routine_owner(ctx, &owner_index, r->cpu_address, r->is_dataseg, r->segment_id, &owner);
             if (owner.name != NULL && owner.has_addr) {
                 char owner_addr[16];
                 format_xref_owner_addr(owner_addr, sizeof(owner_addr), owner.addr);
@@ -2884,6 +3090,9 @@ static int emit_xref_json(const char *filename,
         fprintf(fp, "\n  ");
     }
     fprintf(fp, "]");
+    /* All owner lookups are complete; the remaining data sections reuse the
+       already-built edge/flow records. */
+    free_xref_owner_index(&owner_index);
     if (include_data) {
         fprintf(fp, ",\n");
         fprintf(fp, "  \"data_reads\": [");
@@ -4279,6 +4488,19 @@ typedef struct tag_index_data_range {
     int segment_id;
 } index_data_range;
 
+/* Lookup tables built once after the AST walk so label-by-name and
+   instruction-at-address queries are binary searches instead of the
+   O(label_count * instr_count) linear scans they used to be. */
+typedef struct tag_index_name_entry {
+    const char *name;
+    int label_index;
+} index_name_entry;
+
+typedef struct tag_index_addr_key {
+    int segment_id;
+    int cpu_address;
+} index_addr_key;
+
 typedef struct tag_index_analysis_context {
     index_label *labels;
     int label_count;
@@ -4297,6 +4519,10 @@ typedef struct tag_index_analysis_context {
     index_data_range *data_ranges;
     int data_range_count;
     int data_range_capacity;
+    index_name_entry *name_index;
+    int name_index_count;
+    index_addr_key *addr_index;
+    int addr_index_count;
 } index_analysis_context;
 
 typedef struct tag_index_suffix_pair {
@@ -4461,6 +4687,27 @@ static int add_index_event(index_analysis_context *ctx, int kind, int index)
 static int find_index_label_by_name(const index_analysis_context *ctx, const char *name)
 {
     int i;
+    if (ctx->name_index != NULL) {
+        int lo = 0;
+        int hi = ctx->name_index_count;
+        int result = -1;
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            int cmp = strcmp(ctx->name_index[mid].name, name);
+            if (cmp < 0) {
+                lo = mid + 1;
+            } else if (cmp > 0) {
+                hi = mid;
+            } else {
+                /* Keep the leftmost match; the index is sorted by
+                   (name, label_index) so that is the first label inserted with
+                   this name, matching the old linear-scan behavior. */
+                result = mid;
+                hi = mid;
+            }
+        }
+        return (result >= 0) ? ctx->name_index[result].label_index : -1;
+    }
     for (i = 0; i < ctx->label_count; i++) {
         if (strcmp(ctx->labels[i].name, name) == 0) {
             return i;
@@ -4937,6 +5184,30 @@ static const index_label *find_label_record(const index_analysis_context *ctx, c
 static int has_instruction_at_address(const index_analysis_context *ctx, int addr, int segment_id)
 {
     int i;
+    if (ctx->addr_index != NULL) {
+        int lo = 0;
+        int hi = ctx->addr_index_count;
+        while (lo < hi) {
+            int mid = lo + (hi - lo) / 2;
+            const index_addr_key *k = &ctx->addr_index[mid];
+            int cmp;
+            if (k->segment_id != segment_id) {
+                cmp = (k->segment_id < segment_id) ? -1 : 1;
+            } else if (k->cpu_address != addr) {
+                cmp = (k->cpu_address < addr) ? -1 : 1;
+            } else {
+                cmp = 0;
+            }
+            if (cmp == 0) {
+                return 1;
+            } else if (cmp < 0) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return 0;
+    }
     for (i = 0; i < ctx->instr_count; i++) {
         if (ctx->instrs[i].cpu_address == addr && ctx->instrs[i].segment_id == segment_id) {
             return 1;
@@ -5334,6 +5605,73 @@ static int analyze_index_site_pattern(const index_analysis_context *ctx,
     return 1;
 }
 
+static int index_name_entry_compare(const void *a, const void *b)
+{
+    const index_name_entry *ea = (const index_name_entry *)a;
+    const index_name_entry *eb = (const index_name_entry *)b;
+    int cmp = strcmp(ea->name, eb->name);
+    if (cmp != 0) {
+        return cmp;
+    }
+    if (ea->label_index != eb->label_index) {
+        return (ea->label_index < eb->label_index) ? -1 : 1;
+    }
+    return 0;
+}
+
+static int index_addr_key_compare(const void *a, const void *b)
+{
+    const index_addr_key *ka = (const index_addr_key *)a;
+    const index_addr_key *kb = (const index_addr_key *)b;
+    if (ka->segment_id != kb->segment_id) {
+        return (ka->segment_id < kb->segment_id) ? -1 : 1;
+    }
+    if (ka->cpu_address != kb->cpu_address) {
+        return (ka->cpu_address < kb->cpu_address) ? -1 : 1;
+    }
+    return 0;
+}
+
+/* Build the name/address lookup tables from the already-collected labels and
+   instructions. Returns 0 on allocation failure. */
+static int build_index_lookup_tables(index_analysis_context *ctx)
+{
+    int i;
+
+    if (ctx->label_count > 0) {
+        ctx->name_index = (index_name_entry *)malloc((size_t)ctx->label_count * sizeof(index_name_entry));
+        if (ctx->name_index == NULL) {
+            return 0;
+        }
+        for (i = 0; i < ctx->label_count; i++) {
+            ctx->name_index[i].name = ctx->labels[i].name;
+            ctx->name_index[i].label_index = i;
+        }
+        ctx->name_index_count = ctx->label_count;
+        qsort(ctx->name_index, (size_t)ctx->name_index_count, sizeof(index_name_entry), index_name_entry_compare);
+    }
+
+    if (ctx->instr_count > 0) {
+        ctx->addr_index = (index_addr_key *)malloc((size_t)ctx->instr_count * sizeof(index_addr_key));
+        if (ctx->addr_index == NULL) {
+            free(ctx->name_index);
+            ctx->name_index = NULL;
+            ctx->name_index_count = 0;
+            return 0;
+        }
+        for (i = 0; i < ctx->instr_count; i++) {
+            ctx->addr_index[i].segment_id = ctx->instrs[i].segment_id;
+            ctx->addr_index[i].cpu_address = ctx->instrs[i].cpu_address;
+        }
+        ctx->addr_index_count = ctx->instr_count;
+        qsort(ctx->addr_index, (size_t)ctx->addr_index_count, sizeof(index_addr_key), index_addr_key_compare);
+    }
+
+    return 1;
+}
+
+static void free_index_analysis_context(index_analysis_context *ctx);
+
 static int build_index_analysis_context(astnode *root, index_analysis_context *ctx)
 {
     static astnodeprocmap map[] = {
@@ -5373,10 +5711,17 @@ static int build_index_analysis_context(astnode *root, index_analysis_context *c
     dataseg_pc = 0;
     codeseg_pc = 0;
     if (!start_index_segment(ctx)) {
+        free_index_analysis_context(ctx);
         return 0;
     }
     astproc_walk(root, ctx, map);
     if (ctx->failed) {
+        free_index_analysis_context(ctx);
+        return 0;
+    }
+
+    if (!build_index_lookup_tables(ctx)) {
+        free_index_analysis_context(ctx);
         return 0;
     }
 
@@ -5441,6 +5786,12 @@ static void free_index_analysis_context(index_analysis_context *ctx)
     free(ctx->events);
     free(ctx->segments);
     free(ctx->data_ranges);
+    free(ctx->name_index);
+    free(ctx->addr_index);
+    /* Reset to a clean state so this is idempotent: a second call (e.g. a
+       caller's cleanup after build_index_analysis_context() already freed a
+       partially-built ctx) becomes a safe no-op instead of a double free. */
+    memset(ctx, 0, sizeof(*ctx));
 }
 
 static void free_index_pattern_record(index_pattern_record *record)
