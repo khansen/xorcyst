@@ -4429,6 +4429,12 @@ typedef enum tag_index_value_source_kind {
     INDEX_VALUE_SOURCE_UNKNOWN
 } index_value_source_kind;
 
+typedef enum tag_index_bound_kind {
+    INDEX_BOUND_KIND_NONE = 0,
+    INDEX_BOUND_KIND_MASK,
+    INDEX_BOUND_KIND_COMPARE
+} index_bound_kind;
+
 typedef enum tag_index_access_pattern {
     INDEX_PATTERN_BASE = 0,
     INDEX_PATTERN_BASE_PLUS_CONST,
@@ -4547,6 +4553,8 @@ typedef struct tag_index_pattern_record {
     int scaled_index;
     int split_named_lo_hi;
     int write_access;
+    int index_bound_kind;
+    int index_upper_bound;
 } index_pattern_record;
 
 static int ensure_index_label_capacity(index_analysis_context *ctx)
@@ -4867,6 +4875,15 @@ static const char *index_source_kind_name(int source_kind)
         case INDEX_VALUE_SOURCE_SCALED_ACCUMULATOR: return "scaled_accumulator";
         case INDEX_VALUE_SOURCE_SCALED_REGISTER: return "scaled_register";
         default: return "unknown";
+    }
+}
+
+static const char *index_bound_kind_name(int bound_kind)
+{
+    switch (bound_kind) {
+        case INDEX_BOUND_KIND_MASK: return "mask";
+        case INDEX_BOUND_KIND_COMPARE: return "compare";
+        default: return "none";
     }
 }
 
@@ -5300,6 +5317,80 @@ static int determine_index_source_kind(const index_analysis_context *ctx,
         return INDEX_VALUE_SOURCE_REGISTER;
     }
     return INDEX_VALUE_SOURCE_REGISTER;
+}
+
+static int index_bound_is_pow2_minus_one(int v)
+{
+    /* True for 1,3,7,15,31,63,127,255 -> the value of AND #(2^k - 1). */
+    return v > 0 && v < 256 && ((v & (v + 1)) == 0);
+}
+
+/* Determine a proven exclusive upper bound (element count) on the index
+   register at an indexed access site, from either a masking idiom
+   (AND #(2^k-1) transferred to the index register via TAX/TAY) or a loop
+   compare idiom (CPX/CPY #N on the index register). Returns the bound kind and
+   sets *bound_out to the resolved count. Immediates are read from the assembled
+   instruction, so symbolic masks/counts resolve automatically; the window
+   walker stops at barriers, so the bound is tied to this site's own routine. */
+static int determine_index_upper_bound(const index_analysis_context *ctx,
+                                       const index_instr *instr,
+                                       int *bound_out)
+{
+    char reg = instr->index_register;
+    int prev_indexes[6];
+    int prev_count;
+    int next_indexes[6];
+    int next_count;
+    int i;
+
+    *bound_out = 0;
+    if (reg != 'X' && reg != 'Y') {
+        return INDEX_BOUND_KIND_NONE;
+    }
+
+    /* Mask idiom: the index register is written by TAX/TAY whose accumulator
+       was AND #(2^k-1). Contiguous ASL A scaling before the transfer is
+       skipped, matching the scaled-accumulator source detection. */
+    prev_count = collect_window_instruction_indexes(ctx, instr->event_index, -1, prev_indexes, 6);
+    for (i = 0; i < prev_count; i++) {
+        const index_instr *prev = &ctx->instrs[prev_indexes[i]];
+        if (!writes_register(prev, reg)) {
+            continue;
+        }
+        if ((reg == 'X' && prev->mnemonic == TAX_MNEMONIC)
+            || (reg == 'Y' && prev->mnemonic == TAY_MNEMONIC)) {
+            int and_indexes[6];
+            int and_count = collect_window_instruction_indexes(ctx, prev->event_index, -1, and_indexes, 6);
+            int j;
+            for (j = 0; j < and_count; j++) {
+                const index_instr *a = &ctx->instrs[and_indexes[j]];
+                if (a->mnemonic == ASL_MNEMONIC && a->mode == ACCUMULATOR_MODE) {
+                    continue;
+                }
+                if (a->mnemonic == AND_MNEMONIC && a->mode == IMMEDIATE_MODE
+                    && a->immediate_value_known
+                    && index_bound_is_pow2_minus_one(a->immediate_value)) {
+                    *bound_out = a->immediate_value + 1;
+                    return INDEX_BOUND_KIND_MASK;
+                }
+                break;   /* only the instruction feeding the transfer counts */
+            }
+        }
+        break;   /* first writer of the index register wins */
+    }
+
+    /* Compare idiom: a CPX/CPY #imm on the index register bounds the loop. */
+    next_count = collect_window_instruction_indexes(ctx, instr->event_index, 1, next_indexes, 6);
+    for (i = 0; i < next_count; i++) {
+        const index_instr *nx = &ctx->instrs[next_indexes[i]];
+        int is_cpx = (reg == 'X' && nx->mnemonic == CPX_MNEMONIC);
+        int is_cpy = (reg == 'Y' && nx->mnemonic == CPY_MNEMONIC);
+        if ((is_cpx || is_cpy) && nx->mode == IMMEDIATE_MODE && nx->immediate_value_known) {
+            *bound_out = nx->immediate_value;
+            return INDEX_BOUND_KIND_COMPARE;
+        }
+    }
+    return INDEX_BOUND_KIND_NONE;
 }
 
 static int find_forward_pair_candidate(const index_analysis_context *ctx,
@@ -5821,6 +5912,11 @@ static int emit_index_pattern_record_json(FILE *fp, const index_pattern_record *
     fprintf(fp, ",\"displacement\":%d", record->displacement);
     fprintf(fp, ",\"index_value_source_kind\":");
     print_json_string(fp, index_source_kind_name(record->source_kind));
+    if (record->index_bound_kind != INDEX_BOUND_KIND_NONE) {
+        fprintf(fp, ",\"index_upper_bound\":%d", record->index_upper_bound);
+        fprintf(fp, ",\"index_bound_kind\":");
+        print_json_string(fp, index_bound_kind_name(record->index_bound_kind));
+    }
     if (record->estimated_record_width > 0) {
         fprintf(fp, ",\"estimated_record_width\":%d", record->estimated_record_width);
     }
@@ -5905,6 +6001,11 @@ static void emit_index_patterns_text(FILE *fp, index_pattern_record *records, in
                 index_source_kind_name(records[i].source_kind));
         if (records[i].estimated_record_width > 0) {
             fprintf(fp, "  estimated_record_width=%d\n", records[i].estimated_record_width);
+        }
+        if (records[i].index_bound_kind != INDEX_BOUND_KIND_NONE) {
+            fprintf(fp, "  index_upper_bound=%d (%s)\n",
+                    records[i].index_upper_bound,
+                    index_bound_kind_name(records[i].index_bound_kind));
         }
         if (records[i].table_label_lo != NULL || records[i].table_label_hi != NULL) {
             fprintf(fp, "  split_tables=%s/%s\n",
@@ -6047,6 +6148,11 @@ int generate_index_patterns(astnode *root,
         record->displacement = instr->displacement;
         record->source_kind = source_kind;
         record->estimated_record_width = estimated_width;
+        {
+            int bound_value = 0;
+            record->index_bound_kind = determine_index_upper_bound(&ctx, instr, &bound_value);
+            record->index_upper_bound = bound_value;
+        }
         if (split_lo != NULL) {
             record->table_label_lo = xstrdup(split_lo);
         }

@@ -3790,6 +3790,93 @@ ASM
 
 run_expect_index_patterns
 
+run_expect_index_bounds() {
+    bounds_asm="$TMPDIR/index-bounds.asm"
+    bounds_bin="$TMPDIR/index-bounds.bin"
+    bounds_json="$TMPDIR/index-bounds.json"
+    bounds_log="$TMPDIR/index-bounds.log"
+
+    cat > "$bounds_asm" <<'ASM'
+.org $C000
+MASK3 EQU $03
+RawMask:
+    AND #$03
+    TAY
+    LDA MaskTable,Y
+    RTS
+MaskTable:
+    .db 0,1,2,3
+SymMask:
+    LDA $10
+    AND #MASK3
+    TAY
+    LDA SymTable,Y
+    RTS
+SymTable:
+    .db 0,1,2,3
+CompareLoop:
+    LDX #$00
+CopyLoop:
+    LDA LoopTable,X
+    STA $0300,X
+    INX
+    CPX #$08
+    BNE CopyLoop
+    RTS
+LoopTable:
+    .db 0,1,2,3,4,5,6,7
+RegMismatch:
+    AND #$03
+    TAX
+    LDY $11
+    LDA MismTable,Y
+    RTS
+MismTable:
+    .db 0,1,2,3
+Unrelated:
+    LDA $12
+    AND #$03
+    STA $13
+    LDY $14
+    LDA UnrelTable,Y
+    RTS
+UnrelTable:
+    .db 0,1,2,3
+END
+ASM
+
+    if ! "$XASM" --pure-binary --analyze-index-patterns \
+        --index-patterns-output "$bounds_json" \
+        --index-patterns-format json \
+        "$bounds_asm" -o "$bounds_bin" >"$bounds_log" 2>&1; then
+        cat "$bounds_log" >&2
+        fail "analyze-index-patterns index-bound generation failed"
+    fi
+
+    # Raw-immediate mask idiom -> bound 4, kind mask.
+    if ! grep -q '"table_label":"MaskTable"[^}]*"index_upper_bound":4[^}]*"index_bound_kind":"mask"' "$bounds_json"; then
+        fail "index bounds: MaskTable should report upper_bound 4 kind mask"
+    fi
+    # Symbolic mask (AND #MASK3) resolves to the same bound.
+    if ! grep -q '"table_label":"SymTable"[^}]*"index_upper_bound":4[^}]*"index_bound_kind":"mask"' "$bounds_json"; then
+        fail "index bounds: SymTable symbolic mask should resolve to upper_bound 4"
+    fi
+    # Loop compare idiom -> bound 8, kind compare.
+    if ! grep -q '"table_label":"LoopTable"[^}]*"index_upper_bound":8[^}]*"index_bound_kind":"compare"' "$bounds_json"; then
+        fail "index bounds: LoopTable should report upper_bound 8 kind compare"
+    fi
+    # Register mismatch (mask into X, read via Y) -> no bound reported.
+    if grep -q '"table_label":"MismTable"[^}]*"index_bound_kind"' "$bounds_json"; then
+        fail "index bounds: MismTable register mismatch must not report a bound"
+    fi
+    # Unrelated mask (feeds a store, not the index) -> no bound reported.
+    if grep -q '"table_label":"UnrelTable"[^}]*"index_bound_kind"' "$bounds_json"; then
+        fail "index bounds: UnrelTable unrelated mask must not report a bound"
+    fi
+}
+
+run_expect_index_bounds
+
 run_expect_data_consumers() {
     basic_asm="$TMPDIR/data-consumers-basic.asm"
     basic_bin="$TMPDIR/data-consumers-basic.bin"
