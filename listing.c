@@ -5328,10 +5328,11 @@ static int index_bound_is_pow2_minus_one(int v)
 /* Determine a proven exclusive upper bound (element count) on the index
    register at an indexed access site, from either a masking idiom
    (AND #(2^k-1) transferred to the index register via TAX/TAY) or a loop
-   compare idiom (CPX/CPY #N on the index register). Returns the bound kind and
-   sets *bound_out to the resolved count. Immediates are read from the assembled
-   instruction, so symbolic masks/counts resolve automatically; the window
-   walker stops at barriers, so the bound is tied to this site's own routine. */
+   counter idiom (an INX/INY increment followed by a CPX/CPY #N on the index
+   register). Returns the bound kind and sets *bound_out to the resolved count.
+   Immediates are read from the assembled instruction, so symbolic masks/counts
+   resolve automatically; the scans are tied to this site's own routine and
+   index register so bounds do not leak across scopes. */
 static int determine_index_upper_bound(const index_analysis_context *ctx,
                                        const index_instr *instr,
                                        int *bound_out)
@@ -5339,8 +5340,6 @@ static int determine_index_upper_bound(const index_analysis_context *ctx,
     char reg = instr->index_register;
     int prev_indexes[6];
     int prev_count;
-    int next_indexes[6];
-    int next_count;
     int i;
 
     *bound_out = 0;
@@ -5379,15 +5378,59 @@ static int determine_index_upper_bound(const index_analysis_context *ctx,
         break;   /* first writer of the index register wins */
     }
 
-    /* Compare idiom: a CPX/CPY #imm on the index register bounds the loop. */
-    next_count = collect_window_instruction_indexes(ctx, instr->event_index, 1, next_indexes, 6);
-    for (i = 0; i < next_count; i++) {
-        const index_instr *nx = &ctx->instrs[next_indexes[i]];
-        int is_cpx = (reg == 'X' && nx->mnemonic == CPX_MNEMONIC);
-        int is_cpy = (reg == 'Y' && nx->mnemonic == CPY_MNEMONIC);
-        if ((is_cpx || is_cpy) && nx->mode == IMMEDIATE_MODE && nx->immediate_value_known) {
-            *bound_out = nx->immediate_value;
-            return INDEX_BOUND_KIND_COMPARE;
+    /* Compare idiom (loop-counter bound): scan forward for an increment of the
+       index register (INX/INY) followed by a CPX/CPY #imm on that register --
+       the loop counter/bound pair. A scan loop's terminating compare sits past
+       its early-exit branch, so in-loop conditional branches and CMP are
+       skipped; the scan stops at a segment barrier, a routine-boundary label, a
+       JSR or unconditional transfer (the loop's back-edge or exit), or a reload
+       of the index register, so the compare is tied to this read's own loop
+       rather than an unrelated one. Requiring the increment before the compare
+       rejects a compare that merely guards the access without counting it. */
+    {
+        int inc_mnem = (reg == 'X') ? INX_MNEMONIC : INY_MNEMONIC;
+        int cmp_mnem = (reg == 'X') ? CPX_MNEMONIC : CPY_MNEMONIC;
+        int seen_increment = 0;
+        int steps = 0;
+        int pos;
+        for (pos = instr->event_index + 1;
+             pos < ctx->event_count && steps < 24;
+             pos++) {
+            const index_event *ev = &ctx->events[pos];
+            const index_instr *nx;
+            if (ev->kind == INDEX_EVENT_BARRIER) {
+                break;
+            }
+            if (ev->kind == INDEX_EVENT_LABEL) {
+                if (label_is_window_barrier(&ctx->labels[ev->index])) {
+                    break;
+                }
+                continue;
+            }
+            if (ev->kind != INDEX_EVENT_INSTR) {
+                continue;
+            }
+            nx = &ctx->instrs[ev->index];
+            steps++;
+            if (is_conditional_branch_mnemonic(nx->mnemonic)) {
+                continue;   /* in-loop control flow, not a scope exit */
+            }
+            if (nx->mnemonic == JSR_MNEMONIC
+                || is_unconditional_transfer_mnemonic(nx->mnemonic)) {
+                break;      /* leaves the loop body / region */
+            }
+            if (nx->mnemonic == inc_mnem) {
+                seen_increment = 1;
+                continue;
+            }
+            if (seen_increment && nx->mnemonic == cmp_mnem
+                && nx->mode == IMMEDIATE_MODE && nx->immediate_value_known) {
+                *bound_out = nx->immediate_value;
+                return INDEX_BOUND_KIND_COMPARE;
+            }
+            if (writes_register(nx, reg)) {
+                break;      /* index register reloaded -> a different loop */
+            }
         }
     }
     return INDEX_BOUND_KIND_NONE;

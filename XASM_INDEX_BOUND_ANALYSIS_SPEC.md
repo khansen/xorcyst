@@ -84,24 +84,33 @@ is `X` or `Y`):
   Example: `AND #$03 / TAY / LDA T,Y` → bound 4. Contiguous `ASL A` scaling
   between the `AND` and the transfer is skipped, consistent with the existing
   `count_contiguous_asl_a_before_transfer` scaled-accumulator detection.
-- **Compare idiom.** Within the barrier-bounded forward instruction window
-  from the site, a `CPX #imm` (for an X-indexed read) or `CPY #imm` (for Y)
-  with a known immediate bounds the loop. Bound = `imm`.
-  Example: `LDA T,X / STA dst,X / INX / CPX #$10` → bound 16.
+- **Compare idiom (loop counter).** Scanning forward from the read, an
+  increment of the index register (`INX`/`INY`) followed by a `CPX`/`CPY #imm`
+  on that register — the loop counter/bound pair — gives bound = `imm`.
+  Example: `LDA T,X / STA dst,X / INX / CPX #$10` → bound 16. The terminating
+  compare of a *scan* loop sits past its early-exit branch, so in-loop
+  conditional branches and `CMP` are stepped over; example:
+  `LDA T,X / CMP val / BEQ found / INX / CPX #$05` → bound 5. The forward scan
+  stops at a segment barrier, a routine-boundary label, a `JSR` or unconditional
+  transfer (the loop's back-edge/exit), or a reload of the index register.
+  Requiring the increment before the compare ties the bound to *this* read's
+  loop and rejects a compare that merely guards the access without counting it
+  (e.g. a nearby `CPX #N` on a value the read does not iterate).
 
 Because immediates come from the assembled instruction, symbolic constants
 resolve for free: `AND #PROJECTILE_DAMAGE_SELECTOR_MASK` and `AND #$07` both
-yield 7 → bound 8. Because the window walker stops at label/barrier events, the
-compare is tied to the read site's own loop and does not leak across routines
-or unrelated same-count loops. The bound is register-tied: a mask or compare on
-a different register than the read yields no bound.
+yield 7 → bound 8. Both scans are tied to the read site's own routine and index
+register, so bounds do not leak across scopes or onto an unrelated same-count
+loop. The bound is register-tied: a mask or compare on a different register than
+the read yields no bound.
 
 ### Non-goals and limitations
 
 - Only the two direct idioms are recognized. A masked value that reaches the
-  index register through a store and reload, or a bound held in a variable, is
-  reported as *no bound* rather than a wrong bound. Under-reporting is
-  preferred to mis-reporting.
+  index register through a store and reload, a loop bounded by `DEX`/`DEY` (no
+  compare), a compare that guards the read from *before* it, or a bound held in
+  a variable, is reported as *no bound* rather than a wrong bound. Under-reporting
+  is preferred to mis-reporting.
 - `index_upper_bound` is a necessary signal, not a guarantee that the table is
   exactly that size. Consumers compare it against the table's declared span to
   decide (e.g. bound == declared_size ⇒ a size assertion is warranted).
@@ -161,6 +170,9 @@ the symbolic-mask and multi-loop failures at the source.
   - mask idiom with a raw immediate (`AND #$03 / TAY / LDA T,Y`),
   - mask idiom with a symbolic immediate (`MASK EQU $03` / `AND #MASK / TAY`),
   - compare loop (`LDA T,X / INX / CPX #$10`),
+  - scan loop with an early-exit branch (`LDA T,X / CMP / BEQ / INX / CPX #$05`)
+    ⇒ bound past the in-loop branch,
+  - compare without an increment (`LDA T,X / STA / CPX #$06`) ⇒ no bound,
   - register mismatch (`AND #$03 / TAX` but read via `Y`) ⇒ no bound,
   - no-bound control (`LDY $nn / LDA T,Y`) ⇒ no bound.
   Assert the emitted `index_upper_bound` / `index_bound_kind`. Extend
