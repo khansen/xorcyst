@@ -3842,6 +3842,29 @@ Unrelated:
     RTS
 UnrelTable:
     .db 0,1,2,3
+ScanLoop:
+    LDX #$00
+ScanNext:
+    LDA ScanTable,X
+    CMP $10
+    BEQ ScanFound
+    INX
+    CPX #$05
+    BNE ScanNext
+ScanFound:
+    RTS
+ScanTable:
+    .db 10,11,12,13,14
+NoIncCompare:
+    LDX $15
+    LDA NoIncTable,X
+    STA $16
+    CPX #$06
+    BNE NoIncEnd
+NoIncEnd:
+    RTS
+NoIncTable:
+    .db 0,1,2,3,4,5
 END
 ASM
 
@@ -3872,6 +3895,16 @@ ASM
     # Unrelated mask (feeds a store, not the index) -> no bound reported.
     if grep -q '"table_label":"UnrelTable"[^}]*"index_bound_kind"' "$bounds_json"; then
         fail "index bounds: UnrelTable unrelated mask must not report a bound"
+    fi
+    # Scan loop with an early-exit branch (LDA/CMP/BEQ/INX/CPX) -> bound 5:
+    # the terminating compare sits past the in-loop conditional branch.
+    if ! grep -q '"table_label":"ScanTable"[^}]*"index_upper_bound":5[^}]*"index_bound_kind":"compare"' "$bounds_json"; then
+        fail "index bounds: ScanTable scan loop should report upper_bound 5 kind compare"
+    fi
+    # Compare after the read but with no intervening increment (guards, does not
+    # count) -> no bound, so an adjacent compare is not misattributed as a loop bound.
+    if grep -q '"table_label":"NoIncTable"[^}]*"index_bound_kind"' "$bounds_json"; then
+        fail "index bounds: NoIncTable compare without an increment must not report a bound"
     fi
 }
 
