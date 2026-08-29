@@ -4048,11 +4048,11 @@ static int tag_align_symbols(astnode *align, void *arg, astnode **next)
 /*---------------------------------------------------------------------------*/
 
 /**
- * Removes unused labels from a syntax tree (and symbol table).
- * Unused labels are labels that are defined but not referenced anywhere.
- * This function assumes that the reference counts have already been calculated.
+ * Reports unused labels and optionally removes them from the syntax tree.
+ * Unused labels are labels that are defined but not referenced anywhere. This
+ * function assumes that the reference counts have already been calculated.
  */
-void remove_unused_labels()
+static void report_unused_labels(int remove_labels)
 {
     int i;
     char *id;
@@ -4073,9 +4073,11 @@ void remove_unused_labels()
             } else {
                 warn(n->loc, "`%s' defined but not used", n->label);
             }
-            astnode_remove(n);
-            astnode_finalize(n);
-            //symtab_remove(n->label); ### FIXME leads to crash sometimes...
+            if (remove_labels) {
+                astnode_remove(n);
+                astnode_finalize(n);
+                //symtab_remove(n->label); ### FIXME leads to crash sometimes...
+            }
         }
     }
     symtab_list_finalize(&list);
@@ -4256,7 +4258,11 @@ void astproc_second_pass(astnode *root)
         && !xasm_args.analyze_index_patterns
         && !xasm_args.data_consumers
         && !xasm_args.analyze_data_coverage) {
-        remove_unused_labels();
+        report_unused_labels(1);
+    } else {
+        /* Analysis modes preserve otherwise-unused labels so they can report
+         * them, but analysis output must not change the warning set. */
+        report_unused_labels(0);
     }
 }
 

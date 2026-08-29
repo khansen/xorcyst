@@ -510,6 +510,104 @@ run_expect_data_directive_references() {
     locals_json="$TMPDIR/xref-data-directives-locals.json"
     object_json="$TMPDIR/xref-data-directives-object.json"
     log_file="$TMPDIR/xref-data-directives.log"
+    warning_asm="$TMPDIR/xref-unused-warning.asm"
+    warning_control_log="$TMPDIR/xref-unused-warning-control.log"
+    warning_xref_log="$TMPDIR/xref-unused-warning-xref.log"
+
+    cat > "$warning_asm" <<'ASM'
+.ORG $8000
+UsedTarget:
+    RTS
+UnusedTarget:
+    RTS
+Start:
+    JSR UsedTarget
+    RTS
+.END
+ASM
+    if ! "$XASM" --pure-binary "$warning_asm" \
+        -o "$TMPDIR/xref-unused-warning-control.bin" \
+        >"$warning_control_log" 2>&1; then
+        cat "$warning_control_log" >&2
+        fail "unused-warning control assembly failed"
+    fi
+    if ! "$XASM" --pure-binary --xref="$TMPDIR/xref-unused-warning.json" \
+        --xref-format=json --xref-include-owner=true --xref-data=true \
+        "$warning_asm" -o "$TMPDIR/xref-unused-warning.bin" \
+        >"$warning_xref_log" 2>&1; then
+        cat "$warning_xref_log" >&2
+        fail "unused-warning xref assembly failed"
+    fi
+    grep 'defined but not used' "$warning_control_log" \
+        | sort >"$TMPDIR/xref-unused-warning-control.txt" || true
+    grep 'defined but not used' "$warning_xref_log" \
+        | sort >"$TMPDIR/xref-unused-warning-xref.txt" || true
+    if ! cmp -s "$TMPDIR/xref-unused-warning-control.txt" \
+        "$TMPDIR/xref-unused-warning-xref.txt"; then
+        cat "$warning_control_log" >&2
+        cat "$warning_xref_log" >&2
+        fail "xref generation changed the unused-label warning set"
+    fi
+    if ! grep -Fq "\`UnusedTarget' defined but not used" \
+        "$warning_xref_log"; then
+        cat "$warning_xref_log" >&2
+        fail "xref generation should preserve unused-label warnings"
+    fi
+
+    for warning_mode in listing xref_summary audit index_patterns data_consumers data_coverage; do
+        warning_mode_log="$TMPDIR/analysis-unused-warning-$warning_mode.log"
+        case "$warning_mode" in
+            listing)
+                "$XASM" --pure-binary \
+                    --listing="$TMPDIR/analysis-unused-warning-listing.json" \
+                    --listing-format=json "$warning_asm" \
+                    -o "$TMPDIR/analysis-unused-warning-listing.bin" \
+                    >"$warning_mode_log" 2>&1
+                ;;
+            xref_summary)
+                "$XASM" --pure-binary --xref-summary \
+                    --xref-summary-output "$TMPDIR/analysis-unused-warning-summary.json" \
+                    --xref-summary-format json "$warning_asm" \
+                    -o "$TMPDIR/analysis-unused-warning-summary.bin" \
+                    >"$warning_mode_log" 2>&1
+                ;;
+            audit)
+                "$XASM" --pure-binary --audit-raw-addresses \
+                    --audit-output-format=json "$warning_asm" \
+                    -o "$TMPDIR/analysis-unused-warning-audit.bin" \
+                    >"$warning_mode_log" 2>&1
+                ;;
+            index_patterns)
+                "$XASM" --pure-binary --analyze-index-patterns \
+                    --index-patterns-output "$TMPDIR/analysis-unused-warning-index.json" \
+                    --index-patterns-format json "$warning_asm" \
+                    -o "$TMPDIR/analysis-unused-warning-index.bin" \
+                    >"$warning_mode_log" 2>&1
+                ;;
+            data_consumers)
+                "$XASM" --pure-binary --data-consumers \
+                    --data-consumers-output "$TMPDIR/analysis-unused-warning-consumers.json" \
+                    --data-consumers-format json "$warning_asm" \
+                    -o "$TMPDIR/analysis-unused-warning-consumers.bin" \
+                    >"$warning_mode_log" 2>&1
+                ;;
+            data_coverage)
+                "$XASM" --pure-binary --analyze-data-coverage \
+                    --data-coverage-output "$TMPDIR/analysis-unused-warning-coverage.json" \
+                    --data-coverage-format json "$warning_asm" \
+                    -o "$TMPDIR/analysis-unused-warning-coverage.bin" \
+                    >"$warning_mode_log" 2>&1
+                ;;
+        esac
+        grep 'defined but not used' "$warning_mode_log" \
+            | sort >"$TMPDIR/analysis-unused-warning-$warning_mode.txt" || true
+        if ! cmp -s "$TMPDIR/xref-unused-warning-control.txt" \
+            "$TMPDIR/analysis-unused-warning-$warning_mode.txt"; then
+            cat "$warning_control_log" >&2
+            cat "$warning_mode_log" >&2
+            fail "$warning_mode analysis changed the unused-label warning set"
+        fi
+    done
 
     if ! "$XASM" --pure-binary "$asm_file" -o "$control_bin" >"$log_file" 2>&1; then
         cat "$log_file" >&2
@@ -1198,7 +1296,7 @@ ASM
         cat "$log_audit" >&2
         fail "edge hardening: expected in-range A131 finding"
     fi
-    if grep -q 'TargetOut' "$log_audit"; then
+    if grep -q 'A131:.*TargetOut' "$log_audit"; then
         cat "$log_audit" >&2
         fail "edge hardening: out-of-range A131 finding should be suppressed by ROM range"
     fi
