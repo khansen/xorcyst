@@ -2,10 +2,10 @@
 
 ## Status
 
-Implemented xasm contract on this branch; the coordinated NESrev consumer
-migration remains pending. This document deliberately permits a breaking JSON
-xref change. xasm and the NESrev tooling move to the new contract in sync; no
-compatibility adapter or dual-schema transition is required.
+Implemented and landed in xasm; the coordinated NESrev consumer is also merged.
+This document deliberately permits a breaking JSON xref change. xasm and the
+NESrev tooling moved to the new contract in sync; no compatibility adapter or
+dual-schema transition is required.
 
 A read-only implementation prototype assembled every project at the pinned
 NESrev commit and found every tracked `.DW` inventory tuple by lexical owner,
@@ -493,7 +493,9 @@ PRs, but they form one lockstep tooling change. Acceptance is cross-repository:
    that fresh artifact with consumers.
 3. NESrev migrates only the `.DW` pointer inventory first.
 4. The frozen baseline is NESrev commit
-   `c32aacb372db6a353b6c6970bcb5b92884e8b4ce`. Derive the row count from the
+   `9a6c1f649baca9d076682ce0a1af81fb402c3520`. It contains both the version-2
+   consumer and the reviewed Kung Fu terminal-vector correction, so the pinned
+   tree passes its own inventory-regeneration gate. Derive the row count from the
    tracked `projects/*/docs/reverse_engineering/inventory/pointer_targets.csv`
    files at that commit; do not copy a count into the implementation.
 5. With the invocation shown in this spec and no `--debug`, the structured
@@ -541,6 +543,8 @@ neutral. For baseline compatibility, NESrev maps xasm `code` to `code_pointer`,
 - Consecutive directives and multi-operand directives cannot repeat a sibling's
   expression while reporting a different symbol or output offset.
 - The feature adds no xasm invocation and requires no listing/xref join.
-- xasm regression tests and byte-identity checks pass.
+- xasm regression tests, byte-identity checks, and warning-set parity checks
+  pass. Every label-preserving analysis mode must report the same unused-label
+  warning set as a plain assembly while retaining the nodes its artifact needs.
 - A coordinated NESrev prototype demonstrates exact `.DW` inventory parity at
   the pinned NESrev commit before the source scanner is removed.
