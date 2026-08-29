@@ -484,6 +484,9 @@ void astnode_replace(astnode *old_node, astnode *new_node)
     int i;
     p = astnode_get_parent(old_node);
     if (p != NULL) {
+        if (new_node != NULL && new_node->analysis_origin_id == 0) {
+            new_node->analysis_origin_id = old_node->analysis_origin_id;
+        }
         i = astnode_remove_child(p, old_node);
         if (new_node) {
             /* Insert new child at old child's position */
@@ -832,6 +835,7 @@ astnode *astnode_clone(const astnode *n, location loc)
         default:
         c->param = n->param;
     }
+    c->analysis_origin_id = n->analysis_origin_id;
     /* Clone children (TODO: OPTIMIZE THIS) */
     for (n_c=n->first_child; n_c != NULL; n_c=n_c->next_sibling) {
         astnode_add_child(c, astnode_clone(n_c, loc));

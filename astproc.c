@@ -122,6 +122,13 @@
 #define IS_UNSIGNED_WORD_VALUE(v) (((v) >= 0) && ((v) <= 65535))
 #define IS_WORD_VALUE(v) (IS_SIGNED_WORD_VALUE(v) || IS_UNSIGNED_WORD_VALUE(v))
 
+static astproc_data_analysis_hook data_analysis_hook = NULL;
+
+void astproc_set_data_analysis_hook(astproc_data_analysis_hook hook)
+{
+    data_analysis_hook = hook;
+}
+
 /*---------------------------------------------------------------------------*/
 
 /** Number of errors issued during processing. */
@@ -2267,6 +2274,10 @@ static int process_data(astnode *data, void *arg, astnode **next)
             *next = stmts;
             return 0;
         }
+    }
+    if (data_analysis_hook != NULL && !data_analysis_hook(data)) {
+        err(data->loc, "could not preserve data-directive analysis provenance");
+        return 0;
     }
     /* Go through the list of data values, replacing defines and folding constants */
     for (j=1; j<astnode_get_child_count(data); j++) {
@@ -4838,6 +4849,33 @@ static int write_instruction(astnode *instr, void *arg, astnode **next)
     return 0;
 }
 
+int astproc_truncate_data_value(datatype type, int value, int *was_truncated)
+{
+    int truncated = 0;
+    switch (type) {
+        case BYTE_DATATYPE:
+        case CHAR_DATATYPE:
+            if (!IS_BYTE_VALUE(value)) {
+                truncated = 1;
+            }
+            value &= 0xFF;
+            break;
+        case WORD_DATATYPE:
+            if (!IS_WORD_VALUE(value)) {
+                truncated = 1;
+            }
+            value &= 0xFFFF;
+            break;
+        case DWORD_DATATYPE:
+        default:
+            break;
+    }
+    if (was_truncated != NULL) {
+        *was_truncated = truncated;
+    }
+    return value;
+}
+
 /**
  * Writes data.
  */
@@ -4875,22 +4913,28 @@ static int write_data(astnode *data, void *arg, astnode **next)
         switch (type->datatype) {
             case BYTE_DATATYPE:
             case CHAR_DATATYPE:
-            if (!IS_BYTE_VALUE(value)) {
-                warn(expr->loc, "operand out of range; truncated");
-                value &= 0xFF;
+            {
+                int was_truncated;
+                value = astproc_truncate_data_value(type->datatype, value, &was_truncated);
+                if (was_truncated) {
+                    warn(expr->loc, "operand out of range; truncated");
+                }
+                fputc((unsigned char)value, fp);
+                codeseg_pc += 1;
             }
-            fputc((unsigned char)value, fp);
-            codeseg_pc += 1;
             break;
 
             case WORD_DATATYPE:
-            if (!IS_WORD_VALUE(value)) {
-                warn(expr->loc, "operand out of range; truncated");
-                value &= 0xFFFF;
+            {
+                int was_truncated;
+                value = astproc_truncate_data_value(type->datatype, value, &was_truncated);
+                if (was_truncated) {
+                    warn(expr->loc, "operand out of range; truncated");
+                }
+                fputc((unsigned char)value, fp);
+                fputc((unsigned char)(value >> 8), fp);
+                codeseg_pc += 2;
             }
-            fputc((unsigned char)value, fp);
-            fputc((unsigned char)(value >> 8), fp);
-            codeseg_pc += 2;
             break;
 
             case DWORD_DATATYPE:

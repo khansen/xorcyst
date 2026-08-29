@@ -348,6 +348,7 @@ struct tag_astnode {
         long param;
     };
     int flags;
+    unsigned long analysis_origin_id;
     location loc;   /* File location where node was parsed */
     struct tag_astnode *prev_sibling;
     struct tag_astnode *next_sibling;

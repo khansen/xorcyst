@@ -1396,9 +1396,22 @@ int main(int argc, char *argv[]) {
         return(0);
     }
 
+    if (xasm_args.xref_file != NULL
+        && xasm_args.xref_format == XREF_FORMAT_JSON
+        && !prepare_xref_data_directive_provenance(root_node)) {
+        fprintf(stderr, "error: could not initialize data-directive xref provenance\n");
+        err_count++;
+    }
+
     /* First pass does a lot of stuff. */
     verbose("First pass...");
     astproc_first_pass(root_node);
+    if (xasm_args.xref_file != NULL
+        && xasm_args.xref_format == XREF_FORMAT_JSON
+        && !finish_xref_data_directive_provenance(root_node)) {
+        fprintf(stderr, "error: could not finalize data-directive xref provenance\n");
+        err_count++;
+    }
 
     /* Second pass does more stuff. */
     verbose("Second pass...");
@@ -1495,6 +1508,7 @@ int main(int argc, char *argv[]) {
             exit_code = 3;
         }
     }
+    clear_xref_data_directive_provenance();
 
     if ((exit_code == 0) && output_generated && xasm_args.xref_summary) {
         verbose("Generating xref summary...");

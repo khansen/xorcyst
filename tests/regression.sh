@@ -439,7 +439,7 @@ ASM
         fail "xref-data explicit opt-out fixture failed"
     fi
 
-    for key in '"data_reads"' '"data_writes"' '"indirect_data_flows"'; do
+    for key in '"data_directive_references"' '"data_reads"' '"data_writes"' '"indirect_data_flows"'; do
         if grep -Fq "$key" "$TMPDIR/xref-data-disabled.json"; then
             fail "xref-data explicit opt-out should omit key: $key"
         fi
@@ -496,6 +496,225 @@ ASM
     if [ "$(grep -o '"site_addr":"0xC001"' "$TMPDIR/xref-data-reused-site.json" | wc -l | tr -d ' ')" -ne 2 ]; then
         cat "$TMPDIR/xref-data-reused-site.json" >&2
         fail "xref-data should retain distinct data reads for reused CPU addresses across segments"
+    fi
+}
+
+run_expect_data_directive_references() {
+    asm_file="$ROOT_DIR/tests/fixtures/xref_data_directives.asm"
+    object_asm="$ROOT_DIR/tests/fixtures/xref_data_directives_object.asm"
+    control_bin="$TMPDIR/xref-data-directives-control.bin"
+    out_bin="$TMPDIR/xref-data-directives.bin"
+    debug_bin="$TMPDIR/xref-data-directives-debug.bin"
+    xref_json="$TMPDIR/xref-data-directives.json"
+    debug_json="$TMPDIR/xref-data-directives-debug.json"
+    locals_json="$TMPDIR/xref-data-directives-locals.json"
+    object_json="$TMPDIR/xref-data-directives-object.json"
+    log_file="$TMPDIR/xref-data-directives.log"
+
+    if ! "$XASM" --pure-binary "$asm_file" -o "$control_bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "data-directive control assembly failed"
+    fi
+    if [ "$(grep -c 'warning: operand out of range; truncated' "$log_file" || true)" -ne 1 ]; then
+        cat "$log_file" >&2
+        fail "data-directive control should emit exactly one truncation warning"
+    fi
+
+    if ! "$XASM" --pure-binary --xref="$xref_json" --xref-format=json \
+        --xref-include-owner=true --xref-data=true \
+        "$asm_file" -o "$out_bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "data-directive xref generation failed"
+    fi
+    if ! cmp -s "$control_bin" "$out_bin"; then
+        fail "data-directive xref generation changed output bytes"
+    fi
+    if [ "$(grep -c 'warning: operand out of range; truncated' "$log_file" || true)" -ne 1 ]; then
+        cat "$log_file" >&2
+        fail "data-directive xref should not duplicate truncation warnings"
+    fi
+    for key in '"version": "2"' '"data_directive_references": ['; do
+        if ! grep -Fq "$key" "$xref_json"; then
+            fail "data-directive xref missing key: $key"
+        fi
+    done
+    if [ "$(sed -n '/^  "data_directive_references"/,/^  "data_reads"/p' "$xref_json" | grep -c '^    {"file"')" -ne 19 ]; then
+        fail "data-directive xref record count mismatch"
+    fi
+    if ! grep -Fq '"expression":"RAM_Base","referenced_symbols":["RAM_Base"]' "$xref_json"; then
+        fail "direct equate operands should survive first-pass folding"
+    fi
+    if ! grep -Fq '"expression":"CodeTarget","referenced_symbols":["CodeTarget"]' "$xref_json"; then
+        fail "consecutive directives should retain the CodeTarget expression"
+    fi
+    if ! grep -Fq '"expression":"DataTarget","referenced_symbols":["DataTarget"]' "$xref_json"; then
+        fail "consecutive directives should retain the DataTarget expression"
+    fi
+    reference_lines=$(sed -n '/^  "references"/,/^  "data_directive_references"/p' "$xref_json")
+    if ! printf '%s\n' "$reference_lines" | grep -E '"symbol":"CodeTarget".*"line":15.*"expression":"CodeTarget\+WordStride"' >/dev/null \
+        || ! printf '%s\n' "$reference_lines" | grep -E '"symbol":"DataTarget".*"line":15.*"expression":"DataTarget"' >/dev/null; then
+        fail "ordinary data references should use their own operand expressions"
+    fi
+    if ! grep -Fq '"operand_index":2,"expression":"DataTarget"' "$xref_json"; then
+        fail "literal gaps should remain visible in operand_index"
+    fi
+    if ! grep -Fq '"expression":"RAM_Base+(DifferenceEnd-DifferenceStart)","referenced_symbols":["RAM_Base","DifferenceEnd","DifferenceStart"]' "$xref_json"; then
+        fail "same-segment label-difference expression was not preserved"
+    fi
+    if ! grep -Fq '"owner_item_index":5,"target_symbol":"RAM_Base","target_displacement":1,"target_projection":"none","target_kind":"equate"' "$xref_json"; then
+        fail "same-segment equate target or width-scoped owner index mismatch"
+    fi
+    if ! grep -Fq '"expression":"RAM_Base+$1E*WordStride"' "$xref_json" \
+        || ! grep -Fq '"target_symbol":"RAM_Base","target_displacement":60,"target_projection":"none","target_kind":"equate"' "$xref_json"; then
+        fail "source spelling and target resolution should preserve hexadecimal constants"
+    fi
+    if ! grep -Fq '"expression":"(CodeTarget-1)"' "$xref_json"; then
+        fail "operand source spelling should preserve explicit outer grouping"
+    fi
+    cross_line=$(grep -F '"expression":"RAM_Base+(OtherSegmentLabel-DifferenceStart)"' "$xref_json" || true)
+    if [ -z "$cross_line" ] || printf '%s\n' "$cross_line" | grep -Fq '"target_symbol"'; then
+        fail "cross-segment label difference should omit target fields"
+    fi
+    sum_line=$(grep -F '"expression":"CodeTarget+DataTarget"' "$xref_json" || true)
+    if [ -z "$sum_line" ] || printf '%s\n' "$sum_line" | grep -Fq '"target_symbol"'; then
+        fail "multi-label sum should omit target fields"
+    fi
+    for kind in \
+        '"target_symbol":"CodeTarget","target_displacement":0,"target_projection":"none","target_kind":"code"' \
+        '"target_symbol":"DataTarget","target_displacement":0,"target_projection":"none","target_kind":"data"' \
+        '"target_symbol":"UnknownTarget","target_displacement":0,"target_projection":"none","target_kind":"unknown"'; do
+        if ! grep -Fq "$kind" "$xref_json"; then
+            fail "data-directive target classification missing: $kind"
+        fi
+    done
+    if ! grep -Fq '"target_projection":"low","target_kind":"code"' "$xref_json" \
+        || ! grep -Fq '"target_projection":"high","target_kind":"code"' "$xref_json"; then
+        fail "low/high target projection records missing"
+    fi
+    if ! grep -Fq '"directive":".DB","width_bytes":1,"operand_index":0,"expression":"FarTarget","referenced_symbols":["FarTarget"],"emitted_value":32,"use_cpu_address"' "$xref_json"; then
+        fail "truncated symbolic byte should report its encoded value"
+    fi
+    if [ "$(grep -F '"owner_symbol":"RepeatedOwnerA"' "$xref_json" | grep -c '"use_cpu_address":"0xA000"' || true)" -ne 1 ] \
+        || [ "$(grep -F '"owner_symbol":"RepeatedOwnerB"' "$xref_json" | grep -c '"use_cpu_address":"0xA000"' || true)" -ne 1 ]; then
+        fail "lexical owners should not cross segment restarts at a reused address"
+    fi
+    unowned_restart=$(grep -F '"use_cpu_address":"0xB000"' "$xref_json" || true)
+    if [ -z "$unowned_restart" ] \
+        || printf '%s\n' "$unowned_restart" | grep -Fq '"owner_symbol"'; then
+        fail "a segment restart should clear the prior lexical owner"
+    fi
+    macro_lines=$(grep -F '"owner_symbol":"MacroOwner"' "$xref_json" || true)
+    if [ "$(printf '%s\n' "$macro_lines" | grep -c '^    {' || true)" -ne 2 ] \
+        || ! printf '%s\n' "$macro_lines" | grep -Fq '"expression":"CodeTarget"' \
+        || ! printf '%s\n' "$macro_lines" | grep -Fq '"expression":"DataTarget"' \
+        || ! printf '%s\n' "$macro_lines" | grep -Fq '"owner_item_index":0' \
+        || ! printf '%s\n' "$macro_lines" | grep -Fq '"owner_item_index":1'; then
+        fail "macro-expanded operands should retain their lexical owner"
+    fi
+
+    if ! "$XASM" --debug --pure-binary --xref="$debug_json" --xref-format=json \
+        --xref-include-owner=true --xref-data=true \
+        "$asm_file" -o "$debug_bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "debug data-directive xref generation failed"
+    fi
+    if ! cmp -s "$control_bin" "$debug_bin"; then
+        fail "debug data-directive xref generation changed output bytes"
+    fi
+    sed -n '/^  "data_directive_references"/,/^  "data_reads"/p' "$xref_json" >"$TMPDIR/xref-data-directives.section"
+    sed -n '/^  "data_directive_references"/,/^  "data_reads"/p' "$debug_json" >"$TMPDIR/xref-data-directives-debug.section"
+    if ! cmp -s "$TMPDIR/xref-data-directives.section" "$TMPDIR/xref-data-directives-debug.section"; then
+        fail "debug mode changed data-directive provenance or indices"
+    fi
+
+    if ! "$XASM" --pure-binary --xref="$locals_json" --xref-format=json \
+        --xref-include-owner=true --xref-include-locals=true --xref-data=true \
+        "$asm_file" -o "$TMPDIR/xref-data-directives-locals.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "local data-directive xref generation failed"
+    fi
+    if ! cmp -s "$control_bin" "$TMPDIR/xref-data-directives-locals.bin"; then
+        fail "local data-directive xref generation changed output bytes"
+    fi
+    if grep -Fq '"expression":"@@local#' "$xref_json"; then
+        fail "local data-directive references should be excluded by default"
+    fi
+    local_record=$(grep -F '"expression":"@@local#' "$locals_json" || true)
+    if [ -z "$local_record" ]; then
+        fail "local data-directive references should follow the include-locals flag"
+    fi
+    if ! printf '%s\n' "$local_record" | grep -Fq '"owner_symbol":"LocalOwner"' \
+        || ! printf '%s\n' "$local_record" | grep -Fq '"target_kind":"data"'; then
+        fail "local labels should not replace the nearest non-local lexical owner"
+    fi
+
+    if ! "$XASM" --pure-binary --xref="$TMPDIR/xref-data-directives-anon.json" \
+        --xref-format=json --xref-include-owner=true --xref-include-anon=true \
+        --xref-data=true "$asm_file" \
+        -o "$TMPDIR/xref-data-directives-anon.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "anonymous data-directive xref generation failed"
+    fi
+    if ! cmp -s "$control_bin" "$TMPDIR/xref-data-directives-anon.bin"; then
+        fail "anonymous data-directive xref generation changed output bytes"
+    fi
+    if grep -Fq '"owner_symbol":"AnonymousOwner"' "$xref_json"; then
+        fail "anonymous data-directive references should be excluded by default"
+    fi
+    if ! grep -Fq '"owner_symbol":"AnonymousOwner"' "$TMPDIR/xref-data-directives-anon.json"; then
+        fail "anonymous data-directive references should follow the include-anon flag"
+    fi
+
+    if ! "$XASM" --xref="$TMPDIR/xref-data-directives-object-control.json" \
+        --xref-format=json --xref-data=false "$object_asm" \
+        -o "$TMPDIR/xref-data-directives-control.o" \
+        >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "object-mode control assembly failed"
+    fi
+    if ! "$XASM" --xref="$object_json" --xref-format=json \
+        --xref-include-owner=true --xref-data=true \
+        "$object_asm" -o "$TMPDIR/xref-data-directives.o" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "object-mode data-directive xref generation failed"
+    fi
+    if ! cmp -s "$TMPDIR/xref-data-directives-control.o" "$TMPDIR/xref-data-directives.o"; then
+        fail "object-mode data-directive xref generation changed output bytes"
+    fi
+    if ! grep -Fq '"use_output_offset":null' "$object_json"; then
+        fail "object-mode data-directive reference should use a null output offset"
+    fi
+    if ! grep -Fq '"emitted_value":0,"use_cpu_address":"0x0001","use_output_offset":null' "$object_json"; then
+        fail "object-mode data-directive value should use the completed xref address map"
+    fi
+    if ! grep -Fq '"directive":".DW","width_bytes":2' "$object_json"; then
+        fail "word aliases should use the canonical .DW directive name"
+    fi
+
+    cat > "$TMPDIR/xref-data-directives-empty.asm" <<'ASM'
+.ORG $8000
+LiteralData:
+    .DB $00
+.END
+ASM
+    if ! "$XASM" --pure-binary --xref="$TMPDIR/xref-data-directives-empty.json" \
+        --xref-format=json --xref-data=true \
+        "$TMPDIR/xref-data-directives-empty.asm" \
+        -o "$TMPDIR/xref-data-directives-empty.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "empty data-directive xref generation failed"
+    fi
+    if ! grep -Fq '"data_directive_references": []' "$TMPDIR/xref-data-directives-empty.json"; then
+        fail "empty data-directive xref array should be present"
+    fi
+    if ! "$XASM" --pure-binary "$TMPDIR/xref-data-directives-empty.asm" \
+        -o "$TMPDIR/xref-data-directives-empty-control.bin" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "empty data-directive control assembly failed"
+    fi
+    if ! cmp -s "$TMPDIR/xref-data-directives-empty-control.bin" \
+        "$TMPDIR/xref-data-directives-empty.bin"; then
+        fail "empty data-directive xref generation changed output bytes"
     fi
 }
 
@@ -643,7 +862,7 @@ ASM
     fi
 
     # xref JSON structure and deterministic symbol/reference ordering
-    for k in '"version": "1"' '"build": {' '"symbols": [' '"references": [' '"timestamp_utc": '; do
+    for k in '"version": "2"' '"build": {' '"symbols": [' '"references": [' '"timestamp_utc": '; do
         if ! grep -Fq "$k" "$xref_json"; then
             fail "phase1 parity xref JSON missing key: $k"
         fi
@@ -1121,6 +1340,7 @@ run_expect_compare_match "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_compare_mismatch "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_xref_outputs
 run_expect_xref_data
+run_expect_data_directive_references
 run_expect_xref_include_owner
 run_expect_phase1_spec_parity
 run_expect_unused_equ_feature
