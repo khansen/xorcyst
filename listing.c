@@ -1265,7 +1265,671 @@ typedef struct tag_xref_symbol {
     long value;
     int is_dataseg;
     int segment_id;
+    int definition_kind; /* 0=unknown, 1=code, 2=data */
 } xref_symbol;
+
+typedef struct tag_xref_data_provenance {
+    unsigned long origin_id;
+    location loc;
+    datatype datatype;
+    int operand_index;
+    char *expression;
+    char **referenced_symbols;
+    int referenced_symbol_count;
+    astnode *original_expression;
+} xref_data_provenance;
+
+static xref_data_provenance *xref_data_provenance_records = NULL;
+static int xref_data_provenance_count = 0;
+static int xref_data_provenance_capacity = 0;
+
+static void free_xref_data_provenance_record(xref_data_provenance *provenance)
+{
+    int i;
+    if (provenance == NULL) {
+        return;
+    }
+    free(provenance->expression);
+    for (i = 0; i < provenance->referenced_symbol_count; i++) {
+        free(provenance->referenced_symbols[i]);
+    }
+    free(provenance->referenced_symbols);
+    astnode_finalize(provenance->original_expression);
+    memset(provenance, 0, sizeof(*provenance));
+}
+
+static int data_width_index(datatype type)
+{
+    if (type == WORD_DATATYPE) {
+        return 1;
+    }
+    if (type == DWORD_DATATYPE) {
+        return 2;
+    }
+    return 0;
+}
+
+static int data_width_bytes(datatype type)
+{
+    if (type == WORD_DATATYPE) {
+        return 2;
+    }
+    if (type == DWORD_DATATYPE) {
+        return 4;
+    }
+    return 1;
+}
+
+static int append_rendered_text(char **buffer, size_t *length, size_t *capacity, const char *text)
+{
+    size_t add;
+    char *tmp;
+    if (text == NULL) {
+        return 1;
+    }
+    add = strlen(text);
+    if (*length + add + 1 > *capacity) {
+        size_t new_capacity = (*capacity == 0) ? 64 : *capacity;
+        while (new_capacity < *length + add + 1) {
+            new_capacity *= 2;
+        }
+        tmp = (char *)realloc(*buffer, new_capacity);
+        if (tmp == NULL) {
+            return 0;
+        }
+        *buffer = tmp;
+        *capacity = new_capacity;
+    }
+    memcpy(*buffer + *length, text, add);
+    *length += add;
+    (*buffer)[*length] = '\0';
+    return 1;
+}
+
+static const char *rendered_operator(arithmetic_operator oper)
+{
+    switch (oper) {
+        case PLUS_OPERATOR: return "+";
+        case MINUS_OPERATOR: return "-";
+        case MUL_OPERATOR: return "*";
+        case DIV_OPERATOR: return "/";
+        case MOD_OPERATOR: return "%";
+        case AND_OPERATOR: return "&";
+        case OR_OPERATOR: return "|";
+        case XOR_OPERATOR: return "^";
+        case SHL_OPERATOR: return "<<";
+        case SHR_OPERATOR: return ">>";
+        case LT_OPERATOR: return "<";
+        case GT_OPERATOR: return ">";
+        case EQ_OPERATOR: return "==";
+        case NE_OPERATOR: return "!=";
+        case LE_OPERATOR: return "<=";
+        case GE_OPERATOR: return ">=";
+        default: return "?";
+    }
+}
+
+static int render_expression_recursive(const astnode *expr,
+                                       char **buffer,
+                                       size_t *length,
+                                       size_t *capacity)
+{
+    char number[32];
+    const char *prefix = NULL;
+    if (expr == NULL) {
+        return 0;
+    }
+    switch (astnode_get_type(expr)) {
+        case INTEGER_NODE:
+            snprintf(number, sizeof(number), "%d", expr->integer);
+            return append_rendered_text(buffer, length, capacity, number);
+        case CURRENT_PC_NODE:
+            return append_rendered_text(buffer, length, capacity, "$" );
+        case IDENTIFIER_NODE:
+        case LOCAL_ID_NODE:
+        case FORWARD_BRANCH_NODE:
+        case BACKWARD_BRANCH_NODE:
+            return append_rendered_text(buffer, length, capacity, expr->string);
+        case ARITHMETIC_NODE:
+            switch (expr->oper) {
+                case NEG_OPERATOR: prefix = "~"; break;
+                case NOT_OPERATOR: prefix = "!"; break;
+                case LO_OPERATOR: prefix = "<"; break;
+                case HI_OPERATOR: prefix = ">"; break;
+                case UMINUS_OPERATOR: prefix = "-"; break;
+                case BANK_OPERATOR: prefix = "^"; break;
+                default: break;
+            }
+            if (prefix != NULL) {
+                return append_rendered_text(buffer, length, capacity, prefix)
+                    && render_expression_recursive(LHS(expr), buffer, length, capacity);
+            }
+            return append_rendered_text(buffer, length, capacity, "(")
+                && render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && append_rendered_text(buffer, length, capacity, rendered_operator(expr->oper))
+                && render_expression_recursive(RHS(expr), buffer, length, capacity)
+                && append_rendered_text(buffer, length, capacity, ")");
+        case DOT_NODE:
+            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && append_rendered_text(buffer, length, capacity, ".")
+                && render_expression_recursive(RHS(expr), buffer, length, capacity);
+        case SCOPE_NODE:
+            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && append_rendered_text(buffer, length, capacity, "::")
+                && render_expression_recursive(RHS(expr), buffer, length, capacity);
+        case INDEX_NODE:
+            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && append_rendered_text(buffer, length, capacity, "[")
+                && render_expression_recursive(RHS(expr), buffer, length, capacity)
+                && append_rendered_text(buffer, length, capacity, "]");
+        case SIZEOF_NODE:
+            return append_rendered_text(buffer, length, capacity, "SIZEOF(")
+                && render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && append_rendered_text(buffer, length, capacity, ")");
+        case MASK_NODE:
+            return append_rendered_text(buffer, length, capacity, "MASK ")
+                && render_expression_recursive(LHS(expr), buffer, length, capacity);
+        default:
+            return 0;
+    }
+}
+
+static char *render_expression(const astnode *expr)
+{
+    char *buffer = NULL;
+    size_t length = 0;
+    size_t capacity = 0;
+    if (!render_expression_recursive(expr, &buffer, &length, &capacity)) {
+        free(buffer);
+        return xstrdup("");
+    }
+    return buffer;
+}
+
+static int source_token_matches(const char *token, size_t token_length, const char *expected)
+{
+    size_t i;
+    if (token_length != strlen(expected)) {
+        return 0;
+    }
+    for (i = 0; i < token_length; i++) {
+        if (toupper((unsigned char)token[i]) != toupper((unsigned char)expected[i])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int source_directive_matches_datatype(const char *token,
+                                             size_t token_length,
+                                             datatype type)
+{
+    if (token_length > 0 && token[0] == '.') {
+        token++;
+        token_length--;
+    }
+    if (type == WORD_DATATYPE) {
+        return source_token_matches(token, token_length, "DW")
+            || source_token_matches(token, token_length, "WORD");
+    }
+    if (type == DWORD_DATATYPE) {
+        return source_token_matches(token, token_length, "DD")
+            || source_token_matches(token, token_length, "DWORD");
+    }
+    return source_token_matches(token, token_length, "DB")
+        || source_token_matches(token, token_length, "BYTE")
+        || source_token_matches(token, token_length, "CHAR")
+        || source_token_matches(token, token_length, "ASC");
+}
+
+static char *copy_data_operand_source(const astnode *data, int operand_index)
+{
+    const char *line;
+    const char *p;
+    const char *token_start;
+    const char *operand_start;
+    const char *operand_end;
+    char quote = '\0';
+    int depth = 0;
+    int current_index = 0;
+    char *out;
+    size_t out_length = 0;
+    char output_quote = '\0';
+    if (data == NULL || data->loc.file == NULL || data->loc.first_line <= 0) {
+        return NULL;
+    }
+    line = get_source_line(data->loc.file, data->loc.first_line);
+    if (line == NULL) {
+        return NULL;
+    }
+    p = line + (data->loc.first_column > 0 ? data->loc.first_column - 1 : 0);
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+    token_start = p;
+    while (*p != '\0' && !isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (!source_directive_matches_datatype(
+            token_start, (size_t)(p - token_start), LHS(data)->datatype)) {
+        return NULL;
+    }
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+    operand_start = p;
+    operand_end = NULL;
+    for (;; p++) {
+        char ch = *p;
+        if (quote != '\0') {
+            if (ch == '\0') {
+                return NULL;
+            }
+            if (ch == quote && (p == line || p[-1] != '\\')) {
+                quote = '\0';
+            }
+            continue;
+        }
+        if (ch == '\'' || ch == '"') {
+            quote = ch;
+            continue;
+        }
+        if (ch == '(' || ch == '[' || ch == '{') {
+            depth++;
+            continue;
+        }
+        if (ch == ')' || ch == ']' || ch == '}') {
+            if (depth > 0) {
+                depth--;
+            }
+            continue;
+        }
+        if ((ch == ',' && depth == 0) || ch == ';' || ch == '\0') {
+            if (current_index == operand_index) {
+                operand_end = p;
+                break;
+            }
+            if (ch != ',') {
+                return NULL;
+            }
+            current_index++;
+            operand_start = p + 1;
+        }
+    }
+    while (operand_start < operand_end && isspace((unsigned char)*operand_start)) {
+        operand_start++;
+    }
+    while (operand_end > operand_start && isspace((unsigned char)operand_end[-1])) {
+        operand_end--;
+    }
+    out = (char *)malloc((size_t)(operand_end - operand_start) + 1);
+    if (out == NULL) {
+        return NULL;
+    }
+    while (operand_start < operand_end) {
+        if (output_quote != '\0') {
+            out[out_length++] = *operand_start;
+            if (*operand_start == output_quote
+                && (operand_start == line || operand_start[-1] != '\\')) {
+                output_quote = '\0';
+            }
+        } else if (*operand_start == '\'' || *operand_start == '"') {
+            output_quote = *operand_start;
+            out[out_length++] = *operand_start;
+        } else if (!isspace((unsigned char)*operand_start)) {
+            out[out_length++] = *operand_start;
+        }
+        operand_start++;
+    }
+    out[out_length] = '\0';
+    return out;
+}
+
+static int source_token_is_reference(const xref_data_provenance *provenance,
+                                     const char *token,
+                                     size_t token_length)
+{
+    int i;
+    for (i = 0; i < provenance->referenced_symbol_count; i++) {
+        const char *name = provenance->referenced_symbols[i];
+        if (strlen(name) == token_length
+            && strncmp(name, token, token_length) == 0) {
+            return 1;
+        }
+    }
+    return source_token_matches(token, token_length, "SIZEOF")
+        || source_token_matches(token, token_length, "MASK");
+}
+
+static int source_span_matches_operand(const xref_data_provenance *provenance,
+                                       const char *source)
+{
+    const char *p = source;
+    char quote = '\0';
+    if (source == NULL || source[0] == '\0') {
+        return 0;
+    }
+    while (*p != '\0') {
+        if (quote != '\0') {
+            if (*p == quote && (p == source || p[-1] != '\\')) {
+                quote = '\0';
+            }
+            p++;
+            continue;
+        }
+        if (*p == '\'' || *p == '"') {
+            quote = *p++;
+            continue;
+        }
+        if (*p == '$') {
+            p++;
+            while (isxdigit((unsigned char)*p)) {
+                p++;
+            }
+            continue;
+        }
+        if (isalpha((unsigned char)*p) || *p == '_' || *p == '@') {
+            const char *start = p++;
+            while (isalnum((unsigned char)*p)
+                   || *p == '_' || *p == '@' || *p == '#') {
+                p++;
+            }
+            if (!source_token_is_reference(
+                    provenance, start, (size_t)(p - start))) {
+                return 0;
+            }
+            continue;
+        }
+        p++;
+    }
+    return 1;
+}
+
+static int add_provenance_symbol(xref_data_provenance *p, const char *name)
+{
+    char **tmp;
+    int i;
+    if (name == NULL) {
+        return 1;
+    }
+    for (i = 0; i < p->referenced_symbol_count; i++) {
+        if (strcmp(p->referenced_symbols[i], name) == 0) {
+            return 1;
+        }
+    }
+    tmp = (char **)realloc(p->referenced_symbols,
+                           (size_t)(p->referenced_symbol_count + 1) * sizeof(char *));
+    if (tmp == NULL) {
+        return 0;
+    }
+    p->referenced_symbols = tmp;
+    p->referenced_symbols[p->referenced_symbol_count] = xstrdup(name);
+    if (p->referenced_symbols[p->referenced_symbol_count] == NULL) {
+        return 0;
+    }
+    p->referenced_symbol_count++;
+    return 1;
+}
+
+static int collect_provenance_symbols(astnode *expr, xref_data_provenance *p)
+{
+    astnode *child;
+    if (expr == NULL) {
+        return 1;
+    }
+    if (astnode_is_type(expr, IDENTIFIER_NODE)
+        || astnode_is_type(expr, LOCAL_ID_NODE)
+        || astnode_is_type(expr, FORWARD_BRANCH_NODE)
+        || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
+        if (!add_provenance_symbol(p, expr->string)) {
+            return 0;
+        }
+    }
+    for (child = astnode_get_first_child(expr); child != NULL;
+         child = astnode_get_next_sibling(child)) {
+        if (!collect_provenance_symbols(child, p)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+void clear_xref_data_directive_provenance(void)
+{
+    int i;
+    astproc_set_data_analysis_hook(NULL);
+    for (i = 0; i < xref_data_provenance_count; i++) {
+        free_xref_data_provenance_record(&xref_data_provenance_records[i]);
+    }
+    free(xref_data_provenance_records);
+    xref_data_provenance_records = NULL;
+    xref_data_provenance_count = 0;
+    xref_data_provenance_capacity = 0;
+}
+
+static int ensure_xref_data_provenance_capacity(void)
+{
+    xref_data_provenance *tmp;
+    int new_capacity;
+    if (xref_data_provenance_count < xref_data_provenance_capacity) {
+        return 1;
+    }
+    new_capacity = xref_data_provenance_capacity == 0
+        ? 64 : xref_data_provenance_capacity * 2;
+    tmp = (xref_data_provenance *)realloc(
+        xref_data_provenance_records,
+        (size_t)new_capacity * sizeof(xref_data_provenance));
+    if (tmp == NULL) {
+        return 0;
+    }
+    xref_data_provenance_records = tmp;
+    xref_data_provenance_capacity = new_capacity;
+    return 1;
+}
+
+static int capture_xref_data_provenance(astnode *data)
+{
+    datatype type = LHS(data)->datatype;
+    astnode *expr;
+    int operand_index = 0;
+    for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
+        xref_data_provenance candidate;
+        memset(&candidate, 0, sizeof(candidate));
+        candidate.loc = expr->loc;
+        candidate.datatype = type;
+        candidate.operand_index = operand_index;
+        candidate.original_expression = astnode_clone(expr, loc_preserve);
+        if (candidate.original_expression == NULL
+            || !collect_provenance_symbols(candidate.original_expression, &candidate)) {
+            free_xref_data_provenance_record(&candidate);
+            return 0;
+        }
+        if (candidate.referenced_symbol_count == 0) {
+            free_xref_data_provenance_record(&candidate);
+            operand_index++;
+            continue;
+        }
+        candidate.expression = copy_data_operand_source(data, operand_index);
+        if (!source_span_matches_operand(&candidate, candidate.expression)) {
+            free(candidate.expression);
+            candidate.expression = render_expression(candidate.original_expression);
+        }
+        if (candidate.expression == NULL) {
+            free_xref_data_provenance_record(&candidate);
+            return 0;
+        }
+        if (!ensure_xref_data_provenance_capacity()) {
+            free_xref_data_provenance_record(&candidate);
+            return 0;
+        }
+        candidate.origin_id = (unsigned long)xref_data_provenance_count + 1;
+        expr->analysis_origin_id = candidate.origin_id;
+        xref_data_provenance_records[xref_data_provenance_count++] = candidate;
+        operand_index++;
+    }
+    return 1;
+}
+
+int prepare_xref_data_directive_provenance(astnode *root)
+{
+    (void)root;
+    clear_xref_data_directive_provenance();
+    astproc_set_data_analysis_hook(capture_xref_data_provenance);
+    return 1;
+}
+
+static int provenance_name_scope(const char *name)
+{
+    if (name == NULL) {
+        return 0;
+    }
+    if (strstr(name, "@@") != NULL) {
+        return 1;
+    }
+    if (name[0] == '+' || name[0] == '-'
+        || strstr(name, "+#") != NULL || strstr(name, "-#") != NULL) {
+        return 2;
+    }
+    return 0;
+}
+
+static int synchronize_scoped_names_recursive(astnode *expr,
+                                              const xref_data_provenance *live_symbols,
+                                              int *local_index,
+                                              int *anon_index)
+{
+    astnode *child;
+    if (expr == NULL) {
+        return 1;
+    }
+    if (astnode_is_type(expr, IDENTIFIER_NODE)
+        || astnode_is_type(expr, LOCAL_ID_NODE)
+        || astnode_is_type(expr, FORWARD_BRANCH_NODE)
+        || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
+        int scope = provenance_name_scope(expr->string);
+        int *cursor = scope == 1 ? local_index : anon_index;
+        if (scope != 0) {
+            int i;
+            for (i = *cursor; i < live_symbols->referenced_symbol_count; i++) {
+                const char *candidate = live_symbols->referenced_symbols[i];
+                if (provenance_name_scope(candidate) == scope) {
+                    char *replacement = xstrdup(candidate);
+                    if (replacement == NULL) {
+                        return 0;
+                    }
+                    free(expr->string);
+                    expr->string = replacement;
+                    *cursor = i + 1;
+                    break;
+                }
+            }
+        }
+    }
+    for (child = astnode_get_first_child(expr); child != NULL;
+         child = astnode_get_next_sibling(child)) {
+        if (!synchronize_scoped_names_recursive(
+                child, live_symbols, local_index, anon_index)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int synchronize_xref_data_provenance(astnode *data, void *arg, astnode **next)
+{
+    astnode *expr;
+    int *failed = (int *)arg;
+    (void)next;
+    for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
+        unsigned long origin_id = expr->analysis_origin_id;
+        xref_data_provenance live_symbols;
+        xref_data_provenance *provenance;
+        int i;
+        int local_index = 0;
+        int anon_index = 0;
+        int has_scoped_reference = 0;
+        if (origin_id == 0 || origin_id > (unsigned long)xref_data_provenance_count) {
+            continue;
+        }
+        provenance = &xref_data_provenance_records[origin_id - 1];
+        memset(&live_symbols, 0, sizeof(live_symbols));
+        if (!collect_provenance_symbols(expr, &live_symbols)) {
+            for (i = 0; i < live_symbols.referenced_symbol_count; i++) {
+                free(live_symbols.referenced_symbols[i]);
+            }
+            free(live_symbols.referenced_symbols);
+            *failed = 1;
+            return 0;
+        }
+        if (!synchronize_scoped_names_recursive(provenance->original_expression,
+                                                &live_symbols,
+                                                &local_index,
+                                                &anon_index)) {
+            *failed = 1;
+        }
+        for (i = 0; i < live_symbols.referenced_symbol_count; i++) {
+            free(live_symbols.referenced_symbols[i]);
+        }
+        free(live_symbols.referenced_symbols);
+        for (i = 0; i < provenance->referenced_symbol_count; i++) {
+            free(provenance->referenced_symbols[i]);
+        }
+        free(provenance->referenced_symbols);
+        provenance->referenced_symbols = NULL;
+        provenance->referenced_symbol_count = 0;
+        if (!collect_provenance_symbols(provenance->original_expression, provenance)) {
+            *failed = 1;
+            return 0;
+        }
+        for (i = 0; i < provenance->referenced_symbol_count; i++) {
+            if (provenance_name_scope(provenance->referenced_symbols[i]) != 0) {
+                has_scoped_reference = 1;
+                break;
+            }
+        }
+        if (has_scoped_reference) {
+            free(provenance->expression);
+            provenance->expression = render_expression(provenance->original_expression);
+            if (provenance->expression == NULL) {
+                *failed = 1;
+                return 0;
+            }
+        }
+    }
+    return 0;
+}
+
+int finish_xref_data_directive_provenance(astnode *root)
+{
+    static astnodeprocmap map[] = {
+        { DATA_NODE, synchronize_xref_data_provenance },
+        { 0, NULL }
+    };
+    int failed = 0;
+    astproc_set_data_analysis_hook(NULL);
+    astproc_walk(root, &failed, map);
+    return !failed;
+}
+
+static const xref_data_provenance *find_xref_data_provenance(unsigned long origin_id)
+{
+    if (origin_id == 0 || origin_id > (unsigned long)xref_data_provenance_count) {
+        return NULL;
+    }
+    return &xref_data_provenance_records[origin_id - 1];
+}
+
+typedef struct tag_xref_data_directive_reference {
+    const xref_data_provenance *provenance;
+    astnode *final_expression;
+    int cpu_address;
+    int has_output_offset;
+    long output_offset;
+    int segment_id;
+    unsigned long emitted_value;
+    char *owner_symbol;
+    int owner_item_index;
+} xref_data_directive_reference;
 
 typedef struct tag_xref_ref {
     char *symbol;
@@ -1305,6 +1969,14 @@ typedef struct tag_xref_build_context {
     struct tag_xref_instr *instrs;
     int instr_count;
     int instr_capacity;
+    xref_data_directive_reference *data_directive_refs;
+    int data_directive_ref_count;
+    int data_directive_ref_capacity;
+    int *pending_label_indexes;
+    int pending_label_count;
+    int pending_label_capacity;
+    char *lexical_owner_symbol;
+    int lexical_owner_item_counts[3];
     int include_locals;
     int include_anon;
     int include_data;
@@ -1443,6 +2115,22 @@ static int scope_allowed(const char *scope, int include_locals, int include_anon
     return 1;
 }
 
+static int provenance_has_allowed_reference(const xref_data_provenance *provenance,
+                                            const xref_build_context *ctx)
+{
+    int i;
+    for (i = 0; i < provenance->referenced_symbol_count; i++) {
+        const char *kind;
+        const char *scope;
+        classify_symbol_name(provenance->referenced_symbols[i], &kind, &scope);
+        (void)kind;
+        if (scope_allowed(scope, ctx->include_locals, ctx->include_anon)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int ensure_xref_symbol_capacity(xref_build_context *ctx)
 {
     xref_symbol *tmp;
@@ -1497,6 +2185,59 @@ static int ensure_xref_instr_capacity(xref_build_context *ctx)
     return 1;
 }
 
+static int ensure_xref_data_directive_ref_capacity(xref_build_context *ctx)
+{
+    xref_data_directive_reference *tmp;
+    int new_capacity;
+    if (ctx->data_directive_ref_count < ctx->data_directive_ref_capacity) {
+        return 1;
+    }
+    new_capacity = ctx->data_directive_ref_capacity == 0
+        ? 64 : ctx->data_directive_ref_capacity * 2;
+    tmp = (xref_data_directive_reference *)realloc(
+        ctx->data_directive_refs,
+        (size_t)new_capacity * sizeof(xref_data_directive_reference));
+    if (tmp == NULL) {
+        ctx->failed = 1;
+        return 0;
+    }
+    ctx->data_directive_refs = tmp;
+    ctx->data_directive_ref_capacity = new_capacity;
+    return 1;
+}
+
+static int add_pending_label(xref_build_context *ctx, int symbol_index)
+{
+    int *tmp;
+    int new_capacity;
+    if (ctx->pending_label_count >= ctx->pending_label_capacity) {
+        new_capacity = ctx->pending_label_capacity == 0
+            ? 8 : ctx->pending_label_capacity * 2;
+        tmp = (int *)realloc(ctx->pending_label_indexes,
+                             (size_t)new_capacity * sizeof(int));
+        if (tmp == NULL) {
+            ctx->failed = 1;
+            return 0;
+        }
+        ctx->pending_label_indexes = tmp;
+        ctx->pending_label_capacity = new_capacity;
+    }
+    ctx->pending_label_indexes[ctx->pending_label_count++] = symbol_index;
+    return 1;
+}
+
+static void classify_pending_labels(xref_build_context *ctx, int definition_kind)
+{
+    int i;
+    for (i = 0; i < ctx->pending_label_count; i++) {
+        int index = ctx->pending_label_indexes[i];
+        if (index >= 0 && index < ctx->symbol_count) {
+            ctx->symbols[index].definition_kind = definition_kind;
+        }
+    }
+    ctx->pending_label_count = 0;
+}
+
 static int find_xref_symbol_index(const xref_build_context *ctx, const char *name)
 {
     int i;
@@ -1506,6 +2247,76 @@ static int find_xref_symbol_index(const xref_build_context *ctx, const char *nam
         }
     }
     return -1;
+}
+
+static int eval_expression_int_with_xref(astnode *expr,
+                                         const xref_build_context *ctx,
+                                         int *value,
+                                         int depth)
+{
+    int lhs = 0;
+    int rhs = 0;
+    const char *name;
+    int symbol_index;
+    symtab_entry *entry;
+    if (expr == NULL || value == NULL || depth > EVAL_RECURSION_LIMIT) {
+        return 0;
+    }
+    if (astnode_is_type(expr, INTEGER_NODE)) {
+        *value = expr->integer;
+        return 1;
+    }
+    if (astnode_is_type(expr, IDENTIFIER_NODE)
+        || astnode_is_type(expr, LOCAL_ID_NODE)
+        || astnode_is_type(expr, FORWARD_BRANCH_NODE)
+        || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
+        name = expr->string;
+        entry = symtab_lookup(name);
+        if (entry != NULL && entry->type == CONSTANT_SYMBOL && entry->def != NULL) {
+            return eval_expression_int(entry->def, value, depth + 1);
+        }
+        symbol_index = find_xref_symbol_index(ctx, name);
+        if (symbol_index >= 0 && ctx->symbols[symbol_index].has_cpu_address) {
+            *value = ctx->symbols[symbol_index].cpu_address;
+            return 1;
+        }
+        return 0;
+    }
+    if (!astnode_is_type(expr, ARITHMETIC_NODE)
+        || !eval_expression_int_with_xref(LHS(expr), ctx, &lhs, depth + 1)) {
+        return 0;
+    }
+    switch (expr->oper) {
+        case NEG_OPERATOR: *value = ~lhs; return 1;
+        case NOT_OPERATOR: *value = !lhs; return 1;
+        case LO_OPERATOR: *value = lhs & 0xFF; return 1;
+        case HI_OPERATOR: *value = (lhs >> 8) & 0xFF; return 1;
+        case UMINUS_OPERATOR: *value = -lhs; return 1;
+        case BANK_OPERATOR: *value = (lhs >> 16) & 0xFF; return 1;
+        default: break;
+    }
+    if (!eval_expression_int_with_xref(RHS(expr), ctx, &rhs, depth + 1)) {
+        return 0;
+    }
+    switch (expr->oper) {
+        case PLUS_OPERATOR: *value = lhs + rhs; return 1;
+        case MINUS_OPERATOR: *value = lhs - rhs; return 1;
+        case MUL_OPERATOR: *value = lhs * rhs; return 1;
+        case DIV_OPERATOR: *value = rhs != 0 ? lhs / rhs : 0; return 1;
+        case MOD_OPERATOR: *value = rhs != 0 ? lhs % rhs : 0; return 1;
+        case AND_OPERATOR: *value = lhs & rhs; return 1;
+        case OR_OPERATOR: *value = lhs | rhs; return 1;
+        case XOR_OPERATOR: *value = lhs ^ rhs; return 1;
+        case SHL_OPERATOR: *value = lhs << rhs; return 1;
+        case SHR_OPERATOR: *value = lhs >> rhs; return 1;
+        case LT_OPERATOR: *value = lhs < rhs; return 1;
+        case GT_OPERATOR: *value = lhs > rhs; return 1;
+        case EQ_OPERATOR: *value = lhs == rhs; return 1;
+        case NE_OPERATOR: *value = lhs != rhs; return 1;
+        case LE_OPERATOR: *value = lhs <= rhs; return 1;
+        case GE_OPERATOR: *value = lhs >= rhs; return 1;
+        default: return 0;
+    }
 }
 
 static int add_or_update_xref_symbol(xref_build_context *ctx,
@@ -1631,6 +2442,7 @@ static int add_xref_reference(xref_build_context *ctx,
 
 static void start_xref_segment(xref_build_context *ctx)
 {
+    ctx->pending_label_count = 0;
     ctx->current_segment_id = ctx->next_segment_id++;
 }
 
@@ -1769,8 +2581,11 @@ static int collect_expr_refs_recursive(astnode *expr, xref_build_context *ctx, c
     if (expr == NULL) {
         return 1;
     }
-    if (astnode_is_type(expr, IDENTIFIER_NODE)) {
-        if (!add_xref_reference(ctx, expr->ident, &expr->loc, meta)) {
+    if (astnode_is_type(expr, IDENTIFIER_NODE)
+        || astnode_is_type(expr, LOCAL_ID_NODE)
+        || astnode_is_type(expr, FORWARD_BRANCH_NODE)
+        || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
+        if (!add_xref_reference(ctx, expr->string, &expr->loc, meta)) {
             return 0;
         }
     }
@@ -1838,11 +2653,23 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
                                    0)) {
         return 0;
     }
+    if (strcmp(scope, "global") == 0) {
+        free(ctx->lexical_owner_symbol);
+        ctx->lexical_owner_symbol = xstrdup(label->label);
+        if (ctx->lexical_owner_symbol == NULL) {
+            ctx->failed = 1;
+            return 0;
+        }
+        memset(ctx->lexical_owner_item_counts, 0, sizeof(ctx->lexical_owner_item_counts));
+    }
     /* Record section for the defined symbol */
     {
         int idx = find_xref_symbol_index(ctx, label->label);
         if (idx >= 0) {
             ctx->symbols[idx].is_dataseg = in_dataseg;
+            if (!add_pending_label(ctx, idx)) {
+                return 0;
+            }
         }
     }
     return 0;
@@ -1861,6 +2688,8 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     int resolved_value = 0;
     int record_instruction = 0;
     (void)next;
+
+    classify_pending_labels(ctx, 1);
 
     if (len < 1) {
         len = 1;
@@ -1954,8 +2783,9 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
     int item_count = 0;
     int index = 0;
     xref_meta meta;
-    char expr_buf[512];
     (void)next;
+
+    classify_pending_labels(ctx, 2);
 
     switch (LHS(data)->datatype) {
         case BYTE_DATATYPE:
@@ -1973,13 +2803,14 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
             break;
     }
 
-    extract_operand_from_line(data->loc, expr_buf, sizeof(expr_buf));
-
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
         item_count++;
     }
 
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
+        const xref_data_provenance *provenance =
+            find_xref_data_provenance(expr->analysis_origin_id);
+        int owner_item_index = ctx->lexical_owner_item_counts[data_width_index(LHS(data)->datatype)]++;
         memset(&meta, 0, sizeof(meta));
         meta.has_cpu_address = 1;
         meta.cpu_address = addr + (index * bytes_per_item);
@@ -1988,12 +2819,39 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
         meta.opcode = NULL;
         meta.addressing_mode = NULL;
         meta.access = "address_compute";
-        meta.expression = expr_buf;
+        meta.expression = provenance != NULL ? provenance->expression : "";
         meta.is_dataseg = in_dataseg;
         meta.segment_id = ctx->current_segment_id;
-        if (!collect_expr_refs_recursive(expr, ctx, &meta)) {
+        if (!collect_expr_refs_recursive(
+                provenance != NULL ? provenance->original_expression : expr,
+                ctx,
+                &meta)) {
             ctx->failed = 1;
             break;
+        }
+        if (ctx->include_data && provenance != NULL
+            && provenance_has_allowed_reference(provenance, ctx)) {
+            xref_data_directive_reference *record;
+            if (!ensure_xref_data_directive_ref_capacity(ctx)) {
+                ctx->failed = 1;
+                break;
+            }
+            record = &ctx->data_directive_refs[ctx->data_directive_ref_count++];
+            memset(record, 0, sizeof(*record));
+            record->provenance = provenance;
+            record->final_expression = expr;
+            record->cpu_address = meta.cpu_address;
+            record->has_output_offset = meta.has_output_offset;
+            record->output_offset = meta.output_offset;
+            record->segment_id = meta.segment_id;
+            record->owner_item_index = owner_item_index;
+            if (ctx->lexical_owner_symbol != NULL) {
+                record->owner_symbol = xstrdup(ctx->lexical_owner_symbol);
+                if (record->owner_symbol == NULL) {
+                    ctx->failed = 1;
+                    break;
+                }
+            }
         }
         index++;
     }
@@ -2010,6 +2868,7 @@ static int xref_visit_storage(astnode *storage, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     int count = 0;
     (void)next;
+    classify_pending_labels(ctx, 2);
     if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
         add_current_pc(count);
         if (ctx->pure_binary && !in_dataseg) {
@@ -2023,6 +2882,7 @@ static int xref_visit_binary(astnode *node, void *arg, astnode **next)
 {
     xref_build_context *ctx = (xref_build_context *)arg;
     (void)next;
+    classify_pending_labels(ctx, 2);
     add_current_pc(node->binary.size);
     if (ctx->pure_binary && !in_dataseg) {
         ctx->output_offset += node->binary.size;
@@ -2062,6 +2922,22 @@ static void free_xref_context(xref_build_context *ctx)
     ctx->instrs = NULL;
     ctx->instr_count = 0;
     ctx->instr_capacity = 0;
+
+    for (i = 0; i < ctx->data_directive_ref_count; i++) {
+        free(ctx->data_directive_refs[i].owner_symbol);
+    }
+    free(ctx->data_directive_refs);
+    ctx->data_directive_refs = NULL;
+    ctx->data_directive_ref_count = 0;
+    ctx->data_directive_ref_capacity = 0;
+
+    free(ctx->pending_label_indexes);
+    ctx->pending_label_indexes = NULL;
+    ctx->pending_label_count = 0;
+    ctx->pending_label_capacity = 0;
+
+    free(ctx->lexical_owner_symbol);
+    ctx->lexical_owner_symbol = NULL;
 }
 
 static int xref_symbol_compare(const void *a, const void *b)
@@ -2917,6 +3793,253 @@ static void csv_write_field(FILE *fp, const char *s)
     fputc('"', fp);
 }
 
+static int xref_labels_share_segment(const xref_build_context *ctx,
+                                     const char *left,
+                                     const char *right)
+{
+    int left_index = find_xref_symbol_index(ctx, left);
+    int right_index = find_xref_symbol_index(ctx, right);
+    const xref_symbol *left_symbol;
+    const xref_symbol *right_symbol;
+    if (left_index < 0 || right_index < 0) {
+        return 0;
+    }
+    left_symbol = &ctx->symbols[left_index];
+    right_symbol = &ctx->symbols[right_index];
+    return left_symbol->defined
+        && right_symbol->defined
+        && left_symbol->has_cpu_address
+        && right_symbol->has_cpu_address
+        && left_symbol->segment_id == right_symbol->segment_id;
+}
+
+static const char *xref_expression_symbol_name(astnode *expr)
+{
+    if (expr != NULL
+        && (astnode_is_type(expr, IDENTIFIER_NODE)
+            || astnode_is_type(expr, LOCAL_ID_NODE)
+            || astnode_is_type(expr, FORWARD_BRANCH_NODE)
+            || astnode_is_type(expr, BACKWARD_BRANCH_NODE))) {
+        return expr->string;
+    }
+    return NULL;
+}
+
+static int expression_is_constant_for_target(astnode *expr,
+                                             const xref_build_context *ctx)
+{
+    symtab_entry *entry;
+    astnode *left;
+    astnode *right;
+    if (expr == NULL) {
+        return 0;
+    }
+    if (astnode_is_type(expr, INTEGER_NODE)) {
+        return 1;
+    }
+    if (xref_expression_symbol_name(expr) != NULL) {
+        entry = symtab_lookup(xref_expression_symbol_name(expr));
+        return entry != NULL
+            && entry->type == CONSTANT_SYMBOL
+            && entry->def != NULL;
+    }
+    if (!astnode_is_type(expr, ARITHMETIC_NODE)) {
+        return 0;
+    }
+    left = LHS(expr);
+    right = RHS(expr);
+    if (expr->oper == MINUS_OPERATOR
+        && left != NULL && right != NULL
+        && xref_expression_symbol_name(left) != NULL
+        && xref_expression_symbol_name(right) != NULL) {
+        const char *left_name = xref_expression_symbol_name(left);
+        const char *right_name = xref_expression_symbol_name(right);
+        symtab_entry *left_entry = symtab_lookup(left_name);
+        symtab_entry *right_entry = symtab_lookup(right_name);
+        if (left_entry != NULL && right_entry != NULL
+            && left_entry->type == LABEL_SYMBOL
+            && right_entry->type == LABEL_SYMBOL) {
+            return xref_labels_share_segment(ctx, left_name, right_name);
+        }
+    }
+    switch (expr->oper) {
+        case NEG_OPERATOR:
+        case NOT_OPERATOR:
+        case LO_OPERATOR:
+        case HI_OPERATOR:
+        case UMINUS_OPERATOR:
+        case BANK_OPERATOR:
+            return expression_is_constant_for_target(left, ctx);
+        default:
+            return expression_is_constant_for_target(left, ctx)
+                && expression_is_constant_for_target(right, ctx);
+    }
+}
+
+typedef struct tag_xref_target_result {
+    const char *symbol;
+    int displacement;
+    const char *projection;
+    const char *kind;
+} xref_target_result;
+
+static int resolve_xref_data_target(const xref_build_context *ctx,
+                                    const xref_data_provenance *provenance,
+                                    xref_target_result *out)
+{
+    astnode *expr;
+    astnode *base;
+    astnode *displacement_expr = NULL;
+    symtab_entry *base_entry;
+    int displacement = 0;
+    int sign = 1;
+    int symbol_index;
+    memset(out, 0, sizeof(*out));
+    out->projection = "none";
+    expr = provenance->original_expression;
+    if (expr == NULL) {
+        return 0;
+    }
+    if (astnode_is_type(expr, ARITHMETIC_NODE)
+        && (expr->oper == LO_OPERATOR || expr->oper == HI_OPERATOR)) {
+        out->projection = expr->oper == LO_OPERATOR ? "low" : "high";
+        expr = LHS(expr);
+    }
+    base = expr;
+    if (astnode_is_type(expr, ARITHMETIC_NODE)
+        && (expr->oper == PLUS_OPERATOR || expr->oper == MINUS_OPERATOR)) {
+        base = LHS(expr);
+        displacement_expr = RHS(expr);
+        sign = expr->oper == MINUS_OPERATOR ? -1 : 1;
+    }
+    if (xref_expression_symbol_name(base) == NULL) {
+        return 0;
+    }
+    base_entry = symtab_lookup(xref_expression_symbol_name(base));
+    if (base_entry == NULL
+        || (base_entry->type != LABEL_SYMBOL && base_entry->type != CONSTANT_SYMBOL)) {
+        return 0;
+    }
+    if (base_entry->type == CONSTANT_SYMBOL
+        && (!(base_entry->flags & EQU_FLAG) || base_entry->def == NULL)) {
+        return 0;
+    }
+    if (displacement_expr != NULL) {
+        if (!expression_is_constant_for_target(displacement_expr, ctx)
+            || !eval_expression_int_with_xref(displacement_expr, ctx, &displacement, 0)) {
+            return 0;
+        }
+        displacement *= sign;
+    }
+    out->symbol = xref_expression_symbol_name(base);
+    out->displacement = displacement;
+    if (base_entry->type == CONSTANT_SYMBOL) {
+        out->kind = "equate";
+        return 1;
+    }
+    out->kind = "unknown";
+    symbol_index = find_xref_symbol_index(ctx, xref_expression_symbol_name(base));
+    if (symbol_index >= 0) {
+        if (ctx->symbols[symbol_index].definition_kind == 1) {
+            out->kind = "code";
+        } else if (ctx->symbols[symbol_index].definition_kind == 2) {
+            out->kind = "data";
+        }
+    }
+    return 1;
+}
+
+static const char *data_directive_name(datatype type)
+{
+    if (type == WORD_DATATYPE) {
+        return ".DW";
+    }
+    if (type == DWORD_DATATYPE) {
+        return ".DD";
+    }
+    return ".DB";
+}
+
+static void emit_xref_data_directive_references(FILE *fp,
+                                                const xref_build_context *ctx)
+{
+    int i;
+    fprintf(fp, "  \"data_directive_references\": [");
+    for (i = 0; i < ctx->data_directive_ref_count; i++) {
+        const xref_data_directive_reference *record = &ctx->data_directive_refs[i];
+        const xref_data_provenance *provenance = record->provenance;
+        xref_target_result target;
+        int target_known = resolve_xref_data_target(ctx, provenance, &target);
+        int j;
+        fprintf(fp, "%s\n    {", i == 0 ? "" : ",");
+        fprintf(fp, "\"file\":");
+        print_json_string(fp, provenance->loc.file != NULL ? provenance->loc.file : "");
+        fprintf(fp, ",\"line\":%d,\"column\":%d",
+                provenance->loc.first_line,
+                provenance->loc.first_column);
+        fprintf(fp, ",\"directive\":");
+        print_json_string(fp, data_directive_name(provenance->datatype));
+        fprintf(fp, ",\"width_bytes\":%d", data_width_bytes(provenance->datatype));
+        fprintf(fp, ",\"operand_index\":%d", provenance->operand_index);
+        fprintf(fp, ",\"expression\":");
+        print_json_string(fp, provenance->expression);
+        fprintf(fp, ",\"referenced_symbols\":[");
+        for (j = 0; j < provenance->referenced_symbol_count; j++) {
+            if (j != 0) {
+                fprintf(fp, ",");
+            }
+            print_json_string(fp, provenance->referenced_symbols[j]);
+        }
+        fprintf(fp, "]");
+        fprintf(fp, ",\"emitted_value\":%lu", record->emitted_value);
+        fprintf(fp, ",\"use_cpu_address\":\"0x%04X\"",
+                record->cpu_address & 0xFFFF);
+        fprintf(fp, ",\"use_output_offset\":");
+        if (record->has_output_offset) {
+            fprintf(fp, "%ld", record->output_offset);
+        } else {
+            fprintf(fp, "null");
+        }
+        fprintf(fp, ",\"segment_id\":%d", record->segment_id);
+        if (ctx->include_owner && record->owner_symbol != NULL) {
+            int owner_index = find_xref_symbol_index(ctx, record->owner_symbol);
+            if (owner_index >= 0) {
+                const xref_symbol *owner = &ctx->symbols[owner_index];
+                if (owner->defined && owner->has_cpu_address
+                    && owner->segment_id == record->segment_id
+                    && owner->cpu_address <= record->cpu_address) {
+                    fprintf(fp, ",\"owner_symbol\":");
+                    print_json_string(fp, owner->name);
+                    fprintf(fp, ",\"owner_symbol_addr\":\"0x%04X\"",
+                            owner->cpu_address & 0xFFFF);
+                    fprintf(fp, ",\"owner_symbol_output_offset\":");
+                    if (owner->has_output_offset) {
+                        fprintf(fp, "%ld", owner->output_offset);
+                    } else {
+                        fprintf(fp, "null");
+                    }
+                    fprintf(fp, ",\"owner_item_index\":%d",
+                            record->owner_item_index);
+                }
+            }
+        }
+        if (target_known) {
+            fprintf(fp, ",\"target_symbol\":");
+            print_json_string(fp, target.symbol);
+            fprintf(fp, ",\"target_displacement\":%d", target.displacement);
+            fprintf(fp, ",\"target_projection\":");
+            print_json_string(fp, target.projection);
+            fprintf(fp, ",\"target_kind\":");
+            print_json_string(fp, target.kind);
+        }
+        fprintf(fp, "}");
+    }
+    if (ctx->data_directive_ref_count > 0) {
+        fprintf(fp, "\n  ");
+    }
+    fprintf(fp, "]");
+}
+
 static int emit_xref_json(const char *filename,
                           const xref_build_context *ctx,
                           int include_data,
@@ -2973,7 +4096,7 @@ static int emit_xref_json(const char *filename,
     }
     format_timestamp_utc(ts, sizeof(ts));
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"version\": \"1\",\n");
+    fprintf(fp, "  \"version\": \"2\",\n");
     fprintf(fp, "  \"build\": {\n");
     fprintf(fp, "    \"source_file\": ");
     print_json_string(fp, source_file != NULL ? source_file : "");
@@ -3094,6 +4217,8 @@ static int emit_xref_json(const char *filename,
        already-built edge/flow records. */
     free_xref_owner_index(&owner_index);
     if (include_data) {
+        fprintf(fp, ",\n");
+        emit_xref_data_directive_references(fp, ctx);
         fprintf(fp, ",\n");
         fprintf(fp, "  \"data_reads\": [");
         for (i = 0; i < data_read_count; ++i) {
@@ -7637,6 +8762,19 @@ int generate_xref(astnode *root,
             }
         }
         symtab_list_finalize(&constants);
+    }
+
+    if (ok) {
+        for (i = 0; i < ctx.data_directive_ref_count; i++) {
+            xref_data_directive_reference *record = &ctx.data_directive_refs[i];
+            int value = 0;
+            if (!eval_expression_int_with_xref(record->final_expression, &ctx, &value, 0)) {
+                ok = 0;
+                break;
+            }
+            record->emitted_value = (unsigned long)(unsigned int)
+                astproc_truncate_data_value(record->provenance->datatype, value, NULL);
+        }
     }
 
     if (ok) {

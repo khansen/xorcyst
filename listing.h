@@ -18,6 +18,9 @@ int generate_listing(astnode *root,
                      const char *source_file,
                      const char *output_file);
 int listing_lookup_output_offset(astnode *root, long output_offset, listing_lookup_result *out);
+int prepare_xref_data_directive_provenance(astnode *root);
+int finish_xref_data_directive_provenance(astnode *root);
+void clear_xref_data_directive_provenance(void);
 int generate_xref(astnode *root,
                   const char *filename,
                   xref_format format,

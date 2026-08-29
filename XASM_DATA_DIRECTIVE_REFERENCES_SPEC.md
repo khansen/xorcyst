@@ -2,9 +2,17 @@
 
 ## Status
 
-Proposed implementation contract for xasm. This document deliberately permits a
-breaking JSON xref change. xasm and the NESrev tooling move to the new contract
-in sync; no compatibility adapter or dual-schema transition is required.
+Implemented xasm contract on this branch; the coordinated NESrev consumer
+migration remains pending. This document deliberately permits a breaking JSON
+xref change. xasm and the NESrev tooling move to the new contract in sync; no
+compatibility adapter or dual-schema transition is required.
+
+A read-only implementation prototype assembled every project at the pinned
+NESrev commit and found every tracked `.DW` inventory tuple by lexical owner,
+owner-relative index, expression, and mapped target kind. The only additional
+`.DW` records were rows already excluded by NESrev's terminal-vector policy;
+every emitted `.DW` record had an unambiguous target. Verification derives the
+counts from the pinned tree rather than copying them into this contract.
 
 ## Goal
 
@@ -60,17 +68,19 @@ truncates a local value without replacing the operand AST. Consequently, xref
 cannot assume either that an operand remains structurally intact or that its
 encoded value was stored back into the tree.
 
-The merged node is not a source directive statement. Record provenance must be
-captured after symbol resolution but before `astproc_third_pass`, while original
-directive boundaries and operand expressions are still available. At minimum,
-the preserved provenance for each operand contains its directive identity,
-source location, `operand_index`, normalized expression, referenced symbols,
-owner-relative index, and the structural target candidate: base symbol,
-projection, and unevaluated displacement expression. This capture is required
-because pass 3 may fold an `.EQU` base out of the operand AST. The later xref
-walk adds final emitted addresses and offsets, evaluates the encoded value,
-validates same-segment label differences, resolves the numeric displacement,
-and adds segment identity and target classification.
+The merged node is not a source directive statement. The first pass is also an
+earlier destructive boundary than its name suggests: `process_data` substitutes
+`.EQU` symbols and folds constants. Record provenance must therefore be captured
+inside that callback, after macro expansion has materialized the native data
+node but before its operand-reduction loop runs. At minimum, the preserved
+provenance for each operand contains its directive identity, source location,
+`operand_index`, operand-specific expression spelling, referenced symbols, and
+the structural target candidate: base symbol, projection, and unevaluated displacement
+expression. After pass 1, scoped local/anonymous names are synchronized from the
+surviving operand before later reductions. The final xref walk computes
+width-scoped lexical-owner indices, adds emitted addresses and offsets, evaluates
+the encoded value, validates same-segment label differences, resolves the
+numeric displacement, and adds segment identity and target classification.
 
 An implementation may store that provenance on the operand AST node with rules
 for copying it to replacement nodes, or assign a durable origin ID propagated
@@ -175,13 +185,16 @@ Required fields:
 - `directive`: canonical uppercase directive (`.DB`, `.DW`, or `.DD`)
 - `width_bytes`: emitted width of this operand (1, 2, or 4)
 - `operand_index`: zero-based index within this directive statement
-- `expression`: an operand-specific normalized rendering of the AST; it must
-  preserve identifier names, operators, grouping, and `<` / `>` projection, but
-  need not preserve whitespace
+- `expression`: the operand-specific source slice with insignificant whitespace
+  removed when that slice contains only tokens belonging to the expanded
+  operand, preserving numeric spelling, operators, grouping, and `<` / `>`
+  projection; use a canonical AST rendering when macro location semantics or
+  another transformation makes the source slice broader than the operand
 - `referenced_symbols`: identifiers used by the operand, in first-appearance
   order with duplicates removed
 - `emitted_value`: the unsigned integer actually encoded after xasm's existing
-  datatype truncation
+  datatype truncation in pure-binary mode; in object mode, the unsigned
+  width-normalized value at xasm's current address assignment
 - `use_cpu_address`: address of this operand's first emitted byte, encoded using
   the existing xref address convention
 - `use_output_offset`: output offset of this operand's first emitted byte, or
@@ -292,7 +305,7 @@ Relevant version-2 output:
       "emitted_value": 32777,
       "use_cpu_address": "0x8000",
       "use_output_offset": 0,
-      "segment_id": 0,
+      "segment_id": 1,
       "owner_symbol": "HandlerTable",
       "owner_symbol_addr": "0x8000",
       "owner_symbol_output_offset": 0,
@@ -314,7 +327,7 @@ Relevant version-2 output:
       "emitted_value": 32777,
       "use_cpu_address": "0x8002",
       "use_output_offset": 2,
-      "segment_id": 0,
+      "segment_id": 1,
       "owner_symbol": "HandlerTable",
       "owner_symbol_addr": "0x8000",
       "owner_symbol_output_offset": 0,
@@ -336,7 +349,7 @@ Relevant version-2 output:
       "emitted_value": 32779,
       "use_cpu_address": "0x8006",
       "use_output_offset": 6,
-      "segment_id": 0,
+      "segment_id": 1,
       "owner_symbol": "HandlerTable",
       "owner_symbol_addr": "0x8000",
       "owner_symbol_output_offset": 0,
@@ -358,7 +371,7 @@ Relevant version-2 output:
       "emitted_value": 12,
       "use_cpu_address": "0x8008",
       "use_output_offset": 8,
-      "segment_id": 0,
+      "segment_id": 1,
       "owner_symbol": "SpritePtrLoTable",
       "owner_symbol_addr": "0x8008",
       "owner_symbol_output_offset": 8,
@@ -393,21 +406,28 @@ The literal `$0000` produces no record, but it still advances
 The implementation should add provenance around the existing pass pipeline and
 extend the xref data walk rather than parse source text after assembly:
 
-1. After `astproc_second_pass` and before `astproc_third_pass`, walk original
-   data nodes and capture per-operand provenance, directive/owner indices, and
-   the structural target candidate. Preserve the displacement expression for
-   evaluation after final label addresses and segment identities exist.
+1. Register a first-pass data-analysis hook. When `process_data` receives an
+   expanded native data node, capture each original operand before its
+   substitution/folding loop, assign a durable origin ID, and preserve the
+   structural target candidate and displacement expression. After pass 1,
+   reconcile finalized local/anonymous names from each surviving operand.
 2. Add a `data_directive_reference` collection to `xref_build_context`, and
    make the post-pass `xref_visit_data` lookup the preserved provenance for
    each surviving RHS operand.
-3. Render `expression` and collect ordered identifiers from the original
-   operand AST. Do not call the current whole-line
-   `extract_operand_from_line` for this field.
+3. Collect ordered identifiers from the original operand AST. Split the
+   directive source at top-level commas, retain the selected operand with
+   insignificant whitespace removed only when every identifier-like token
+   belongs to that expanded operand, and otherwise use a canonical AST
+   rendering. Do not reuse the current whole-directive
+   `extract_operand_from_line` result for every child. This distinction
+   preserves `$1E` and deliberate grouping in normal source while preventing a
+   macro invocation name from becoming part of its expanded operand expression.
 4. Compute `emitted_value` during xref by evaluating the final operand without
-   replacing it in the AST, then applying the same datatype-width truncation as
-   `write_data`. Prefer a shared pure helper so code emission and xref cannot
-   drift. Do not issue a second truncation warning, and do not attempt to expose
-   the pre-truncation value.
+   replacing it in the AST, using the completed xref symbol/address map when an
+   object-mode symbol-table entry has no final-address flag, then applying the
+   same datatype-width truncation as `write_data`. Prefer a shared pure helper
+   so code emission and xref cannot drift. Do not issue a second truncation
+   warning, and do not attempt to expose the pre-truncation value.
 5. Track the nearest eligible owner symbol in the current segment. Reuse a
    prebuilt symbol/owner index during output rather than performing an O(N)
    search for every record.
