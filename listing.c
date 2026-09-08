@@ -551,12 +551,12 @@ static const char *datatype_directive_name(datatype type)
     }
 }
 
-static void print_json_string(FILE *fp, const char *s)
+static void print_json_string_n(FILE *fp, const char *s, size_t length)
 {
     const unsigned char *p = (const unsigned char *)s;
     fputc('"', fp);
     if (p != NULL) {
-        while (*p != '\0') {
+        while (length-- > 0) {
             unsigned char c = *p++;
             switch (c) {
                 case '\"': fputs("\\\"", fp); break;
@@ -577,6 +577,41 @@ static void print_json_string(FILE *fp, const char *s)
         }
     }
     fputc('"', fp);
+}
+
+static void print_json_string(FILE *fp, const char *s)
+{
+    print_json_string_n(fp, s, s != NULL ? strlen(s) : 0);
+}
+
+static int instruction_utf8_valid(const char *text, size_t length)
+{
+    const unsigned char *bytes = (const unsigned char *)text;
+    size_t i = 0;
+    while (i < length) {
+        unsigned int codepoint, minimum;
+        unsigned char first = bytes[i++];
+        size_t remaining;
+        if (first < 0x80) continue;
+        if (first >= 0xc2 && first <= 0xdf) {
+            remaining = 1; codepoint = first & 0x1f; minimum = 0x80;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            remaining = 2; codepoint = first & 0x0f; minimum = 0x800;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            remaining = 3; codepoint = first & 0x07; minimum = 0x10000;
+        } else {
+            return 0;
+        }
+        if (remaining > length - i) return 0;
+        while (remaining-- > 0) {
+            unsigned char continuation = bytes[i++];
+            if ((continuation & 0xc0) != 0x80) return 0;
+            codepoint = (codepoint << 6) | (continuation & 0x3f);
+        }
+        if (codepoint < minimum || codepoint > 0x10ffff
+            || (codepoint >= 0xd800 && codepoint <= 0xdfff)) return 0;
+    }
+    return 1;
 }
 
 static void emit_structured_record(location loc,
@@ -1993,6 +2028,8 @@ const char *capture_xref_instruction_source(const char *filename, const char *di
     const char *base = strrchr(filename, '/');
     char *resolved;
     instruction_source *source;
+    if (!instruction_utf8_valid(filename, strlen(filename))
+        || !instruction_utf8_valid(directory, strlen(directory))) return NULL;
     base = base != NULL ? base + 1 : filename;
     resolved = (char *)malloc(strlen(directory) + strlen(base) + 2);
     if (resolved == NULL) return NULL;
@@ -2002,7 +2039,7 @@ const char *capture_xref_instruction_source(const char *filename, const char *di
     return source != NULL ? source->filename : NULL;
 }
 
-static char *instruction_source_span(location loc)
+static char *instruction_source_span(location loc, size_t *length)
 {
     instruction_source *source = instruction_source_file(loc.file, NULL);
     size_t start, end, first_limit, last_limit;
@@ -2021,6 +2058,7 @@ static char *instruction_source_span(location loc)
     if (text == NULL) return NULL;
     memcpy(text, source->bytes + start, end - start);
     text[end - start] = '\0';
+    *length = end - start;
     return text;
 }
 
@@ -2101,17 +2139,24 @@ static void emit_instruction_location(FILE *fp, location loc)
 
 static int emit_instruction_source(FILE *fp, location loc)
 {
-    char *text = instruction_source_span(loc);
+    size_t length = 0;
+    char *text = instruction_source_span(loc, &length);
     if (text == NULL) {
         fprintf(stderr, "error: unavailable instruction source span %s:%d:%d-%d:%d\n",
                 loc.file != NULL ? loc.file : "", loc.first_line, loc.first_column,
                 loc.last_line, loc.last_column);
         return 0;
     }
+    if (!instruction_utf8_valid(text, length)) {
+        fprintf(stderr, "error: instruction source span is not UTF-8: %s:%d:%d\n",
+                loc.file, loc.first_line, loc.first_column);
+        free(text);
+        return 0;
+    }
     fprintf(fp, "{\"span\":");
     emit_instruction_location(fp, loc);
     fprintf(fp, ",\"text\":");
-    print_json_string(fp, text);
+    print_json_string_n(fp, text, length);
     fprintf(fp, "}");
     free(text);
     return 1;

@@ -10,6 +10,7 @@ import unittest
 
 
 XASM = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "xasm"
+XLNK = Path(__file__).resolve().parents[1] / "xlnk"
 
 
 class InstructionRecords(unittest.TestCase):
@@ -20,7 +21,7 @@ class InstructionRecords(unittest.TestCase):
 
     def assemble(self, text, *, options=(), includes=None):
         source = self.root / "input.asm"
-        source.write_text(text)
+        source.write_bytes(text if isinstance(text, bytes) else text.encode())
         for name, content in (includes or {}).items():
             (self.root / name).write_text(content)
         output = self.root / "output.bin"
@@ -49,7 +50,23 @@ class InstructionRecords(unittest.TestCase):
             self.assertEqual(record["size"], len(record["bytes"]))
             self.assertEqual(bytes(record["bytes"]), plain_bytes[start:start + record["size"]])
             self.assertEqual(record["opcode"], record["bytes"][0])
+        self.assert_source_spans(records["records"])
         return records["records"]
+
+    def assert_source_spans(self, value):
+        if isinstance(value, dict):
+            if "span" in value and "text" in value:
+                span = value["span"]
+                lines = Path(span["file"]).read_bytes().split(b"\n")
+                start = sum(len(line) + 1 for line in lines[:span["line"] - 1]) + span["column"] - 1
+                end = sum(len(line) + 1 for line in lines[:span["end_line"] - 1]) + span["end_column"] - 1
+                raw = Path(span["file"]).read_bytes()
+                self.assertEqual(value["text"].encode(), raw[start:end])
+            for child in value.values():
+                self.assert_source_spans(child)
+        elif isinstance(value, list):
+            for child in value:
+                self.assert_source_spans(child)
 
     def test_literal_modes_and_emitted_bytes(self):
         records = self.assemble(""".ORG $C000
@@ -314,6 +331,54 @@ END
         self.assertEqual([r["operand_value"] for r in records], [3, 4, 2, 1])
         self.assertEqual([r["expression"]["source"]["text"] for r in records[:2]], ["$03", "$04"])
         self.assertEqual(records[2]["source"], records[3]["source"])
+
+    def test_utf8_and_embedded_nul_are_lossless(self):
+        for literal in [b"a\x00b", "café".encode(), "λ🙂".encode()]:
+            with self.subTest(literal=literal):
+                records = self.assemble(b'.ORG $C000\nLDA #sizeof("' + literal + b'")\nRTS\nEND\n')
+                self.assertEqual(len(records), 2)
+                self.assert_source_spans(records)
+                self.assertIn(literal.decode(), records[0]["source"]["text"])
+
+    def test_invalid_utf8_is_explicit_analysis_failure(self):
+        for instruction in [b"LDA #'\xff'", b'LDA #sizeof("caf\xe9")',
+                            b'LDA #sizeof("\xc0\x80")', b'LDA #sizeof("\xed\xa0\x80")',
+                            b'LDA #sizeof("\xf4\x90\x80\x80")', b'LDA #sizeof("\xe2\x82")']:
+            with self.subTest(instruction=instruction):
+                source = self.root / "input.asm"
+                source.write_bytes(b'.ORG $C000\n' + instruction + b'\nRTS\nEND\n')
+                xref = self.root / "xref.json"
+                out = self.root / "out.bin"
+                args = [str(XASM), "--pure-binary", f"--xref={xref}", str(source), "-o", str(out)]
+                plain = subprocess.run(args, capture_output=True)
+                self.assertEqual(plain.returncode, 0, plain.stderr.decode())
+                json.loads(xref.read_bytes())
+                expected = out.read_bytes()
+                run = subprocess.run([*args, "--xref-instructions=true"], capture_output=True)
+                self.assertEqual(run.returncode, 3, run.stderr.decode())
+                self.assertIn(b"instruction source span is not UTF-8", run.stderr)
+                self.assertEqual(out.read_bytes(), expected)
+
+    def test_linker_indexed_shortening_and_wide_operands(self):
+        source = self.root / "input.asm"
+        source.write_text('''.DATASEG
+Scratch .DSB 1
+.CODESEG
+    LDX Scratch,Y
+    STX Scratch,Y
+    LDX Scratch+$100,Y
+    LDX.W Scratch,Y
+END
+''')
+        obj = self.root / "input.o"
+        output = self.root / "linked.bin"
+        run = subprocess.run([str(XASM), str(source), "-o", str(obj)], capture_output=True)
+        self.assertEqual(run.returncode, 0, run.stderr.decode())
+        script = self.root / "link.script"
+        script.write_text(f"output{{file={output}}}\nram{{start=$10,end=$FF}}\nbank{{size=$10,origin=$C000}}\nlink{{file={obj}}}\n")
+        run = subprocess.run([str(XLNK), str(script)], capture_output=True)
+        self.assertEqual(run.returncode, 0, run.stderr.decode())
+        self.assertEqual(output.read_bytes()[:10], bytes([0xB6, 0x10, 0x96, 0x10, 0xBE, 0x10, 1, 0xBE, 0x10, 0]))
 
     def test_cli_refusal(self):
         source = self.root / "input.asm"

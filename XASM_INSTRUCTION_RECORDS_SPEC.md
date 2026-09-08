@@ -72,6 +72,13 @@ Instruction and operand spans come from the grammar, not a second source parser.
 Source bytes are retained when their input files are opened, without the old
 listing renderer's fixed line-length limit.
 
+Version 1 admits UTF-8 source spans and input paths. Embedded NUL/control bytes
+are serialized losslessly with JSON escapes using explicit span lengths. Valid
+multibyte UTF-8 is preserved; invalid UTF-8 within a reported span is an analysis
+error (exit 3), never replaced or emitted as malformed JSON. Non-UTF-8 bytes in
+unreported comments/data are not rejected by this check. This opt-in encoding
+boundary does not change feature-off assembly or legacy string evaluation.
+
 For a macro, `source` and `operand_source` describe the definition's template;
 they must not be presented as the expanded operand spelling. `use` identifies
 the invocation. Expression nodes retain their individual parsed source spans,
@@ -156,9 +163,15 @@ all addressing-mode families, final zero-page shortening, operand spelling,
 macros/repeats, include identity, same-line and long-line source spans,
 debug/filter invariance, mutable operands, inactive code, conservative base
 refusal, empty streams, CLI/assembly/output failures, and binary/warning/legacy
-xref parity. It runs from `sh tests/regression.sh` as well.
+xref parity. Byte-written fixtures separately exercise UTF-8, embedded NUL,
+and invalid UTF-8 refusal. An object-mode linker fixture covers late indexed
+zero-page shortening and forced-wide/high-address indexed loads. The suite
+runs from `sh tests/regression.sh` as well.
 
 Generated parser/scanner files are checked in for ordinary builds. Regenerate
 with Bison 3.8.2 and Flex 2.6.4 after grammar/lexer changes. This work also fixes
 the opcode-mode lookup for STX/LDX zero-page-Y and LDX absolute-Y; the independent
 opcode-byte fixtures cover those three pre-existing misclassifications.
+The linker also consumes this lookup. Its shortening eligibility groups both
+absolute indexed modes together, so the correction does not change that
+eligibility; the linker regression pins the resulting bytes independently.
