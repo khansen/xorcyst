@@ -339,6 +339,12 @@ END
                 self.assertEqual(len(records), 2)
                 self.assert_source_spans(records)
                 self.assertIn(literal.decode(), records[0]["source"]["text"])
+                string = records[0]["expression"]["children"][0]
+                self.assertEqual(string["kind"], "string")
+                self.assertEqual(string["source"]["text"], '"' + literal.decode() + '"')
+                parsed_value = literal.split(b"\x00", 1)[0]
+                self.assertEqual(string["name"], parsed_value.decode())
+                self.assertEqual(records[0]["operand_value"], len(parsed_value))
 
     def test_invalid_utf8_is_explicit_analysis_failure(self):
         for instruction in [b"LDA #'\xff'", b'LDA #sizeof("caf\xe9")',

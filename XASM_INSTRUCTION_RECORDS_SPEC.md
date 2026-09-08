@@ -100,6 +100,12 @@ Binary operators use their grammar spellings: `+`, `-`, `*`, `/`, `%`, `&`, `|`,
 `bit_not`, `logical_not`, `low_byte`, `high_byte`, `negate`, and `bank`.
 Datatype names are `byte`, `char`, `word`, `dword`, and `user`.
 
+For string nodes, `name` is the parser's string value, not lossless source
+spelling. The existing parser uses NUL-terminated strings: an actual embedded
+NUL in `"a<NUL>b"` yields `name: "a"` and `sizeof` value 1. The node's
+`source.text` retains the entire quoted literal, including NUL and trailing
+bytes; this interface does not change that legacy evaluation behavior.
+
 The tree preserves syntactic distinctions before folding: a named constant is
 not a raw integer merely because both resolve to the same value. Parentheses
 are represented by tree structure; exact grouping remains in `operand_source`.
