@@ -7,6 +7,8 @@
 #include "astproc.h"
 #include "symtab.h"
 #include "opcode.h"
+#include "dependencies.h"
+#include "utf8.h"
 
 #define SOURCE_LINE_BUFFER_SIZE 1024
 #define HEX_BYTES_PER_ROW 4
@@ -364,7 +366,7 @@ static const char *get_source_line(const char *filename, int line)
     if (source_fp == NULL || current_source_file == NULL || strcmp(current_source_file, filename) != 0) {
         close_source_cache();
 
-        source_fp = fopen(filename, "r");
+        source_fp = dependencies_open(filename, "r", DEP_ANALYSIS_SOURCE);
         if (source_fp == NULL) {
             return "";
         }
@@ -582,36 +584,6 @@ static void print_json_string_n(FILE *fp, const char *s, size_t length)
 static void print_json_string(FILE *fp, const char *s)
 {
     print_json_string_n(fp, s, s != NULL ? strlen(s) : 0);
-}
-
-static int instruction_utf8_valid(const char *text, size_t length)
-{
-    const unsigned char *bytes = (const unsigned char *)text;
-    size_t i = 0;
-    while (i < length) {
-        unsigned int codepoint, minimum;
-        unsigned char first = bytes[i++];
-        size_t remaining;
-        if (first < 0x80) continue;
-        if (first >= 0xc2 && first <= 0xdf) {
-            remaining = 1; codepoint = first & 0x1f; minimum = 0x80;
-        } else if (first >= 0xe0 && first <= 0xef) {
-            remaining = 2; codepoint = first & 0x0f; minimum = 0x800;
-        } else if (first >= 0xf0 && first <= 0xf4) {
-            remaining = 3; codepoint = first & 0x07; minimum = 0x10000;
-        } else {
-            return 0;
-        }
-        if (remaining > length - i) return 0;
-        while (remaining-- > 0) {
-            unsigned char continuation = bytes[i++];
-            if ((continuation & 0xc0) != 0x80) return 0;
-            codepoint = (codepoint << 6) | (continuation & 0x3f);
-        }
-        if (codepoint < minimum || codepoint > 0x10ffff
-            || (codepoint >= 0xd800 && codepoint <= 0xdfff)) return 0;
-    }
-    return 1;
 }
 
 static void emit_structured_record(location loc,
@@ -2028,8 +2000,8 @@ const char *capture_xref_instruction_source(const char *filename, const char *di
     const char *base = strrchr(filename, '/');
     char *resolved;
     instruction_source *source;
-    if (!instruction_utf8_valid(filename, strlen(filename))
-        || !instruction_utf8_valid(directory, strlen(directory))) return NULL;
+    if (!xasm_utf8_valid(filename, strlen(filename))
+        || !xasm_utf8_valid(directory, strlen(directory))) return NULL;
     base = base != NULL ? base + 1 : filename;
     resolved = (char *)malloc(strlen(directory) + strlen(base) + 2);
     if (resolved == NULL) return NULL;
@@ -2147,7 +2119,7 @@ static int emit_instruction_source(FILE *fp, location loc)
                 loc.last_line, loc.last_column);
         return 0;
     }
-    if (!instruction_utf8_valid(text, length)) {
+    if (!xasm_utf8_valid(text, length)) {
         fprintf(stderr, "error: instruction source span is not UTF-8: %s:%d:%d\n",
                 loc.file, loc.first_line, loc.first_column);
         free(text);
@@ -9536,7 +9508,7 @@ static int audit_is_suppressed(location loc, const char *code)
     if (loc.file == NULL || loc.first_line <= 0) {
         return 0;
     }
-    fp = fopen(loc.file, "r");
+    fp = dependencies_open(loc.file, "r", DEP_ANALYSIS_SOURCE);
     if (fp == NULL) {
         return 0;
     }

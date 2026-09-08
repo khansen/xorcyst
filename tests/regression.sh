@@ -4703,5 +4703,6 @@ ASM
 run_expect_data_coverage
 
 python3 "$ROOT_DIR/tests/test_instruction_records.py" "$XASM"
+python3 "$ROOT_DIR/tests/test_dependencies.py" "$XASM"
 
 echo "All regression tests passed"

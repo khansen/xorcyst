@@ -61,6 +61,7 @@ const char *maybe_ignorecase(char *);
 #include "parser.h"
 #include "xasm.h"
 #include "listing.h"
+#include "dependencies.h"
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
@@ -338,13 +339,13 @@ void yyresetloc(void)
  * Helper function used to handle INCSRC and INCBIN
  * statements during parsing.
  */
-FILE *open_included_file(const char *filename, int quoted_form, char **path_out)
+FILE *open_included_file(const char *filename, int quoted_form, char **path_out, unsigned role)
 {
     FILE *fp = 0;
     char *path = 0;
     if (filename[0] == '/') {
         /* Absolute path */
-        fp = fopen(filename, "rt");
+        fp = dependencies_open(filename, "rt", role);
         if (fp) {
             char *lastslash = strrchr(filename, '/');
             int len = lastslash - filename;
@@ -365,7 +366,7 @@ FILE *open_included_file(const char *filename, int quoted_form, char **path_out)
                 strcpy(tmp, include_path);
                 strcat(tmp, "/");
                 strcat(tmp, filename);
-                fp = fopen(tmp, "rt");
+                fp = dependencies_open(tmp, "rt", role);
                 if (fp) {
                     char *lastslash = strrchr(tmp, '/');
                     int len = lastslash - tmp;
@@ -390,7 +391,7 @@ FILE *open_included_file(const char *filename, int quoted_form, char **path_out)
                 strcpy(tmp, include_path);
                 strcat(tmp, "/");
                 strcat(tmp, filename);
-                fp = fopen(tmp, "rt");
+                fp = dependencies_open(tmp, "rt", role);
                 if (fp) {
                     char *lastslash = strrchr(tmp, '/');
                     int len = lastslash - tmp;
@@ -454,7 +455,7 @@ int yypushandrestart(const char *filename, int quoted_form)
         /* Error, stack overflow */
         return 2;
     }
-    fp = open_included_file(filename, quoted_form, &path);
+    fp = open_included_file(filename, quoted_form, &path, DEP_SOURCE);
     if (fp) {
         /* Save position in current file */
         FTOS().loc = yylloc;
@@ -488,7 +489,7 @@ int yybegin(const char *filename, int swap_parens, int ignore_case)
     yyparswap = swap_parens;
     yyignorecase = ignore_case;
     /* Attempt to open the given file */
-    fp = fopen(filename, "rt");
+    fp = dependencies_open(filename, "rt", DEP_SOURCE);
     if (fp) {
         /* Figure out path */
         char *path;

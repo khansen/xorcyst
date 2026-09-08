@@ -64,6 +64,7 @@ char *scan_include(int); /* In lexer */
 extern astnode *root_node;  /* Root of the generated parse tree */
 void handle_incsrc(astnode *);  /* See below */
 void handle_incbin(astnode *);  /* See below */
+#include "dependencies.h"
 static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mode mode,
                                   astnode *expr, location loc, location operand)
 {
@@ -645,7 +646,7 @@ void handle_incsrc(astnode *n)
 
 // TODO: This shouldn't be done here but rather in astproc module.
 
-FILE *open_included_file(const char *, int, char **);
+FILE *open_included_file(const char *, int, char **, unsigned);
 
 /**
  * Takes care of including the binary contents of the file specified by a parsed
@@ -665,7 +666,7 @@ void handle_incbin(astnode *n)
     const char *filename = file->string;
     int quoted_form = (astnode_get_type(file) == STRING_NODE) ? 1 : 0;
     /* Try to open it */
-    fp = open_included_file(filename, quoted_form, NULL);
+    fp = open_included_file(filename, quoted_form, NULL, DEP_BINARY);
     if (fp) {
         /* Get filesize */
         if (fseek(fp, 0, SEEK_END) != 0) {

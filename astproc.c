@@ -112,6 +112,7 @@
 #include "symtab.h"
 #include "opcode.h"
 #include "charmap.h"
+#include "dependencies.h"
 #include "xasm.h"
 
 #define IS_SIGNED_BYTE_VALUE(v) (((v) >= -128) && ((v) <= 127))
@@ -4117,7 +4118,7 @@ static int is_unused_equ_suppressed(location loc)
         return 0;
     }
 
-    fp = fopen(loc.file, "r");
+    fp = dependencies_open(loc.file, "r", DEP_ANALYSIS_SOURCE);
     if (fp == NULL) {
         return 0;
     }

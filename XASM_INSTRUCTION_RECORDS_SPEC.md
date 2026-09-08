@@ -133,8 +133,10 @@ limits; additional binding/dataflow facts require explicit producer extensions.
 
 This producer section is usable in the same assembly as existing analysis
 outputs, but **is not a freshness certificate**. Source snapshots here support
-provenance; they are not a complete content-hashed dependency manifest. No
-NESrev gate or standalone fallback is changed by this producer unit.
+provenance. Optional [dependency manifests](XASM_DEPENDENCY_MANIFEST_SPEC.md)
+now hash the consumed inputs and record lookup misses, independently of this
+section. Neither artifact alone is a validated downstream bundle. No NESrev
+gate or standalone fallback is changed by these producer units.
 
 The follow-on invocation-local bundle must:
 
@@ -142,8 +144,9 @@ The follow-on invocation-local bundle must:
    transitive source files, binary includes, character maps, and any other
    assembler input. Use the producer's file-resolution/read paths, not an
    include-directive regex. Identify effective options/defines/include paths and
-   producer build. The source snapshot plumbing here is only one part of that
-   work; binary/character-map input tracking and hashes are not implemented yet.
+   producer build. The optional dependency manifest provides this input-side
+   contract; wrappers must request it and validate its complete schema, paths,
+   hashes, lookup misses, and invocation identity.
 2. Bind successful outputs to those input hashes, producer/schema versions,
    project configuration, and address/bank domain. The wrapper adds hashes for
    its configuration and authored policy inputs; xasm does not own NESrev policy.
