@@ -60,6 +60,7 @@ const char *maybe_ignorecase(char *);
 #include "astnode.h"
 #include "parser.h"
 #include "xasm.h"
+#include "listing.h"
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
@@ -327,6 +328,10 @@ static int file_stack_ptr;
 void yyresetloc(void)
 {
     LOCATION_RESET(yylloc);
+    if (xasm_args.xref_instructions) {
+        yylloc.source_file = capture_xref_instruction_source(FTOS().name, FTOS().path, FTOS().fp);
+        if (yylloc.source_file == NULL) yyerror("could not preserve instruction source");
+    }
 }
 
 /**

@@ -64,6 +64,18 @@ char *scan_include(int); /* In lexer */
 extern astnode *root_node;  /* Root of the generated parse tree */
 void handle_incsrc(astnode *);  /* See below */
 void handle_incbin(astnode *);  /* See below */
+static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mode mode,
+                                  astnode *expr, location loc, location operand)
+{
+    astnode *node = astnode_create_instruction(mnemonic, mode, expr, loc);
+    if (node != NULL) {
+        operand.last_line = loc.last_line;
+        operand.last_column = loc.last_column;
+        if (operand.source_file != NULL) operand.file = operand.source_file;
+        node->instr.operand_loc = operand;
+    }
+    return node;
+}
 %}
 
 %union {
@@ -305,14 +317,14 @@ instruction_statement:
 
 instruction:
     MNEMONIC { $$ = astnode_create_instruction($1, IMPLIED_MODE, NULL, @$); }
-    | MNEMONIC 'A' { $$ = astnode_create_instruction($1, ACCUMULATOR_MODE, NULL, @$); }
-    | MNEMONIC '#' expression { $$ = astnode_create_instruction($1, IMMEDIATE_MODE, $3, @$); }
-    | MNEMONIC expression { $$ = astnode_create_instruction($1, ABSOLUTE_MODE, $2, @$); }
-    | MNEMONIC expression ',' 'X' { $$ = astnode_create_instruction($1, ABSOLUTE_X_MODE, $2, @$); }
-    | MNEMONIC expression ',' 'Y' { $$ = astnode_create_instruction($1, ABSOLUTE_Y_MODE, $2, @$); }
-    | MNEMONIC '[' expression ',' 'X' ']' { $$ = astnode_create_instruction($1, PREINDEXED_INDIRECT_MODE, $3, @$); }
-    | MNEMONIC '[' expression ']' ',' 'Y' { $$ = astnode_create_instruction($1, POSTINDEXED_INDIRECT_MODE, $3, @$); }
-    | MNEMONIC '[' expression ']' { $$ = astnode_create_instruction($1, INDIRECT_MODE, $3, @$); }
+    | MNEMONIC 'A' { $$ = parsed_instruction($1, ACCUMULATOR_MODE, NULL, @$, @2); }
+    | MNEMONIC '#' expression { $$ = parsed_instruction($1, IMMEDIATE_MODE, $3, @$, @2); }
+    | MNEMONIC expression { $$ = parsed_instruction($1, ABSOLUTE_MODE, $2, @$, @2); }
+    | MNEMONIC expression ',' 'X' { $$ = parsed_instruction($1, ABSOLUTE_X_MODE, $2, @$, @2); }
+    | MNEMONIC expression ',' 'Y' { $$ = parsed_instruction($1, ABSOLUTE_Y_MODE, $2, @$, @2); }
+    | MNEMONIC '[' expression ',' 'X' ']' { $$ = parsed_instruction($1, PREINDEXED_INDIRECT_MODE, $3, @$, @2); }
+    | MNEMONIC '[' expression ']' ',' 'Y' { $$ = parsed_instruction($1, POSTINDEXED_INDIRECT_MODE, $3, @$, @2); }
+    | MNEMONIC '[' expression ']' { $$ = parsed_instruction($1, INDIRECT_MODE, $3, @$, @2); }
     ;
 
 expression:

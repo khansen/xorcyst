@@ -123,10 +123,16 @@
 #define IS_WORD_VALUE(v) (IS_SIGNED_WORD_VALUE(v) || IS_UNSIGNED_WORD_VALUE(v))
 
 static astproc_data_analysis_hook data_analysis_hook = NULL;
+static astproc_data_analysis_hook instruction_analysis_hook = NULL;
 
 void astproc_set_data_analysis_hook(astproc_data_analysis_hook hook)
 {
     data_analysis_hook = hook;
+}
+
+void astproc_set_instruction_analysis_hook(astproc_data_analysis_hook hook)
+{
+    instruction_analysis_hook = hook;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2151,6 +2157,10 @@ static int process_instruction(astnode *instr, void *arg, astnode **next)
     }
     else {
         unsigned char op;
+        if (instruction_analysis_hook != NULL && !instruction_analysis_hook(instr)) {
+            err(instr->loc, "could not preserve instruction analysis provenance");
+            return 0;
+        }
         expr = astnode_get_child(instr, 0);
         reduce_expression(expr, FOLD_PC_NO);
         op = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);

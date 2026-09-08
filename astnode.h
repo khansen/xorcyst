@@ -295,6 +295,7 @@ struct tag_instruction_attribs {
     instruction_mnemonic mnemonic;
     addressing_mode mode;
     unsigned char opcode;
+    location operand_loc;
 };
 
 typedef struct tag_instruction_attribs instruction_attribs;
@@ -350,6 +351,7 @@ struct tag_astnode {
     int flags;
     unsigned long analysis_origin_id;
     location loc;   /* File location where node was parsed */
+    location source_loc; /* Parsed span, retained when expansion changes loc. */
     struct tag_astnode *prev_sibling;
     struct tag_astnode *next_sibling;
     struct tag_astnode *first_child;

@@ -1,6 +1,7 @@
 #ifndef LISTING_H
 #define LISTING_H
 
+#include <stdio.h>
 #include "astnode.h"
 #include "xasm.h"
 
@@ -21,10 +22,15 @@ int listing_lookup_output_offset(astnode *root, long output_offset, listing_look
 int prepare_xref_data_directive_provenance(astnode *root);
 int finish_xref_data_directive_provenance(astnode *root);
 void clear_xref_data_directive_provenance(void);
+int prepare_xref_instruction_provenance(void);
+const char *capture_xref_instruction_source(const char *filename, const char *directory, FILE *fp);
+int finish_xref_instruction_provenance(astnode *root);
+void clear_xref_instruction_provenance(void);
 int generate_xref(astnode *root,
                   const char *filename,
                   xref_format format,
                   int include_data,
+                  int include_instructions,
                   int include_owner,
                   int include_locals,
                   int include_anon,
