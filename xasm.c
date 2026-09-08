@@ -1393,6 +1393,17 @@ static int run_compare(astnode *root)
 /**
  * Program entrypoint.
  */
+/* Diagnostic readers use AST location paths, which can differ from the source
+ * resolver's paths. Reserve them before any output can truncate a later read. */
+static int protect_analysis_sources(const astnode *node)
+{
+    for (; node; node = node->next_sibling) {
+        if (!dependencies_protect_source(node->loc.file)
+            || !protect_analysis_sources(node->first_child)) return 0;
+    }
+    return 1;
+}
+
 int main(int argc, char *argv[]) {
     FILE *output_fp;
     int output_generated = 0;
@@ -1490,6 +1501,8 @@ int main(int argc, char *argv[]) {
 
     /* Print the final AST (debugging) */
 //    astnode_print(root_node, 0);
+
+    if (xasm_args.dependency_manifest && !protect_analysis_sources(root_node)) goto cleanup;
 
     /* If no errors, proceed with code generation. */
     if (total_errors() == 0) {

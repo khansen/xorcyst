@@ -11,6 +11,7 @@ enum dependency_role {
 /* Capture before getopt mutates or reorders argv; enable only after parsing. */
 void dependencies_arguments(int argc, char **argv);
 int dependencies_start(const char *version, const char *manifest);
+int dependencies_protect_source(const char *path);
 int dependencies_output(const char *path);
 FILE *dependencies_open(const char *path, const char *mode, unsigned role);
 int dependencies_validate(void);

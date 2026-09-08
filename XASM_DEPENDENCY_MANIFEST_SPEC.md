@@ -77,6 +77,11 @@ encoding contract is separate and unchanged.
 
 Manifest paths must not alias an input, a lookup probe, or another output.
 Registered output paths are also checked against known inputs and each other.
+Before opening outputs, the producer conservatively reserves the final AST's
+source-location lookup paths, including paths different from those selected by
+include resolution. This prevents an output from truncating a file that a later
+diagnostic reader would consume. A reservation alone is not a consumed or
+missing dependency in the manifest; only actual reads/probes become entries.
 These checks prevent ordinary accidental overwrites; they do not secure a
 directory being maliciously mutated between filesystem operations.
 

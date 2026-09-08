@@ -247,6 +247,30 @@ class Dependencies(unittest.TestCase):
         self.assertEqual(self.source.read_bytes(), original)
         self.assertFalse(self.manifest.exists())
 
+    def test_outputs_cannot_overwrite_later_diagnostic_source_reads(self):
+        (self.root / "sub").mkdir()
+        self.source.write_text('.ORG $C000\n.INCSRC "sub/outer.inc"\nEND\n')
+        (self.root / "sub/outer.inc").write_text('.INCSRC "inner.inc"\n')
+        (self.root / "sub/inner.inc").write_text('RTS\n')
+        diagnostic = self.root / "inner.inc"
+        original = b"original diagnostic source\n"
+        diagnostic.write_bytes(original)
+        control = self.run_asm("--listing=listing.txt")
+        self.assertEqual(control.returncode, 0, control.stderr)
+        entries = {row["path"]: row for row in self.read_manifest()["inputs"]}
+        self.assertEqual(entries[str(diagnostic)]["roles"], ["analysis_source"])
+        self.assertEqual(diagnostic.read_bytes(), original)
+        previous = self.manifest.read_bytes()
+        for options in [["--listing=inner.inc"], ["-o", "inner.inc", "--listing=listing.txt"],
+                        ["--xref=inner.inc", "--listing=listing.txt"],
+                        ["--dependency-manifest=inner.inc"]]:
+            with self.subTest(options=options):
+                run = self.run_asm(*options, manifest=not options[0].startswith("--dependency-manifest="))
+                self.assertEqual(run.returncode, 3, run.stderr)
+                self.assertIn(b"aliases", run.stderr)
+                self.assertEqual(diagnostic.read_bytes(), original)
+                self.assertEqual(self.manifest.read_bytes(), previous)
+
     def test_ignored_output_options_do_not_create_output_collisions(self):
         option = f"--data-consumers-output={self.source}"
         original = self.source.read_bytes()

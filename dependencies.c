@@ -28,6 +28,7 @@ static char **arguments, *directory;
 static const char *producer_version;
 static char *manifest_path;
 static dependency *outputs;
+static dependency *source_paths;
 static int aliases_input(const char *path);
 
 static void failure(const char *message, const char *path)
@@ -283,7 +284,26 @@ static int aliases_input(const char *path)
     dependency *entry;
     for (entry = inputs; entry; entry = entry->next)
         if (same_file(path, entry->path)) return 1;
+    for (entry = source_paths; entry; entry = entry->next)
+        if (same_file(path, entry->path)) return 1;
     return 0;
+}
+
+int dependencies_protect_source(const char *path)
+{
+    dependency *entry;
+    char *absolute;
+    if (!active || !path) return 1;
+    absolute = absolute_path(path);
+    if (!absolute) return 0;
+    for (entry = source_paths; entry; entry = entry->next)
+        if (strcmp(entry->path, absolute) == 0) { free(absolute); return 1; }
+    entry = calloc(1, sizeof(*entry));
+    if (!entry) { free(absolute); failure("out of memory", path); return 0; }
+    entry->path = absolute;
+    entry->next = source_paths;
+    source_paths = entry;
+    return 1;
 }
 
 int dependencies_output(const char *path)
@@ -400,6 +420,11 @@ void dependencies_clear(void)
     while (outputs) {
         dependency *entry = outputs;
         outputs = entry->next;
+        free(entry->path); free(entry);
+    }
+    while (source_paths) {
+        dependency *entry = source_paths;
+        source_paths = entry->next;
         free(entry->path); free(entry);
     }
     if (arguments) for (i = 0; i < argument_count; i++) free(arguments[i]);
