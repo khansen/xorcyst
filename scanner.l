@@ -329,7 +329,7 @@ static int file_stack_ptr;
 void yyresetloc(void)
 {
     LOCATION_RESET(yylloc);
-    if (xasm_args.xref_instructions) {
+    if (xasm_args.xref_instructions || xasm_args.instruction_records_file) {
         yylloc.source_file = capture_xref_instruction_source(FTOS().name, FTOS().path, FTOS().fp);
         if (yylloc.source_file == NULL) yyerror("could not preserve instruction source");
     }

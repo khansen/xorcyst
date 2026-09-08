@@ -4388,10 +4388,10 @@ static const char *instruction_index_register(addressing_mode mode)
     }
 }
 
-static int emit_xref_instructions(FILE *fp, const xref_build_context *ctx)
+static int emit_instruction_records(FILE *fp, const xref_build_context *ctx)
 {
     int i, j;
-    fprintf(fp, "  \"instruction_records\": {\"version\":\"1\",\"records\":[");
+    fprintf(fp, "{\"version\":\"1\",\"records\":[");
     for (i = 0; i < ctx->instr_count; i++) {
         const xref_instr *record = &ctx->instrs[i];
         const instruction_provenance *provenance = record->provenance;
@@ -4455,6 +4455,7 @@ static int emit_xref_instructions(FILE *fp, const xref_build_context *ctx)
 static int emit_xref_json(const char *filename,
                           const xref_build_context *ctx,
                           int include_data,
+                          int include_instructions,
                           const char *source_file,
                           const char *output_file,
                           int pure_binary)
@@ -4629,9 +4630,9 @@ static int emit_xref_json(const char *filename,
     /* All owner lookups are complete; the remaining data sections reuse the
        already-built edge/flow records. */
     free_xref_owner_index(&owner_index);
-    if (ctx->include_instructions) {
-        fprintf(fp, ",\n");
-        ok = emit_xref_instructions(fp, ctx);
+    if (include_instructions) {
+        fprintf(fp, ",\n  \"instruction_records\": ");
+        ok = emit_instruction_records(fp, ctx);
     }
     if (include_data) {
         fprintf(fp, ",\n");
@@ -9073,6 +9074,7 @@ int generate_xref(astnode *root,
                   xref_format format,
                   int include_data,
                   int include_instructions,
+                  const char *instruction_records_file,
                   int include_owner,
                   int include_locals,
                   int include_anon,
@@ -9117,7 +9119,7 @@ int generate_xref(astnode *root,
     ctx.include_locals = include_locals;
     ctx.include_anon = include_anon;
     ctx.include_data = include_data;
-    ctx.include_instructions = include_instructions;
+    ctx.include_instructions = include_instructions || instruction_records_file != NULL;
     ctx.include_owner = include_owner;
     ctx.pure_binary = pure_binary;
     ctx.output_offset = 0;
@@ -9202,14 +9204,30 @@ int generate_xref(astnode *root,
         qsort(ctx.symbols, (size_t)ctx.symbol_count, sizeof(xref_symbol), xref_symbol_compare);
         qsort(ctx.refs, (size_t)ctx.ref_count, sizeof(xref_ref), xref_ref_compare);
 
-        if (format == XREF_FORMAT_JSON) {
-            ok = emit_xref_json(filename, &ctx, include_data, source_file, output_file, pure_binary);
-        } else if (format == XREF_FORMAT_TEXT) {
-            ok = emit_xref_text(filename, &ctx);
-        } else if (format == XREF_FORMAT_CSV) {
-            ok = emit_xref_csv(filename, &ctx);
-        } else {
+        if (filename != NULL) {
+            if (format == XREF_FORMAT_JSON) {
+                ok = emit_xref_json(filename, &ctx, include_data, include_instructions, source_file, output_file, pure_binary);
+            } else if (format == XREF_FORMAT_TEXT) {
+                ok = emit_xref_text(filename, &ctx);
+            } else if (format == XREF_FORMAT_CSV) {
+                ok = emit_xref_csv(filename, &ctx);
+            } else {
+                ok = 0;
+            }
+        }
+    }
+
+    if (ok && instruction_records_file != NULL) {
+        FILE *fp = fopen(instruction_records_file, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "error: could not open instruction records `%s' for writing\n", instruction_records_file);
             ok = 0;
+        } else {
+            ok = emit_instruction_records(fp, &ctx);
+            fputc('\n', fp);
+            if (ferror(fp)) ok = 0;
+            if (fclose(fp) != 0) ok = 0;
+            if (!ok) fprintf(stderr, "error: could not write instruction records `%s'\n", instruction_records_file);
         }
     }
 

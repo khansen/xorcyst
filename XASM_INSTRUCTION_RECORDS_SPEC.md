@@ -39,6 +39,32 @@ output, warnings, and existing xref sections apart from normal build metadata.
 
 ## Record contract
 
+### Separate output
+
+`--instruction-records-output=FILE` writes the same version 1 section as a
+standalone JSON document: `{"version":"1","records":[...]}`. It enables the
+same provenance capture without requiring an xref file. With ordinary JSON
+xref it keeps instruction trees out of the legacy document; requesting
+`--xref-instructions=true` as well deliberately emits both copies. The record
+payloads are identical, collected once from the same context and serialized by
+the same implementation. Existing combined-xref behavior is unchanged.
+
+The separate output requires `--dependency-manifest=FILE` in version 1, hence
+pure-binary mode and JSON format for any requested xref. This binds the new
+destination to the existing consumed-input and output-alias protection before
+any output opens, without introducing an untracked overwrite path. Empty
+filenames and incompatible options fail with CLI exit 2. Open/write/provenance
+failures return exit 3 and prevent manifest publication. Artifacts left by a
+failed process, including pre-existing files, never establish success. A
+successful data-only assembly produces an explicit empty records array.
+
+```sh
+xasm --pure-binary --instruction-records-output=instructions.json \
+  --dependency-manifest=dependencies.json input.asm -o output.bin
+```
+
+### Fields
+
 | Field | Meaning |
 |---|---|
 | `origin_id` | Positive encounter ID assigned before operand folding; retained through later passes. Unique within this assembly, not a persistent ID across edits or builds. |
