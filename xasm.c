@@ -103,6 +103,7 @@
 #include "codegen.h"
 #include "listing.h"
 #include "xasm.h"
+#include "dependencies.h"
 
 /*---------------------------------------------------------------------------*/
 
@@ -130,6 +131,7 @@ xasm_arguments xasm_args;
 /* Long options for getopt_long(). */
 static struct option long_options[] = {
   { "define",   required_argument, 0, 'D' },
+  { "dependency-manifest", required_argument, 0, 0 },
   { "include-path", required_argument, 0, 'I' },
   { "output",   required_argument, 0, 'o' },
   { "listing",  required_argument, 0, 'L' },
@@ -203,6 +205,7 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
             [--xref-data=true|false]\n\
             [--xref-instructions=true|false]\n\
+            [--dependency-manifest=FILE]\n\
             [--xref-include-owner=true|false]\n\
             [--xref-include-locals=true|false]\n\
             [--xref-include-anon=true|false]\n\
@@ -252,6 +255,8 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
     --xref-data=BOOL       Extend JSON xref with data read/write edges\n\
     --xref-instructions=BOOL\n\
                             Include versioned instruction/operand records\n\
+    --dependency-manifest=FILE\n\
+                            Snapshot/hash consumed inputs (pure-binary v1)\n\
     --xref-include-locals=BOOL\n\
                             Include local labels in xref (default false)\n\
     --xref-include-anon=BOOL\n\
@@ -644,6 +649,7 @@ parse_arguments (int argc, char **argv)
     xasm_args.audit_rom_lo = 0;
     xasm_args.audit_rom_hi = 0;
     xasm_args.input_file = NULL;
+    xasm_args.dependency_manifest = NULL;
     xasm_args.output_file = NULL;
     xasm_args.include_paths = NULL;
     xasm_args.include_path_count = 0;
@@ -765,7 +771,10 @@ parse_arguments (int argc, char **argv)
 
             case 0:
             /* Use index to differentiate between options */
-            if (strcmp(long_options[index].name, "usage") == 0) {
+            if (strcmp(long_options[index].name, "dependency-manifest") == 0) {
+                if (!optarg[0]) cli_error("--dependency-manifest requires a nonempty output path");
+                xasm_args.dependency_manifest = optarg;
+            } else if (strcmp(long_options[index].name, "usage") == 0) {
                 usage();
             } else if (strcmp(long_options[index].name, "help") == 0) {
                 help();
@@ -996,6 +1005,10 @@ parse_arguments (int argc, char **argv)
         }
     }
 
+    if (xasm_args.dependency_manifest && (!xasm_args.pure_binary
+        || (xasm_args.xref_file && xasm_args.xref_format != XREF_FORMAT_JSON)))
+        cli_error("--dependency-manifest requires --pure-binary and JSON xref in version 1");
+
     if (xasm_args.xref_include_owner) {
         if (xasm_args.xref_file == NULL) {
             cli_error("--xref-include-owner=true requires --xref=FILE");
@@ -1070,7 +1083,7 @@ typedef struct tag_compare_mismatch {
     char source_text[COMPARE_SOURCE_TEXT_MAX];
 } compare_mismatch;
 
-static int read_file_bytes(const char *path, unsigned char **data, long *size)
+static int read_file_bytes(const char *path, unsigned char **data, long *size, int is_input)
 {
     FILE *fp;
     long n;
@@ -1081,7 +1094,7 @@ static int read_file_bytes(const char *path, unsigned char **data, long *size)
         return 0;
     }
 
-    fp = fopen(path, "rb");
+    fp = is_input ? dependencies_open(path, "rb", DEP_COMPARISON) : fopen(path, "rb");
     if (fp == NULL) {
         return 0;
     }
@@ -1135,7 +1148,7 @@ static void read_source_line(const char *filename, int line, char *buf, int buf_
         return;
     }
 
-    fp = fopen(filename, "r");
+    fp = dependencies_open(filename, "r", DEP_ANALYSIS_SOURCE);
     if (fp == NULL) {
         return;
     }
@@ -1205,11 +1218,11 @@ static int run_compare(astnode *root)
     compare_mismatch *mismatches = NULL;
     int exit_code = 0;
 
-    if (!read_file_bytes(xasm_args.output_file, &assembled_data, &assembled_size)) {
+    if (!read_file_bytes(xasm_args.output_file, &assembled_data, &assembled_size, 0)) {
         fprintf(stderr, "error: could not read `%s'\n", xasm_args.output_file);
         return 3;
     }
-    if (!read_file_bytes(xasm_args.compare_file, &reference_data, &reference_size)) {
+    if (!read_file_bytes(xasm_args.compare_file, &reference_data, &reference_size, 1)) {
         fprintf(stderr, "error: could not read `%s'\n", xasm_args.compare_file);
         free(assembled_data);
         return 3;
@@ -1393,7 +1406,16 @@ int main(int argc, char *argv[]) {
     symbol_table = symtab_create();
 
     /* Parse our arguments. */
+    dependencies_arguments(argc, argv);
     parse_arguments (argc, argv);
+
+    if (xasm_args.dependency_manifest
+        && !dependencies_start(program_version, xasm_args.dependency_manifest)) {
+        dependencies_clear();
+        symtab_finalize(symbol_table);
+        free(xasm_path);
+        return 3;
+    }
 
     if (xasm_args.xref_instructions && !prepare_xref_instruction_provenance()) {
         fprintf(stderr, "error: could not initialize instruction provenance\n");
@@ -1407,7 +1429,10 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "error: could not open `%s' for reading\n", xasm_args.input_file);
         clear_xref_instruction_provenance();
         symtab_finalize(symbol_table);
-        return(1);
+        exit_code = dependencies_failed() ? 3 : 1;
+        dependencies_clear();
+        free(xasm_path);
+        return exit_code;
     }
 
  /* Parse it into a syntax tree */
@@ -1416,11 +1441,14 @@ int main(int argc, char *argv[]) {
     yyparse();
 
     if (root_node == NULL) {
-        if (xasm_args.xref_instructions) root_node = astnode_create(LIST_NODE, loc_preserve);
+        if (xasm_args.xref_instructions || xasm_args.dependency_manifest)
+            root_node = astnode_create(LIST_NODE, loc_preserve);
         if (root_node == NULL) {
             clear_xref_instruction_provenance();
             symtab_finalize(symbol_table);
-            return xasm_args.xref_instructions ? 3 : 0;
+            dependencies_clear();
+            free(xasm_path);
+            return (xasm_args.xref_instructions || xasm_args.dependency_manifest) ? 3 : 0;
         }
     }
 
@@ -1474,6 +1502,22 @@ int main(int argc, char *argv[]) {
             change_extension(xasm_args.input_file, default_ext, default_outfile);
             xasm_args.output_file = default_outfile;
         }
+        if (xasm_args.dependency_manifest && xasm_args.compare_file) {
+            FILE *reference = dependencies_open(xasm_args.compare_file, "rb", DEP_COMPARISON);
+            if (!reference) {
+                fprintf(stderr, "error: could not read `%s'\n", xasm_args.compare_file);
+                exit_code = 3;
+                goto cleanup;
+            }
+            fclose(reference);
+        }
+        if (!dependencies_output(xasm_args.output_file)
+            || !dependencies_output(xasm_args.listing_file)
+            || !dependencies_output(xasm_args.xref_file)
+            || (xasm_args.xref_summary && !dependencies_output(xasm_args.xref_summary_output))
+            || (xasm_args.analyze_index_patterns && !dependencies_output(xasm_args.index_patterns_output))
+            || (xasm_args.data_consumers && !dependencies_output(xasm_args.data_consumers_output))
+            || (xasm_args.analyze_data_coverage && !dependencies_output(xasm_args.data_coverage_output))) goto cleanup;
         /* Attempt to open file for writing */
         size_t tmp_len = strlen(xasm_args.output_file) + 5;
         char *tmp_outfile = (char *)malloc(tmp_len);
@@ -1482,6 +1526,7 @@ int main(int argc, char *argv[]) {
             err_count++;
         } else {
             snprintf(tmp_outfile, tmp_len, "%s.tmp", xasm_args.output_file);
+            if (!dependencies_output(tmp_outfile)) { free(tmp_outfile); goto cleanup; }
             output_fp = fopen(tmp_outfile, "wb");
             if (output_fp == NULL) {
                 fprintf(stderr, "error: could not open `%s' for writing\n", tmp_outfile);
@@ -1516,6 +1561,7 @@ int main(int argc, char *argv[]) {
     }
 
     if ((output_generated || total_errors() != 0) && xasm_args.listing_file != NULL) {
+        if (!output_generated && !dependencies_output(xasm_args.listing_file)) goto cleanup;
         verbose("Generating listing...");
         if (!generate_listing(root_node,
                               xasm_args.listing_file,
@@ -1622,6 +1668,12 @@ int main(int argc, char *argv[]) {
         exit_code = run_compare(root_node);
     }
 
+cleanup:
+    if (xasm_args.dependency_manifest && exit_code == 0 && total_errors() == 0
+        && output_generated && !dependencies_write(xasm_args.dependency_manifest)) exit_code = 3;
+    if (dependencies_failed()) exit_code = 3;
+    dependencies_clear();
+
     /* Cleanup */
     verbose("cleaning up...");
     symtab_pop();
@@ -1641,6 +1693,7 @@ int main(int argc, char *argv[]) {
 
     free(xasm_path);
 
+    if (xasm_args.dependency_manifest && exit_code == 3) return 3;
     if (total_errors() != 0) {
         return 1;
     }

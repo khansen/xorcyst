@@ -53,6 +53,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include "charmap.h"
+#include "dependencies.h"
 
 /*---------------------------------------------------------------------------*/
 
@@ -153,7 +154,7 @@ int charmap_parse(const char *filename, unsigned char *map)
     int i;
     char line[1024];
     /* Attempt to open the file */
-    fp = fopen(filename, "rt");
+    fp = dependencies_open(filename, "rt", DEP_CHARMAP);
     if (fp == NULL) {
         return 0;
     }
@@ -202,6 +203,7 @@ int charmap_parse(const char *filename, unsigned char *map)
         /* Make sure we've not hit end of string */
         if ((line[i] == '\0') || (line[i] == '\n')) {
             maperr(filename, lineno, "value expected");
+            fclose(fp);
             return 0;
         }
         /* Read value */
