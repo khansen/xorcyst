@@ -2,6 +2,7 @@
 """Producer contract tests; fixtures contain no project-specific inputs."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -51,6 +52,29 @@ class InstructionRecords(unittest.TestCase):
             self.assertEqual(bytes(record["bytes"]), plain_bytes[start:start + record["size"]])
             self.assertEqual(record["opcode"], record["bytes"][0])
         self.assert_source_spans(records["records"])
+        sidecar = self.root / "instructions.json"
+        manifest = self.root / "dependencies.json"
+        for mode in ("separate", "legacy-and-separate", "both"):
+            with self.subTest(packaging=mode):
+                args = [arg for arg in base if not arg.startswith("--xref-")] if mode == "separate" else list(base)
+                args += [f"--instruction-records-output={sidecar}", f"--dependency-manifest={manifest}"]
+                if mode != "separate":
+                    args += [f"--xref={xref}"]
+                args += ["--xref-instructions=" + ("true" if mode == "both" else "false")]
+                run = subprocess.run(args, capture_output=True)
+                self.assertEqual(run.returncode, 0, run.stderr.decode())
+                self.assertEqual(run.stderr, plain.stderr)
+                self.assertEqual(output.read_bytes(), plain_bytes)
+                self.assertEqual(json.loads(sidecar.read_bytes()), records)
+                self.assertEqual(json.loads(manifest.read_bytes())["invocation"]["argv"], args)
+                if mode != "separate":
+                    actual = json.loads(xref.read_bytes())
+                    if mode == "both":
+                        self.assertEqual(actual.pop("instruction_records"), records)
+                    else:
+                        self.assertNotIn("instruction_records", actual)
+                    actual["build"].pop("timestamp_utc")
+                    self.assertEqual(actual, old_xref)
         return records["records"]
 
     def assert_source_spans(self, value):
@@ -399,6 +423,87 @@ END
 
         run = subprocess.run([str(XASM), "--xref-instructions=maybe", str(source)], capture_output=True)
         self.assertEqual(run.returncode, 2)
+
+
+    def test_sidecar_cli_refusal(self):
+        source = self.root / "input.asm"
+        source.write_text(".ORG $C000\nRTS\n")
+        cases = [([], "requires --dependency-manifest"),
+                 (["--dependency-manifest=deps.json"], "requires --pure-binary"),
+                 (["--pure-binary", "--dependency-manifest=deps.json", "--xref=refs.json", "--xref-format=csv"], "JSON xref"),
+                 (["--pure-binary", "--dependency-manifest=deps.json", "--xref-instructions=true"], "requires --xref=FILE")]
+        for options, message in cases:
+            with self.subTest(options=options):
+                run = subprocess.run([str(XASM), *options, "--instruction-records-output=instructions.json", str(source)],
+                                     cwd=self.root, capture_output=True)
+                self.assertEqual(run.returncode, 2, run.stderr)
+                self.assertIn(message.encode(), run.stderr)
+                self.assertFalse((self.root / "instructions.json").exists())
+                self.assertFalse((self.root / "deps.json").exists())
+        run = subprocess.run([str(XASM), "--instruction-records-output=", str(source)], capture_output=True)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn(b"nonempty filename", run.stderr)
+
+    def test_sidecar_collisions_refused_before_any_output(self):
+        source = self.root / "input.asm"
+        include = self.root / "part.asm"
+        binary = self.root / "data.bin"
+        source.write_text('.ORG $C000\n.INCSRC "part.asm"\n.INCBIN "data.bin"\n')
+        include.write_text("RTS\n")
+        binary.write_bytes(b"\x01")
+        alias = self.root / "source-alias.asm"
+        os.link(source, alias)
+        inputs = {path: path.read_bytes() for path in (source, include, binary, alias)}
+        output, xref, listing, manifest = [self.root / name for name in ("out.bin", "xref.json", "listing.json", "deps.json")]
+        for target in (source, include, binary, alias, output, xref, listing, manifest):
+            with self.subTest(target=target.name):
+                run = subprocess.run([str(XASM), "--pure-binary", "-o", str(output), f"--xref={xref}",
+                                      f"--listing={listing}", "--listing-format=json", f"--dependency-manifest={manifest}",
+                                      f"--instruction-records-output={target}", str(source)], capture_output=True)
+                self.assertEqual(run.returncode, 3, run.stderr)
+                self.assertIn(b"aliases an input, lookup probe, or another output", run.stderr)
+                for path, original in inputs.items():
+                    self.assertEqual(path.read_bytes(), original)
+                for path in (output, xref, listing, manifest):
+                    self.assertFalse(path.exists(), path)
+
+    def test_sidecar_negative_lookup_collision(self):
+        (self.root / "fallback").mkdir()
+        (self.root / "fallback/child.inc").write_text("RTS\n")
+        source = self.root / "input.asm"
+        source.write_text('.ORG $C000\n.INCSRC "child.inc"\n')
+        run = subprocess.run([str(XASM), "--pure-binary", "-Ifallback", "-o", "out.bin",
+                              "--dependency-manifest=deps.json", "--instruction-records-output=child.inc", str(source)],
+                             cwd=self.root, capture_output=True)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn(b"aliases an input, lookup probe, or another output", run.stderr)
+        for name in ("child.inc", "out.bin", "deps.json"):
+            self.assertFalse((self.root / name).exists())
+
+    def test_sidecar_failure_never_publishes_manifest(self):
+        source, output, sidecar, manifest = [self.root / name for name in ("input.asm", "out.bin", "instructions.json", "deps.json")]
+        sidecar.mkdir()
+        source.write_text(".ORG $C000\nRTS\n")
+        args = [str(XASM), "--pure-binary", "-o", str(output), f"--dependency-manifest={manifest}",
+                f"--instruction-records-output={sidecar}", str(source)]
+        run = subprocess.run(args, capture_output=True)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn(b"could not open instruction records", run.stderr)
+        self.assertFalse(manifest.exists())
+        self.assertEqual(output.read_bytes(), b"\x60")
+        sidecar.rmdir()
+        source.write_bytes(b".ORG $C000\nLDA #'\xff'\n")
+        run = subprocess.run(args, capture_output=True)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn(b"instruction source span is not UTF-8", run.stderr)
+        self.assertFalse(manifest.exists())
+        sidecar.write_text('{"version":"1","records":[]}\n')
+        original = sidecar.read_bytes()
+        source.write_text(".ORG $C000\nNOT_AN_OPCODE\n")
+        run = subprocess.run(args, capture_output=True)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertFalse(manifest.exists())
+        self.assertEqual(sidecar.read_bytes(), original)
 
 
 if __name__ == "__main__":

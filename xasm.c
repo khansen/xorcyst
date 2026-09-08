@@ -141,6 +141,7 @@ static struct option long_options[] = {
   { "xref-format", required_argument, 0, 0 },
   { "xref-data", required_argument, 0, 0 },
   { "xref-instructions", required_argument, 0, 0 },
+  { "instruction-records-output", required_argument, 0, 0 },
   { "xref-include-owner", required_argument, 0, 0 },
   { "xref-include-locals", required_argument, 0, 0 },
   { "xref-include-anon", required_argument, 0, 0 },
@@ -205,6 +206,7 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
             [--xref-data=true|false]\n\
             [--xref-instructions=true|false]\n\
+            [--instruction-records-output=FILE]\n\
             [--dependency-manifest=FILE]\n\
             [--xref-include-owner=true|false]\n\
             [--xref-include-locals=true|false]\n\
@@ -255,6 +257,8 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
     --xref-data=BOOL       Extend JSON xref with data read/write edges\n\
     --xref-instructions=BOOL\n\
                             Include versioned instruction/operand records\n\
+    --instruction-records-output=FILE\n\
+                            Separate instruction JSON (requires dependency manifest)\n\
     --dependency-manifest=FILE\n\
                             Snapshot/hash consumed inputs (pure-binary v1)\n\
     --xref-include-locals=BOOL\n\
@@ -667,6 +671,7 @@ parse_arguments (int argc, char **argv)
     xasm_args.xref_format = XREF_FORMAT_JSON;
     xasm_args.xref_data = 0;
     xasm_args.xref_instructions = 0;
+    xasm_args.instruction_records_file = NULL;
     xasm_args.xref_include_owner = 0;
     xasm_args.xref_include_locals = 0;
     xasm_args.xref_include_anon = 0;
@@ -836,6 +841,9 @@ parse_arguments (int argc, char **argv)
                 if (!parse_bool_value(optarg, &xasm_args.xref_instructions)) {
                     cli_error("invalid value for --xref-instructions: `%s' (expected true|false)", optarg);
                 }
+            } else if (strcmp(long_options[index].name, "instruction-records-output") == 0) {
+                if (optarg[0] == '\0') cli_error("--instruction-records-output requires a nonempty filename");
+                xasm_args.instruction_records_file = optarg;
             } else if (strcmp(long_options[index].name, "xref-include-owner") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_owner)) {
                     cli_error("invalid value for --xref-include-owner: `%s' (expected true|false)", optarg);
@@ -1004,6 +1012,9 @@ parse_arguments (int argc, char **argv)
             cli_error("--xref-instructions=true requires --pure-binary in version 1");
         }
     }
+
+    if (xasm_args.instruction_records_file && !xasm_args.dependency_manifest)
+        cli_error("--instruction-records-output requires --dependency-manifest in version 1");
 
     if (xasm_args.dependency_manifest && (!xasm_args.pure_binary
         || (xasm_args.xref_file && xasm_args.xref_format != XREF_FORMAT_JSON)))
@@ -1428,7 +1439,8 @@ int main(int argc, char *argv[]) {
         return 3;
     }
 
-    if (xasm_args.xref_instructions && !prepare_xref_instruction_provenance()) {
+    if ((xasm_args.xref_instructions || xasm_args.instruction_records_file)
+        && !prepare_xref_instruction_provenance()) {
         fprintf(stderr, "error: could not initialize instruction provenance\n");
         err_count++;
     }
@@ -1452,14 +1464,14 @@ int main(int argc, char *argv[]) {
     yyparse();
 
     if (root_node == NULL) {
-        if (xasm_args.xref_instructions || xasm_args.dependency_manifest)
+        if (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.dependency_manifest)
             root_node = astnode_create(LIST_NODE, loc_preserve);
         if (root_node == NULL) {
             clear_xref_instruction_provenance();
             symtab_finalize(symbol_table);
             dependencies_clear();
             free(xasm_path);
-            return (xasm_args.xref_instructions || xasm_args.dependency_manifest) ? 3 : 0;
+            return (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.dependency_manifest) ? 3 : 0;
         }
     }
 
@@ -1480,7 +1492,8 @@ int main(int argc, char *argv[]) {
         err_count++;
     }
 
-    if (xasm_args.xref_instructions && !finish_xref_instruction_provenance(root_node)) {
+    if ((xasm_args.xref_instructions || xasm_args.instruction_records_file)
+        && !finish_xref_instruction_provenance(root_node)) {
         fprintf(stderr, "error: could not finalize instruction provenance\n");
         err_count++;
     }
@@ -1527,6 +1540,7 @@ int main(int argc, char *argv[]) {
         if (!dependencies_output(xasm_args.output_file)
             || !dependencies_output(xasm_args.listing_file)
             || !dependencies_output(xasm_args.xref_file)
+            || !dependencies_output(xasm_args.instruction_records_file)
             || (xasm_args.xref_summary && !dependencies_output(xasm_args.xref_summary_output))
             || (xasm_args.analyze_index_patterns && !dependencies_output(xasm_args.index_patterns_output))
             || (xasm_args.data_consumers && !dependencies_output(xasm_args.data_consumers_output))
@@ -1585,13 +1599,15 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if ((exit_code == 0) && output_generated && xasm_args.xref_file != NULL) {
+    if ((exit_code == 0) && output_generated
+        && (xasm_args.xref_file != NULL || xasm_args.instruction_records_file != NULL)) {
         verbose("Generating xref...");
         if (!generate_xref(root_node,
                            xasm_args.xref_file,
                            (xref_format)xasm_args.xref_format,
                            xasm_args.xref_data,
                            xasm_args.xref_instructions,
+                           xasm_args.instruction_records_file,
                            xasm_args.xref_include_owner,
                            xasm_args.xref_include_locals,
                            xasm_args.xref_include_anon,
