@@ -413,6 +413,8 @@ astnode *astnode_create(astnode_type type, location loc)
     if (n != NULL) {
         n->type = type;
         n->loc = loc;
+        n->source_loc = loc;
+        if (loc.source_file != NULL) n->source_loc.file = loc.source_file;
     }
     return n;
 }
@@ -836,6 +838,7 @@ astnode *astnode_clone(const astnode *n, location loc)
         c->param = n->param;
     }
     c->analysis_origin_id = n->analysis_origin_id;
+    c->source_loc = n->source_loc;
     /* Clone children (TODO: OPTIMIZE THIS) */
     for (n_c=n->first_child; n_c != NULL; n_c=n_c->next_sibling) {
         astnode_add_child(c, astnode_clone(n_c, loc));

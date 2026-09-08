@@ -27,6 +27,7 @@ typedef struct YYLTYPE
   int last_line;
   int last_column;
   const char *file;
+  const char *source_file; /* Resolved input path; independent of diagnostics. */
 } YYLTYPE;
 # define yyltype YYLTYPE /* obsolescent; will be withdrawn */
 # define YYLTYPE_IS_DECLARED 1
@@ -46,6 +47,7 @@ typedef struct YYLTYPE
 	  (Current).last_line    = YYRHSLOC (Rhs, N).last_line;		\
 	  (Current).last_column  = YYRHSLOC (Rhs, N).last_column;	\
           (Current).file         = YYRHSLOC (Rhs, 1).file;              \
+          (Current).source_file  = YYRHSLOC (Rhs, 1).source_file;       \
 	}								\
       else								\
 	{								\
@@ -54,6 +56,7 @@ typedef struct YYLTYPE
 	  (Current).first_column = (Current).last_column =		\
 	    YYRHSLOC (Rhs, 0).last_column;				\
           (Current).file         = YYRHSLOC (Rhs, 0).file;              \
+          (Current).source_file  = YYRHSLOC (Rhs, 0).source_file;       \
 	}								\
     while (0)
 #endif
@@ -68,7 +71,8 @@ extern const location loc_preserve;
      # define LOCATION_RESET(Loc)                  \
        (Loc).first_column = (Loc).first_line = 1;  \
        (Loc).last_column =  (Loc).last_line = 1; \
-       (Loc).file = yy_current_filename();
+       (Loc).file = yy_current_filename(); \
+       (Loc).source_file = NULL;
 
      /* Advance of NUM lines. */
      # define LOCATION_LINES(Loc, Num)             \

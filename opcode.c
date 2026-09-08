@@ -1225,7 +1225,7 @@ addressing_mode opcode_addressing_mode(unsigned char op)
         INVALID_MODE,
         ZEROPAGE_X_MODE, /* STY */
         ZEROPAGE_X_MODE, /* STA */
-        ZEROPAGE_X_MODE, /* STX */
+        ZEROPAGE_Y_MODE, /* STX */
         INVALID_MODE,
         IMPLIED_MODE, /* TYA */
         ABSOLUTE_Y_MODE, /* STA */
@@ -1259,7 +1259,7 @@ addressing_mode opcode_addressing_mode(unsigned char op)
         INVALID_MODE,
         ZEROPAGE_X_MODE, /* LDY */
         ZEROPAGE_X_MODE, /* LDA */
-        ZEROPAGE_X_MODE, /* LDX */
+        ZEROPAGE_Y_MODE, /* LDX */
         INVALID_MODE,
         IMPLIED_MODE, /* CLV */
         ABSOLUTE_Y_MODE, /* LDA */
@@ -1267,7 +1267,7 @@ addressing_mode opcode_addressing_mode(unsigned char op)
         INVALID_MODE,
         ABSOLUTE_X_MODE, /* LDY */
         ABSOLUTE_X_MODE, /* LDA */
-        ABSOLUTE_X_MODE, /* LDX */
+        ABSOLUTE_Y_MODE, /* LDX */
         INVALID_MODE,
 
         IMMEDIATE_MODE, /* CPY */

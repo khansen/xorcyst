@@ -551,12 +551,12 @@ static const char *datatype_directive_name(datatype type)
     }
 }
 
-static void print_json_string(FILE *fp, const char *s)
+static void print_json_string_n(FILE *fp, const char *s, size_t length)
 {
     const unsigned char *p = (const unsigned char *)s;
     fputc('"', fp);
     if (p != NULL) {
-        while (*p != '\0') {
+        while (length-- > 0) {
             unsigned char c = *p++;
             switch (c) {
                 case '\"': fputs("\\\"", fp); break;
@@ -577,6 +577,41 @@ static void print_json_string(FILE *fp, const char *s)
         }
     }
     fputc('"', fp);
+}
+
+static void print_json_string(FILE *fp, const char *s)
+{
+    print_json_string_n(fp, s, s != NULL ? strlen(s) : 0);
+}
+
+static int instruction_utf8_valid(const char *text, size_t length)
+{
+    const unsigned char *bytes = (const unsigned char *)text;
+    size_t i = 0;
+    while (i < length) {
+        unsigned int codepoint, minimum;
+        unsigned char first = bytes[i++];
+        size_t remaining;
+        if (first < 0x80) continue;
+        if (first >= 0xc2 && first <= 0xdf) {
+            remaining = 1; codepoint = first & 0x1f; minimum = 0x80;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            remaining = 2; codepoint = first & 0x0f; minimum = 0x800;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            remaining = 3; codepoint = first & 0x07; minimum = 0x10000;
+        } else {
+            return 0;
+        }
+        if (remaining > length - i) return 0;
+        while (remaining-- > 0) {
+            unsigned char continuation = bytes[i++];
+            if ((continuation & 0xc0) != 0x80) return 0;
+            codepoint = (codepoint << 6) | (continuation & 0x3f);
+        }
+        if (codepoint < minimum || codepoint > 0x10ffff
+            || (codepoint >= 0xd800 && codepoint <= 0xdfff)) return 0;
+    }
+    return 1;
 }
 
 static void emit_structured_record(location loc,
@@ -1919,6 +1954,283 @@ static const xref_data_provenance *find_xref_data_provenance(unsigned long origi
     return &xref_data_provenance_records[origin_id - 1];
 }
 
+typedef struct tag_instruction_provenance {
+    xref_data_provenance operand;
+    location source_loc;
+    location use_loc;
+    location operand_loc;
+    addressing_mode parsed_mode;
+} instruction_provenance;
+
+typedef struct tag_instruction_source {
+    char *filename;
+    char *bytes;
+    size_t length;
+    size_t *lines;
+    size_t line_count;
+    struct tag_instruction_source *next;
+} instruction_source;
+
+static instruction_provenance *instruction_provenance_records;
+static size_t instruction_provenance_count;
+static size_t instruction_provenance_capacity;
+static instruction_source *instruction_sources;
+
+/* Locations come from the parser. Index source bytes once, without imposing
+ * the listing renderer's line-length limit or interpreting assembly syntax. */
+static instruction_source *instruction_source_file(const char *filename, FILE *fp)
+{
+    instruction_source *source;
+    long length;
+    size_t i, line;
+    if (filename == NULL) return NULL;
+    for (source = instruction_sources; source != NULL; source = source->next) {
+        if (strcmp(source->filename, filename) == 0) return source;
+    }
+    if (fp == NULL) return NULL;
+    if (fseek(fp, 0, SEEK_END) != 0 || (length = ftell(fp)) < 0
+        || fseek(fp, 0, SEEK_SET) != 0) {
+        return NULL;
+    }
+    source = (instruction_source *)calloc(1, sizeof(*source));
+    if (source == NULL) return NULL;
+    source->filename = xstrdup(filename);
+    source->bytes = (char *)malloc((size_t)length + 1);
+    if (source->filename == NULL || source->bytes == NULL) goto fail;
+    if (fread(source->bytes, 1, (size_t)length, fp) != (size_t)length) goto fail;
+    source->length = (size_t)length;
+    source->bytes[length] = '\0';
+    source->line_count = 1;
+    for (i = 0; i < source->length; i++) {
+        if (source->bytes[i] == '\n') source->line_count++;
+    }
+    source->lines = (size_t *)malloc(source->line_count * sizeof(size_t));
+    if (source->lines == NULL) goto fail;
+    source->lines[0] = 0;
+    line = 1;
+    for (i = 0; i < source->length; i++) {
+        if (source->bytes[i] == '\n') source->lines[line++] = i + 1;
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) goto fail;
+    source->next = instruction_sources;
+    instruction_sources = source;
+    return source;
+fail:
+    free(source->filename);
+    free(source->bytes);
+    free(source->lines);
+    free(source);
+    return NULL;
+}
+
+const char *capture_xref_instruction_source(const char *filename, const char *directory, FILE *fp)
+{
+    const char *base = strrchr(filename, '/');
+    char *resolved;
+    instruction_source *source;
+    if (!instruction_utf8_valid(filename, strlen(filename))
+        || !instruction_utf8_valid(directory, strlen(directory))) return NULL;
+    base = base != NULL ? base + 1 : filename;
+    resolved = (char *)malloc(strlen(directory) + strlen(base) + 2);
+    if (resolved == NULL) return NULL;
+    sprintf(resolved, "%s/%s", directory, base);
+    source = instruction_source_file(resolved, fp);
+    free(resolved);
+    return source != NULL ? source->filename : NULL;
+}
+
+static char *instruction_source_span(location loc, size_t *length)
+{
+    instruction_source *source = instruction_source_file(loc.file, NULL);
+    size_t start, end, first_limit, last_limit;
+    char *text;
+    if (source == NULL || loc.first_line < 1 || loc.last_line < loc.first_line
+        || (size_t)loc.last_line > source->line_count
+        || loc.first_column < 1 || loc.last_column < 1) return NULL;
+    start = source->lines[loc.first_line - 1] + (size_t)loc.first_column - 1;
+    end = source->lines[loc.last_line - 1] + (size_t)loc.last_column - 1;
+    first_limit = (size_t)loc.first_line < source->line_count
+        ? source->lines[loc.first_line] : source->length;
+    last_limit = (size_t)loc.last_line < source->line_count
+        ? source->lines[loc.last_line] : source->length;
+    if (start > first_limit || end > last_limit || end < start) return NULL;
+    text = (char *)malloc(end - start + 1);
+    if (text == NULL) return NULL;
+    memcpy(text, source->bytes + start, end - start);
+    text[end - start] = '\0';
+    *length = end - start;
+    return text;
+}
+
+static int capture_instruction_provenance(astnode *instr)
+{
+    instruction_provenance candidate, *tmp;
+    memset(&candidate, 0, sizeof(candidate));
+    candidate.source_loc = instr->source_loc;
+    candidate.use_loc = instr->loc;
+    if (instr->loc.source_file != NULL) candidate.use_loc.file = instr->loc.source_file;
+    candidate.operand_loc = instr->instr.operand_loc;
+    candidate.parsed_mode = instr->instr.mode;
+    if (LHS(instr) != NULL) {
+        candidate.operand.original_expression = astnode_clone(LHS(instr), loc_preserve);
+        if (candidate.operand.original_expression == NULL
+            || !collect_provenance_symbols(candidate.operand.original_expression,
+                                            &candidate.operand)) goto fail;
+    }
+    if (instruction_provenance_count == instruction_provenance_capacity) {
+        size_t capacity = instruction_provenance_capacity == 0
+            ? 256 : instruction_provenance_capacity * 2;
+        tmp = (instruction_provenance *)realloc(instruction_provenance_records,
+                                                capacity * sizeof(*tmp));
+        if (tmp == NULL) goto fail;
+        instruction_provenance_records = tmp;
+        instruction_provenance_capacity = capacity;
+    }
+    candidate.operand.origin_id = (unsigned long)instruction_provenance_count + 1;
+    instr->analysis_origin_id = candidate.operand.origin_id;
+    instruction_provenance_records[instruction_provenance_count++] = candidate;
+    return 1;
+fail:
+    free_xref_data_provenance_record(&candidate.operand);
+    return 0;
+}
+
+void clear_xref_instruction_provenance(void)
+{
+    size_t i;
+    astproc_set_instruction_analysis_hook(NULL);
+    for (i = 0; i < instruction_provenance_count; i++) {
+        free_xref_data_provenance_record(&instruction_provenance_records[i].operand);
+    }
+    free(instruction_provenance_records);
+    instruction_provenance_records = NULL;
+    instruction_provenance_count = instruction_provenance_capacity = 0;
+    while (instruction_sources != NULL) {
+        instruction_source *source = instruction_sources;
+        instruction_sources = source->next;
+        free(source->filename);
+        free(source->bytes);
+        free(source->lines);
+        free(source);
+    }
+}
+
+int prepare_xref_instruction_provenance(void)
+{
+    clear_xref_instruction_provenance();
+    astproc_set_instruction_analysis_hook(capture_instruction_provenance);
+    return 1;
+}
+
+int finish_xref_instruction_provenance(astnode *root)
+{
+    (void)root;
+    astproc_set_instruction_analysis_hook(NULL);
+    return 1;
+}
+
+static void emit_instruction_location(FILE *fp, location loc)
+{
+    fprintf(fp, "{\"file\":");
+    print_json_string(fp, loc.file != NULL ? loc.file : "");
+    fprintf(fp, ",\"line\":%d,\"column\":%d,\"end_line\":%d,\"end_column\":%d}",
+            loc.first_line, loc.first_column, loc.last_line, loc.last_column);
+}
+
+static int emit_instruction_source(FILE *fp, location loc)
+{
+    size_t length = 0;
+    char *text = instruction_source_span(loc, &length);
+    if (text == NULL) {
+        fprintf(stderr, "error: unavailable instruction source span %s:%d:%d-%d:%d\n",
+                loc.file != NULL ? loc.file : "", loc.first_line, loc.first_column,
+                loc.last_line, loc.last_column);
+        return 0;
+    }
+    if (!instruction_utf8_valid(text, length)) {
+        fprintf(stderr, "error: instruction source span is not UTF-8: %s:%d:%d\n",
+                loc.file, loc.first_line, loc.first_column);
+        free(text);
+        return 0;
+    }
+    fprintf(fp, "{\"span\":");
+    emit_instruction_location(fp, loc);
+    fprintf(fp, ",\"text\":");
+    print_json_string_n(fp, text, length);
+    fprintf(fp, "}");
+    free(text);
+    return 1;
+}
+
+static const char *instruction_operator(arithmetic_operator oper)
+{
+    switch (oper) {
+        case NEG_OPERATOR: return "bit_not";
+        case NOT_OPERATOR: return "logical_not";
+        case LO_OPERATOR: return "low_byte";
+        case HI_OPERATOR: return "high_byte";
+        case UMINUS_OPERATOR: return "negate";
+        case BANK_OPERATOR: return "bank";
+        default: return rendered_operator(oper);
+    }
+}
+
+static int emit_instruction_expression(FILE *fp, astnode *expr)
+{
+    const char *kind;
+    astnode *child;
+    int count = 0;
+    if (expr == NULL) { fprintf(fp, "null"); return 1; }
+    switch (astnode_get_type(expr)) {
+        case INTEGER_NODE: kind = "integer"; break;
+        case STRING_NODE: kind = "string"; break;
+        case IDENTIFIER_NODE: kind = "symbol"; break;
+        case LOCAL_ID_NODE: kind = "local_symbol"; break;
+        case FORWARD_BRANCH_NODE: kind = "forward_label"; break;
+        case BACKWARD_BRANCH_NODE: kind = "backward_label"; break;
+        case CURRENT_PC_NODE: kind = "current_pc"; break;
+        case ARITHMETIC_NODE: kind = "operator"; break;
+        case DOT_NODE: kind = "member"; break;
+        case SCOPE_NODE: kind = "scope"; break;
+        case INDEX_NODE: kind = "index"; break;
+        case SIZEOF_NODE: kind = "sizeof"; break;
+        case MASK_NODE: kind = "mask"; break;
+        case DATATYPE_NODE: kind = "datatype"; break;
+        default: return 0;
+    }
+    fprintf(fp, "{\"kind\":");
+    print_json_string(fp, kind);
+    fprintf(fp, ",\"source\":");
+    if (!emit_instruction_source(fp, expr->source_loc)) return 0;
+    if (astnode_is_type(expr, INTEGER_NODE)) {
+        fprintf(fp, ",\"value\":%d", expr->integer);
+    } else if (astnode_is_type(expr, ARITHMETIC_NODE)) {
+        fprintf(fp, ",\"operator\":");
+        print_json_string(fp, instruction_operator(expr->oper));
+    } else if (astnode_is_type(expr, DATATYPE_NODE)) {
+        fprintf(fp, ",\"name\":");
+        print_json_string(fp, expr->datatype == BYTE_DATATYPE ? "byte"
+            : expr->datatype == CHAR_DATATYPE ? "char"
+            : expr->datatype == WORD_DATATYPE ? "word"
+            : expr->datatype == DWORD_DATATYPE ? "dword" : "user");
+    } else if (astnode_is_type(expr, STRING_NODE)
+               || astnode_is_type(expr, IDENTIFIER_NODE)
+               || astnode_is_type(expr, LOCAL_ID_NODE)
+               || astnode_is_type(expr, FORWARD_BRANCH_NODE)
+               || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
+        fprintf(fp, ",\"name\":");
+        print_json_string(fp, expr->string);
+    }
+    fprintf(fp, ",\"children\":[");
+    for (child = astnode_get_first_child(expr); child != NULL;
+         child = astnode_get_next_sibling(child)) {
+        if (count++ != 0) fprintf(fp, ",");
+        if (!emit_instruction_expression(fp, child)) return 0;
+    }
+    fprintf(fp, "]}");
+    return 1;
+}
+
 typedef struct tag_xref_data_directive_reference {
     const xref_data_provenance *provenance;
     astnode *final_expression;
@@ -1980,6 +2292,7 @@ typedef struct tag_xref_build_context {
     int include_locals;
     int include_anon;
     int include_data;
+    int include_instructions;
     int include_owner;
     int pure_binary;
     long output_offset;
@@ -1989,6 +2302,11 @@ typedef struct tag_xref_build_context {
 } xref_build_context;
 
 typedef struct tag_xref_instr {
+    astnode *node;
+    const instruction_provenance *provenance;
+    char *lexical_owner;
+    long output_offset;
+    int operand_value;
     int cpu_address;
     int is_dataseg;
     int segment_id;
@@ -2694,7 +3012,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     if (len < 1) {
         len = 1;
     }
-    if (ctx->include_data || ctx->include_owner) {
+    if (ctx->include_data || ctx->include_owner || ctx->include_instructions) {
         if (!ensure_xref_instr_capacity(ctx)) {
             goto finish;
         }
@@ -2705,6 +3023,25 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         out->segment_id = ctx->current_segment_id;
         out->mnemonic = instr->instr.mnemonic.value;
         out->mode = instr->instr.mode;
+        record_instruction = 1;
+        if (ctx->include_instructions) {
+            unsigned long id = instr->analysis_origin_id;
+            if (id == 0 || id > instruction_provenance_count) {
+                ctx->failed = 1;
+                goto finish;
+            }
+            out->node = instr;
+            out->provenance = &instruction_provenance_records[id - 1];
+            out->output_offset = ctx->output_offset;
+            if (ctx->lexical_owner_symbol != NULL) {
+                out->lexical_owner = xstrdup(ctx->lexical_owner_symbol);
+                if (out->lexical_owner == NULL) { ctx->failed = 1; goto finish; }
+            }
+            if (len > 1 && !eval_expression_int(LHS(instr), &out->operand_value, 0)) {
+                ctx->failed = 1;
+                goto finish;
+            }
+        }
     }
 
     memset(&meta, 0, sizeof(meta));
@@ -2760,8 +3097,6 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
             goto finish;
         }
     }
-
-    record_instruction = (ctx->include_data || ctx->include_owner);
 
 finish:
     if (record_instruction) {
@@ -2917,6 +3252,7 @@ static void free_xref_context(xref_build_context *ctx)
 
     for (i = 0; i < ctx->instr_count; ++i) {
         free(ctx->instrs[i].direct_symbol);
+        free(ctx->instrs[i].lexical_owner);
     }
     free(ctx->instrs);
     ctx->instrs = NULL;
@@ -4040,6 +4376,110 @@ static void emit_xref_data_directive_references(FILE *fp,
     fprintf(fp, "]");
 }
 
+/* This describes written structure, not alias expansion or a value-to-label
+ * guess. More complex constant expressions remain in the expression tree. */
+static void emit_instruction_base(FILE *fp, astnode *expr)
+{
+    astnode *base = expr;
+    const char *projection = "none";
+    long displacement = 0;
+    if (astnode_is_type(base, ARITHMETIC_NODE)
+        && (base->oper == LO_OPERATOR || base->oper == HI_OPERATOR)) {
+        projection = base->oper == LO_OPERATOR ? "low" : "high";
+        base = LHS(base);
+    }
+    if (astnode_is_type(base, ARITHMETIC_NODE)
+        && (base->oper == PLUS_OPERATOR || base->oper == MINUS_OPERATOR)
+        && astnode_is_type(RHS(base), INTEGER_NODE)) {
+        displacement = RHS(base)->integer;
+        if (base->oper == MINUS_OPERATOR) displacement = -displacement;
+        base = LHS(base);
+    }
+    if (!astnode_is_type(base, IDENTIFIER_NODE)) { fprintf(fp, "null"); return; }
+    fprintf(fp, "{\"symbol\":");
+    print_json_string(fp, base->string);
+    fprintf(fp, ",\"displacement\":%ld,\"projection\":", displacement);
+    print_json_string(fp, projection);
+    fprintf(fp, "}");
+}
+
+static const char *instruction_index_register(addressing_mode mode)
+{
+    switch (mode) {
+        case ZEROPAGE_X_MODE:
+        case ABSOLUTE_X_MODE:
+        case PREINDEXED_INDIRECT_MODE: return "X";
+        case ZEROPAGE_Y_MODE:
+        case ABSOLUTE_Y_MODE:
+        case POSTINDEXED_INDIRECT_MODE: return "Y";
+        default: return NULL;
+    }
+}
+
+static int emit_xref_instructions(FILE *fp, const xref_build_context *ctx)
+{
+    int i, j;
+    fprintf(fp, "  \"instruction_records\": {\"version\":\"1\",\"records\":[");
+    for (i = 0; i < ctx->instr_count; i++) {
+        const xref_instr *record = &ctx->instrs[i];
+        const instruction_provenance *provenance = record->provenance;
+        unsigned char opcode = record->node->instr.opcode;
+        addressing_mode mode = opcode_addressing_mode(opcode);
+        int length = opcode_length(opcode);
+        astnode *expression = provenance->operand.original_expression;
+        const char *index = instruction_index_register(mode);
+        int encoded = record->operand_value;
+        if (mode == RELATIVE_MODE) encoded -= record->cpu_address + 2;
+        fprintf(fp, "%s\n    {\"origin_id\":%lu,\"use\":", i == 0 ? "" : ",",
+                provenance->operand.origin_id);
+        emit_instruction_location(fp, provenance->use_loc);
+        fprintf(fp, ",\"source\":");
+        if (!emit_instruction_source(fp, provenance->source_loc)) return 0;
+        fprintf(fp, ",\"operand_source\":");
+        if (provenance->parsed_mode == IMPLIED_MODE) fprintf(fp, "null");
+        else if (!emit_instruction_source(fp, provenance->operand_loc)) return 0;
+        fprintf(fp, ",\"lexical_owner\":");
+        if (record->lexical_owner != NULL) print_json_string(fp, record->lexical_owner);
+        else fprintf(fp, "null");
+        fprintf(fp, ",\"segment_id\":%d,\"cpu_address\":%d,\"output_offset\":%ld",
+                record->segment_id, record->cpu_address, record->output_offset);
+        fprintf(fp, ",\"opcode\":%u,\"mnemonic\":", (unsigned int)opcode);
+        print_json_string(fp, opcode_to_string(opcode));
+        fprintf(fp, ",\"size\":%d,\"addressing_mode\":", length);
+        print_json_string(fp, addressing_mode_name(mode));
+        fprintf(fp, ",\"immediate\":%s,\"index_register\":", mode == IMMEDIATE_MODE ? "true" : "false");
+        if (index != NULL) print_json_string(fp, index);
+        else fprintf(fp, "null");
+        fprintf(fp, ",\"parsed_addressing_mode\":");
+        print_json_string(fp, addressing_mode_name(provenance->parsed_mode));
+        fprintf(fp, ",\"operand_form\":");
+        print_json_string(fp, expression == NULL ? "none"
+            : astnode_is_type(expression, INTEGER_NODE) ? "integer_literal"
+            : xref_expression_symbol_name(expression) != NULL ? "symbol" : "expression");
+        fprintf(fp, ",\"expression\":");
+        if (!emit_instruction_expression(fp, expression)) return 0;
+        fprintf(fp, ",\"structural_base\":");
+        emit_instruction_base(fp, expression);
+        fprintf(fp, ",\"referenced_symbols\":[");
+        for (j = 0; j < provenance->operand.referenced_symbol_count; j++) {
+            if (j != 0) fprintf(fp, ",");
+            print_json_string(fp, provenance->operand.referenced_symbols[j]);
+        }
+        fprintf(fp, "],\"operand_value\":");
+        if (length > 1) fprintf(fp, "%d", record->operand_value);
+        else fprintf(fp, "null");
+        fprintf(fp, ",\"branch_displacement\":");
+        if (mode == RELATIVE_MODE) fprintf(fp, "%d", encoded);
+        else fprintf(fp, "null");
+        fprintf(fp, ",\"bytes\":[%u", (unsigned int)opcode);
+        if (length > 1) fprintf(fp, ",%u", (unsigned int)encoded & 0xff);
+        if (length > 2) fprintf(fp, ",%u", ((unsigned int)encoded >> 8) & 0xff);
+        fprintf(fp, "]}");
+    }
+    fprintf(fp, "\n  ]}");
+    return 1;
+}
+
 static int emit_xref_json(const char *filename,
                           const xref_build_context *ctx,
                           int include_data,
@@ -4056,6 +4496,7 @@ static int emit_xref_json(const char *filename,
     int data_read_count = 0;
     int data_write_count = 0;
     int indirect_flow_count = 0;
+    int ok = 1;
     xref_owner_index owner_index;
     owner_index.entries = NULL;
     owner_index.count = 0;
@@ -4216,6 +4657,10 @@ static int emit_xref_json(const char *filename,
     /* All owner lookups are complete; the remaining data sections reuse the
        already-built edge/flow records. */
     free_xref_owner_index(&owner_index);
+    if (ctx->include_instructions) {
+        fprintf(fp, ",\n");
+        ok = emit_xref_instructions(fp, ctx);
+    }
     if (include_data) {
         fprintf(fp, ",\n");
         emit_xref_data_directive_references(fp, ctx);
@@ -4322,7 +4767,8 @@ static int emit_xref_json(const char *filename,
         fprintf(fp, "\n");
     }
     fprintf(fp, "}\n");
-    fclose(fp);
+    if (ferror(fp)) ok = 0;
+    if (fclose(fp) != 0) ok = 0;
     if (include_data) {
         for (i = 0; i < data_read_count; i++) {
             free_xref_data_edge(&data_reads[i]);
@@ -4337,7 +4783,8 @@ static int emit_xref_json(const char *filename,
         }
         free(indirect_flows);
     }
-    return 1;
+    if (!ok) fprintf(stderr, "error: could not emit complete xref records\n");
+    return ok;
 }
 
 static int emit_xref_text(const char *filename, const xref_build_context *ctx)
@@ -8653,6 +9100,7 @@ int generate_xref(astnode *root,
                   const char *filename,
                   xref_format format,
                   int include_data,
+                  int include_instructions,
                   int include_owner,
                   int include_locals,
                   int include_anon,
@@ -8697,6 +9145,7 @@ int generate_xref(astnode *root,
     ctx.include_locals = include_locals;
     ctx.include_anon = include_anon;
     ctx.include_data = include_data;
+    ctx.include_instructions = include_instructions;
     ctx.include_owner = include_owner;
     ctx.pure_binary = pure_binary;
     ctx.output_offset = 0;
