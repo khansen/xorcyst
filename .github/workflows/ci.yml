@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential autoconf automake python3
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake
+      - name: Build from checked-in generated sources
+        run: |
+          ./configure --disable-maintainer-mode YACC=: LEX=:
+          make -j2
+      - name: Run regression suite
+        run: sh tests/regression.sh
+
+  sanitizers:
+    name: ASan and UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CC: clang
+      TEST_SYMTAB_CFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+      TEST_BACKEND_CFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+      TEST_FAULT_CFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install compiler and test runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang python3
+      - name: Check symbol-table and AST ownership
+        run: |
+          python3 tests/test_symtab.py
+          python3 tests/test_backend_performance.py
+      - name: Check output and allocation failure paths
+        run: python3 tests/test_output_failures.py
