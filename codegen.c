@@ -615,7 +615,11 @@ static void put_public_constants(FILE *fp)
 
     /* 16-bit count followed by (name, type, value) triplets */
 
-    symtab_list_type(CONSTANT_SYMBOL, &list);
+    if (symtab_list_type(CONSTANT_SYMBOL, &list) < 0) {
+        fprintf(stderr, "error: out of memory enumerating public constants\n");
+        err_count++;
+        return;
+    }
     /* Make one iteration to look them up and count them */
     count = 0;
     for (i=0; i<list.size; i++) {
@@ -699,7 +703,11 @@ static void put_externals(FILE *fp)
 
     /* 16-bit count followed by name list */
 
-    symtab_list_type(ANY_SYMBOL, &list);
+    if (symtab_list_type(ANY_SYMBOL, &list) < 0) {
+        fprintf(stderr, "error: out of memory enumerating external symbols\n");
+        err_count++;
+        return;
+    }
     /* One iteration to count them */
     count = 0;
     for (i=0; i<list.size; i++) {

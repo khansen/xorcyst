@@ -9,6 +9,8 @@
 #include "opcode.h"
 #include "dependencies.h"
 #include "utf8.h"
+#include "fceux_nl.h"
+#include <stdint.h>
 
 #define SOURCE_LINE_BUFFER_SIZE 1024
 #define HEX_BYTES_PER_ROW 4
@@ -24,7 +26,8 @@ typedef struct tag_listed_label {
 
 static FILE *listing_fp = NULL;
 static FILE *source_fp = NULL;
-static char *current_source_file = NULL;
+/* AST location filenames remain valid until the assembly is released. */
+static const char *current_source_file = NULL;
 static int current_source_line_cached = 0;
 static char source_line_buffer[SOURCE_LINE_BUFFER_SIZE];
 
@@ -132,10 +135,7 @@ static void close_source_cache(void)
         fclose(source_fp);
         source_fp = NULL;
     }
-    if (current_source_file != NULL) {
-        free(current_source_file);
-        current_source_file = NULL;
-    }
+    current_source_file = NULL;
     current_source_line_cached = 0;
 }
 
@@ -371,12 +371,7 @@ static const char *get_source_line(const char *filename, int line)
             return "";
         }
 
-        current_source_file = xstrdup(filename);
-        if (current_source_file == NULL) {
-            fclose(source_fp);
-            source_fp = NULL;
-            return "";
-        }
+        current_source_file = filename;
     }
 
     if (line <= current_source_line_cached) {
@@ -938,7 +933,7 @@ static int list_noop(astnode *n, void *arg, astnode **next)
     return 0;
 }
 
-static void list_symbols(void)
+static int list_symbols(void)
 {
     symbol_ident_list constants;
     int i;
@@ -952,7 +947,10 @@ static void list_symbols(void)
                 listed_labels[i].display, listed_labels[i].address & 0xFFFF);
     }
 
-    symtab_list_type(CONSTANT_SYMBOL, &constants);
+    if (symtab_list_type(CONSTANT_SYMBOL, &constants) < 0) {
+        fprintf(stderr, "error: could not enumerate listing constants\n");
+        return 0;
+    }
     for (i = 0; i < constants.size; ++i) {
         symtab_entry *e = symtab_lookup(constants.idents[i]);
         int value = 0;
@@ -969,6 +967,7 @@ static void list_symbols(void)
     symtab_list_finalize(&constants);
 
     fprintf(listing_fp, "%s\n", DIVIDER);
+    return 1;
 }
 
 int generate_listing(astnode *root,
@@ -1006,6 +1005,7 @@ int generate_listing(astnode *root,
         { 0, NULL }
     };
 
+    int ok = 1;
     listing_fp = fopen(filename, "w");
     if (listing_fp == NULL) {
         fprintf(stderr, "error: could not open `%s' for writing\n", filename);
@@ -1052,7 +1052,7 @@ int generate_listing(astnode *root,
 
     astproc_walk(root, NULL, map);
     if (current_listing_format == LISTING_FORMAT_TEXT) {
-        list_symbols();
+        ok = list_symbols();
     } else if (current_listing_format == LISTING_FORMAT_JSON) {
         if (json_record_count > 0) {
             fprintf(listing_fp, "\n");
@@ -1067,7 +1067,7 @@ int generate_listing(astnode *root,
     reset_last_printed_source();
     free_listed_labels();
     clear_scope_map();
-    return 1;
+    return ok;
 }
 
 static long lookup_target_offset = -1;
@@ -1262,6 +1262,7 @@ typedef struct tag_xref_symbol {
     char *name;
     char *kind;
     char *scope;
+    const char *owner; /* borrowed name of enclosing global symbol, or NULL */
     int defined;
     location definition_loc;
     int has_cpu_address;
@@ -1335,9 +1336,11 @@ static int append_rendered_text(char **buffer, size_t *length, size_t *capacity,
         return 1;
     }
     add = strlen(text);
+    if (add == SIZE_MAX || *length > SIZE_MAX - add - 1) return 0;
     if (*length + add + 1 > *capacity) {
         size_t new_capacity = (*capacity == 0) ? 64 : *capacity;
         while (new_capacity < *length + add + 1) {
+            if (new_capacity > SIZE_MAX / 2) { new_capacity = *length + add + 1; break; }
             new_capacity *= 2;
         }
         tmp = (char *)realloc(*buffer, new_capacity);
@@ -1376,10 +1379,14 @@ static const char *rendered_operator(arithmetic_operator oper)
     }
 }
 
+typedef char *(*expression_name_formatter)(const char *name, const void *arg);
+
 static int render_expression_recursive(const astnode *expr,
                                        char **buffer,
                                        size_t *length,
-                                       size_t *capacity)
+                                       size_t *capacity,
+                                       expression_name_formatter format_name,
+                                       const void *name_arg)
 {
     char number[32];
     const char *prefix = NULL;
@@ -1390,12 +1397,40 @@ static int render_expression_recursive(const astnode *expr,
         case INTEGER_NODE:
             snprintf(number, sizeof(number), "%d", expr->integer);
             return append_rendered_text(buffer, length, capacity, number);
+        case STRING_NODE: {
+            const unsigned char *text = (const unsigned char *)expr->string;
+            if (!append_rendered_text(buffer, length, capacity, "\"")) return 0;
+            for (; *text; text++) {
+                char escaped[5];
+                if (*text == '#' || *text < 32 || *text == 127) {
+                    snprintf(escaped, sizeof(escaped), "\\x%02X", *text);
+                } else if (*text == '\\' || *text == '"') {
+                    escaped[0] = '\\'; escaped[1] = *text; escaped[2] = '\0';
+                } else {
+                    escaped[0] = *text; escaped[1] = '\0';
+                }
+                if (!append_rendered_text(buffer, length, capacity, escaped)) return 0;
+            }
+            return append_rendered_text(buffer, length, capacity, "\"");
+        }
+        case DATATYPE_NODE:
+            if (expr->datatype == USER_DATATYPE)
+                return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg);
+            return append_rendered_text(buffer, length, capacity,
+                expr->datatype == BYTE_DATATYPE ? "byte" : expr->datatype == CHAR_DATATYPE ? "char"
+                : expr->datatype == WORD_DATATYPE ? "word" : "dword");
         case CURRENT_PC_NODE:
             return append_rendered_text(buffer, length, capacity, "$" );
         case IDENTIFIER_NODE:
         case LOCAL_ID_NODE:
         case FORWARD_BRANCH_NODE:
         case BACKWARD_BRANCH_NODE:
+            if (format_name != NULL) {
+                char *name = format_name(expr->string, name_arg);
+                int ok = name != NULL && append_rendered_text(buffer, length, capacity, name);
+                free(name);
+                return ok;
+            }
             return append_rendered_text(buffer, length, capacity, expr->string);
         case ARITHMETIC_NODE:
             switch (expr->oper) {
@@ -1409,33 +1444,33 @@ static int render_expression_recursive(const astnode *expr,
             }
             if (prefix != NULL) {
                 return append_rendered_text(buffer, length, capacity, prefix)
-                    && render_expression_recursive(LHS(expr), buffer, length, capacity);
+                    && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg);
             }
             return append_rendered_text(buffer, length, capacity, "(")
-                && render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, rendered_operator(expr->oper))
-                && render_expression_recursive(RHS(expr), buffer, length, capacity)
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, ")");
         case DOT_NODE:
-            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+            return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, ".")
-                && render_expression_recursive(RHS(expr), buffer, length, capacity);
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg);
         case SCOPE_NODE:
-            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+            return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, "::")
-                && render_expression_recursive(RHS(expr), buffer, length, capacity);
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg);
         case INDEX_NODE:
-            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+            return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, "[")
-                && render_expression_recursive(RHS(expr), buffer, length, capacity)
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, "]");
         case SIZEOF_NODE:
             return append_rendered_text(buffer, length, capacity, "SIZEOF(")
-                && render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, ")");
         case MASK_NODE:
             return append_rendered_text(buffer, length, capacity, "MASK ")
-                && render_expression_recursive(LHS(expr), buffer, length, capacity);
+                && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg);
         default:
             return 0;
     }
@@ -1446,7 +1481,7 @@ static char *render_expression(const astnode *expr)
     char *buffer = NULL;
     size_t length = 0;
     size_t capacity = 0;
-    if (!render_expression_recursive(expr, &buffer, &length, &capacity)) {
+    if (!render_expression_recursive(expr, &buffer, &length, &capacity, NULL, NULL)) {
         free(buffer);
         return xstrdup("");
     }
@@ -2243,6 +2278,14 @@ typedef struct tag_xref_meta {
     int segment_id;
 } xref_meta;
 
+/* Emitted extent of an assembly segment, indexed by segment_id. Empty
+   segments have size zero; end labels do not imply an additional byte. */
+typedef struct {
+    int cpu_start;
+    long output_start;
+    long size;
+} xref_output_extent;
+
 typedef struct tag_xref_build_context {
     xref_symbol *symbols;
     int symbol_count;
@@ -2259,7 +2302,7 @@ typedef struct tag_xref_build_context {
     int *pending_label_indexes;
     int pending_label_count;
     int pending_label_capacity;
-    char *lexical_owner_symbol;
+    const char *lexical_owner_symbol;
     int lexical_owner_item_counts[3];
     int include_locals;
     int include_anon;
@@ -2271,6 +2314,14 @@ typedef struct tag_xref_build_context {
     int current_segment_id;
     int next_segment_id;
     int failed;
+    /* Real symbols are collected independently of output scope filters. */
+    int *symbol_index; /* open-addressed name -> symbol array index + 1 */
+    size_t symbol_index_capacity;
+    int collect_memory_operands;
+    int collect_output_extents;
+    xref_output_extent *output_extents;
+    size_t output_extent_capacity;
+    fceux_nl_table nl;
 } xref_build_context;
 
 typedef struct tag_xref_instr {
@@ -2528,15 +2579,58 @@ static void classify_pending_labels(xref_build_context *ctx, int definition_kind
     ctx->pending_label_count = 0;
 }
 
+static size_t xref_name_hash(const char *name)
+{
+    size_t hash = 5381;
+    while (*name != '\0') hash = hash * 33u ^ (unsigned char)*name++;
+    return hash;
+}
+
+static void index_xref_symbol(xref_build_context *ctx, int index)
+{
+    size_t slot = xref_name_hash(ctx->symbols[index].name) & (ctx->symbol_index_capacity - 1);
+    while (ctx->symbol_index[slot] != 0) slot = (slot + 1) & (ctx->symbol_index_capacity - 1);
+    ctx->symbol_index[slot] = index + 1;
+}
+
+/* Also rebuild after sorting the symbol array; no pointers into a reallocating
+   array are retained in the index. */
+static int rebuild_xref_symbol_index(xref_build_context *ctx)
+{
+    size_t capacity = ctx->symbol_index_capacity ? ctx->symbol_index_capacity : 128;
+    int *slots;
+    int i;
+    while (capacity / 2 <= (size_t)ctx->symbol_count) {
+        if (capacity > SIZE_MAX / 2 / sizeof(*slots)) { ctx->failed = 1; return 0; }
+        capacity *= 2;
+    }
+    slots = calloc(capacity, sizeof(*slots));
+    if (slots == NULL) { ctx->failed = 1; return 0; }
+    free(ctx->symbol_index);
+    ctx->symbol_index = slots;
+    ctx->symbol_index_capacity = capacity;
+    for (i = 0; i < ctx->symbol_count; i++) index_xref_symbol(ctx, i);
+    return 1;
+}
+
 static int find_xref_symbol_index(const xref_build_context *ctx, const char *name)
 {
-    int i;
-    for (i = 0; i < ctx->symbol_count; ++i) {
-        if (strcmp(ctx->symbols[i].name, name) == 0) {
-            return i;
-        }
+    size_t slot;
+    if (ctx->symbol_index_capacity == 0) return -1;
+    slot = xref_name_hash(name) & (ctx->symbol_index_capacity - 1);
+    while (ctx->symbol_index[slot] != 0) {
+        int index = ctx->symbol_index[slot] - 1;
+        if (strcmp(ctx->symbols[index].name, name) == 0) return index;
+        slot = (slot + 1) & (ctx->symbol_index_capacity - 1);
     }
     return -1;
+}
+
+static int find_visible_xref_symbol_index(const xref_build_context *ctx, const char *name)
+{
+    int index = find_xref_symbol_index(ctx, name);
+    return index >= 0 && scope_allowed(ctx->symbols[index].scope, ctx->include_locals, ctx->include_anon)
+        ? index : -1;
 }
 
 static int eval_expression_int_with_xref(astnode *expr,
@@ -2609,6 +2703,8 @@ static int eval_expression_int_with_xref(astnode *expr,
     }
 }
 
+/* Keep definitions complete. Scope switches belong to xref's output view,
+   not to the symbol facts shared by the analysis and debugger exporters. */
 static int add_or_update_xref_symbol(xref_build_context *ctx,
                                      const char *name,
                                      const char *kind,
@@ -2626,35 +2722,44 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
     int index;
     xref_symbol *s;
 
-    if (!scope_allowed(scope, ctx->include_locals, ctx->include_anon)) {
-        return 1;
-    }
-
+    if (ctx->failed) return 0;
     index = find_xref_symbol_index(ctx, name);
     if (index < 0) {
+        xref_symbol candidate = {0};
         if (!ensure_xref_symbol_capacity(ctx)) {
             return 0;
         }
-        s = &ctx->symbols[ctx->symbol_count++];
-        memset(s, 0, sizeof(*s));
-        s->name = xstrdup(name);
-        s->kind = xstrdup(kind);
-        s->scope = xstrdup(scope);
-        if (s->name == NULL || s->kind == NULL || s->scope == NULL) {
+        if (ctx->symbol_index_capacity / 2 <= (size_t)ctx->symbol_count + 1
+            && !rebuild_xref_symbol_index(ctx)) return 0;
+        candidate.name = xstrdup(name);
+        candidate.kind = xstrdup(kind);
+        candidate.scope = xstrdup(scope);
+        if (candidate.name == NULL || candidate.kind == NULL || candidate.scope == NULL) {
+            free(candidate.name);
+            free(candidate.kind);
+            free(candidate.scope);
             ctx->failed = 1;
             return 0;
         }
+        index = ctx->symbol_count++;
+        s = &ctx->symbols[index];
+        *s = candidate;
+        index_xref_symbol(ctx, index);
     } else {
         s = &ctx->symbols[index];
         if (defined && !s->defined) {
-            free(s->kind);
-            free(s->scope);
-            s->kind = xstrdup(kind);
-            s->scope = xstrdup(scope);
-            if (s->kind == NULL || s->scope == NULL) {
+            char *new_kind = xstrdup(kind);
+            char *new_scope = xstrdup(scope);
+            if (new_kind == NULL || new_scope == NULL) {
+                free(new_kind);
+                free(new_scope);
                 ctx->failed = 1;
                 return 0;
             }
+            free(s->kind);
+            free(s->scope);
+            s->kind = new_kind;
+            s->scope = new_scope;
         }
     }
 
@@ -2924,7 +3029,7 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     const char *kind;
     const char *scope;
-    int addr;
+    int addr, index;
     (void)next;
     classify_symbol_name(label->label, &kind, &scope);
     addr = get_current_pc();
@@ -2943,26 +3048,101 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
                                    0)) {
         return 0;
     }
+    index = find_xref_symbol_index(ctx, label->label);
     if (strcmp(scope, "global") == 0) {
-        free(ctx->lexical_owner_symbol);
-        ctx->lexical_owner_symbol = xstrdup(label->label);
-        if (ctx->lexical_owner_symbol == NULL) {
-            ctx->failed = 1;
-            return 0;
-        }
+        ctx->lexical_owner_symbol = ctx->symbols[index].name;
         memset(ctx->lexical_owner_item_counts, 0, sizeof(ctx->lexical_owner_item_counts));
     }
-    /* Record section for the defined symbol */
-    {
-        int idx = find_xref_symbol_index(ctx, label->label);
-        if (idx >= 0) {
-            ctx->symbols[idx].is_dataseg = in_dataseg;
-            if (!add_pending_label(ctx, idx)) {
-                return 0;
+    ctx->symbols[index].is_dataseg = in_dataseg;
+    if (strcmp(scope, "local") == 0) {
+        ctx->symbols[index].owner = ctx->lexical_owner_symbol;
+    }
+    if (!add_pending_label(ctx, index)) return 0;
+    return 0;
+}
+
+/* Local labels carry a compiler namespace suffix. NL uses the lexical
+   owner and source name; a root-scope local has an empty owner. */
+static char *nl_symbol_name(const char *raw, const void *owner_arg)
+{
+    const char *owner = owner_arg;
+    char *base, *name;
+    if (raw[0] != '@' || raw[1] != '@') return xstrdup(raw);
+    base = base_without_hash_suffix(raw);
+    if (base == NULL) return NULL;
+    name = str_concat(owner != NULL ? owner : "", base);
+    free(base);
+    return name;
+}
+
+/* Expressions containing anonymous labels have no stable debugger name. */
+static int nl_operand_has_name(const xref_data_provenance *operand)
+{
+    int i;
+    if (operand->referenced_symbol_count == 0) return 0;
+    for (i = 0; i < operand->referenced_symbol_count; i++) {
+        const char *kind, *scope;
+        classify_symbol_name(operand->referenced_symbols[i], &kind, &scope);
+        if (strcmp(scope, "anonymous") == 0) return 0;
+    }
+    return 1;
+}
+
+static int collect_memory_operand(xref_build_context *ctx, const astnode *expr, int address)
+{
+    char *name = NULL;
+    size_t length = 0, capacity = 0;
+    if (!render_expression_recursive(expr, &name, &length, &capacity, nl_symbol_name,
+                                    ctx->lexical_owner_symbol != NULL ? ctx->lexical_owner_symbol : "")) {
+        free(name);
+        fprintf(stderr, "error: could not render FCEUX memory operand\n");
+        return 0;
+    }
+    /* The enclosing parentheses of a binary expression serve no purpose in
+       a standalone debugger name. Nested parentheses still preserve meaning. */
+    if (length > 1 && name[0] == '(' && name[length - 1] == ')') {
+        memmove(name, name + 1, length - 2);
+        name[length - 2] = '\0';
+    }
+    return fceux_nl_add(&ctx->nl, FCEUX_NL_RAM_BANK, address, name);
+}
+
+/* All emitted byte kinds advance through here, so layout does not depend
+   on whether those bytes have labels or instruction records. */
+static void advance_xref_position(xref_build_context *ctx, int size)
+{
+    if (ctx->pure_binary && !in_dataseg) {
+        if (ctx->collect_output_extents && size > 0 && !ctx->failed) {
+            size_t segment = (size_t)ctx->current_segment_id;
+            if (segment >= ctx->output_extent_capacity) {
+                size_t capacity = ctx->output_extent_capacity ? ctx->output_extent_capacity : 16;
+                xref_output_extent *grown;
+                while (capacity <= segment) {
+                    if (capacity > SIZE_MAX / 2 / sizeof(*grown)) { ctx->failed = 1; return; }
+                    capacity *= 2;
+                }
+                grown = realloc(ctx->output_extents, capacity * sizeof(*grown));
+                if (grown == NULL) {
+                    ctx->failed = 1;
+                } else {
+                    memset(grown + ctx->output_extent_capacity, 0,
+                           (capacity - ctx->output_extent_capacity) * sizeof(*grown));
+                    ctx->output_extents = grown;
+                    ctx->output_extent_capacity = capacity;
+                }
+            }
+            if (!ctx->failed) {
+                xref_output_extent *extent = &ctx->output_extents[segment];
+                if (extent->size == 0) {
+                    extent->cpu_start = get_current_pc();
+                    extent->output_start = ctx->output_offset;
+                }
+                extent->size += size;
             }
         }
+        ctx->output_offset += size;
     }
-    return 0;
+    add_current_pc(size);
 }
 
 static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
@@ -3070,14 +3250,29 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         }
     }
 
+    if (ctx->collect_memory_operands && LHS(instr) != NULL
+        && is_supported_xref_data_direct_mode(instr->instr.mode)
+        && strcmp(meta.access, "call") != 0 && strcmp(meta.access, "jump") != 0) {
+        unsigned long id = instr->analysis_origin_id;
+        int address;
+        if (id == 0 || id > instruction_provenance_count
+            || !eval_expression_int(LHS(instr), &address, 0)) {
+            ctx->failed = 1;
+            goto finish;
+        }
+        if (address >= 0 && address < 0x8000
+            && nl_operand_has_name(&instruction_provenance_records[id - 1].operand)
+            && !collect_memory_operand(ctx,
+                instruction_provenance_records[id - 1].operand.original_expression, address)) {
+            ctx->failed = 1;
+        }
+    }
+
 finish:
     if (record_instruction) {
         ctx->instr_count++;
     }
-    add_current_pc(len);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += len;
-    }
+    advance_xref_position(ctx, len);
     return 0;
 }
 
@@ -3163,10 +3358,7 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
         index++;
     }
 
-    add_current_pc(item_count * bytes_per_item);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += item_count * bytes_per_item;
-    }
+    advance_xref_position(ctx, item_count * bytes_per_item);
     return 0;
 }
 
@@ -3176,12 +3368,9 @@ static int xref_visit_storage(astnode *storage, void *arg, astnode **next)
     int count = 0;
     (void)next;
     classify_pending_labels(ctx, 2);
-    if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
-        add_current_pc(count);
-        if (ctx->pure_binary && !in_dataseg) {
-            ctx->output_offset += count;
-        }
-    }
+    if (!eval_expression_int(RHS(storage), &count, 0) || count < 0) {
+        if (ctx->collect_output_extents) ctx->failed = 1;
+    } else if (count > 0) advance_xref_position(ctx, count);
     return 0;
 }
 
@@ -3190,10 +3379,7 @@ static int xref_visit_binary(astnode *node, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     (void)next;
     classify_pending_labels(ctx, 2);
-    add_current_pc(node->binary.size);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += node->binary.size;
-    }
+    advance_xref_position(ctx, node->binary.size);
     return 0;
 }
 
@@ -3239,12 +3425,14 @@ static void free_xref_context(xref_build_context *ctx)
     ctx->data_directive_ref_count = 0;
     ctx->data_directive_ref_capacity = 0;
 
+    free(ctx->symbol_index);
+    free(ctx->output_extents);
+    fceux_nl_free(&ctx->nl);
     free(ctx->pending_label_indexes);
     ctx->pending_label_indexes = NULL;
     ctx->pending_label_count = 0;
     ctx->pending_label_capacity = 0;
 
-    free(ctx->lexical_owner_symbol);
     ctx->lexical_owner_symbol = NULL;
 }
 
@@ -3427,7 +3615,7 @@ static int build_xref_owner_index(const xref_build_context *ctx, xref_owner_inde
         entries[entry_count].segment_id = s->segment_id;
         entries[entry_count].cpu_address = s->cpu_address;
         entries[entry_count].symbol_index = i;
-        /* Tie-break key = position in ctx->symbols. generate_xref() sorts the
+        /* Tie-break key = position in ctx->symbols. collect_analysis() sorts the
            symbol table (xref_symbol_compare) before emit, so this is the xref
            symbol sort order, not raw insertion order -- but it is exactly the
            order the old linear owner scan walked, so ownership is unchanged. */
@@ -3662,52 +3850,88 @@ static int xref_indirect_flow_compare(const void *a, const void *b)
     return strcmp(lhs->owner_routine, rhs->owner_routine);
 }
 
-static const char *find_symbol_at_address(const xref_build_context *ctx,
-                                          int addr,
-                                          int is_dataseg,
-                                          int segment_id)
+/* The visible address view preserves the symbol sort order for aliases.
+   A section of -1 indexes the fallback across all sections and segments. */
+typedef struct {
+    int address, section, segment, symbol_index;
+} xref_address_entry;
+
+typedef struct {
+    xref_address_entry *entries;
+    size_t count;
+} xref_address_index;
+
+static int compare_xref_address_key(const xref_address_entry *a, const xref_address_entry *b)
 {
-    int i;
-    for (i = 0; i < ctx->symbol_count; i++) {
-        const xref_symbol *s = &ctx->symbols[i];
-        if (!s->defined || !s->has_cpu_address) {
-            continue;
-        }
-        if (s->cpu_address == addr && s->is_dataseg == is_dataseg && s->segment_id == segment_id) {
-            return s->name;
-        }
-    }
-    return NULL;
+    if (a->address != b->address) return a->address < b->address ? -1 : 1;
+    if (a->section != b->section) return a->section < b->section ? -1 : 1;
+    if (a->segment != b->segment) return a->segment < b->segment ? -1 : 1;
+    return 0;
 }
 
-static const char *find_symbol_at_any_section(const xref_build_context *ctx, int addr)
+static int compare_xref_address_entry(const void *a, const void *b)
+{
+    const xref_address_entry *lhs = a, *rhs = b;
+    int order = compare_xref_address_key(lhs, rhs);
+    if (order != 0) return order;
+    return (lhs->symbol_index > rhs->symbol_index) - (lhs->symbol_index < rhs->symbol_index);
+}
+
+static int build_xref_address_index(const xref_build_context *ctx, xref_address_index *index)
 {
     int i;
+    size_t count = 0, read, write;
     for (i = 0; i < ctx->symbol_count; i++) {
         const xref_symbol *s = &ctx->symbols[i];
-        if (!s->defined || !s->has_cpu_address) {
-            continue;
-        }
-        if (s->cpu_address == addr) {
-            return s->name;
-        }
+        if (s->defined && s->has_cpu_address
+            && scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) count++;
+    }
+    if (count == 0) return 1;
+    if (count > SIZE_MAX / 2 / sizeof(*index->entries)) return 0;
+    index->entries = malloc(2 * count * sizeof(*index->entries));
+    if (index->entries == NULL) return 0;
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *s = &ctx->symbols[i];
+        xref_address_entry entry;
+        if (!s->defined || !s->has_cpu_address
+            || !scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) continue;
+        entry = (xref_address_entry){s->cpu_address, s->is_dataseg, s->segment_id, i};
+        index->entries[index->count++] = entry;
+        entry.section = entry.segment = -1;
+        index->entries[index->count++] = entry;
+    }
+    qsort(index->entries, index->count, sizeof(*index->entries), compare_xref_address_entry);
+    write = 0;
+    for (read = 0; read < index->count; read++) {
+        if (write == 0 || compare_xref_address_key(&index->entries[write - 1], &index->entries[read]) != 0)
+            index->entries[write++] = index->entries[read];
+    }
+    index->count = write;
+    return 1;
+}
+
+static const char *find_symbol_at_address(const xref_build_context *ctx,
+                                          const xref_address_index *index,
+                                          int address, int section, int segment)
+{
+    xref_address_entry key = {address, section, segment, 0};
+    size_t low = 0, high = index->count;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        int order = compare_xref_address_key(&index->entries[middle], &key);
+        if (order < 0) low = middle + 1;
+        else if (order > 0) high = middle;
+        else return ctx->symbols[index->entries[middle].symbol_index].name;
     }
     return NULL;
 }
 
 static const char *resolve_pointer_pair_symbol(const xref_build_context *ctx,
-                                               int low_addr,
-                                               int is_dataseg,
-                                               int segment_id)
+                                               const xref_address_index *index,
+                                               int low_addr, int is_dataseg, int segment_id)
 {
-    const char *low_name = find_symbol_at_address(ctx, low_addr, is_dataseg, segment_id);
-    if (low_name == NULL) {
-        low_name = find_symbol_at_any_section(ctx, low_addr);
-    }
-    if (low_name != NULL) {
-        return low_name;
-    }
-    return NULL;
+    const char *name = find_symbol_at_address(ctx, index, low_addr, is_dataseg, segment_id);
+    return name != NULL ? name : find_symbol_at_address(ctx, index, low_addr, -1, -1);
 }
 
 static int nullable_string_equal(const char *lhs, const char *rhs)
@@ -3965,6 +4189,8 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
     } xref_pair_state;
 
     xref_indirect_flow *flows = NULL;
+    xref_address_index address_index = {0};
+    int address_index_ready = 0;
     int flow_count = 0;
     int flow_capacity = 0;
     xref_pair_state pair_states[255];
@@ -4019,7 +4245,12 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
         if (instr->indirect_ptr_addr_known && instr->indirect_ptr_addr >= 0 && instr->indirect_ptr_addr <= 0xFE) {
             const xref_pair_state *pair = &pair_states[instr->indirect_ptr_addr];
             if (pair->valid_mask == 3) {
-                const char *ptr_symbol = resolve_pointer_pair_symbol(ctx,
+                const char *ptr_symbol;
+                if (!address_index_ready) {
+                    if (!build_xref_address_index(ctx, &address_index)) goto fail;
+                    address_index_ready = 1;
+                }
+                ptr_symbol = resolve_pointer_pair_symbol(ctx, &address_index,
                                                                     instr->indirect_ptr_addr,
                                                                     instr->is_dataseg,
                                                                     instr->segment_id);
@@ -4045,12 +4276,14 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
         }
     }
 
+    free(address_index.entries);
     dedupe_xref_indirect_flows(flows, &flow_count);
     *flows_out = flows;
     *flow_count_out = flow_count;
     return 1;
 
 fail:
+    free(address_index.entries);
     for (i = 0; i < flow_count; i++) {
         free_xref_indirect_flow(&flows[i]);
     }
@@ -4105,8 +4338,8 @@ static int xref_labels_share_segment(const xref_build_context *ctx,
                                      const char *left,
                                      const char *right)
 {
-    int left_index = find_xref_symbol_index(ctx, left);
-    int right_index = find_xref_symbol_index(ctx, right);
+    int left_index = find_visible_xref_symbol_index(ctx, left);
+    int right_index = find_visible_xref_symbol_index(ctx, right);
     const xref_symbol *left_symbol;
     const xref_symbol *right_symbol;
     if (left_index < 0 || right_index < 0) {
@@ -4246,7 +4479,7 @@ static int resolve_xref_data_target(const xref_build_context *ctx,
         return 1;
     }
     out->kind = "unknown";
-    symbol_index = find_xref_symbol_index(ctx, xref_expression_symbol_name(base));
+    symbol_index = find_visible_xref_symbol_index(ctx, xref_expression_symbol_name(base));
     if (symbol_index >= 0) {
         if (ctx->symbols[symbol_index].definition_kind == 1) {
             out->kind = "code";
@@ -4462,6 +4695,7 @@ static int emit_xref_json(const char *filename,
 {
     FILE *fp;
     int i;
+    int emitted = 0;
     char ts[64];
     xref_data_edge *data_reads = NULL;
     xref_data_edge *data_writes = NULL;
@@ -4473,40 +4707,30 @@ static int emit_xref_json(const char *filename,
     xref_owner_index owner_index;
     owner_index.entries = NULL;
     owner_index.count = 0;
-    fp = fopen(filename, "w");
-    if (fp == NULL) {
-        fprintf(stderr, "error: could not open `%s' for writing\n", filename);
-        return 0;
-    }
     /* Owner lookup is the xref-data hot path. Build the index once here and
        reuse it for data edges, indirect flows, and per-reference owner fields. */
     if (include_data || ctx->include_owner) {
         if (!build_xref_owner_index(ctx, &owner_index)) {
-            fclose(fp);
             fprintf(stderr, "error: could not build xref owner index\n");
-            return 0;
+            ok = 0;
+            goto cleanup;
         }
     }
     if (include_data) {
         if (!build_xref_data_edges(ctx, &owner_index, &data_reads, &data_read_count, &data_writes, &data_write_count)
             || !build_xref_indirect_flows(ctx, &owner_index, &indirect_flows, &indirect_flow_count)) {
-            for (i = 0; i < data_read_count; i++) {
-                free_xref_data_edge(&data_reads[i]);
-            }
-            for (i = 0; i < data_write_count; i++) {
-                free_xref_data_edge(&data_writes[i]);
-            }
-            for (i = 0; i < indirect_flow_count; i++) {
-                free_xref_indirect_flow(&indirect_flows[i]);
-            }
-            free_xref_owner_index(&owner_index);
-            fclose(fp);
-            free(data_reads);
-            free(data_writes);
-            free(indirect_flows);
             fprintf(stderr, "error: could not build xref data records\n");
-            return 0;
+            ok = 0;
+            goto cleanup;
         }
+    }
+    /* Complete analysis before opening the destination: allocation failures
+       must not truncate a previous xref file. */
+    fp = fopen(filename, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "error: could not open `%s' for writing\n", filename);
+        ok = 0;
+        goto cleanup;
     }
     format_timestamp_utc(ts, sizeof(ts));
     fprintf(fp, "{\n");
@@ -4526,7 +4750,11 @@ static int emit_xref_json(const char *filename,
     fprintf(fp, "  \"symbols\": [");
     for (i = 0; i < ctx->symbol_count; ++i) {
         const xref_symbol *s = &ctx->symbols[i];
-        fprintf(fp, "%s\n    {", (i == 0) ? "" : ",");
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
+            continue;
+        }
+        fprintf(fp, "%s\n    {", (emitted == 0) ? "" : ",");
+        emitted++;
         fprintf(fp, "\"name\":");
         print_json_string(fp, s->name);
         fprintf(fp, ",\"kind\":");
@@ -4565,7 +4793,7 @@ static int emit_xref_json(const char *filename,
         }
         fprintf(fp, "}}");
     }
-    if (ctx->symbol_count > 0) {
+    if (emitted > 0) {
         fprintf(fp, "\n  ");
     }
     fprintf(fp, "],\n");
@@ -4627,9 +4855,6 @@ static int emit_xref_json(const char *filename,
         fprintf(fp, "\n  ");
     }
     fprintf(fp, "]");
-    /* All owner lookups are complete; the remaining data sections reuse the
-       already-built edge/flow records. */
-    free_xref_owner_index(&owner_index);
     if (include_instructions) {
         fprintf(fp, ",\n  \"instruction_records\": ");
         ok = emit_instruction_records(fp, ctx);
@@ -4742,6 +4967,9 @@ static int emit_xref_json(const char *filename,
     fprintf(fp, "}\n");
     if (ferror(fp)) ok = 0;
     if (fclose(fp) != 0) ok = 0;
+    if (!ok) fprintf(stderr, "error: could not emit complete xref records\n");
+cleanup:
+    free_xref_owner_index(&owner_index);
     if (include_data) {
         for (i = 0; i < data_read_count; i++) {
             free_xref_data_edge(&data_reads[i]);
@@ -4756,7 +4984,6 @@ static int emit_xref_json(const char *filename,
         }
         free(indirect_flows);
     }
-    if (!ok) fprintf(stderr, "error: could not emit complete xref records\n");
     return ok;
 }
 
@@ -4772,6 +4999,9 @@ static int emit_xref_text(const char *filename, const xref_build_context *ctx)
     fprintf(fp, "SYMBOLS\n");
     for (i = 0; i < ctx->symbol_count; ++i) {
         const xref_symbol *s = &ctx->symbols[i];
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
+            continue;
+        }
         fprintf(fp, "%s,%s,%s,defined=%d", s->name, s->kind, s->scope, s->defined);
         if (s->has_cpu_address) {
             fprintf(fp, ",cpu=$%04X", s->cpu_address & 0xFFFF);
@@ -4806,15 +5036,11 @@ static int emit_xref_text(const char *filename, const xref_build_context *ctx)
     return 1;
 }
 
-static int emit_xref_csv(const char *filename, const xref_build_context *ctx)
+static int emit_xref_csv(const char *sym_name, const char *ref_name, const xref_build_context *ctx)
 {
     FILE *sym_fp;
     FILE *ref_fp;
-    char sym_name[1024];
-    char ref_name[1024];
     int i;
-    snprintf(sym_name, sizeof(sym_name), "%s.symbols.csv", filename);
-    snprintf(ref_name, sizeof(ref_name), "%s.refs.csv", filename);
     sym_fp = fopen(sym_name, "w");
     if (sym_fp == NULL) {
         fprintf(stderr, "error: could not open `%s' for writing\n", sym_name);
@@ -4833,6 +5059,9 @@ static int emit_xref_csv(const char *filename, const xref_build_context *ctx)
         char cpu[16];
         char off[32];
         char val[32];
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
+            continue;
+        }
         cpu[0] = '\0';
         off[0] = '\0';
         val[0] = '\0';
@@ -4971,10 +5200,7 @@ static int summary_visit_instruction(astnode *instr, void *arg, astnode **next)
         }
     }
 
-    add_current_pc(len);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += len;
-    }
+    advance_xref_position(ctx, len);
     return 0;
 }
 
@@ -9069,18 +9295,80 @@ int generate_data_coverage(astnode *root,
 
 /* ---- end analyze-index-patterns ---- */
 
-int generate_xref(astnode *root,
-                  const char *filename,
-                  xref_format format,
-                  int include_data,
-                  int include_instructions,
-                  const char *instruction_records_file,
-                  int include_owner,
-                  int include_locals,
-                  int include_anon,
-                  const char *source_file,
-                  const char *output_file,
-                  int pure_binary)
+/* Project resolved facts into NL records. Physical pages depend only on
+   emitted offsets, never on segment count, CPU windows, or label density. */
+static int build_fceux_nl(xref_build_context *ctx, int rom, int ram, int mirror_16k)
+{
+    int i;
+    size_t j;
+    if (rom) {
+        for (j = 0; j < ctx->output_extent_capacity; j++) {
+            const xref_output_extent *extent = &ctx->output_extents[j];
+            if (extent->size == 0) continue;
+            if (extent->cpu_start < 0x8000
+                || extent->cpu_start > 0xFFFF
+                || extent->size > 0x10000L - extent->cpu_start) {
+                fprintf(stderr, "error: FCEUX ROM export requires a raw PRG image "
+                        "with emitted bytes addressed in $8000-$FFFF\n");
+                return 0;
+            }
+            if (mirror_16k && (extent->output_start % FCEUX_NL_PAGE_SIZE
+                              != extent->cpu_start % FCEUX_NL_PAGE_SIZE)) {
+                fprintf(stderr, "error: FCEUX 16KB mirror has inconsistent CPU and PRG offsets\n");
+                return 0;
+            }
+        }
+    }
+    if (mirror_16k && ctx->output_offset != FCEUX_NL_PAGE_SIZE) {
+        fprintf(stderr, "error: --fceux-nl-mirror-16k requires exactly 16384 PRG bytes\n");
+        return 0;
+    }
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *symbol = &ctx->symbols[i];
+        int address = symbol->cpu_address;
+        if (!symbol->defined || !symbol->has_cpu_address
+            || strcmp(symbol->scope, "anonymous") == 0) continue;
+        if (ram && symbol->is_dataseg && address >= 0 && address < 0x8000) {
+            if (!fceux_nl_add(&ctx->nl, FCEUX_NL_RAM_BANK, address,
+                             nl_symbol_name(symbol->name, symbol->owner))) return 0;
+        }
+        if (rom && symbol->has_output_offset && address >= 0x8000 && address <= 0xFFFF) {
+            const xref_output_extent *extent;
+            long bank = symbol->output_offset / FCEUX_NL_PAGE_SIZE;
+            if (symbol->segment_id < 0
+                || (size_t)symbol->segment_id >= ctx->output_extent_capacity) continue;
+            extent = &ctx->output_extents[symbol->segment_id];
+            /* One-past-the-end and empty-segment labels identify no ROM byte. */
+            if (extent->size == 0 || symbol->output_offset < extent->output_start
+                || symbol->output_offset >= extent->output_start + extent->size) continue;
+            if (!fceux_nl_add(&ctx->nl, bank, address,
+                             nl_symbol_name(symbol->name, symbol->owner))) return 0;
+            if (mirror_16k && !fceux_nl_add(&ctx->nl, bank, address ^ 0x4000,
+                                           nl_symbol_name(symbol->name, symbol->owner))) return 0;
+        }
+    }
+    return 1;
+}
+
+struct tag_analysis_result {
+    xref_build_context facts;
+};
+
+struct tag_analysis_output_plan {
+    analysis_output_options options;
+    char *csv_symbols;
+    char *csv_references;
+    fceux_nl_output_plan nl;
+};
+
+void free_analysis(analysis_result *analysis)
+{
+    if (analysis == NULL) return;
+    free_xref_context(&analysis->facts);
+    free(analysis);
+}
+
+analysis_result *collect_analysis(astnode *root, const analysis_options *options)
 {
     static astnodeprocmap map[] = {
         { DATASEG_NODE, xref_visit_dataseg },
@@ -9110,33 +9398,40 @@ int generate_xref(astnode *root,
         { TOMBSTONE_NODE, list_noop },
         { 0, NULL }
     };
-    xref_build_context ctx;
+    analysis_result *analysis = calloc(1, sizeof(*analysis));
+    xref_build_context *ctx;
     symbol_ident_list constants;
     int i;
     int ok = 1;
 
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.include_locals = include_locals;
-    ctx.include_anon = include_anon;
-    ctx.include_data = include_data;
-    ctx.include_instructions = include_instructions || instruction_records_file != NULL;
-    ctx.include_owner = include_owner;
-    ctx.pure_binary = pure_binary;
-    ctx.output_offset = 0;
-    ctx.current_segment_id = 0;
-    ctx.next_segment_id = 1;
+    if (analysis == NULL) return NULL;
+    ctx = &analysis->facts;
+    ctx->include_locals = options->include_locals;
+    ctx->include_anon = options->include_anon;
+    ctx->include_data = options->include_data;
+    ctx->include_instructions = options->include_instructions;
+    ctx->include_owner = options->include_owner;
+    ctx->pure_binary = options->pure_binary;
+    ctx->collect_memory_operands = options->collect_ram_names;
+    ctx->collect_output_extents = options->collect_rom_layout;
+    ctx->output_offset = 0;
+    ctx->current_segment_id = 0;
+    ctx->next_segment_id = 1;
 
     in_dataseg = 0;
     dataseg_pc = 0;
     codeseg_pc = 0;
     close_source_cache();
-    astproc_walk(root, &ctx, map);
-    if (ctx.failed) {
+    astproc_walk(root, ctx, map);
+    if (ctx->failed) {
         ok = 0;
     }
 
     if (ok) {
-        symtab_list_type(CONSTANT_SYMBOL, &constants);
+        if (symtab_list_type(CONSTANT_SYMBOL, &constants) < 0) {
+            fprintf(stderr, "error: could not enumerate analysis constants\n");
+            ok = 0;
+        }
         for (i = 0; i < constants.size; ++i) {
             symtab_entry *e = symtab_lookup(constants.idents[i]);
             int value = 0;
@@ -9148,7 +9443,7 @@ int generate_xref(astnode *root,
             }
             if (e->def != NULL) {
                 if (eval_expression_int(e->def, (int *)&value, 0)) {
-                    if (!add_or_update_xref_symbol(&ctx,
+                    if (!add_or_update_xref_symbol(ctx,
                                                    e->id,
                                                    "equ",
                                                    "global",
@@ -9165,7 +9460,7 @@ int generate_xref(astnode *root,
                         break;
                     }
                 } else {
-                    if (!add_or_update_xref_symbol(&ctx,
+                    if (!add_or_update_xref_symbol(ctx,
                                                    e->id,
                                                    "equ",
                                                    "global",
@@ -9188,10 +9483,10 @@ int generate_xref(astnode *root,
     }
 
     if (ok) {
-        for (i = 0; i < ctx.data_directive_ref_count; i++) {
-            xref_data_directive_reference *record = &ctx.data_directive_refs[i];
+        for (i = 0; i < ctx->data_directive_ref_count; i++) {
+            xref_data_directive_reference *record = &ctx->data_directive_refs[i];
             int value = 0;
-            if (!eval_expression_int_with_xref(record->final_expression, &ctx, &value, 0)) {
+            if (!eval_expression_int_with_xref(record->final_expression, ctx, &value, 0)) {
                 ok = 0;
                 break;
             }
@@ -9201,39 +9496,104 @@ int generate_xref(astnode *root,
     }
 
     if (ok) {
-        qsort(ctx.symbols, (size_t)ctx.symbol_count, sizeof(xref_symbol), xref_symbol_compare);
-        qsort(ctx.refs, (size_t)ctx.ref_count, sizeof(xref_ref), xref_ref_compare);
-
-        if (filename != NULL) {
-            if (format == XREF_FORMAT_JSON) {
-                ok = emit_xref_json(filename, &ctx, include_data, include_instructions, source_file, output_file, pure_binary);
-            } else if (format == XREF_FORMAT_TEXT) {
-                ok = emit_xref_text(filename, &ctx);
-            } else if (format == XREF_FORMAT_CSV) {
-                ok = emit_xref_csv(filename, &ctx);
-            } else {
-                ok = 0;
-            }
-        }
+        qsort(ctx->symbols, (size_t)ctx->symbol_count, sizeof(xref_symbol), xref_symbol_compare);
+        qsort(ctx->refs, (size_t)ctx->ref_count, sizeof(xref_ref), xref_ref_compare);
+        ok = rebuild_xref_symbol_index(ctx);
     }
-
-    if (ok && instruction_records_file != NULL) {
-        FILE *fp = fopen(instruction_records_file, "w");
-        if (fp == NULL) {
-            fprintf(stderr, "error: could not open instruction records `%s' for writing\n", instruction_records_file);
-            ok = 0;
-        } else {
-            ok = emit_instruction_records(fp, &ctx);
-            fputc('\n', fp);
-            if (ferror(fp)) ok = 0;
-            if (fclose(fp) != 0) ok = 0;
-            if (!ok) fprintf(stderr, "error: could not write instruction records `%s'\n", instruction_records_file);
-        }
-    }
-
     close_source_cache();
-    free_xref_context(&ctx);
-    return ok;
+    if (!ok) {
+        free_analysis(analysis);
+        return NULL;
+    }
+    return analysis;
+}
+
+void free_analysis_outputs(analysis_output_plan *plan)
+{
+    if (plan == NULL) return;
+    free(plan->csv_symbols);
+    free(plan->csv_references);
+    fceux_nl_free_outputs(&plan->nl);
+    free(plan);
+}
+
+analysis_output_plan *plan_analysis_outputs(const analysis_result *analysis,
+                                            const analysis_output_options *options)
+{
+    analysis_output_plan *plan = calloc(1, sizeof(*plan));
+    long size = analysis->facts.output_offset;
+    if (plan == NULL) return NULL;
+    plan->options = *options;
+    if (options->xref_file != NULL && options->format == XREF_FORMAT_CSV) {
+        plan->csv_symbols = str_concat(options->xref_file, ".symbols.csv");
+        plan->csv_references = str_concat(options->xref_file, ".refs.csv");
+        if (plan->csv_symbols == NULL || plan->csv_references == NULL) goto fail;
+    }
+    if (!fceux_nl_plan_outputs(&plan->nl, options->rom_prefix, options->ram_file,
+                               size / FCEUX_NL_PAGE_SIZE + (size % FCEUX_NL_PAGE_SIZE != 0))) goto fail;
+    return plan;
+fail:
+    free_analysis_outputs(plan);
+    return NULL;
+}
+
+int prepare_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan)
+{
+    const analysis_output_options *options = &plan->options;
+    return (options->rom_prefix == NULL && options->ram_file == NULL)
+        || build_fceux_nl(&analysis->facts, options->rom_prefix != NULL,
+                          options->ram_file != NULL, options->mirror_16k);
+}
+
+int validate_analysis_outputs(const analysis_output_plan *plan)
+{
+    size_t i;
+    if (plan == NULL) return 1;
+    if (plan->options.format == XREF_FORMAT_CSV) {
+        if (!dependencies_output(plan->csv_symbols)
+            || !dependencies_output(plan->csv_references)) return 0;
+    } else if (!dependencies_output(plan->options.xref_file)) return 0;
+    if (!dependencies_output(plan->options.instruction_records_file)) return 0;
+    for (i = 0; i < plan->nl.count; i++) {
+        if (!dependencies_output(plan->nl.destinations[i].path)) return 0;
+    }
+    return 1;
+}
+
+int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan)
+{
+    const analysis_output_options *options = &plan->options;
+    const xref_build_context *ctx = &analysis->facts;
+    int ok = 1;
+    if (options->xref_file != NULL) {
+        switch (options->format) {
+            case XREF_FORMAT_JSON:
+                ok = emit_xref_json(options->xref_file, ctx, ctx->include_data,
+                                    options->xref_instructions, options->source_file,
+                                    options->output_file, ctx->pure_binary);
+                break;
+            case XREF_FORMAT_TEXT:
+                ok = emit_xref_text(options->xref_file, ctx);
+                break;
+            case XREF_FORMAT_CSV:
+                ok = emit_xref_csv(plan->csv_symbols, plan->csv_references, ctx);
+                break;
+            default: return 0;
+        }
+    }
+    if (ok && options->instruction_records_file != NULL) {
+        FILE *fp = fopen(options->instruction_records_file, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "error: could not open instruction records `%s' for writing\n", options->instruction_records_file);
+            return 0;
+        }
+        ok = emit_instruction_records(fp, ctx);
+        fputc('\n', fp);
+        if (ferror(fp)) ok = 0;
+        if (fclose(fp) != 0) ok = 0;
+        if (!ok) fprintf(stderr, "error: could not write instruction records `%s'\n", options->instruction_records_file);
+    }
+    return ok && fceux_nl_write(&analysis->facts.nl, &plan->nl);
 }
 
 typedef struct tag_audit_label {
@@ -9587,21 +9947,24 @@ static int add_audit_finding(audit_context *ctx,
         && f->suggested_symbol != NULL && f->message != NULL;
 }
 
-static void build_audit_symbol_maps(audit_context *ctx)
+static int build_audit_symbol_maps(audit_context *ctx)
 {
     symbol_ident_list labels;
     symbol_ident_list constants;
     int i;
-    symtab_list_type(LABEL_SYMBOL, &labels);
+    if (symtab_list_type(LABEL_SYMBOL, &labels) < 0) return 0;
     for (i = 0; i < labels.size; ++i) {
         symtab_entry *e = symtab_lookup(labels.idents[i]);
         if (e != NULL && (e->flags & ADDR_FLAG)) {
-            add_audit_label(ctx, e->id, e->address);
+            if (!add_audit_label(ctx, e->id, e->address)) {
+                symtab_list_finalize(&labels);
+                return 0;
+            }
         }
     }
     symtab_list_finalize(&labels);
 
-    symtab_list_type(CONSTANT_SYMBOL, &constants);
+    if (symtab_list_type(CONSTANT_SYMBOL, &constants) < 0) return 0;
     for (i = 0; i < constants.size; ++i) {
         symtab_entry *e = symtab_lookup(constants.idents[i]);
         int value;
@@ -9609,10 +9972,14 @@ static void build_audit_symbol_maps(audit_context *ctx)
             continue;
         }
         if (eval_expression_int(e->def, &value, 0)) {
-            add_audit_equ(ctx, e->id, value);
+            if (!add_audit_equ(ctx, e->id, value)) {
+                symtab_list_finalize(&constants);
+                return 0;
+            }
         }
     }
     symtab_list_finalize(&constants);
+    return 1;
 }
 
 static int audit_visit_dataseg(astnode *n, void *arg, astnode **next)
@@ -9979,7 +10346,11 @@ int run_raw_address_audit(astnode *root,
     ctx.rom_lo = rom_lo;
     ctx.rom_hi = rom_hi;
 
-    build_audit_symbol_maps(&ctx);
+    if (!build_audit_symbol_maps(&ctx)) {
+        fprintf(stderr, "error: could not build audit symbol maps\n");
+        free_audit_context(&ctx);
+        return -1;
+    }
 
     in_dataseg = 0;
     dataseg_pc = 0;

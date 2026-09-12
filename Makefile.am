@@ -1,6 +1,7 @@
 ## Makefile.am -- Process this file with automake to produce Makefile.in
 
 bin_PROGRAMS = xasm xlnk
+xasm_LDADD = $(LDADD) $(DARWIN_LIBS)
 
 # Use the *generated* files for normal builds
 xasm_SOURCES = \
@@ -12,7 +13,7 @@ xasm_SOURCES = \
   opcode.c opcode.h \
   parser.c scanner.c \
   symtab.c symtab.h \
-  listing.c listing.h \
+  listing.c listing.h fceux_nl.c fceux_nl.h \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
   xasm.c \
   my_getopt.c my_getopt.h getopt.h

@@ -535,29 +535,30 @@ int symtab_size()
  * Lists the entries in a symbol table that are of a certain type.
  * @param type The symbol type (*_SYMBOL)
  * @param list List which will receive the array of identifiers
+ * @return Number of identifiers, or -1 on failure with an empty list.
  */
 int symtab_list_type(symbol_type type, symbol_ident_list *list)
 {
     symtab *st = symtab_tos();
-    int i = 0;
-    list->size = symtab_type_count(type);
-    list->idents = (char **)malloc(list->size * sizeof(char *) );
-    if (list->idents != NULL) {
-        symtab_entry *e = binary_min(st->root);
-        while (e != NULL) {
-            if ((type == ANY_SYMBOL) || (e->type == type)) {
-                /* Add to list */
-                list->idents[i] = (char *)malloc(strlen(e->id)+1);
-                if (list->idents[i] != NULL) {
-                    strcpy(list->idents[i], e->id);
-                    i++;
-                }
+    int count = symtab_type_count(type);
+    symtab_entry *e;
+    list->size = 0;
+    list->idents = NULL;
+    if (count == 0) return 0;
+    list->idents = (char **)malloc((size_t)count * sizeof(char *));
+    if (list->idents == NULL) return -1;
+    for (e = binary_min(st->root); e != NULL; e = binary_succ(e)) {
+        if ((type == ANY_SYMBOL) || (e->type == type)) {
+            char *name = (char *)malloc(strlen(e->id) + 1);
+            if (name == NULL) {
+                symtab_list_finalize(list);
+                return -1;
             }
-            e = binary_succ(e);
+            strcpy(name, e->id);
+            list->idents[list->size++] = name;
         }
     }
-    /* Return the number of entries listed */
-    return i;
+    return list->size;
 }
 
 /**
@@ -600,4 +601,5 @@ void symtab_list_finalize(symbol_ident_list *list)
         SAFE_FREE(list->idents[i]);
     }
     SAFE_FREE(list->idents);
+    list->size = 0;
 }

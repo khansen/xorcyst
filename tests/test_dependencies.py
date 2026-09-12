@@ -24,7 +24,14 @@ class Dependencies(unittest.TestCase):
         cls.driver = Path(cls.build.name) / "driver"
         subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
                         str(ROOT / "tests/dependency_driver.c"), str(ROOT / "dependencies.c"),
-                        str(ROOT / "sha256.c"), "-o", str(cls.driver)], check=True)
+                        str(ROOT / "sha256.c"), "-o", str(cls.driver),
+                        *(["-framework", "CoreFoundation"] if sys.platform == "darwin" else [])], check=True)
+        if sys.platform == "darwin":
+            cls.pathconf_driver = Path(cls.build.name) / "pathconf-driver"
+            subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
+                            str(ROOT / "tests/dependency_driver.c"), str(ROOT / "tests/test_pathconf_faults.c"),
+                            str(ROOT / "sha256.c"), "-o", str(cls.pathconf_driver),
+                            "-framework", "CoreFoundation"], check=True)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="xasm-dependencies-")
@@ -133,8 +140,9 @@ class Dependencies(unittest.TestCase):
                     self.assertEqual(run.returncode, 0, run.stderr)
                     self.assertEqual(run.stdout.decode().strip(), "snapshot=" + hashlib.sha256(payload).hexdigest())
 
-    def mutate_after_snapshot(self, path, mutate, *, role=1, driver=None):
-        proc = subprocess.Popen([str(driver or self.driver), str(self.manifest), str(role), str(path)],
+    def mutate_after_snapshot(self, path, mutate, *, role=1, driver=None, protect_only=False):
+        mode = 'protect' if protect_only else str(self.manifest)
+        proc = subprocess.Popen([str(driver or self.driver), mode, str(role), str(path)],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
         self.addCleanup(lambda: proc.poll() is None and (proc.kill(), proc.wait()))
         self.assertEqual(proc.stdout.readline(), b"ready\n")
@@ -147,6 +155,104 @@ class Dependencies(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertIn(hashlib.sha256(self.source.read_bytes()).hexdigest().encode(), stdout)
         self.read_manifest()
+
+    def test_output_protection_reads_live_inputs_without_snapshots(self):
+        self.source.write_bytes(b'original')
+        code, stdout, stderr = self.mutate_after_snapshot(
+            self.source, lambda: self.source.write_bytes(b'modified'), protect_only=True)
+        self.assertEqual(code, 0, stderr)
+        self.assertIn(hashlib.sha256(b'modified').hexdigest().encode(), stdout)
+        self.assertFalse(self.manifest.exists())
+
+    def test_output_protection_rejects_input_aliases_in_both_orders(self):
+        hardlink = self.root / 'hardlink'
+        symlink = self.root / 'symlink'
+        os.link(self.source, hardlink)
+        symlink.symlink_to(self.source)
+        original = self.source.read_bytes()
+        for kind in ('input', 'source', 'late-input'):
+            for alias in (self.source, hardlink, symlink):
+                with self.subTest(kind=kind, alias=alias.name):
+                    run = subprocess.run([str(self.driver), 'protect-alias', kind, str(self.source), str(alias)],
+                                         capture_output=True)
+                    self.assertEqual(run.returncode, 3, run.stderr)
+                    self.assertIn(b'aliases', run.stderr)
+                    self.assertEqual(self.source.read_bytes(), original)
+        self.assertFalse(self.manifest.exists())
+
+    def test_output_protection_resolves_future_output_parents(self):
+        directory_alias = self.root / 'directory-alias'
+        directory_alias.symlink_to(self.root, target_is_directory=True)
+        first = self.root / 'future.nl'
+        for second in (str(self.root) + '/./future.nl', directory_alias / 'future.nl'):
+            with self.subTest(second=str(second)):
+                run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first), str(second)],
+                                     capture_output=True)
+                self.assertEqual(run.returncode, 3, run.stderr)
+                self.assertIn(b'aliases', run.stderr)
+                self.assertFalse(first.exists())
+        other_directory = self.root / 'other'
+        other_directory.mkdir()
+        run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first),
+                              str(other_directory / 'future.nl')], capture_output=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_future_outputs_follow_dangling_symlink_chains(self):
+        target = self.root / 'future.nl'
+        (self.root / 'sub').mkdir()
+        (self.root / 'directory-alias').symlink_to(self.root / 'sub', target_is_directory=True)
+        relative = self.root / 'relative'
+        relative.symlink_to('directory-alias/../future.nl')
+        absolute = self.root / 'absolute'
+        absolute.symlink_to(relative)
+        for alias in (relative, absolute):
+            for first, second in ((target, alias), (alias, target)):
+                with self.subTest(first=first.name, second=second.name):
+                    run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first), str(second)],
+                                         capture_output=True, timeout=5)
+                    self.assertEqual(run.returncode, 3, run.stderr)
+                    self.assertIn(b'aliases', run.stderr)
+                    self.assertFalse(target.exists())
+        other = self.root / 'other'
+        other.symlink_to('different.nl')
+        run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(relative), str(other)],
+                             capture_output=True, timeout=5)
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin filesystem capabilities")
+    def test_future_names_with_unknown_or_failed_case_sensitivity(self):
+        for mode, first, second, expected in (
+                ("unknown", "out.bin", "other.nl", 0),
+                ("unknown", "out.bin", "OUT.BIN", 3),
+                ("unknown", "Résumé.nl", "RE\u0301SUME\u0301.NL", 3),
+                ("sensitive", "out.bin", "OUT.BIN", 0),
+                ("insensitive", "out.bin", "OUT.BIN", 3),
+                ("error", "out.bin", "other.nl", 3)):
+            with self.subTest(mode=mode, first=first, second=second):
+                run = subprocess.run([str(self.pathconf_driver), 'protect-alias', 'outputs',
+                                      str(self.root / first), str(self.root / second)], capture_output=True,
+                                     env={**os.environ, 'XASM_TEST_CASE_SENSITIVITY': mode}, timeout=5)
+                self.assertIn(f'INJECT_PATHCONF {mode}'.encode(), run.stderr)
+                self.assertEqual(run.returncode, expected, run.stderr)
+                if mode == 'error':
+                    self.assertIn(b'cannot determine output filesystem case sensitivity', run.stderr)
+                else:
+                    self.assertNotIn(b'cannot determine output filesystem case sensitivity', run.stderr)
+                if expected == 3 and mode != 'error':
+                    self.assertIn(b'aliases', run.stderr)
+                self.assertFalse((self.root / first).exists())
+                self.assertFalse((self.root / second).exists())
+
+    def test_output_symlink_cycles_fail_without_hanging(self):
+        first, second = self.root / 'first', self.root / 'second'
+        first.symlink_to(second.name)
+        second.symlink_to(first.name)
+        run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first),
+                              str(self.root / 'future.nl')], capture_output=True, timeout=5)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn(b'resolv', run.stderr)
+        self.assertTrue(first.is_symlink())
+        self.assertTrue(second.is_symlink())
 
     def test_same_size_same_timestamp_mutation_refuses_each_input_role(self):
         for role in [1, 2, 4, 8, 16]:
@@ -229,6 +335,22 @@ class Dependencies(unittest.TestCase):
         self.assertEqual(run.returncode, 3, run.stderr)
         self.assertIn(b"aliases", run.stderr)
         self.assertEqual(self.source.read_bytes(), original)
+
+    def test_manifest_source_alias_preserves_all_outputs(self):
+        ram = self.root / 'game.nes.ram.nl'
+        bank = self.root / 'game.nes.0.nl'
+        xref = self.root / 'xref.json'
+        listing = self.root / 'listing.txt'
+        previous = {self.source: self.source.read_bytes()}
+        for path in (self.output, ram, bank, xref, listing):
+            previous[path] = b'previous ' + path.name.encode()
+            path.write_bytes(previous[path])
+        run = self.run_asm(f'--dependency-manifest={self.source}', f'--xref={xref}',
+                           f'--listing={listing}', f'--fceux-nl-rom-prefix={self.root}/game.nes.',
+                           f'--fceux-nl-ram-output={ram}', manifest=False)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn(b'manifest output aliases an input', run.stderr)
+        self.assertEqual({path: path.read_bytes() for path in previous}, previous)
 
     def test_output_cannot_overwrite_comparison_reference(self):
         reference = self.root / "reference.bin"

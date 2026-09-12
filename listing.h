@@ -26,18 +26,45 @@ int prepare_xref_instruction_provenance(void);
 const char *capture_xref_instruction_source(const char *filename, const char *directory, FILE *fp);
 int finish_xref_instruction_provenance(astnode *root);
 void clear_xref_instruction_provenance(void);
-int generate_xref(astnode *root,
-                  const char *filename,
-                  xref_format format,
-                  int include_data,
-                  int include_instructions,
-                  const char *instruction_records_file,
-                  int include_owner,
-                  int include_locals,
-                  int include_anon,
-                  const char *source_file,
-                  const char *output_file,
-                  int pure_binary);
+/* Collection owns resolved facts; it does not open output files. */
+typedef struct tag_analysis_result analysis_result;
+typedef struct tag_analysis_output_plan analysis_output_plan;
+
+typedef struct {
+    int pure_binary;
+    int include_data;
+    int include_instructions;
+    int include_owner;
+    int include_locals;
+    int include_anon;
+    int collect_rom_layout;
+    int collect_ram_names;
+} analysis_options;
+
+/* Strings are borrowed for the lifetime of the output plan. */
+typedef struct {
+    const char *xref_file;
+    xref_format format;
+    int xref_instructions;
+    const char *instruction_records_file;
+    const char *rom_prefix;
+    const char *ram_file;
+    int mirror_16k;
+    const char *source_file;
+    const char *output_file;
+} analysis_output_options;
+
+analysis_result *collect_analysis(astnode *root, const analysis_options *options);
+void free_analysis(analysis_result *analysis);
+/* Expand exact filenames without opening or registering any destination. */
+analysis_output_plan *plan_analysis_outputs(const analysis_result *analysis,
+                                            const analysis_output_options *options);
+/* Called once as part of invocation-wide validation, before any output opens. */
+int validate_analysis_outputs(const analysis_output_plan *plan);
+/* Prepare names only for successful assembly; diagnostic listings need paths only. */
+int prepare_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan);
+int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan);
+void free_analysis_outputs(analysis_output_plan *plan);
 int generate_xref_summary(astnode *root,
                           const char *output_path,
                           xref_summary_format format,

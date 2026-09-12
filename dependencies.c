@@ -10,6 +10,7 @@
 #include <unistd.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#include <CoreFoundation/CoreFoundation.h>
 #endif
 
 typedef struct dependency {
@@ -23,7 +24,7 @@ typedef struct dependency {
 } dependency;
 
 static dependency *inputs, **tail = &inputs;
-static int active, failed, argument_count;
+static int active, protect_outputs, failed, argument_count;
 static char **arguments, *directory;
 static const char *producer_version;
 static char *manifest_path;
@@ -33,7 +34,7 @@ static int aliases_input(const char *path);
 
 static void failure(const char *message, const char *path)
 {
-    fprintf(stderr, "error: dependency manifest: %s%s%s\n", message,
+    fprintf(stderr, "error: %s: %s%s%s\n", active ? "dependency manifest" : "output protection", message,
             path != NULL ? ": " : "", path != NULL ? path : "");
     failed = 1;
 }
@@ -64,11 +65,131 @@ static dependency *find_input(const char *path)
     return NULL;
 }
 
+/* Keep original lookup paths for input validation. Resolve prospective output
+ * paths separately, including a final symlink whose target is not yet present. */
+static char *resolved_parent(const char *path, const char *slash)
+{
+    size_t length = slash == path ? 1 : (size_t)(slash - path);
+    char *parent = malloc(length + 1);
+    char *resolved;
+    if (parent == NULL) { failure("out of memory comparing output paths", path); return NULL; }
+    memcpy(parent, path, length);
+    parent[length] = '\0';
+    resolved = realpath(parent, NULL);
+    if (resolved == NULL && errno != ENOENT && errno != ENOTDIR)
+        failure("cannot resolve output directory", path);
+    free(parent);
+    return resolved;
+}
+
+static char *resolved_output_path(const char *path, unsigned links)
+{
+    struct stat info;
+    char *resolved = realpath(path, NULL);
+    const char *slash;
+    char *parent;
+    size_t length;
+    if (resolved != NULL) return resolved;
+    if (errno != ENOENT && errno != ENOTDIR) {
+        failure("cannot resolve output path", path);
+        return NULL;
+    }
+    slash = strrchr(path, '/');
+    if (slash == NULL) { failure("output path is not absolute", path); return NULL; }
+    if (lstat(path, &info) == 0 && S_ISLNK(info.st_mode)) {
+        char *target, *next;
+        size_t capacity = 128;
+        ssize_t count;
+        if (links >= 40) { failure("cannot resolve output symlink chain", path); return NULL; }
+        for (;;) {
+            target = malloc(capacity + 1);
+            if (target == NULL) { failure("out of memory", path); return NULL; }
+            count = readlink(path, target, capacity);
+            if (count < 0) { free(target); failure("cannot resolve output symlink", path); return NULL; }
+            if ((size_t)count < capacity) break;
+            free(target);
+            if (capacity > (SIZE_MAX - 1) / 2) { failure("output symlink is too long", path); return NULL; }
+            capacity *= 2;
+        }
+        target[count] = '\0';
+        if (target[0] == '/') next = target;
+        else {
+            size_t prefix = (size_t)(slash - path) + 1;
+            next = malloc(prefix + (size_t)count + 1);
+            if (next != NULL) {
+                memcpy(next, path, prefix);
+                memcpy(next + prefix, target, (size_t)count + 1);
+            }
+            free(target);
+        }
+        if (next == NULL) { failure("out of memory", path); return NULL; }
+        resolved = resolved_output_path(next, links + 1);
+        free(next);
+        return resolved;
+    }
+    parent = resolved_parent(path, slash);
+    if (parent == NULL) return NULL; /* A missing parent cannot accept an output. */
+    length = strlen(parent) + strlen(slash) + 1;
+    resolved = malloc(length);
+    if (resolved != NULL) snprintf(resolved, length, "%s%s", parent, slash);
+    else failure("out of memory", path);
+    free(parent);
+    return resolved;
+}
+
+static int same_future_name(const char *parent, const char *a, const char *b)
+{
+    if (strcmp(a, b) == 0) return 1;
+#ifdef __APPLE__
+    /* Darwin filesystems expose case sensitivity; CoreFoundation supplies
+       Unicode comparison without changing the assembler's process locale. */
+    long sensitive;
+    CFStringRef left, right;
+    CFStringCompareFlags flags = kCFCompareNonliteral;
+    int same;
+    errno = 0;
+    sensitive = pathconf(parent, _PC_CASE_SENSITIVE);
+    if (sensitive < 0 && errno != 0) {
+        failure("cannot determine output filesystem case sensitivity", parent);
+        return 1;
+    }
+    /* An indeterminate result must still protect potential case aliases. */
+    if (sensitive <= 0) flags |= kCFCompareCaseInsensitive;
+    left = CFStringCreateWithCString(NULL, a, kCFStringEncodingUTF8);
+    right = CFStringCreateWithCString(NULL, b, kCFStringEncodingUTF8);
+    same = left == NULL || right == NULL || CFStringCompare(left, right, flags) == kCFCompareEqualTo;
+    if (left == NULL || right == NULL) failure("out of memory comparing output names", parent);
+    if (left != NULL) CFRelease(left);
+    if (right != NULL) CFRelease(right);
+    return same;
+#else
+    (void)parent;
+    return 0;
+#endif
+}
+
 static int same_file(const char *a, const char *b)
 {
     struct stat sa, sb;
-    return strcmp(a, b) == 0 || (stat(a, &sa) == 0 && stat(b, &sb) == 0
-        && sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino);
+    char *left, *right, *a_slash, *b_slash;
+    int same = 0;
+    if (strcmp(a, b) == 0) return 1;
+    if (stat(a, &sa) == 0 && stat(b, &sb) == 0)
+        return sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino;
+    left = resolved_output_path(a, 0);
+    right = resolved_output_path(b, 0);
+    if (left != NULL && right != NULL) {
+        a_slash = strrchr(left, '/');
+        b_slash = strrchr(right, '/');
+        *a_slash = *b_slash = '\0';
+        if (stat(left[0] ? left : "/", &sa) == 0 && stat(right[0] ? right : "/", &sb) == 0
+            && sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino)
+            same = same_future_name(left[0] ? left : "/", a_slash + 1, b_slash + 1);
+    }
+    free(left);
+    free(right);
+    same |= failed;
+    return same;
 }
 
 static int read_contents(const char *path, unsigned char **bytes, size_t *size, char hash[65])
@@ -189,6 +310,14 @@ static char *executable_path(void)
 #endif
 }
 
+int dependencies_start_output_protection(void)
+{
+    protect_outputs = 1;
+    directory = getcwd(NULL, 0);
+    if (directory == NULL) failure("cannot identify working directory", NULL);
+    return !failed;
+}
+
 int dependencies_start(const char *version, const char *manifest)
 {
     int i;
@@ -221,7 +350,10 @@ FILE *dependencies_open(const char *path, const char *mode, unsigned role)
 {
     dependency *entry;
     FILE *fp;
-    if (!active) return fopen(path, mode);
+    if (!active) {
+        if (protect_outputs && !dependencies_protect_source(path)) return NULL;
+        return fopen(path, mode);
+    }
     entry = capture(path, role);
     if (!entry || failed || entry->missing) { errno = ENOENT; return NULL; }
     fp = tmpfile();
@@ -293,9 +425,16 @@ int dependencies_protect_source(const char *path)
 {
     dependency *entry;
     char *absolute;
-    if (!active || !path) return 1;
+    if ((!active && !protect_outputs) || !path) return 1;
     absolute = absolute_path(path);
     if (!absolute) return 0;
+    for (entry = outputs; entry; entry = entry->next) {
+        if (same_file(absolute, entry->path)) {
+            failure("input aliases an output", absolute);
+            free(absolute);
+            return 0;
+        }
+    }
     for (entry = source_paths; entry; entry = entry->next)
         if (strcmp(entry->path, absolute) == 0) { free(absolute); return 1; }
     entry = calloc(1, sizeof(*entry));
@@ -310,10 +449,10 @@ int dependencies_output(const char *path)
 {
     dependency *entry;
     char *absolute;
-    if (!active || !path) return 1;
+    if ((!active && !protect_outputs) || !path) return 1;
     absolute = absolute_path(path);
     if (!absolute) return 0;
-    if (same_file(absolute, manifest_path) || aliases_input(absolute)) goto collision;
+    if ((manifest_path != NULL && same_file(absolute, manifest_path)) || aliases_input(absolute)) goto collision;
     for (entry = outputs; entry; entry = entry->next)
         if (same_file(absolute, entry->path)) goto collision;
     entry = calloc(1, sizeof(*entry));
@@ -406,7 +545,7 @@ int dependencies_write(const char *path)
 
 int dependencies_failed(void)
 {
-    return active && failed;
+    return (active || protect_outputs) && failed;
 }
 
 void dependencies_clear(void)
@@ -431,5 +570,5 @@ void dependencies_clear(void)
     free(arguments); free(directory); free(manifest_path);
     manifest_path = NULL;
     arguments = NULL; directory = NULL; tail = &inputs;
-    argument_count = active = failed = 0;
+    argument_count = active = protect_outputs = failed = 0;
 }
