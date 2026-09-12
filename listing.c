@@ -9,6 +9,7 @@
 #include "opcode.h"
 #include "dependencies.h"
 #include "utf8.h"
+#include <stdint.h>
 
 #define SOURCE_LINE_BUFFER_SIZE 1024
 #define HEX_BYTES_PER_ROW 4
@@ -1262,6 +1263,7 @@ typedef struct tag_xref_symbol {
     char *name;
     char *kind;
     char *scope;
+    const char *owner; /* borrowed name of enclosing global symbol, or NULL */
     int defined;
     location definition_loc;
     int has_cpu_address;
@@ -2259,7 +2261,7 @@ typedef struct tag_xref_build_context {
     int *pending_label_indexes;
     int pending_label_count;
     int pending_label_capacity;
-    char *lexical_owner_symbol;
+    const char *lexical_owner_symbol;
     int lexical_owner_item_counts[3];
     int include_locals;
     int include_anon;
@@ -2271,6 +2273,9 @@ typedef struct tag_xref_build_context {
     int current_segment_id;
     int next_segment_id;
     int failed;
+    /* Real symbols are collected independently of output scope filters. */
+    int *symbol_index; /* open-addressed name -> symbol array index + 1 */
+    size_t symbol_index_capacity;
 } xref_build_context;
 
 typedef struct tag_xref_instr {
@@ -2528,15 +2533,58 @@ static void classify_pending_labels(xref_build_context *ctx, int definition_kind
     ctx->pending_label_count = 0;
 }
 
+static size_t xref_name_hash(const char *name)
+{
+    size_t hash = 5381;
+    while (*name != '\0') hash = hash * 33u ^ (unsigned char)*name++;
+    return hash;
+}
+
+static void index_xref_symbol(xref_build_context *ctx, int index)
+{
+    size_t slot = xref_name_hash(ctx->symbols[index].name) & (ctx->symbol_index_capacity - 1);
+    while (ctx->symbol_index[slot] != 0) slot = (slot + 1) & (ctx->symbol_index_capacity - 1);
+    ctx->symbol_index[slot] = index + 1;
+}
+
+/* Also rebuild after sorting the symbol array; no pointers into a reallocating
+   array are retained in the index. */
+static int rebuild_xref_symbol_index(xref_build_context *ctx)
+{
+    size_t capacity = ctx->symbol_index_capacity ? ctx->symbol_index_capacity : 128;
+    int *slots;
+    int i;
+    while (capacity / 2 <= (size_t)ctx->symbol_count) {
+        if (capacity > SIZE_MAX / 2 / sizeof(*slots)) { ctx->failed = 1; return 0; }
+        capacity *= 2;
+    }
+    slots = calloc(capacity, sizeof(*slots));
+    if (slots == NULL) { ctx->failed = 1; return 0; }
+    free(ctx->symbol_index);
+    ctx->symbol_index = slots;
+    ctx->symbol_index_capacity = capacity;
+    for (i = 0; i < ctx->symbol_count; i++) index_xref_symbol(ctx, i);
+    return 1;
+}
+
 static int find_xref_symbol_index(const xref_build_context *ctx, const char *name)
 {
-    int i;
-    for (i = 0; i < ctx->symbol_count; ++i) {
-        if (strcmp(ctx->symbols[i].name, name) == 0) {
-            return i;
-        }
+    size_t slot;
+    if (ctx->symbol_index_capacity == 0) return -1;
+    slot = xref_name_hash(name) & (ctx->symbol_index_capacity - 1);
+    while (ctx->symbol_index[slot] != 0) {
+        int index = ctx->symbol_index[slot] - 1;
+        if (strcmp(ctx->symbols[index].name, name) == 0) return index;
+        slot = (slot + 1) & (ctx->symbol_index_capacity - 1);
     }
     return -1;
+}
+
+static int find_visible_xref_symbol_index(const xref_build_context *ctx, const char *name)
+{
+    int index = find_xref_symbol_index(ctx, name);
+    return index >= 0 && scope_allowed(ctx->symbols[index].scope, ctx->include_locals, ctx->include_anon)
+        ? index : -1;
 }
 
 static int eval_expression_int_with_xref(astnode *expr,
@@ -2609,6 +2657,8 @@ static int eval_expression_int_with_xref(astnode *expr,
     }
 }
 
+/* Keep definitions complete. Scope switches belong to xref's output view,
+   not to the symbol facts shared by the analysis and debugger exporters. */
 static int add_or_update_xref_symbol(xref_build_context *ctx,
                                      const char *name,
                                      const char *kind,
@@ -2626,16 +2676,15 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
     int index;
     xref_symbol *s;
 
-    if (!scope_allowed(scope, ctx->include_locals, ctx->include_anon)) {
-        return 1;
-    }
-
     index = find_xref_symbol_index(ctx, name);
     if (index < 0) {
         if (!ensure_xref_symbol_capacity(ctx)) {
             return 0;
         }
-        s = &ctx->symbols[ctx->symbol_count++];
+        if (ctx->symbol_index_capacity / 2 <= (size_t)ctx->symbol_count + 1
+            && !rebuild_xref_symbol_index(ctx)) return 0;
+        index = ctx->symbol_count++;
+        s = &ctx->symbols[index];
         memset(s, 0, sizeof(*s));
         s->name = xstrdup(name);
         s->kind = xstrdup(kind);
@@ -2644,6 +2693,7 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
             ctx->failed = 1;
             return 0;
         }
+        index_xref_symbol(ctx, index);
     } else {
         s = &ctx->symbols[index];
         if (defined && !s->defined) {
@@ -2924,7 +2974,7 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     const char *kind;
     const char *scope;
-    int addr;
+    int addr, index;
     (void)next;
     classify_symbol_name(label->label, &kind, &scope);
     addr = get_current_pc();
@@ -2943,25 +2993,16 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
                                    0)) {
         return 0;
     }
+    index = find_xref_symbol_index(ctx, label->label);
     if (strcmp(scope, "global") == 0) {
-        free(ctx->lexical_owner_symbol);
-        ctx->lexical_owner_symbol = xstrdup(label->label);
-        if (ctx->lexical_owner_symbol == NULL) {
-            ctx->failed = 1;
-            return 0;
-        }
+        ctx->lexical_owner_symbol = ctx->symbols[index].name;
         memset(ctx->lexical_owner_item_counts, 0, sizeof(ctx->lexical_owner_item_counts));
     }
-    /* Record section for the defined symbol */
-    {
-        int idx = find_xref_symbol_index(ctx, label->label);
-        if (idx >= 0) {
-            ctx->symbols[idx].is_dataseg = in_dataseg;
-            if (!add_pending_label(ctx, idx)) {
-                return 0;
-            }
-        }
+    ctx->symbols[index].is_dataseg = in_dataseg;
+    if (strcmp(scope, "local") == 0) {
+        ctx->symbols[index].owner = ctx->lexical_owner_symbol;
     }
+    if (!add_pending_label(ctx, index)) return 0;
     return 0;
 }
 
@@ -3239,12 +3280,12 @@ static void free_xref_context(xref_build_context *ctx)
     ctx->data_directive_ref_count = 0;
     ctx->data_directive_ref_capacity = 0;
 
+    free(ctx->symbol_index);
     free(ctx->pending_label_indexes);
     ctx->pending_label_indexes = NULL;
     ctx->pending_label_count = 0;
     ctx->pending_label_capacity = 0;
 
-    free(ctx->lexical_owner_symbol);
     ctx->lexical_owner_symbol = NULL;
 }
 
@@ -3662,6 +3703,7 @@ static int xref_indirect_flow_compare(const void *a, const void *b)
     return strcmp(lhs->owner_routine, rhs->owner_routine);
 }
 
+/* Address-to-name resolution is part of the filtered xref view. */
 static const char *find_symbol_at_address(const xref_build_context *ctx,
                                           int addr,
                                           int is_dataseg,
@@ -3671,6 +3713,9 @@ static const char *find_symbol_at_address(const xref_build_context *ctx,
     for (i = 0; i < ctx->symbol_count; i++) {
         const xref_symbol *s = &ctx->symbols[i];
         if (!s->defined || !s->has_cpu_address) {
+            continue;
+        }
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
             continue;
         }
         if (s->cpu_address == addr && s->is_dataseg == is_dataseg && s->segment_id == segment_id) {
@@ -3686,6 +3731,9 @@ static const char *find_symbol_at_any_section(const xref_build_context *ctx, int
     for (i = 0; i < ctx->symbol_count; i++) {
         const xref_symbol *s = &ctx->symbols[i];
         if (!s->defined || !s->has_cpu_address) {
+            continue;
+        }
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
             continue;
         }
         if (s->cpu_address == addr) {
@@ -4105,8 +4153,8 @@ static int xref_labels_share_segment(const xref_build_context *ctx,
                                      const char *left,
                                      const char *right)
 {
-    int left_index = find_xref_symbol_index(ctx, left);
-    int right_index = find_xref_symbol_index(ctx, right);
+    int left_index = find_visible_xref_symbol_index(ctx, left);
+    int right_index = find_visible_xref_symbol_index(ctx, right);
     const xref_symbol *left_symbol;
     const xref_symbol *right_symbol;
     if (left_index < 0 || right_index < 0) {
@@ -4246,7 +4294,7 @@ static int resolve_xref_data_target(const xref_build_context *ctx,
         return 1;
     }
     out->kind = "unknown";
-    symbol_index = find_xref_symbol_index(ctx, xref_expression_symbol_name(base));
+    symbol_index = find_visible_xref_symbol_index(ctx, xref_expression_symbol_name(base));
     if (symbol_index >= 0) {
         if (ctx->symbols[symbol_index].definition_kind == 1) {
             out->kind = "code";
@@ -4462,6 +4510,7 @@ static int emit_xref_json(const char *filename,
 {
     FILE *fp;
     int i;
+    int emitted = 0;
     char ts[64];
     xref_data_edge *data_reads = NULL;
     xref_data_edge *data_writes = NULL;
@@ -4526,7 +4575,11 @@ static int emit_xref_json(const char *filename,
     fprintf(fp, "  \"symbols\": [");
     for (i = 0; i < ctx->symbol_count; ++i) {
         const xref_symbol *s = &ctx->symbols[i];
-        fprintf(fp, "%s\n    {", (i == 0) ? "" : ",");
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
+            continue;
+        }
+        fprintf(fp, "%s\n    {", (emitted == 0) ? "" : ",");
+        emitted++;
         fprintf(fp, "\"name\":");
         print_json_string(fp, s->name);
         fprintf(fp, ",\"kind\":");
@@ -4565,7 +4618,7 @@ static int emit_xref_json(const char *filename,
         }
         fprintf(fp, "}}");
     }
-    if (ctx->symbol_count > 0) {
+    if (emitted > 0) {
         fprintf(fp, "\n  ");
     }
     fprintf(fp, "],\n");
@@ -4772,6 +4825,9 @@ static int emit_xref_text(const char *filename, const xref_build_context *ctx)
     fprintf(fp, "SYMBOLS\n");
     for (i = 0; i < ctx->symbol_count; ++i) {
         const xref_symbol *s = &ctx->symbols[i];
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
+            continue;
+        }
         fprintf(fp, "%s,%s,%s,defined=%d", s->name, s->kind, s->scope, s->defined);
         if (s->has_cpu_address) {
             fprintf(fp, ",cpu=$%04X", s->cpu_address & 0xFFFF);
@@ -4833,6 +4889,9 @@ static int emit_xref_csv(const char *filename, const xref_build_context *ctx)
         char cpu[16];
         char off[32];
         char val[32];
+        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
+            continue;
+        }
         cpu[0] = '\0';
         off[0] = '\0';
         val[0] = '\0';
@@ -9203,8 +9262,9 @@ int generate_xref(astnode *root,
     if (ok) {
         qsort(ctx.symbols, (size_t)ctx.symbol_count, sizeof(xref_symbol), xref_symbol_compare);
         qsort(ctx.refs, (size_t)ctx.ref_count, sizeof(xref_ref), xref_ref_compare);
+        ok = rebuild_xref_symbol_index(&ctx);
 
-        if (filename != NULL) {
+        if (ok && filename != NULL) {
             if (format == XREF_FORMAT_JSON) {
                 ok = emit_xref_json(filename, &ctx, include_data, include_instructions, source_file, output_file, pure_binary);
             } else if (format == XREF_FORMAT_TEXT) {
