@@ -37,9 +37,8 @@ typedef struct {
     int include_owner;
     int include_locals;
     int include_anon;
-    int collect_rom_labels;
+    int collect_rom_layout;
     int collect_ram_names;
-    int mirror_16k;
 } analysis_options;
 
 /* Strings are borrowed for the lifetime of the output plan. */
@@ -50,6 +49,7 @@ typedef struct {
     const char *instruction_records_file;
     const char *rom_prefix;
     const char *ram_file;
+    int mirror_16k;
     const char *source_file;
     const char *output_file;
 } analysis_output_options;
@@ -61,6 +61,8 @@ analysis_output_plan *plan_analysis_outputs(const analysis_result *analysis,
                                             const analysis_output_options *options);
 /* Called once as part of invocation-wide validation, before any output opens. */
 int validate_analysis_outputs(const analysis_output_plan *plan);
+/* Prepare names only for successful assembly; diagnostic listings need paths only. */
+int prepare_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan);
 int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan);
 void free_analysis_outputs(analysis_output_plan *plan);
 int generate_xref_summary(astnode *root,

@@ -158,6 +158,42 @@ def benchmark(baseline, candidate, source, root, repeats, limit, mode_names):
     return results
 
 
+def verify_hidden_local_lookups(baseline, candidate, root, repeats, limit):
+    """Exercise xref's address lookups with NL disabled and locals hidden."""
+    results = {}
+    for count in (1000, 4000, 8000):
+        source = root / f'hidden-{count}.asm'
+        source.write_text('.ORG $8000\nMain:\n'
+                          + ''.join(f'@@Local{i:05d}: NOP\n' for i in range(count))
+                          + 'STA $10\nSTA $11\n' + 'LDA [$10],Y\n' * count + 'END\n')
+        flags, paths = modes(root)['xref']
+        flags = [*flags, '--xref-data=true']
+        before, _ = run(baseline, source, root, flags)
+        expected_binary, expected_xref = (root / 'output.prg').read_bytes(), artifacts(paths)
+        samples = {'baseline': [], 'candidate': []}
+        for iteration in range(repeats):
+            order = [('baseline', baseline), ('candidate', candidate)]
+            if iteration % 2:
+                order.reverse()
+            for label, executable in order:
+                clear_outputs(root, paths)
+                actual, sample = run(executable, source, root, flags)
+                require(actual.stdout == before.stdout and actual.stderr == before.stderr,
+                        f'{count} hidden locals: diagnostics changed')
+                require((root / 'output.prg').read_bytes() == expected_binary
+                        and artifacts(paths) == expected_xref,
+                        f'{count} hidden locals: binary or xref changed')
+                samples[label].append(sample)
+        medians = {label: statistics.median(s['cpu_seconds'] for s in data)
+                   for label, data in samples.items()}
+        passed = medians['candidate'] <= medians['baseline'] * limit + 0.020
+        results[count] = {'nl_enabled': False, 'samples': samples, 'median_cpu_seconds': medians,
+                          'candidate_over_baseline': medians['candidate'] / medians['baseline'],
+                          'passed': passed}
+        print(f'{count} hidden locals: CPU ratio {results[count]["candidate_over_baseline"]:.3f}', flush=True)
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baseline', type=Path, required=True)
@@ -166,6 +202,8 @@ def main():
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--repeats', type=int, default=5)
     parser.add_argument('--max-cpu-ratio', type=float, default=1.20)
+    parser.add_argument('--hidden-locals', action='store_true',
+                        help='Also compare xref-data with 1,000, 4,000 and 8,000 hidden locals/indirect reads.')
     parser.add_argument('--timing-mode', action='append', choices=tuple(modes(Path('.'))),
                         help='Repeat for several modes; defaults to plain, xref, xref-full, listing, summary.')
     args = parser.parse_args()
@@ -190,8 +228,14 @@ def main():
             project['performance'] = benchmark(baseline, candidate, source, root, args.repeats,
                                                 args.max_cpu_ratio, args.timing_mode or
                                                 ['plain', 'xref', 'xref-full', 'listing', 'summary'])
+        if args.hidden_locals:
+            root = Path(directory) / 'hidden-locals'
+            root.mkdir()
+            report['hidden_locals'] = verify_hidden_local_lookups(
+                baseline, candidate, root, args.repeats, args.max_cpu_ratio)
     report['passed'] = all(result['passed'] for project in report['projects']
                            for result in project['performance'].values())
+    report['passed'] &= all(result['passed'] for result in report.get('hidden_locals', {}).values())
     args.report.write_text(json.dumps(report, indent=2) + '\n')
     require(report['passed'], f'NL-disabled performance threshold exceeded; see {args.report}')
     print(f'All project acceptance checks passed. Report: {args.report}', flush=True)

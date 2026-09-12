@@ -639,7 +639,8 @@ ac_includes_default="\
 
 ac_header_c_list=
 ac_func_c_list=
-ac_subst_vars='am__EXEEXT_FALSE
+ac_subst_vars='DARWIN_LIBS
+am__EXEEXT_FALSE
 am__EXEEXT_TRUE
 LTLIBOBJS
 LIBOBJS
@@ -6275,6 +6276,31 @@ if test "x$LEX" = "x:"; then
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: No lex/flex found; scanner.c will not be regenerated from scanner.l" >&5
 printf "%s\n" "$as_me: WARNING: No lex/flex found; scanner.c will not be regenerated from scanner.l" >&2;}
 fi
+
+
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#ifndef __APPLE__
+#error Not Darwin
+#endif
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  DARWIN_LIBS="-framework CoreFoundation"
+else case e in #(
+  e) DARWIN_LIBS="" ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 
 
 ac_fn_c_check_header_compile "$LINENO" "stddef.h" "ac_cv_header_stddef_h" "$ac_includes_default"

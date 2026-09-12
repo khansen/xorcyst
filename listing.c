@@ -3361,9 +3361,9 @@ static int xref_visit_storage(astnode *storage, void *arg, astnode **next)
     int count = 0;
     (void)next;
     classify_pending_labels(ctx, 2);
-    if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
-        advance_xref_position(ctx, count);
-    }
+    if (!eval_expression_int(RHS(storage), &count, 0) || count < 0) {
+        if (ctx->collect_output_extents) ctx->failed = 1;
+    } else if (count > 0) advance_xref_position(ctx, count);
     return 0;
 }
 
@@ -3843,59 +3843,88 @@ static int xref_indirect_flow_compare(const void *a, const void *b)
     return strcmp(lhs->owner_routine, rhs->owner_routine);
 }
 
-/* Address-to-name resolution is part of the filtered xref view. */
-static const char *find_symbol_at_address(const xref_build_context *ctx,
-                                          int addr,
-                                          int is_dataseg,
-                                          int segment_id)
+/* The visible address view preserves the symbol sort order for aliases.
+   A section of -1 indexes the fallback across all sections and segments. */
+typedef struct {
+    int address, section, segment, symbol_index;
+} xref_address_entry;
+
+typedef struct {
+    xref_address_entry *entries;
+    size_t count;
+} xref_address_index;
+
+static int compare_xref_address_key(const xref_address_entry *a, const xref_address_entry *b)
 {
-    int i;
-    for (i = 0; i < ctx->symbol_count; i++) {
-        const xref_symbol *s = &ctx->symbols[i];
-        if (!s->defined || !s->has_cpu_address) {
-            continue;
-        }
-        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
-            continue;
-        }
-        if (s->cpu_address == addr && s->is_dataseg == is_dataseg && s->segment_id == segment_id) {
-            return s->name;
-        }
-    }
-    return NULL;
+    if (a->address != b->address) return a->address < b->address ? -1 : 1;
+    if (a->section != b->section) return a->section < b->section ? -1 : 1;
+    if (a->segment != b->segment) return a->segment < b->segment ? -1 : 1;
+    return 0;
 }
 
-static const char *find_symbol_at_any_section(const xref_build_context *ctx, int addr)
+static int compare_xref_address_entry(const void *a, const void *b)
+{
+    const xref_address_entry *lhs = a, *rhs = b;
+    int order = compare_xref_address_key(lhs, rhs);
+    if (order != 0) return order;
+    return (lhs->symbol_index > rhs->symbol_index) - (lhs->symbol_index < rhs->symbol_index);
+}
+
+static int build_xref_address_index(const xref_build_context *ctx, xref_address_index *index)
 {
     int i;
+    size_t count = 0, read, write;
     for (i = 0; i < ctx->symbol_count; i++) {
         const xref_symbol *s = &ctx->symbols[i];
-        if (!s->defined || !s->has_cpu_address) {
-            continue;
-        }
-        if (!scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) {
-            continue;
-        }
-        if (s->cpu_address == addr) {
-            return s->name;
-        }
+        if (s->defined && s->has_cpu_address
+            && scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) count++;
+    }
+    if (count == 0) return 1;
+    if (count > SIZE_MAX / 2 / sizeof(*index->entries)) return 0;
+    index->entries = malloc(2 * count * sizeof(*index->entries));
+    if (index->entries == NULL) return 0;
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *s = &ctx->symbols[i];
+        xref_address_entry entry;
+        if (!s->defined || !s->has_cpu_address
+            || !scope_allowed(s->scope, ctx->include_locals, ctx->include_anon)) continue;
+        entry = (xref_address_entry){s->cpu_address, s->is_dataseg, s->segment_id, i};
+        index->entries[index->count++] = entry;
+        entry.section = entry.segment = -1;
+        index->entries[index->count++] = entry;
+    }
+    qsort(index->entries, index->count, sizeof(*index->entries), compare_xref_address_entry);
+    write = 0;
+    for (read = 0; read < index->count; read++) {
+        if (write == 0 || compare_xref_address_key(&index->entries[write - 1], &index->entries[read]) != 0)
+            index->entries[write++] = index->entries[read];
+    }
+    index->count = write;
+    return 1;
+}
+
+static const char *find_symbol_at_address(const xref_build_context *ctx,
+                                          const xref_address_index *index,
+                                          int address, int section, int segment)
+{
+    xref_address_entry key = {address, section, segment, 0};
+    size_t low = 0, high = index->count;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        int order = compare_xref_address_key(&index->entries[middle], &key);
+        if (order < 0) low = middle + 1;
+        else if (order > 0) high = middle;
+        else return ctx->symbols[index->entries[middle].symbol_index].name;
     }
     return NULL;
 }
 
 static const char *resolve_pointer_pair_symbol(const xref_build_context *ctx,
-                                               int low_addr,
-                                               int is_dataseg,
-                                               int segment_id)
+                                               const xref_address_index *index,
+                                               int low_addr, int is_dataseg, int segment_id)
 {
-    const char *low_name = find_symbol_at_address(ctx, low_addr, is_dataseg, segment_id);
-    if (low_name == NULL) {
-        low_name = find_symbol_at_any_section(ctx, low_addr);
-    }
-    if (low_name != NULL) {
-        return low_name;
-    }
-    return NULL;
+    const char *name = find_symbol_at_address(ctx, index, low_addr, is_dataseg, segment_id);
+    return name != NULL ? name : find_symbol_at_address(ctx, index, low_addr, -1, -1);
 }
 
 static int nullable_string_equal(const char *lhs, const char *rhs)
@@ -4153,6 +4182,8 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
     } xref_pair_state;
 
     xref_indirect_flow *flows = NULL;
+    xref_address_index address_index = {0};
+    int address_index_ready = 0;
     int flow_count = 0;
     int flow_capacity = 0;
     xref_pair_state pair_states[255];
@@ -4207,7 +4238,12 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
         if (instr->indirect_ptr_addr_known && instr->indirect_ptr_addr >= 0 && instr->indirect_ptr_addr <= 0xFE) {
             const xref_pair_state *pair = &pair_states[instr->indirect_ptr_addr];
             if (pair->valid_mask == 3) {
-                const char *ptr_symbol = resolve_pointer_pair_symbol(ctx,
+                const char *ptr_symbol;
+                if (!address_index_ready) {
+                    if (!build_xref_address_index(ctx, &address_index)) goto fail;
+                    address_index_ready = 1;
+                }
+                ptr_symbol = resolve_pointer_pair_symbol(ctx, &address_index,
                                                                     instr->indirect_ptr_addr,
                                                                     instr->is_dataseg,
                                                                     instr->segment_id);
@@ -4233,12 +4269,14 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
         }
     }
 
+    free(address_index.entries);
     dedupe_xref_indirect_flows(flows, &flow_count);
     *flows_out = flows;
     *flow_count_out = flow_count;
     return 1;
 
 fail:
+    free(address_index.entries);
     for (i = 0; i < flow_count; i++) {
         free_xref_indirect_flow(&flows[i]);
     }
@@ -9379,7 +9417,7 @@ analysis_result *collect_analysis(astnode *root, const analysis_options *options
     ctx->include_owner = options->include_owner;
     ctx->pure_binary = options->pure_binary;
     ctx->collect_memory_operands = options->collect_ram_names;
-    ctx->collect_output_extents = options->collect_rom_labels;
+    ctx->collect_output_extents = options->collect_rom_layout;
     ctx->output_offset = 0;
     ctx->current_segment_id = 0;
     ctx->next_segment_id = 1;
@@ -9463,10 +9501,6 @@ analysis_result *collect_analysis(astnode *root, const analysis_options *options
         qsort(ctx->refs, (size_t)ctx->ref_count, sizeof(xref_ref), xref_ref_compare);
         ok = rebuild_xref_symbol_index(ctx);
     }
-    if (ok && (options->collect_rom_labels || options->collect_ram_names)) {
-        ok = build_fceux_nl(ctx, options->collect_rom_labels,
-                            options->collect_ram_names, options->mirror_16k);
-    }
     close_source_cache();
     if (!ok) {
         free_analysis(analysis);
@@ -9502,6 +9536,14 @@ analysis_output_plan *plan_analysis_outputs(const analysis_result *analysis,
 fail:
     free_analysis_outputs(plan);
     return NULL;
+}
+
+int prepare_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan)
+{
+    const analysis_output_options *options = &plan->options;
+    return (options->rom_prefix == NULL && options->ram_file == NULL)
+        || build_fceux_nl(&analysis->facts, options->rom_prefix != NULL,
+                          options->ram_file != NULL, options->mirror_16k);
 }
 
 int validate_analysis_outputs(const analysis_output_plan *plan)

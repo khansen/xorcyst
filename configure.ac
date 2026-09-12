@@ -42,6 +42,12 @@ if test "x$LEX" = "x:"; then
 fi
 
 dnl Checks for libraries.
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#ifndef __APPLE__
+#error Not Darwin
+#endif
+]], [[]])], [DARWIN_LIBS="-framework CoreFoundation"], [DARWIN_LIBS=""])
+AC_SUBST([DARWIN_LIBS])
 
 dnl Checks for header files.
 AC_CHECK_HEADERS(stddef.h)

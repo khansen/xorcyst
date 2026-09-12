@@ -93,6 +93,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
@@ -1456,14 +1458,20 @@ static int validate_output_destinations(const xasm_arguments *args,
                                         const analysis_output_plan *analysis_outputs,
                                         const char *binary_temporary)
 {
-    return dependencies_output(args->output_file)
+    struct stat staging;
+    if (!(dependencies_output(args->output_file)
         && dependencies_output(binary_temporary)
         && dependencies_output(args->listing_file)
         && validate_analysis_outputs(analysis_outputs)
         && (!args->xref_summary || dependencies_output(args->xref_summary_output))
         && (!args->analyze_index_patterns || dependencies_output(args->index_patterns_output))
         && (!args->data_consumers || dependencies_output(args->data_consumers_output))
-        && (!args->analyze_data_coverage || dependencies_output(args->data_coverage_output));
+        && (!args->analyze_data_coverage || dependencies_output(args->data_coverage_output)))) return 0;
+    if (lstat(binary_temporary, &staging) == 0 && S_ISLNK(staging.st_mode)) {
+        fprintf(stderr, "error: binary staging path is a symbolic link: %s\n", binary_temporary);
+        return 0;
+    }
+    return 1;
 }
 
 int main(int argc, char *argv[]) {
@@ -1474,6 +1482,7 @@ int main(int argc, char *argv[]) {
     int needs_instruction_provenance;
     int needs_output_protection;
     int needs_analysis;
+    int assembly_ready;
     int destinations_validated = 0;
     char *tmp_outfile = NULL;
     analysis_result *analysis = NULL;
@@ -1593,8 +1602,10 @@ int main(int argc, char *argv[]) {
 
     if (needs_output_protection && !protect_analysis_sources(root_node)) goto cleanup;
 
-    /* If no errors, proceed with code generation. */
-    if (total_errors() == 0) {
+    /* Diagnostic listings also require a complete destination plan. Their
+       analysis collects layout without requiring exportable names or operands. */
+    assembly_ready = total_errors() == 0;
+    if (assembly_ready || (needs_output_protection && xasm_args.listing_file != NULL)) {
         if (xasm_args.output_file == NULL) {
             /* Create default name of output */
             const char *default_ext = "o";
@@ -1605,7 +1616,9 @@ int main(int argc, char *argv[]) {
             change_extension(xasm_args.input_file, default_ext, default_outfile);
             xasm_args.output_file = default_outfile;
         }
-        if (needs_output_protection && xasm_args.compare_file) {
+        if (needs_output_protection && !dependencies_protect_source(xasm_args.compare_file))
+            goto cleanup;
+        if (assembly_ready && needs_output_protection && xasm_args.compare_file) {
             FILE *reference = dependencies_open(xasm_args.compare_file, "rb", DEP_COMPARISON);
             if (!reference) {
                 fprintf(stderr, "error: could not read `%s'\n", xasm_args.compare_file);
@@ -1618,14 +1631,14 @@ int main(int argc, char *argv[]) {
         if (needs_analysis) {
             analysis_options options = {
                 .pure_binary = xasm_args.pure_binary,
-                .include_data = xasm_args.xref_data,
-                .include_instructions = xasm_args.xref_instructions || xasm_args.instruction_records_file != NULL,
-                .include_owner = xasm_args.xref_include_owner,
+                .include_data = assembly_ready && xasm_args.xref_data,
+                .include_instructions = assembly_ready
+                    && (xasm_args.xref_instructions || xasm_args.instruction_records_file != NULL),
+                .include_owner = assembly_ready && xasm_args.xref_include_owner,
                 .include_locals = xasm_args.xref_include_locals,
                 .include_anon = xasm_args.xref_include_anon,
-                .collect_rom_labels = xasm_args.fceux_nl_rom_prefix != NULL,
-                .collect_ram_names = xasm_args.fceux_nl_ram_file != NULL,
-                .mirror_16k = xasm_args.fceux_nl_mirror_16k
+                .collect_rom_layout = xasm_args.fceux_nl_rom_prefix != NULL,
+                .collect_ram_names = assembly_ready && xasm_args.fceux_nl_ram_file != NULL
             };
             analysis_output_options outputs = {
                 .xref_file = xasm_args.xref_file,
@@ -1634,6 +1647,7 @@ int main(int argc, char *argv[]) {
                 .instruction_records_file = xasm_args.instruction_records_file,
                 .rom_prefix = xasm_args.fceux_nl_rom_prefix,
                 .ram_file = xasm_args.fceux_nl_ram_file,
+                .mirror_16k = xasm_args.fceux_nl_mirror_16k,
                 .source_file = xasm_args.input_file,
                 .output_file = xasm_args.output_file
             };
@@ -1646,6 +1660,10 @@ int main(int argc, char *argv[]) {
             analysis_outputs = plan_analysis_outputs(analysis, &outputs);
             if (analysis_outputs == NULL) {
                 fprintf(stderr, "error: could not plan analysis destinations\n");
+                exit_code = 3;
+                goto cleanup;
+            }
+            if (assembly_ready && !prepare_analysis_outputs(analysis, analysis_outputs)) {
                 exit_code = 3;
                 goto cleanup;
             }
@@ -1663,8 +1681,11 @@ int main(int argc, char *argv[]) {
             goto cleanup;
         }
         destinations_validated = 1;
-
-        output_fp = fopen(tmp_outfile, "wb");
+    }
+    if (assembly_ready) {
+        int output_fd = open(tmp_outfile, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0666);
+        output_fp = output_fd < 0 ? NULL : fdopen(output_fd, "wb");
+        if (output_fd >= 0 && output_fp == NULL) close(output_fd);
         if (output_fp == NULL) {
             fprintf(stderr, "error: could not open `%s' for writing\n", tmp_outfile);
             err_count++;

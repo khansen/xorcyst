@@ -24,7 +24,8 @@ class Dependencies(unittest.TestCase):
         cls.driver = Path(cls.build.name) / "driver"
         subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
                         str(ROOT / "tests/dependency_driver.c"), str(ROOT / "dependencies.c"),
-                        str(ROOT / "sha256.c"), "-o", str(cls.driver)], check=True)
+                        str(ROOT / "sha256.c"), "-o", str(cls.driver),
+                        *(["-framework", "CoreFoundation"] if sys.platform == "darwin" else [])], check=True)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="xasm-dependencies-")
@@ -189,6 +190,39 @@ class Dependencies(unittest.TestCase):
         run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first),
                               str(other_directory / 'future.nl')], capture_output=True)
         self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_future_outputs_follow_dangling_symlink_chains(self):
+        target = self.root / 'future.nl'
+        (self.root / 'sub').mkdir()
+        (self.root / 'directory-alias').symlink_to(self.root / 'sub', target_is_directory=True)
+        relative = self.root / 'relative'
+        relative.symlink_to('directory-alias/../future.nl')
+        absolute = self.root / 'absolute'
+        absolute.symlink_to(relative)
+        for alias in (relative, absolute):
+            for first, second in ((target, alias), (alias, target)):
+                with self.subTest(first=first.name, second=second.name):
+                    run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first), str(second)],
+                                         capture_output=True, timeout=5)
+                    self.assertEqual(run.returncode, 3, run.stderr)
+                    self.assertIn(b'aliases', run.stderr)
+                    self.assertFalse(target.exists())
+        other = self.root / 'other'
+        other.symlink_to('different.nl')
+        run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(relative), str(other)],
+                             capture_output=True, timeout=5)
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_output_symlink_cycles_fail_without_hanging(self):
+        first, second = self.root / 'first', self.root / 'second'
+        first.symlink_to(second.name)
+        second.symlink_to(first.name)
+        run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first),
+                              str(self.root / 'future.nl')], capture_output=True, timeout=5)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn(b'resolv', run.stderr)
+        self.assertTrue(first.is_symlink())
+        self.assertTrue(second.is_symlink())
 
     def test_same_size_same_timestamp_mutation_refuses_each_input_role(self):
         for role in [1, 2, 4, 8, 16]:

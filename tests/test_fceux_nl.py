@@ -490,6 +490,138 @@ END
                 self.assertIn(b'aliases', result.stderr)
                 self.assertEqual({path: path.read_bytes() for path in expected}, expected)
 
+    def test_early_error_listings_validate_all_destinations(self):
+        self.source.write_text('.ORG $8000\nMain:\nRTS\n.ERROR "stop"\nEND\n')
+        bank = self.root / 'game.nes.0.nl'
+        csv = self.root / 'xref'
+        csv_symbols = self.root / 'xref.symbols.csv'
+        csv_references = self.root / 'xref.refs.csv'
+        for manifest in (False, True):
+            paths = [self.output, bank, self.ram]
+            if not manifest:
+                paths += [csv_symbols, csv_references]
+            for target in paths:
+                with self.subTest(manifest=manifest, target=target.name):
+                    for path in paths:
+                        path.write_text('previous ' + path.name + '\n')
+                    expected = {path: path.read_bytes() for path in paths}
+                    flags = [f'--listing={target}', f'--fceux-nl-rom-prefix={self.prefix}',
+                             f'--fceux-nl-ram-output={self.ram}']
+                    if manifest:
+                        flags += [f'--dependency-manifest={self.root}/deps.json']
+                    else:
+                        flags += [f'--xref={csv}', '--xref-format=csv']
+                    result = self.run_xasm(*flags)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(b'aliases', result.stderr)
+                    self.assertEqual({path: path.read_bytes() for path in paths}, expected)
+
+    def test_safe_diagnostic_listings_survive_assembly_errors(self):
+        listing = self.root / 'listing.txt'
+        for source in ('.ORG $8000\nRTS\n.ERROR "stop"\nEND\n',
+                       '.ORG $8000\nLDA Missing\nEND\n',
+                       '.ORG $8000\nRTS\nLDA #\nEND\n'):
+            self.source.write_text(source)
+            for nl in (False, True):
+                with self.subTest(source=source, nl=nl):
+                    listing.write_text('previous listing\n')
+                    self.output.write_bytes(b'previous binary')
+                    flags = [f'--listing={listing}']
+                    if nl:
+                        flags += [f'--fceux-nl-rom-prefix={self.prefix}',
+                                  f'--fceux-nl-ram-output={self.ram}']
+                    result = self.run_xasm(*flags)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertNotIn(b'aliases', result.stderr)
+                    self.assertIn('SOURCE CODE', listing.read_text())
+                    self.assertEqual(self.output.read_bytes(), b'previous binary')
+                    self.assertFalse(self.ram.exists())
+                    self.assertFalse((self.root / 'game.nes.0.nl').exists())
+
+    def test_unresolved_rom_size_cannot_publish_diagnostic_listing(self):
+        self.source.write_text('.ORG $8000\n.DSB Missing\nEND\n')
+        bank = self.root / 'game.nes.0.nl'
+        bank.write_text('preserve symbols\n')
+        self.output.write_bytes(b'preserve binary')
+        result = self.run_xasm(f'--listing={bank}', f'--fceux-nl-rom-prefix={self.prefix}')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(bank.read_text(), 'preserve symbols\n')
+        self.assertEqual(self.output.read_bytes(), b'preserve binary')
+
+    def test_future_filesystem_equivalent_destinations_are_rejected(self):
+        self.source.write_text('Port .EQU $2000\n.ORG $8000\nSTA Port\nEND\n')
+        for name, alias in (('out.bin', 'OUT.BIN'), ('é.bin', 'e\u0301.bin'),
+                            ('å.bin', 'Å.bin'), ('ß.bin', 'ss.bin'), ('ς.bin', 'σ.bin')):
+            with self.subTest(name=name, alias=alias):
+                probe = self.root / name
+                probe.write_bytes(b'probe')
+                equivalent = (self.root / alias).exists()
+                probe.unlink()
+                if not equivalent:
+                    continue
+                self.output = probe
+                result = self.run_xasm(f'--fceux-nl-ram-output={self.root / alias}')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b'aliases', result.stderr)
+                self.assertFalse(self.output.exists())
+                self.assertFalse((self.root / alias).exists())
+
+    def test_binary_staging_symlinks_are_rejected_before_publication(self):
+        self.source.write_text('.ORG $8000\nRTS\nEND\n')
+        stage = Path(str(self.output) + '.tmp')
+        listing = self.root / 'listing.txt'
+        for target in (self.ram, self.root / 'unrelated', self.root / 'existing'):
+            with self.subTest(target=target.name):
+                if target.name == 'existing':
+                    target.write_bytes(b'preserve target')
+                stage.unlink(missing_ok=True)
+                stage.symlink_to(target)
+                listing.write_bytes(b'preserve listing')
+                result = self.run_xasm(f'--listing={listing}', f'--fceux-nl-ram-output={self.ram}')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.output.exists())
+                self.assertTrue(stage.is_symlink())
+                self.assertEqual(listing.read_bytes(), b'preserve listing')
+                if target.name == 'existing':
+                    self.assertEqual(target.read_bytes(), b'preserve target')
+                else:
+                    self.assertFalse(target.exists())
+
+    def test_error_listing_cannot_overwrite_comparison_reference(self):
+        self.source.write_text('.ORG $8000\nRTS\n.ERROR "stop"\nEND\n')
+        reference = self.root / 'reference.bin'
+        for manifest in (False, True):
+            with self.subTest(manifest=manifest):
+                reference.write_bytes(b'preserve reference')
+                flags = [f'--compare={reference}', f'--listing={reference}',
+                         f'--fceux-nl-ram-output={self.ram}']
+                if manifest:
+                    flags += [f'--dependency-manifest={self.root}/deps.json']
+                result = self.run_xasm(*flags)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b'aliases', result.stderr)
+                self.assertEqual(reference.read_bytes(), b'preserve reference')
+
+    def test_dangling_listing_symlinks_cannot_alias_future_nl_files(self):
+        self.source.write_text('.ORG $8000\nMain:\nRTS\nEND\n')
+        listing = self.root / 'listing.txt'
+        for filename in ('game.nes.0.nl', 'game.nes.ram.nl'):
+            for manifest in (False, True):
+                with self.subTest(filename=filename, manifest=manifest):
+                    listing.unlink(missing_ok=True)
+                    listing.symlink_to(filename)
+                    self.output.write_bytes(b'previous binary')
+                    flags = [f'--listing={listing}', f'--fceux-nl-rom-prefix={self.prefix}',
+                             f'--fceux-nl-ram-output={self.ram}']
+                    if manifest:
+                        flags += [f'--dependency-manifest={self.root}/deps.json']
+                    result = self.run_xasm(*flags)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(b'aliases', result.stderr)
+                    self.assertEqual(self.output.read_bytes(), b'previous binary')
+                    self.assertTrue(listing.is_symlink())
+                    self.assertFalse(listing.exists())
+
     def test_anonymous_memory_operands_are_excluded_inside_and_outside_macros(self):
         bodies = ('-\n.DB 0\nLDA -\n', 'LDA +\n+\n.DB 0\n',
                   '-\n.DB 0\nLDA (-)+Port\n', 'LDA Port+(+)\n+\n.DB 0\n')

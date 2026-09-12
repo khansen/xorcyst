@@ -97,6 +97,45 @@ END
             owner = f'Label{count - 1 - reference["use_output_offset"] // 4:03d}'
             self.assertEqual(reference['owner_routine'], owner)
 
+    def test_pointer_address_view_preserves_sections_aliases_and_visibility(self):
+        self.source.write_text('''.DATASEG
+.ORG $10
+APointer:
+.DSB 2
+.CODESEG
+.ORG $10
+ZPointer:
+ZAlias:
+.DSB 2
+SameSegment:
+STA $10
+STA $11
+LDA [$10],Y
+.ORG $8000
+Fallback:
+STA $10
+STA $11
+LDA [$10],Y
+.ORG $20
+@@Hidden:
+.DSB 2
+STA $20
+STA $21
+LDA [$20],Y
+END
+''')
+        for locals_on in (False, True):
+            with self.subTest(locals=locals_on):
+                data = self.export(locals_on=locals_on, extra=('--xref-data=true',))
+                flows = data['indirect_data_flows']
+                names = [flow['ptr_symbol'] for flow in flows]
+                self.assertIn('ZAlias', names)  # Same segment wins over APointer.
+                self.assertIn('APointer', names)  # Fallback keeps the first sorted alias.
+                hidden = [row['name'] for row in data['symbols'] if row['scope'] == 'local']
+                self.assertEqual(len(flows), 3 if locals_on else 2)
+                if locals_on:
+                    self.assertIn(hidden[0], names)
+
     def test_all_hidden_definitions_produce_empty_symbol_views(self):
         self.source.write_text('.ORG $8000\n@@Hidden:\n-\nRTS\nEND\n')
         data = self.export()

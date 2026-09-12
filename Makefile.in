@@ -109,10 +109,11 @@ PROGRAMS = $(bin_PROGRAMS)
 am_xasm_OBJECTS = astnode.$(OBJEXT) astproc.$(OBJEXT) \
 	charmap.$(OBJEXT) codegen.$(OBJEXT) opcode.$(OBJEXT) \
 	parser.$(OBJEXT) scanner.$(OBJEXT) symtab.$(OBJEXT) \
-	listing.$(OBJEXT) fceux_nl.$(OBJEXT) dependencies.$(OBJEXT) sha256.$(OBJEXT) \
-	xasm.$(OBJEXT) my_getopt.$(OBJEXT)
+	listing.$(OBJEXT) fceux_nl.$(OBJEXT) dependencies.$(OBJEXT) \
+	sha256.$(OBJEXT) xasm.$(OBJEXT) my_getopt.$(OBJEXT)
 xasm_OBJECTS = $(am_xasm_OBJECTS)
-xasm_LDADD = $(LDADD)
+am__DEPENDENCIES_1 =
+xasm_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am_xlnk_OBJECTS = xlnk.$(OBJEXT) script.$(OBJEXT) unit.$(OBJEXT) \
 	hashtab.$(OBJEXT) opcode.$(OBJEXT) my_getopt.$(OBJEXT)
 xlnk_OBJECTS = $(am_xlnk_OBJECTS)
@@ -134,12 +135,13 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/astnode.Po ./$(DEPDIR)/astproc.Po \
 	./$(DEPDIR)/charmap.Po ./$(DEPDIR)/codegen.Po \
-	./$(DEPDIR)/dependencies.Po ./$(DEPDIR)/hashtab.Po \
-	./$(DEPDIR)/listing.Po ./$(DEPDIR)/fceux_nl.Po ./$(DEPDIR)/my_getopt.Po \
-	./$(DEPDIR)/opcode.Po ./$(DEPDIR)/parser.Po \
-	./$(DEPDIR)/scanner.Po ./$(DEPDIR)/script.Po \
-	./$(DEPDIR)/sha256.Po ./$(DEPDIR)/symtab.Po \
-	./$(DEPDIR)/unit.Po ./$(DEPDIR)/xasm.Po ./$(DEPDIR)/xlnk.Po
+	./$(DEPDIR)/dependencies.Po ./$(DEPDIR)/fceux_nl.Po \
+	./$(DEPDIR)/hashtab.Po ./$(DEPDIR)/listing.Po \
+	./$(DEPDIR)/my_getopt.Po ./$(DEPDIR)/opcode.Po \
+	./$(DEPDIR)/parser.Po ./$(DEPDIR)/scanner.Po \
+	./$(DEPDIR)/script.Po ./$(DEPDIR)/sha256.Po \
+	./$(DEPDIR)/symtab.Po ./$(DEPDIR)/unit.Po ./$(DEPDIR)/xasm.Po \
+	./$(DEPDIR)/xlnk.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -218,6 +220,7 @@ CPPFLAGS = @CPPFLAGS@
 CSCOPE = @CSCOPE@
 CTAGS = @CTAGS@
 CYGPATH_W = @CYGPATH_W@
+DARWIN_LIBS = @DARWIN_LIBS@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 ECHO_C = @ECHO_C@
@@ -307,6 +310,7 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
+xasm_LDADD = $(DARWIN_LIBS)
 
 # Use the *generated* files for normal builds
 xasm_SOURCES = \
@@ -452,9 +456,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/charmap.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/codegen.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dependencies.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fceux_nl.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hashtab.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/listing.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fceux_nl.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/my_getopt.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/opcode.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parser.Po@am__quote@ # am--include-marker
@@ -771,9 +775,9 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/charmap.Po
 	-rm -f ./$(DEPDIR)/codegen.Po
 	-rm -f ./$(DEPDIR)/dependencies.Po
+	-rm -f ./$(DEPDIR)/fceux_nl.Po
 	-rm -f ./$(DEPDIR)/hashtab.Po
 	-rm -f ./$(DEPDIR)/listing.Po
-	-rm -f ./$(DEPDIR)/fceux_nl.Po
 	-rm -f ./$(DEPDIR)/my_getopt.Po
 	-rm -f ./$(DEPDIR)/opcode.Po
 	-rm -f ./$(DEPDIR)/parser.Po
@@ -836,9 +840,9 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/charmap.Po
 	-rm -f ./$(DEPDIR)/codegen.Po
 	-rm -f ./$(DEPDIR)/dependencies.Po
+	-rm -f ./$(DEPDIR)/fceux_nl.Po
 	-rm -f ./$(DEPDIR)/hashtab.Po
 	-rm -f ./$(DEPDIR)/listing.Po
-	-rm -f ./$(DEPDIR)/fceux_nl.Po
 	-rm -f ./$(DEPDIR)/my_getopt.Po
 	-rm -f ./$(DEPDIR)/opcode.Po
 	-rm -f ./$(DEPDIR)/parser.Po

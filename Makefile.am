@@ -1,6 +1,7 @@
 ## Makefile.am -- Process this file with automake to produce Makefile.in
 
 bin_PROGRAMS = xasm xlnk
+xasm_LDADD = $(DARWIN_LIBS)
 
 # Use the *generated* files for normal builds
 xasm_SOURCES = \

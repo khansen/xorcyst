@@ -152,7 +152,9 @@ and serialization:
    The same byte-advance helper handles instructions, data, storage, and
    binary includes and records segment extents when ROM layout is needed.
    RAM operands directly produce `(bank, address, name)` output records;
-   ROM labels and mirror addresses join that table after the walk.
+   `prepare_analysis_outputs()` adds ROM labels and mirror addresses after
+   collection and validates names for a successful assembly. Diagnostic
+   listings need destination planning without this projection step.
 3. **Plan and validate destinations.** `plan_analysis_outputs()` expands exact
    filenames, including both CSV files and all RAM/ROM NL files, into an owned
    output plan. Invocation-wide validation checks these alongside the binary,
@@ -167,6 +169,12 @@ and serialization:
 
 The caller supplies typed collection and output options, owns the collected
 facts and output plan separately, and releases both explicitly.
+
+Xref's indirect-flow analysis builds an address index of visible definitions
+on its first eligible pointer read. Exact section/segment matches and the
+fallback across sections preserve the existing symbol ordering for aliases.
+Hidden definitions are filtered once when constructing the index. Each later
+address lookup takes `O(log visible_symbols)` time.
 
 There is no shadow local-label collection, synthesized `xref_symbol` array,
 FCEUX-only symbol flag, or repeated search for `(segment, side)` bank keys.
@@ -197,6 +205,18 @@ including the binary staging path, both expanded CSV paths, instruction records,
 RAM/ROM NL files, listing, and other analysis outputs. The manifest reserves its
 own destination at startup. A collision leaves all existing outputs intact.
 
+Diagnostic listings also use this validation after assembly errors, including
+reservations for the comparison reference, binary, expanded CSV files and NL
+files. Name projection is skipped on those failed builds. If layout collection
+cannot resolve a required storage size, it leaves outputs untouched.
+
+Path comparison follows dangling symlink chains as well as existing files and
+symlinked directories. On macOS it queries filesystem case sensitivity and uses
+the system CoreFoundation Unicode comparison facilities for future filenames,
+including case and normalization aliases. The macOS build links that system
+framework; other builds retain POSIX path comparison. Binary staging symlinks
+are rejected, and the staging open uses `O_NOFOLLOW`.
+
 Each NL file is written to a temporary file beside its destination and renamed
 only after successful completion. Failures leave that file's previous contents
 intact. The entire set of output files is not an atomic transaction: a later
@@ -210,7 +230,7 @@ This replaces the preliminary branch's unbounded, unchecked stale-file deletion.
 
 ## Validation
 
-`tests/test_fceux_nl.py` has 33 tests, with matrices covering xref formats,
+`tests/test_fceux_nl.py` has 40 tests, with matrices covering xref formats,
 local/anonymous filters, and analysis outputs. It covers physical page numbering, unlabeled pages,
 local-only pages, the exact `$C000` boundary, end labels, multiple origins per
 page, four-window layouts, hexadecimal filenames beyond bank 9, both NROM
@@ -219,6 +239,8 @@ macro expansion, same-line instructions, long names, alias grouping, xref
 formats, instruction records, path collisions, and failed writes. Collision
 tests preserve sentinel contents in every destination, with and without a
 manifest, including expanded CSV paths and an aliased binary staging path.
+They also exercise early diagnostic listings, comparison-reference protection,
+dangling staging/listing links, and filesystem-equivalent future filenames.
 Anonymous memory operands, including expressions mixing named and anonymous
 symbols, are exercised inside and outside macros with xref's anonymous-label
 switch enabled and disabled. NL contents
@@ -229,10 +251,12 @@ previous outputs before comparisons that require a freshly generated file.
 Standalone instruction records remain byte-identical, and dependency manifests
 retain their contents apart from the expected invocation argument changes.
 
-`tests/test_fceux_nl_alloc.c` injects a failure at every allocation reached by
-the NL collector/writer, including table growth, filename construction, and
-file staging. Each injected failure must return failure. It is also suitable
-for AddressSanitizer and UndefinedBehaviorSanitizer runs.
+`tests/test_fceux_nl_alloc.c` injects failures at the 79 allocations reached in
+the NL table, destination planning, writer, and fixture-name allocations.
+Each injected failure must return failure. This does not fault-inject shared
+analysis collection, address/name indexes, expression rendering, or path
+validation. Normal execution of the exporter and address-view tests is also
+checked with AddressSanitizer and UndefinedBehaviorSanitizer.
 
 `tests/verify_fceux_projects.py` provides opt-in checks using larger, external
 projects and a pre-feature executable. It compares binary bytes, diagnostics,
@@ -259,6 +283,12 @@ alternates their order for paired samples. The JSON report contains executable
 hashes, every wall/CPU sample, medians, and a configurable CPU regression
 threshold (default: 20% plus 20 ms). Timings run sequentially; increase
 `--repeats` when process timings vary substantially.
+
+Add `--hidden-locals` to exercise 1,000, 4,000 and 8,000 hidden local definitions
+and indirect reads with NL disabled. This compares diagnostics, binary and
+xref contents against the baseline, and applies the same paired CPU threshold.
+The fixture specifically covers the repeated address-lookup cost that the
+external game projects did not expose.
 
 Donkey Kong (16 KB) and Kid Icarus (128 KB) pass the compatibility matrix
 against commit `00617b8d69a9e8a78c4bada5459c5cb0df6e3397`, before this feature
@@ -290,3 +320,12 @@ preceding feature executable (`d90936d`) with the same seven-mode compatibility
 matrix on both projects. Five paired samples of plain assembly and full xref,
 with NL disabled, also remained within the existing timing threshold in all
 four project/mode combinations.
+
+A subsequent review exposed quadratic visible-address lookup work that those
+projects did not exercise. The hidden-local fixture is now part of the opt-in
+verification script. In five paired runs, total CPU ratios against master were
+1.08, 1.04 and 0.98 for 1,000, 4,000 and 8,000 locals/reads respectively, with
+identical outputs and diagnostics. Temporary phase instrumentation measured
+collection plus serialization at 0.80, 2.07 and 3.99 ms after indexing; the
+preceding feature build measured 4.98, 66.41 and 252.10 ms. These phase timings
+isolate the addressed regression from the assembler's other costs.
