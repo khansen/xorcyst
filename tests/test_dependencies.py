@@ -336,6 +336,22 @@ class Dependencies(unittest.TestCase):
         self.assertIn(b"aliases", run.stderr)
         self.assertEqual(self.source.read_bytes(), original)
 
+    def test_manifest_source_alias_preserves_all_outputs(self):
+        ram = self.root / 'game.nes.ram.nl'
+        bank = self.root / 'game.nes.0.nl'
+        xref = self.root / 'xref.json'
+        listing = self.root / 'listing.txt'
+        previous = {self.source: self.source.read_bytes()}
+        for path in (self.output, ram, bank, xref, listing):
+            previous[path] = b'previous ' + path.name.encode()
+            path.write_bytes(previous[path])
+        run = self.run_asm(f'--dependency-manifest={self.source}', f'--xref={xref}',
+                           f'--listing={listing}', f'--fceux-nl-rom-prefix={self.root}/game.nes.',
+                           f'--fceux-nl-ram-output={ram}', manifest=False)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn(b'manifest output aliases an input', run.stderr)
+        self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+
     def test_output_cannot_overwrite_comparison_reference(self):
         reference = self.root / "reference.bin"
         reference.write_bytes(b"unchanged")

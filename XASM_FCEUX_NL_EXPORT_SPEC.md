@@ -228,6 +228,8 @@ paths must be regular files; symlinks, FIFOs, directories, and sockets are
 rejected before publication. The staging open uses `O_NOFOLLOW | O_NONBLOCK`
 and checks the opened descriptor before truncating or writing. A failed stream
 initialization closes the descriptor and removes the regular staging file.
+Exclusive creation records staging-file ownership. A failed descriptor check
+removes a file created by this invocation and preserves a pre-existing node.
 
 The binary and each NL file are written to temporary files beside their
 destinations. Publication requires a clear stream error indicator and a
@@ -237,6 +239,11 @@ and removes the temporary file. Binary failures prevent analysis and manifest
 publication; diagnostic listings may still describe the failed build.
 The entire set of output files is not an atomic transaction: a later filesystem
 error may follow successful replacement of an earlier file.
+
+JSON xref owner, address, and data-flow analysis completes before its destination
+is opened, so those allocation failures preserve existing xref contents. Symbol
+enumeration returns an explicit failure and an empty list on allocation failure;
+only initialized names are freed, and callers propagate failure.
 
 The exporter does **not** delete files for higher bank numbers left from an
 earlier invocation. A matching filename alone does not establish ownership;
@@ -279,18 +286,22 @@ queries, verifying that unknown capabilities still reject case/Unicode aliases
 while permitting distinct names.
 
 `tests/test_output_failures.py` builds the real assembler with test-only wrappers
-around its CLI, exporter, and analysis translation units. Its six tests inject
+around its CLI, exporter, analysis, and symbol-table translation units. Its nine
+tests inject
 476 allocations during shared collection (including symbol/index and extent
 growth and long local RAM expressions), three during shared destination
 planning, 108 during NL name projection, and the visible-address-index allocation.
+Four constant-enumeration allocations and 17 xref owner/data-flow allocations
+are each failed with NL disabled and enabled. These cases verify both safe
+cleanup and preservation of existing xref and NL destinations.
 Every injected allocation failure must produce a nonzero exit without a crash;
 failures before publication must preserve all existing destinations. This does
 not cover allocations in parsing, AST evaluation, or path validation.
 
-The same harness injects 35 I/O failure scenarios during temporary-file creation
+The same harness injects 37 I/O failure scenarios during temporary-file creation
 and subsequent output operations.
-Binary `fdopen` failures cover fresh and existing staging files. Binary `ferror`,
-`fclose`, and `rename` failures cover fresh and existing destinations, raw binary
+Binary `fstat` and `fdopen` failures cover fresh and existing staging files.
+Binary `ferror`, `fclose`, and `rename` failures cover fresh and existing destinations, raw binary
 output with NL enabled and disabled, and object output. Successful replacement
 is also checked in all three modes. Each NL `mkstemp`, `fdopen`, `ferror`,
 `fclose`, and `rename` operation is failed at the RAM file and both ROM banks,

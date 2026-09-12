@@ -12,6 +12,10 @@ static void begin_fault_phase(const char *name)
 {
     const char *selected = getenv("XASM_TEST_ALLOC_PHASE");
     const char *index = getenv("XASM_TEST_ALLOC_AT");
+    if (selected != NULL && strcmp(selected, "constants") == 0 && strcmp(name, "collect") == 0)
+        name = "constants";
+    if (selected != NULL && strcmp(selected, "xref") == 0 && strcmp(name, "address") == 0)
+        name = "xref";
     phase = name;
     active = selected != NULL && strcmp(selected, name) == 0;
     allocations = 0;
@@ -27,6 +31,7 @@ static int allocation_fails(const char *function)
 {
     int index;
     if (!active || (address_only && strcmp(function, "build_xref_address_index") != 0)) return 0;
+    if (strcmp(phase, "constants") == 0 && strcmp(function, "symtab_list_type") != 0) return 0;
     index = allocations++;
     if (fail_at < 0) fprintf(stderr, "ALLOC_SITE %s %d %s\n", phase, index, function);
     if (index != fail_at) return 0;
@@ -61,6 +66,13 @@ static void *analysis_realloc(void *ptr, size_t size, const char *function)
 #undef plan_analysis_outputs
 #undef prepare_analysis_outputs
 #undef write_analysis_outputs
+
+/* Enumeration allocations belong to shared collection too. Earlier assembler
+   passes still use the real allocator because no collection phase is active. */
+#define malloc(size) analysis_malloc(size, __func__)
+#undef SAFE_FREE
+#include "../symtab.c"
+#undef malloc
 
 analysis_result *collect_analysis(astnode *root, const analysis_options *options)
 {

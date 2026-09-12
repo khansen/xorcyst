@@ -933,7 +933,7 @@ static int list_noop(astnode *n, void *arg, astnode **next)
     return 0;
 }
 
-static void list_symbols(void)
+static int list_symbols(void)
 {
     symbol_ident_list constants;
     int i;
@@ -947,7 +947,10 @@ static void list_symbols(void)
                 listed_labels[i].display, listed_labels[i].address & 0xFFFF);
     }
 
-    symtab_list_type(CONSTANT_SYMBOL, &constants);
+    if (symtab_list_type(CONSTANT_SYMBOL, &constants) < 0) {
+        fprintf(stderr, "error: could not enumerate listing constants\n");
+        return 0;
+    }
     for (i = 0; i < constants.size; ++i) {
         symtab_entry *e = symtab_lookup(constants.idents[i]);
         int value = 0;
@@ -964,6 +967,7 @@ static void list_symbols(void)
     symtab_list_finalize(&constants);
 
     fprintf(listing_fp, "%s\n", DIVIDER);
+    return 1;
 }
 
 int generate_listing(astnode *root,
@@ -1001,6 +1005,7 @@ int generate_listing(astnode *root,
         { 0, NULL }
     };
 
+    int ok = 1;
     listing_fp = fopen(filename, "w");
     if (listing_fp == NULL) {
         fprintf(stderr, "error: could not open `%s' for writing\n", filename);
@@ -1047,7 +1052,7 @@ int generate_listing(astnode *root,
 
     astproc_walk(root, NULL, map);
     if (current_listing_format == LISTING_FORMAT_TEXT) {
-        list_symbols();
+        ok = list_symbols();
     } else if (current_listing_format == LISTING_FORMAT_JSON) {
         if (json_record_count > 0) {
             fprintf(listing_fp, "\n");
@@ -1062,7 +1067,7 @@ int generate_listing(astnode *root,
     reset_last_printed_source();
     free_listed_labels();
     clear_scope_map();
-    return 1;
+    return ok;
 }
 
 static long lookup_target_offset = -1;
@@ -4702,40 +4707,30 @@ static int emit_xref_json(const char *filename,
     xref_owner_index owner_index;
     owner_index.entries = NULL;
     owner_index.count = 0;
-    fp = fopen(filename, "w");
-    if (fp == NULL) {
-        fprintf(stderr, "error: could not open `%s' for writing\n", filename);
-        return 0;
-    }
     /* Owner lookup is the xref-data hot path. Build the index once here and
        reuse it for data edges, indirect flows, and per-reference owner fields. */
     if (include_data || ctx->include_owner) {
         if (!build_xref_owner_index(ctx, &owner_index)) {
-            fclose(fp);
             fprintf(stderr, "error: could not build xref owner index\n");
-            return 0;
+            ok = 0;
+            goto cleanup;
         }
     }
     if (include_data) {
         if (!build_xref_data_edges(ctx, &owner_index, &data_reads, &data_read_count, &data_writes, &data_write_count)
             || !build_xref_indirect_flows(ctx, &owner_index, &indirect_flows, &indirect_flow_count)) {
-            for (i = 0; i < data_read_count; i++) {
-                free_xref_data_edge(&data_reads[i]);
-            }
-            for (i = 0; i < data_write_count; i++) {
-                free_xref_data_edge(&data_writes[i]);
-            }
-            for (i = 0; i < indirect_flow_count; i++) {
-                free_xref_indirect_flow(&indirect_flows[i]);
-            }
-            free_xref_owner_index(&owner_index);
-            fclose(fp);
-            free(data_reads);
-            free(data_writes);
-            free(indirect_flows);
             fprintf(stderr, "error: could not build xref data records\n");
-            return 0;
+            ok = 0;
+            goto cleanup;
         }
+    }
+    /* Complete analysis before opening the destination: allocation failures
+       must not truncate a previous xref file. */
+    fp = fopen(filename, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "error: could not open `%s' for writing\n", filename);
+        ok = 0;
+        goto cleanup;
     }
     format_timestamp_utc(ts, sizeof(ts));
     fprintf(fp, "{\n");
@@ -4860,9 +4855,6 @@ static int emit_xref_json(const char *filename,
         fprintf(fp, "\n  ");
     }
     fprintf(fp, "]");
-    /* All owner lookups are complete; the remaining data sections reuse the
-       already-built edge/flow records. */
-    free_xref_owner_index(&owner_index);
     if (include_instructions) {
         fprintf(fp, ",\n  \"instruction_records\": ");
         ok = emit_instruction_records(fp, ctx);
@@ -4975,6 +4967,9 @@ static int emit_xref_json(const char *filename,
     fprintf(fp, "}\n");
     if (ferror(fp)) ok = 0;
     if (fclose(fp) != 0) ok = 0;
+    if (!ok) fprintf(stderr, "error: could not emit complete xref records\n");
+cleanup:
+    free_xref_owner_index(&owner_index);
     if (include_data) {
         for (i = 0; i < data_read_count; i++) {
             free_xref_data_edge(&data_reads[i]);
@@ -4989,7 +4984,6 @@ static int emit_xref_json(const char *filename,
         }
         free(indirect_flows);
     }
-    if (!ok) fprintf(stderr, "error: could not emit complete xref records\n");
     return ok;
 }
 
@@ -9434,7 +9428,10 @@ analysis_result *collect_analysis(astnode *root, const analysis_options *options
     }
 
     if (ok) {
-        symtab_list_type(CONSTANT_SYMBOL, &constants);
+        if (symtab_list_type(CONSTANT_SYMBOL, &constants) < 0) {
+            fprintf(stderr, "error: could not enumerate analysis constants\n");
+            ok = 0;
+        }
         for (i = 0; i < constants.size; ++i) {
             symtab_entry *e = symtab_lookup(constants.idents[i]);
             int value = 0;
@@ -9950,21 +9947,24 @@ static int add_audit_finding(audit_context *ctx,
         && f->suggested_symbol != NULL && f->message != NULL;
 }
 
-static void build_audit_symbol_maps(audit_context *ctx)
+static int build_audit_symbol_maps(audit_context *ctx)
 {
     symbol_ident_list labels;
     symbol_ident_list constants;
     int i;
-    symtab_list_type(LABEL_SYMBOL, &labels);
+    if (symtab_list_type(LABEL_SYMBOL, &labels) < 0) return 0;
     for (i = 0; i < labels.size; ++i) {
         symtab_entry *e = symtab_lookup(labels.idents[i]);
         if (e != NULL && (e->flags & ADDR_FLAG)) {
-            add_audit_label(ctx, e->id, e->address);
+            if (!add_audit_label(ctx, e->id, e->address)) {
+                symtab_list_finalize(&labels);
+                return 0;
+            }
         }
     }
     symtab_list_finalize(&labels);
 
-    symtab_list_type(CONSTANT_SYMBOL, &constants);
+    if (symtab_list_type(CONSTANT_SYMBOL, &constants) < 0) return 0;
     for (i = 0; i < constants.size; ++i) {
         symtab_entry *e = symtab_lookup(constants.idents[i]);
         int value;
@@ -9972,10 +9972,14 @@ static void build_audit_symbol_maps(audit_context *ctx)
             continue;
         }
         if (eval_expression_int(e->def, &value, 0)) {
-            add_audit_equ(ctx, e->id, value);
+            if (!add_audit_equ(ctx, e->id, value)) {
+                symtab_list_finalize(&constants);
+                return 0;
+            }
         }
     }
     symtab_list_finalize(&constants);
+    return 1;
 }
 
 static int audit_visit_dataseg(astnode *n, void *arg, astnode **next)
@@ -10342,7 +10346,11 @@ int run_raw_address_audit(astnode *root,
     ctx.rom_lo = rom_lo;
     ctx.rom_hi = rom_hi;
 
-    build_audit_symbol_maps(&ctx);
+    if (!build_audit_symbol_maps(&ctx)) {
+        fprintf(stderr, "error: could not build audit symbol maps\n");
+        free_audit_context(&ctx);
+        return -1;
+    }
 
     in_dataseg = 0;
     dataseg_pc = 0;

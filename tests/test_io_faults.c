@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 static int io_fault(const char *operation)
 {
@@ -18,6 +19,10 @@ static int io_fault(const char *operation)
 
 static FILE *binary_stream;
 
+static int binary_fstat(int fd, struct stat *info)
+{
+    return io_fault("binary_fstat") ? -1 : fstat(fd, info);
+}
 static FILE *binary_fdopen(int fd, const char *mode)
 {
     binary_stream = io_fault("binary_fdopen") ? NULL : fdopen(fd, mode);
@@ -40,11 +45,13 @@ static int binary_rename(const char *from, const char *to)
     return io_fault("binary_rename") ? -1 : rename(from, to);
 }
 #define fdopen binary_fdopen
+#define fstat binary_fstat
 #define ferror binary_ferror
 #define fclose binary_fclose
 #define rename binary_rename
 #include "../xasm.c"
 #undef fdopen
+#undef fstat
 #undef ferror
 #undef fclose
 #undef rename

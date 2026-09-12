@@ -166,6 +166,7 @@ int symtab_type_count(symbol_type);
 void symtab_finalize(symtab *);
 void symtab_remove(const char *);
 void symtab_remove_by_type(symbol_type);
+/* Listing returns a count, or -1 with an empty, finalizable list on failure. */
 int symtab_list(symbol_ident_list *);
 int symtab_list_type(symbol_type, symbol_ident_list *);
 void symtab_list_finalize(symbol_ident_list *);

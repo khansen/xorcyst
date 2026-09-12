@@ -24,7 +24,7 @@ class OutputFailures(unittest.TestCase):
         sources = re.search(r'^xasm_SOURCES = (.*?)(?=\n\n)',
                             (REPO / 'Makefile.am').read_text(), re.M | re.S)[1]
         sources = [REPO / word for word in sources.replace('\\\n', ' ').split()
-                   if word.endswith('.c') and word not in ('xasm.c', 'listing.c', 'fceux_nl.c')]
+                   if word.endswith('.c') and word not in ('xasm.c', 'listing.c', 'symtab.c', 'fceux_nl.c')]
         sources += [REPO / 'tests/test_io_faults.c', REPO / 'tests/test_analysis_faults.c']
         command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO), '-Wall',
                    *shlex.split(os.environ.get('TEST_FAULT_CFLAGS', '-O0 -g')),
@@ -106,6 +106,66 @@ class OutputFailures(unittest.TestCase):
                         self.assertEqual(path.read_bytes(), published[path] if index < fail_at else previous[path])
                     self.assertEqual(manifest.read_bytes(), previous[manifest])
                     self.assert_no_temporary_files()
+
+    def test_binary_fstat_failure_cleans_only_created_stage(self):
+        for existing_stage in (False, True):
+            with self.subTest(existing_stage=existing_stage):
+                previous = self.seed_outputs()
+                stage = Path(str(self.output) + '.tmp')
+                if existing_stage:
+                    stage.write_bytes(b'previous staging bytes')
+                result = self.run_xasm(faults={'XASM_TEST_IO_FAILURE': 'binary_fstat'})
+                self.assertGreater(result.returncode, 0, result.stderr.decode())
+                self.assertIn(b'INJECT_IO binary_fstat', result.stderr)
+                self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+                if existing_stage:
+                    self.assertEqual(stage.read_bytes(), b'previous staging bytes')
+                    stage.unlink()
+                self.assert_no_temporary_files()
+
+    def test_constant_enumeration_allocation_failures(self):
+        self.source.write_text('Alpha .EQU $10\nBeta .EQU $11\nGamma .EQU $12\n'
+                               '.ORG $8000\nEntry:\nLDA Alpha\nSTA Beta\nLDA Gamma\nEND\n')
+        xref = self.root / 'xref.json'
+        manifest = self.root / 'deps.json'
+        flags = (f'--xref={xref}', f'--dependency-manifest={manifest}')
+        for nl in (False, True):
+            baseline = self.run_xasm(*flags, nl=nl, faults={'XASM_TEST_ALLOC_PHASE': 'constants'})
+            self.assertEqual(baseline.returncode, 0, baseline.stderr.decode())
+            sites = re.findall(rb'ALLOC_SITE constants (\d+) symtab_list_type', baseline.stderr)
+            self.assertEqual(len(sites), 4, baseline.stderr.decode())
+            for index in sites:
+                with self.subTest(nl=nl, index=index.decode()):
+                    previous = self.seed_outputs([xref, manifest])
+                    result = self.run_xasm(*flags, nl=nl, faults={
+                        'XASM_TEST_ALLOC_PHASE': 'constants', 'XASM_TEST_ALLOC_AT': index.decode()})
+                    self.assertIn(b'INJECT_ALLOC constants', result.stderr)
+                    self.assertGreater(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+                    self.assert_no_temporary_files()
+
+    def test_xref_analysis_failures_preserve_destination(self):
+        self.source.write_text('.DATASEG\n.ORG $10\nPointer:\n.DSB 2\n.CODESEG\n.ORG $8000\n'
+                               'Main:\nSTA Pointer\nSTA Pointer+1\nLDA [Pointer],Y\nEND\n')
+        xref = self.root / 'xref.json'
+        flags = (f'--xref={xref}', '--xref-data=true', '--xref-include-owner=true')
+        for nl in (False, True):
+            baseline = self.run_xasm(*flags, nl=nl, faults={'XASM_TEST_ALLOC_PHASE': 'xref'})
+            self.assertEqual(baseline.returncode, 0, baseline.stderr.decode())
+            sites = re.findall(rb'ALLOC_SITE xref (\d+) (\w+)', baseline.stderr)
+            self.assertIn(b'build_xref_owner_index', [function for _, function in sites])
+            self.assertIn(b'build_xref_address_index', [function for _, function in sites])
+            for index, function in sites:
+                with self.subTest(nl=nl, index=index.decode(), function=function.decode()):
+                    previous = self.seed_outputs([xref])
+                    result = self.run_xasm(*flags, nl=nl, faults={
+                        'XASM_TEST_ALLOC_PHASE': 'xref', 'XASM_TEST_ALLOC_AT': index.decode()})
+                    self.assertIn(b'INJECT_ALLOC xref', result.stderr)
+                    self.assertGreater(result.returncode, 0, result.stderr.decode())
+                    for path in (xref, self.ram, self.bank0, self.bank1):
+                        self.assertEqual(path.read_bytes(), previous[path])
+                    self.assert_no_temporary_files()
+            print(f'Checked {len(sites)} xref analysis allocation failures with NL={nl}', flush=True)
 
     def test_binary_completion_failures_preserve_outputs(self):
         manifest = self.root / 'deps.json'
@@ -189,13 +249,13 @@ class OutputFailures(unittest.TestCase):
         baseline = self.run_xasm(*flags, faults={'XASM_TEST_ALLOC_PHASE': 'address'})
         self.assertEqual(baseline.returncode, 0, baseline.stderr.decode())
         self.assertIn(b'ALLOC_SITE address 0 build_xref_address_index', baseline.stderr)
-        previous = self.seed_outputs()
+        previous = self.seed_outputs([xref])
         result = self.run_xasm(*flags, faults={
             'XASM_TEST_ALLOC_PHASE': 'address', 'XASM_TEST_ALLOC_AT': '0'})
         self.assertGreater(result.returncode, 0, result.stderr.decode())
         self.assertIn(b'INJECT_ALLOC address 0 build_xref_address_index', result.stderr)
         self.assertIn(b'could not build xref data records', result.stderr)
-        for path in (self.ram, self.bank0, self.bank1):
+        for path in (xref, self.ram, self.bank0, self.bank1):
             self.assertEqual(path.read_bytes(), previous[path])
         self.assert_no_temporary_files()
 

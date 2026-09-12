@@ -3584,7 +3584,10 @@ static int validate_ref(astnode *n, void *arg, astnode **next)
     symtab_entry * e = symtab_lookup(n->ident);
     if (e == NULL) {
         /* Maybe it is part of an enumeration */
-        symtab_list_type(ENUM_SYMBOL, &list);
+        if (symtab_list_type(ENUM_SYMBOL, &list) < 0) {
+            err(n->loc, "out of memory enumerating symbols");
+            return 0;
+        }
         for (i=0; i<list.size; i++) {
             enum_def = symtab_lookup(list.idents[i]);
             symtab_push(enum_def->symtab);
@@ -3932,7 +3935,11 @@ void astproc_first_pass(astnode *root)
         int i;
         symbol_ident_list list;
         symtab_entry *e;
-        symtab_list_type(CONSTANT_SYMBOL, &list);
+        if (symtab_list_type(CONSTANT_SYMBOL, &list) < 0) {
+            fprintf(stderr, "error: out of memory enumerating constants\n");
+            err_count++;
+            return;
+        }
         for (i = 0; i < list.size; ++i) {
             e = symtab_lookup(list.idents[i]);
             if (e->flags & VOLATILE_FLAG) {
@@ -4069,7 +4076,11 @@ static void report_unused_labels(int remove_labels)
     char *id;
     astnode *n;
     symbol_ident_list list;
-    symtab_list_type(LABEL_SYMBOL, &list);
+    if (symtab_list_type(LABEL_SYMBOL, &list) < 0) {
+        fprintf(stderr, "error: out of memory enumerating labels\n");
+        err_count++;
+        return;
+    }
     for (i=0; i<list.size; i++) {
         id = list.idents[i];
         symtab_entry * e = symtab_lookup(id);
@@ -4172,7 +4183,11 @@ static void warn_unused_equates(void)
         return;
     }
 
-    symtab_list_type(CONSTANT_SYMBOL, &list);
+    if (symtab_list_type(CONSTANT_SYMBOL, &list) < 0) {
+        fprintf(stderr, "error: out of memory enumerating constants\n");
+        err_count++;
+        return;
+    }
     for (i = 0; i < list.size; ++i) {
         symtab_entry *e = symtab_lookup(list.idents[i]);
         if (e == NULL) {

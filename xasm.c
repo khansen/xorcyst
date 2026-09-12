@@ -93,6 +93,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <stdarg.h>
@@ -1479,12 +1480,18 @@ static FILE *open_binary_temporary(const char *path)
 {
     struct stat staging;
     FILE *fp;
+    int created = 1;
     /* A FIFO substituted after validation must not block this open. Check the
        opened descriptor before truncating or writing any bytes. */
-    int fd = open(path, O_WRONLY | O_CREAT | O_NOFOLLOW | O_NONBLOCK, 0666);
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_NONBLOCK, 0666);
+    if (fd < 0 && errno == EEXIST) {
+        created = 0;
+        fd = open(path, O_WRONLY | O_NOFOLLOW | O_NONBLOCK);
+    }
     if (fd < 0) return NULL;
     if (fstat(fd, &staging) != 0 || !S_ISREG(staging.st_mode)) {
         close(fd);
+        if (created) remove(path);
         return NULL;
     }
     fp = ftruncate(fd, 0) == 0 ? fdopen(fd, "wb") : NULL;
