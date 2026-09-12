@@ -1,4 +1,4 @@
-/* Test-only wrappers around real AST operations and the assembler entry point. */
+/* Test-only wrappers around real AST operations, JSON writes, and main. */
 #if defined(TEST_AST_WORK)
 #include <assert.h>
 #include <stdlib.h>
@@ -111,14 +111,83 @@ int test_indexed_ast_removal(void)
     return 0;
 }
 
+#elif defined(TEST_JSON_WORK)
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
+
+unsigned long test_json_stdio_calls;
+
+static int counted_json_fputc(int c, FILE *fp)
+{
+    test_json_stdio_calls++;
+    return fputc(c, fp);
+}
+
+static int counted_json_fputs(const char *s, FILE *fp)
+{
+    test_json_stdio_calls++;
+    return fputs(s, fp);
+}
+
+static size_t counted_json_fwrite(const void *p, size_t size, size_t count, FILE *fp)
+{
+    test_json_stdio_calls++;
+    return fwrite(p, size, count, fp);
+}
+
+static int counted_json_fprintf(FILE *fp, const char *format, ...)
+{
+    int result;
+    va_list args;
+    test_json_stdio_calls++;
+    va_start(args, format);
+    result = vfprintf(fp, format, args);
+    va_end(args);
+    return result;
+}
+
+#define fputc counted_json_fputc
+#define fputs counted_json_fputs
+#define fwrite counted_json_fwrite
+#define fprintf counted_json_fprintf
+#include "../listing.c"
+#undef fputc
+#undef fputs
+#undef fwrite
+#undef fprintf
+
+int test_write_json_string(const char *length_arg)
+{
+    size_t length;
+    char *bytes;
+    if (strcmp(length_arg, "null") == 0) {
+        print_json_string_n(stdout, NULL, 17);
+        return 0;
+    }
+    length = (size_t)strtoul(length_arg, NULL, 10);
+    /* Deliberately no NUL terminator: the serializer must respect length. */
+    bytes = (char *)malloc(length != 0 ? length : 1);
+    if (bytes == NULL || fread(bytes, 1, length, stdin) != length) {
+        free(bytes);
+        return 1;
+    }
+    print_json_string_n(stdout, bytes, length);
+    free(bytes);
+    return 0;
+}
+
 #else
 #define main assembler_main
 #include "../xasm.c"
 #undef main
 
 extern unsigned long test_child_index_nodes;
+extern unsigned long test_json_stdio_calls;
 int test_remove_ast_nodes(int count);
 int test_indexed_ast_removal(void);
+int test_write_json_string(const char *length_arg);
 
 int main(int argc, char **argv)
 {
@@ -127,9 +196,12 @@ int main(int argc, char **argv)
         result = test_remove_ast_nodes(atoi(argv[2]));
     else if (argc == 2 && strcmp(argv[1], "--test-indexed-removal") == 0)
         result = test_indexed_ast_removal();
+    else if (argc == 3 && strcmp(argv[1], "--test-json-string") == 0)
+        result = test_write_json_string(argv[2]);
     else
         result = assembler_main(argc, argv);
-    fprintf(stderr, "BACKEND_WORK index_nodes=%lu\n", test_child_index_nodes);
+    fprintf(stderr, "BACKEND_WORK index_nodes=%lu json_calls=%lu\n",
+            test_child_index_nodes, test_json_stdio_calls);
     return result;
 }
 #endif
