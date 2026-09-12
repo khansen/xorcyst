@@ -4871,6 +4871,7 @@ static int emit_xref_csv(const char *filename, const xref_build_context *ctx)
     int i;
     snprintf(sym_name, sizeof(sym_name), "%s.symbols.csv", filename);
     snprintf(ref_name, sizeof(ref_name), "%s.refs.csv", filename);
+    if (!dependencies_output(sym_name) || !dependencies_output(ref_name)) return 0;
     sym_fp = fopen(sym_name, "w");
     if (sym_fp == NULL) {
         fprintf(stderr, "error: could not open `%s' for writing\n", sym_name);

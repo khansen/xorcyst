@@ -133,8 +133,9 @@ class Dependencies(unittest.TestCase):
                     self.assertEqual(run.returncode, 0, run.stderr)
                     self.assertEqual(run.stdout.decode().strip(), "snapshot=" + hashlib.sha256(payload).hexdigest())
 
-    def mutate_after_snapshot(self, path, mutate, *, role=1, driver=None):
-        proc = subprocess.Popen([str(driver or self.driver), str(self.manifest), str(role), str(path)],
+    def mutate_after_snapshot(self, path, mutate, *, role=1, driver=None, protect_only=False):
+        mode = 'protect' if protect_only else str(self.manifest)
+        proc = subprocess.Popen([str(driver or self.driver), mode, str(role), str(path)],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
         self.addCleanup(lambda: proc.poll() is None and (proc.kill(), proc.wait()))
         self.assertEqual(proc.stdout.readline(), b"ready\n")
@@ -147,6 +148,47 @@ class Dependencies(unittest.TestCase):
         self.assertEqual(code, 0, stderr)
         self.assertIn(hashlib.sha256(self.source.read_bytes()).hexdigest().encode(), stdout)
         self.read_manifest()
+
+    def test_output_protection_reads_live_inputs_without_snapshots(self):
+        self.source.write_bytes(b'original')
+        code, stdout, stderr = self.mutate_after_snapshot(
+            self.source, lambda: self.source.write_bytes(b'modified'), protect_only=True)
+        self.assertEqual(code, 0, stderr)
+        self.assertIn(hashlib.sha256(b'modified').hexdigest().encode(), stdout)
+        self.assertFalse(self.manifest.exists())
+
+    def test_output_protection_rejects_input_aliases_in_both_orders(self):
+        hardlink = self.root / 'hardlink'
+        symlink = self.root / 'symlink'
+        os.link(self.source, hardlink)
+        symlink.symlink_to(self.source)
+        original = self.source.read_bytes()
+        for kind in ('input', 'source', 'late-input'):
+            for alias in (self.source, hardlink, symlink):
+                with self.subTest(kind=kind, alias=alias.name):
+                    run = subprocess.run([str(self.driver), 'protect-alias', kind, str(self.source), str(alias)],
+                                         capture_output=True)
+                    self.assertEqual(run.returncode, 3, run.stderr)
+                    self.assertIn(b'aliases', run.stderr)
+                    self.assertEqual(self.source.read_bytes(), original)
+        self.assertFalse(self.manifest.exists())
+
+    def test_output_protection_resolves_future_output_parents(self):
+        directory_alias = self.root / 'directory-alias'
+        directory_alias.symlink_to(self.root, target_is_directory=True)
+        first = self.root / 'future.nl'
+        for second in (str(self.root) + '/./future.nl', directory_alias / 'future.nl'):
+            with self.subTest(second=str(second)):
+                run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first), str(second)],
+                                     capture_output=True)
+                self.assertEqual(run.returncode, 3, run.stderr)
+                self.assertIn(b'aliases', run.stderr)
+                self.assertFalse(first.exists())
+        other_directory = self.root / 'other'
+        other_directory.mkdir()
+        run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(first),
+                              str(other_directory / 'future.nl')], capture_output=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
 
     def test_same_size_same_timestamp_mutation_refuses_each_input_role(self):
         for role in [1, 2, 4, 8, 16]:
