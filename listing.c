@@ -374,7 +374,11 @@ static const char *get_source_line(const char *filename, int line)
         current_source_file = filename;
     }
 
-    /* Several operands can request the same line; its text is already cached. */
+    /* Cached text is already normalized. Trimming it again could remove an
+       embedded carriage return after the original CRLF ending was stripped. */
+    if (line == current_source_line_cached) {
+        return source_line_buffer;
+    }
     if (line < current_source_line_cached) {
         rewind(source_fp);
         current_source_line_cached = 0;

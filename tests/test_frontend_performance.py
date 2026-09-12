@@ -130,10 +130,10 @@ END
     def test_cache_reuses_equal_lines_and_handles_backwards_reads_and_file_changes(self):
         first = self.root / 'first.asm'
         second = self.root / 'second.asm'
-        first.write_bytes(b'first\n\n  third\r\nfourth\nfifth\n')
+        first.write_bytes(b'first\n\n  third\rembedded\r\nfourth\nfifth\n')
         second.write_text('other first\nother second\nother third\n')
         result, (_, rewinds) = self.run_measured(['--test-read-source-lines', first, second])
-        self.assertEqual(result.stdout, b'  third\n  third\nfifth\nfirst\nother third\nfirst\n')
+        self.assertEqual(result.stdout, b'  third\rembedded\n  third\rembedded\nfifth\nfirst\nother third\nfirst\n')
         self.assertEqual(rewinds, 1, 'only a backwards read within the current file needs a rewind')
 
     def test_repeated_data_operands_keep_source_spelling_without_rereads(self):
@@ -146,6 +146,15 @@ END
         self.assertEqual([row['expression'] for row in records], [f'Base+${i:02X}' for i in range(1, 5)])
         self.assertEqual([row['emitted_value'] for row in records], list(range(0x1235, 0x1239)))
         self.assertEqual([row['target_displacement'] for row in records], [1, 2, 3, 4])
+
+    def test_embedded_carriage_return_does_not_retrim_a_cached_crlf_line(self):
+        self.source.write_bytes(b"Base .EQU $1234\n.ORG $8000\n.DW Base+'\r', Base+$02 ;\r\nEND\n")
+        _, rewinds = self.assemble(complete_xref=True)
+        self.assertEqual(rewinds, 0)
+        self.assertEqual(self.output.read_bytes(), bytes.fromhex('41 12 36 12'))
+        records = json.loads(self.xref.read_bytes())['data_directive_references']
+        self.assertEqual([row['expression'] for row in records], ["Base+'\r'", 'Base+$02'])
+        self.assertEqual([row['emitted_value'] for row in records], [0x1241, 0x1236])
 
 
 if __name__ == '__main__':
