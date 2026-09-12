@@ -9480,8 +9480,10 @@ analysis_result *collect_analysis(astnode *root, const analysis_options *options
     }
 
     if (ok) {
-        qsort(ctx->symbols, (size_t)ctx->symbol_count, sizeof(xref_symbol), xref_symbol_compare);
-        qsort(ctx->refs, (size_t)ctx->ref_count, sizeof(xref_ref), xref_ref_compare);
+        if (ctx->symbol_count > 1)
+            qsort(ctx->symbols, (size_t)ctx->symbol_count, sizeof(xref_symbol), xref_symbol_compare);
+        if (ctx->ref_count > 1)
+            qsort(ctx->refs, (size_t)ctx->ref_count, sizeof(xref_ref), xref_ref_compare);
         ok = rebuild_xref_symbol_index(ctx);
     }
     close_source_cache();
