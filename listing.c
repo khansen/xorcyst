@@ -1072,7 +1072,9 @@ int generate_listing(astnode *root,
         fprintf(listing_fp, "}\n");
     }
 
-    fclose(listing_fp);
+    if (ferror(listing_fp)) ok = 0;
+    if (fclose(listing_fp) != 0) ok = 0;
+    if (!ok) fprintf(stderr, "error: could not write complete listing `%s'\n", filename);
     listing_fp = NULL;
     close_source_cache();
     reset_last_printed_source();

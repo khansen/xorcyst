@@ -191,6 +191,22 @@ class OutputFailures(unittest.TestCase):
                         self.assertGreater(result.returncode, 0, result.stderr.decode())
                         self.assertIn(b'could not emit complete xref records', result.stderr)
 
+    def test_listing_stream_failures_stop_analysis_and_manifest_publication(self):
+        listing, xref, manifest = [self.root / name for name in ('listing.txt', 'xref.json', 'deps.json')]
+        for fmt in ('text', 'json', 'ndjson'):
+            for operation in ('listing_ferror', 'listing_fclose'):
+                with self.subTest(format=fmt, operation=operation):
+                    previous = self.seed_outputs([xref, manifest])
+                    result = self.run_xasm(f'--listing={listing}', f'--listing-format={fmt}',
+                                           f'--xref={xref}', f'--dependency-manifest={manifest}',
+                                           faults={'XASM_TEST_IO_FAILURE': operation})
+                    self.assertEqual(result.returncode, 3, result.stderr.decode())
+                    self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                    self.assertIn(b'could not write complete listing', result.stderr)
+                    for path in (xref, manifest, self.ram, self.bank0, self.bank1):
+                        self.assertEqual(path.read_bytes(), previous[path])
+                    self.assert_no_temporary_files()
+
     def test_binary_completion_failures_preserve_outputs(self):
         manifest = self.root / 'deps.json'
         xref = self.root / 'xref.json'
