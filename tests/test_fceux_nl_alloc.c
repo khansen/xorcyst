@@ -27,6 +27,7 @@ static void *fault_realloc(void *ptr, size_t size)
 #define malloc fault_malloc
 #define calloc fault_calloc
 #define realloc fault_realloc
+#include "../output_file.c"
 #include "../fceux_nl.c"
 #undef malloc
 #undef calloc

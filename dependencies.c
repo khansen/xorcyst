@@ -1,4 +1,5 @@
 #include "dependencies.h"
+#include "output_file.h"
 #include "sha256.h"
 #include "utf8.h"
 #include <errno.h>
@@ -469,9 +470,10 @@ collision:
 
 int dependencies_write(const char *path)
 {
-    char *absolute, *temporary;
+    char *absolute;
+    output_writer output;
     FILE *fp;
-    int fd, ok, i, first;
+    int ok, i, first;
     dependency *entry;
     if (!active || !dependencies_validate()) return 0;
     absolute = absolute_path(path);
@@ -486,17 +488,12 @@ int dependencies_write(const char *path)
         free(absolute);
         return 0;
     }
-    temporary = malloc(strlen(absolute) + 12);
-    if (!temporary) { free(absolute); failure("out of memory", path); return 0; }
-    sprintf(temporary, "%s.XXXXXX", absolute);
-    fd = mkstemp(temporary);
-    fp = fd < 0 ? NULL : fdopen(fd, "wb");
-    if (!fp) {
-        if (fd >= 0) { close(fd); unlink(temporary); }
+    if (!output_file_open(&output, absolute)) {
         failure("cannot create manifest output", absolute);
-        free(absolute); free(temporary);
+        free(absolute);
         return 0;
     }
+    fp = output.stream;
     fputs("{\"schema\":\"xasm-dependencies\",\"version\":\"1\",\"producer_version\":", fp);
     json_string(fp, producer_version);
     fputs(",\"invocation\":{\"cwd\":", fp);
@@ -531,15 +528,15 @@ int dependencies_write(const char *path)
         json_string(fp, entry->path);
     }
     fputs("]}\n", fp);
-    ok = !ferror(fp);
-    if (fclose(fp) != 0) ok = 0;
+    ok = output_file_close(&output, 1);
     /* Recheck after writing, before exposing a complete manifest pathname. */
-    if (!ok || !dependencies_validate() || rename(temporary, absolute) != 0) {
-        unlink(temporary);
+    if (ok) ok = dependencies_validate();
+    if (ok) ok = output_file_publish(&output);
+    output_file_discard(&output);
+    if (!ok) {
         failure("could not publish dependency manifest", absolute);
-        ok = 0;
     }
-    free(absolute); free(temporary);
+    free(absolute);
     return ok;
 }
 

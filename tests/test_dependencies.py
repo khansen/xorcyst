@@ -24,13 +24,13 @@ class Dependencies(unittest.TestCase):
         cls.driver = Path(cls.build.name) / "driver"
         subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
                         str(ROOT / "tests/dependency_driver.c"), str(ROOT / "dependencies.c"),
-                        str(ROOT / "sha256.c"), "-o", str(cls.driver),
+                        str(ROOT / "sha256.c"), str(ROOT / "output_file.c"), "-o", str(cls.driver),
                         *(["-framework", "CoreFoundation"] if sys.platform == "darwin" else [])], check=True)
         if sys.platform == "darwin":
             cls.pathconf_driver = Path(cls.build.name) / "pathconf-driver"
             subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
                             str(ROOT / "tests/dependency_driver.c"), str(ROOT / "tests/test_pathconf_faults.c"),
-                            str(ROOT / "sha256.c"), "-o", str(cls.pathconf_driver),
+                            str(ROOT / "sha256.c"), str(ROOT / "output_file.c"), "-o", str(cls.pathconf_driver),
                             "-framework", "CoreFoundation"], check=True)
 
     def setUp(self):

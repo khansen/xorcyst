@@ -10,6 +10,7 @@
 #include "dependencies.h"
 #include "utf8.h"
 #include "fceux_nl.h"
+#include "output_file.h"
 #include <stdint.h>
 
 #define SOURCE_LINE_BUFFER_SIZE 1024
@@ -1017,11 +1018,9 @@ int generate_listing(astnode *root,
     };
 
     int ok = 1;
-    listing_fp = fopen(filename, "w");
-    if (listing_fp == NULL) {
-        fprintf(stderr, "error: could not open `%s' for writing\n", filename);
-        return 0;
-    }
+    output_writer output;
+    if (!output_file_open(&output, filename)) return 0;
+    listing_fp = output.stream;
 
     current_listing_format = format;
     listing_source_file_arg = source_file;
@@ -1052,7 +1051,7 @@ int generate_listing(astnode *root,
         fprintf(listing_fp, "  \"records\": [\n");
     } else if (current_listing_format != LISTING_FORMAT_NDJSON) {
         fprintf(stderr, "error: invalid listing format\n");
-        fclose(listing_fp);
+        output_file_discard(&output);
         listing_fp = NULL;
         close_source_cache();
         reset_last_printed_source();
@@ -1072,9 +1071,7 @@ int generate_listing(astnode *root,
         fprintf(listing_fp, "}\n");
     }
 
-    if (ferror(listing_fp)) ok = 0;
-    if (fclose(listing_fp) != 0) ok = 0;
-    if (!ok) fprintf(stderr, "error: could not write complete listing `%s'\n", filename);
+    ok = output_file_finish(&output, ok);
     listing_fp = NULL;
     close_source_cache();
     reset_last_printed_source();
@@ -4707,6 +4704,7 @@ static int emit_xref_json(const char *filename,
                           int pure_binary)
 {
     FILE *fp;
+    output_writer output;
     int i;
     int emitted = 0;
     char ts[64];
@@ -4739,12 +4737,11 @@ static int emit_xref_json(const char *filename,
     }
     /* Complete analysis before opening the destination: allocation failures
        must not truncate a previous xref file. */
-    fp = fopen(filename, "w");
-    if (fp == NULL) {
-        fprintf(stderr, "error: could not open `%s' for writing\n", filename);
+    if (!output_file_open(&output, filename)) {
         ok = 0;
         goto cleanup;
     }
+    fp = output.stream;
     /* Large xrefs benefit from fewer flushes. Buffering is optional; libc
        owns the buffer and the stream remains usable if the request fails. */
     (void)setvbuf(fp, NULL, _IOFBF, 65536);
@@ -4981,9 +4978,7 @@ static int emit_xref_json(const char *filename,
         fprintf(fp, "\n");
     }
     fprintf(fp, "}\n");
-    if (ferror(fp)) ok = 0;
-    if (fclose(fp) != 0) ok = 0;
-    if (!ok) fprintf(stderr, "error: could not emit complete xref records\n");
+    ok = output_file_finish(&output, ok);
 cleanup:
     free_xref_owner_index(&owner_index);
     if (include_data) {
@@ -5006,12 +5001,10 @@ cleanup:
 static int emit_xref_text(const char *filename, const xref_build_context *ctx)
 {
     FILE *fp;
+    output_writer output;
     int i;
-    fp = fopen(filename, "w");
-    if (fp == NULL) {
-        fprintf(stderr, "error: could not open `%s' for writing\n", filename);
-        return 0;
-    }
+    if (!output_file_open(&output, filename)) return 0;
+    fp = output.stream;
     fprintf(fp, "SYMBOLS\n");
     for (i = 0; i < ctx->symbol_count; ++i) {
         const xref_symbol *s = &ctx->symbols[i];
@@ -5048,26 +5041,22 @@ static int emit_xref_text(const char *filename, const xref_build_context *ctx)
         }
         fprintf(fp, ",access=%s,expr=%s\n", r->access, r->expression);
     }
-    fclose(fp);
-    return 1;
+    return output_file_finish(&output, 1);
 }
 
 static int emit_xref_csv(const char *sym_name, const char *ref_name, const xref_build_context *ctx)
 {
     FILE *sym_fp;
     FILE *ref_fp;
-    int i;
-    sym_fp = fopen(sym_name, "w");
-    if (sym_fp == NULL) {
-        fprintf(stderr, "error: could not open `%s' for writing\n", sym_name);
+    int i, ok;
+    output_writer symbols, references;
+    if (!output_file_open(&symbols, sym_name)) return 0;
+    if (!output_file_open(&references, ref_name)) {
+        output_file_discard(&symbols);
         return 0;
     }
-    ref_fp = fopen(ref_name, "w");
-    if (ref_fp == NULL) {
-        fclose(sym_fp);
-        fprintf(stderr, "error: could not open `%s' for writing\n", ref_name);
-        return 0;
-    }
+    sym_fp = symbols.stream;
+    ref_fp = references.stream;
 
     fprintf(sym_fp, "name,kind,scope,defined,file,line,column,cpu_address,output_offset,value\n");
     for (i = 0; i < ctx->symbol_count; ++i) {
@@ -5125,9 +5114,14 @@ static int emit_xref_csv(const char *sym_name, const char *ref_name, const xref_
         csv_write_field(ref_fp, r->expression != NULL ? r->expression : ""); fprintf(ref_fp, "\n");
     }
 
-    fclose(sym_fp);
-    fclose(ref_fp);
-    return 1;
+    /* Finish both streams before publishing either half of the CSV view. */
+    ok = output_file_close(&symbols, 1);
+    if (!output_file_close(&references, 1)) ok = 0;
+    if (ok) ok = output_file_publish(&symbols);
+    if (ok) ok = output_file_publish(&references);
+    output_file_discard(&symbols);
+    output_file_discard(&references);
+    return ok;
 }
 
 /* ---- xref-summary implementation ---- */
@@ -5807,6 +5801,7 @@ int generate_xref_summary(astnode *root,
     int have_inc_re = 0, have_exc_re = 0;
 
     FILE *fp = NULL;
+    output_writer output;
     int ok = 1;
     int i, j;
 
@@ -6145,16 +6140,11 @@ entry_done:
     truncate_summary_entries(data_labels, &data_label_count, limit);
 
     /* Open output */
-    if (output_path != NULL) {
-        fp = fopen(output_path, "w");
-        if (fp == NULL) {
-            fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
-            ok = 0;
-            goto cleanup;
-        }
-    } else {
-        fp = stdout;
+    if (!output_file_open(&output, output_path)) {
+        ok = 0;
+        goto cleanup;
     }
+    fp = output.stream;
 
     /* Emit */
     if (format == XREF_SUMMARY_FORMAT_JSON) {
@@ -6165,9 +6155,7 @@ entry_done:
         emit_xref_summary_text(fp, callables, callable_count, jump_targets, jump_target_count, data_labels, data_label_count, kind_filter);
     }
 
-    if (output_path != NULL && fp != NULL) {
-        fclose(fp);
-    }
+    ok = output_file_finish(&output, ok);
 
 cleanup:
     /* Free entries */
@@ -7884,6 +7872,7 @@ int generate_index_patterns(astnode *root,
     int record_count = 0;
     int record_capacity = 0;
     FILE *fp = NULL;
+    output_writer output;
     int ok = 1;
     int i;
     int parse_result = 0;
@@ -8031,15 +8020,8 @@ int generate_index_patterns(astnode *root,
     }
 
     if (ok) {
-        if (output_path != NULL) {
-            fp = fopen(output_path, "w");
-            if (fp == NULL) {
-                fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
-                ok = 0;
-            }
-        } else {
-            fp = stdout;
-        }
+        ok = output_file_open(&output, output_path);
+        if (ok) fp = output.stream;
     }
 
     if (ok) {
@@ -8052,9 +8034,7 @@ int generate_index_patterns(astnode *root,
         }
     }
 
-    if (output_path != NULL && fp != NULL) {
-        fclose(fp);
-    }
+    if (fp != NULL) ok = output_file_finish(&output, ok);
     if (pairs != NULL) {
         for (i = 0; i < pair_count; i++) {
             free(pairs[i].lo);
@@ -9211,6 +9191,7 @@ int generate_data_consumers(astnode *root,
     data_consumer_record *records = NULL;
     int span_count = 0;
     FILE *fp = NULL;
+    output_writer output;
     int ok;
 
     (void)pure_binary;
@@ -9224,16 +9205,11 @@ int generate_data_consumers(astnode *root,
         return 0;
     }
 
-    if (output_path != NULL) {
-        fp = fopen(output_path, "w");
-        if (fp == NULL) {
-            fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
-            free_data_consumer_records(records, span_count);
-            return 0;
-        }
-    } else {
-        fp = stdout;
+    if (!output_file_open(&output, output_path)) {
+        free_data_consumer_records(records, span_count);
+        return 0;
     }
+    fp = output.stream;
 
     if (format == DATA_CONSUMERS_FORMAT_JSON) {
         if (!emit_data_consumers_json(fp, records, span_count)) {
@@ -9253,9 +9229,7 @@ int generate_data_consumers(astnode *root,
     }
 
 cleanup:
-    if (output_path != NULL && fp != NULL) {
-        fclose(fp);
-    }
+    ok = output_file_finish(&output, ok);
     free_data_consumer_records(records, span_count);
     return ok;
 }
@@ -9270,6 +9244,7 @@ int generate_data_coverage(astnode *root,
     data_consumer_record *records = NULL;
     int record_count = 0;
     FILE *fp = NULL;
+    output_writer output;
     int ok;
 
     (void)pure_binary;
@@ -9283,16 +9258,11 @@ int generate_data_coverage(astnode *root,
         return 0;
     }
 
-    if (output_path != NULL) {
-        fp = fopen(output_path, "w");
-        if (fp == NULL) {
-            fprintf(stderr, "error: could not open `%s' for writing\n", output_path);
-            free_data_consumer_records(records, record_count);
-            return 0;
-        }
-    } else {
-        fp = stdout;
+    if (!output_file_open(&output, output_path)) {
+        free_data_consumer_records(records, record_count);
+        return 0;
     }
+    fp = output.stream;
 
     if (format == DATA_COVERAGE_FORMAT_JSON) {
         ok = emit_data_coverage_json(fp, records, record_count);
@@ -9302,9 +9272,7 @@ int generate_data_coverage(astnode *root,
         ok = emit_data_coverage_text(fp, records, record_count);
     }
 
-    if (output_path != NULL && fp != NULL) {
-        fclose(fp);
-    }
+    ok = output_file_finish(&output, ok);
     free_data_consumer_records(records, record_count);
     return ok;
 }
@@ -9598,16 +9566,13 @@ int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan
         }
     }
     if (ok && options->instruction_records_file != NULL) {
-        FILE *fp = fopen(options->instruction_records_file, "w");
-        if (fp == NULL) {
-            fprintf(stderr, "error: could not open instruction records `%s' for writing\n", options->instruction_records_file);
-            return 0;
-        }
+        output_writer output;
+        FILE *fp;
+        if (!output_file_open(&output, options->instruction_records_file)) return 0;
+        fp = output.stream;
         ok = emit_instruction_records(fp, ctx);
         fputc('\n', fp);
-        if (ferror(fp)) ok = 0;
-        if (fclose(fp) != 0) ok = 0;
-        if (!ok) fprintf(stderr, "error: could not write instruction records `%s'\n", options->instruction_records_file);
+        ok = output_file_finish(&output, ok);
     }
     return ok && fceux_nl_write(&analysis->facts.nl, &plan->nl);
 }

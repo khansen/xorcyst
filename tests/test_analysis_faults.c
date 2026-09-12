@@ -51,8 +51,6 @@ static void *analysis_realloc(void *ptr, size_t size, const char *function)
     return allocation_fails(function) ? NULL : realloc(ptr, size);
 }
 
-static FILE *xref_stream;
-
 static int xref_io_fails(const char *operation)
 {
     const char *selected = getenv("XASM_TEST_IO_FAILURE");
@@ -63,16 +61,10 @@ static int xref_io_fails(const char *operation)
 
 static int xref_setvbuf(FILE *fp, char *buffer, int mode, size_t size)
 {
-    xref_stream = fp;
     return xref_io_fails("xref_setvbuf") ? -1 : setvbuf(fp, buffer, mode, size);
 }
 
-static int analysis_fclose(FILE *fp);
-static int analysis_ferror(FILE *fp);
-
 #define setvbuf xref_setvbuf
-#define fclose analysis_fclose
-#define ferror analysis_ferror
 #define malloc(size) analysis_malloc(size, __func__)
 #define calloc(count, size) analysis_calloc(count, size, __func__)
 #define realloc(ptr, size) analysis_realloc(ptr, size, __func__)
@@ -82,8 +74,6 @@ static int analysis_ferror(FILE *fp);
 #define write_analysis_outputs write_analysis_outputs_impl
 #include "../listing.c"
 #undef setvbuf
-#undef fclose
-#undef ferror
 #undef malloc
 #undef calloc
 #undef realloc
@@ -91,22 +81,6 @@ static int analysis_ferror(FILE *fp);
 #undef plan_analysis_outputs
 #undef prepare_analysis_outputs
 #undef write_analysis_outputs
-
-static int analysis_ferror(FILE *fp)
-{
-    return fp == listing_fp && xref_io_fails("listing_ferror") ? 1 : ferror(fp);
-}
-
-static int analysis_fclose(FILE *fp)
-{
-    int is_xref = fp == xref_stream;
-    int is_listing = fp == listing_fp;
-    int result = fclose(fp);
-    if (is_xref) xref_stream = NULL;
-    if (is_xref && xref_io_fails("xref_fclose")) return EOF;
-    if (is_listing && xref_io_fails("listing_fclose")) return EOF;
-    return result;
-}
 
 /* Enumeration allocations belong to shared collection too. Earlier assembler
    passes still use the real allocator because no collection phase is active. */

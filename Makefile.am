@@ -14,6 +14,7 @@ xasm_SOURCES = \
   parser.c scanner.c \
   symtab.c symtab.h \
   listing.c listing.h fceux_nl.c fceux_nl.h \
+  output_file.c output_file.h \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
   xasm.c \
   my_getopt.c my_getopt.h getopt.h
