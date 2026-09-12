@@ -51,6 +51,32 @@ static void *analysis_realloc(void *ptr, size_t size, const char *function)
     return allocation_fails(function) ? NULL : realloc(ptr, size);
 }
 
+static FILE *xref_stream;
+
+static int xref_io_fails(const char *operation)
+{
+    const char *selected = getenv("XASM_TEST_IO_FAILURE");
+    if (selected == NULL || strcmp(selected, operation) != 0) return 0;
+    fprintf(stderr, "INJECT_IO %s\n", operation);
+    return 1;
+}
+
+static int xref_setvbuf(FILE *fp, char *buffer, int mode, size_t size)
+{
+    xref_stream = fp;
+    return xref_io_fails("xref_setvbuf") ? -1 : setvbuf(fp, buffer, mode, size);
+}
+
+static int xref_fclose(FILE *fp)
+{
+    int is_xref = fp == xref_stream;
+    int result = fclose(fp);
+    if (is_xref) xref_stream = NULL;
+    return is_xref && xref_io_fails("xref_fclose") ? EOF : result;
+}
+
+#define setvbuf xref_setvbuf
+#define fclose xref_fclose
 #define malloc(size) analysis_malloc(size, __func__)
 #define calloc(count, size) analysis_calloc(count, size, __func__)
 #define realloc(ptr, size) analysis_realloc(ptr, size, __func__)
@@ -59,6 +85,8 @@ static void *analysis_realloc(void *ptr, size_t size, const char *function)
 #define prepare_analysis_outputs prepare_analysis_outputs_impl
 #define write_analysis_outputs write_analysis_outputs_impl
 #include "../listing.c"
+#undef setvbuf
+#undef fclose
 #undef malloc
 #undef calloc
 #undef realloc

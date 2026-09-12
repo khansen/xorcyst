@@ -4743,6 +4743,9 @@ static int emit_xref_json(const char *filename,
         ok = 0;
         goto cleanup;
     }
+    /* Large xrefs benefit from fewer flushes. Buffering is optional; libc
+       owns the buffer and the stream remains usable if the request fails. */
+    (void)setvbuf(fp, NULL, _IOFBF, 65536);
     format_timestamp_utc(ts, sizeof(ts));
     fprintf(fp, "{\n");
     fprintf(fp, "  \"version\": \"2\",\n");
