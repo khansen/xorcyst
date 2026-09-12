@@ -121,11 +121,83 @@ static symtab_entry *binary_pred(symtab_entry *p)
 }
 #endif
 
+/* AVL balancing bounds lookup work independently of declaration order.
+   Preserve the existing ordering: larger identifiers go to the left. */
+static int tree_height(const symtab_entry *node)
+{
+    return node != NULL ? node->height : 0;
+}
+
+static void update_height(symtab_entry *node)
+{
+    int left = tree_height(node->left), right = tree_height(node->right);
+    node->height = 1 + (left > right ? left : right);
+}
+
+static void replace_tree_child(symtab *st, symtab_entry *old, symtab_entry *replacement)
+{
+    if (old->parent == NULL) {
+        st->root = replacement;
+    } else if (old->parent->left == old) {
+        old->parent->left = replacement;
+    } else {
+        old->parent->right = replacement;
+    }
+    if (replacement != NULL) {
+        replacement->parent = old->parent;
+    }
+}
+
+/* Promote a child over its parent without moving either entry's payload. */
+static void rotate_up(symtab *st, symtab_entry *node)
+{
+    symtab_entry *parent = node->parent;
+    replace_tree_child(st, parent, node);
+    if (parent->left == node) {
+        parent->left = node->right;
+        if (parent->left != NULL) {
+            parent->left->parent = parent;
+        }
+        node->right = parent;
+    } else {
+        parent->right = node->left;
+        if (parent->right != NULL) {
+            parent->right->parent = parent;
+        }
+        node->left = parent;
+    }
+    parent->parent = node;
+    update_height(parent);
+    update_height(node);
+}
+
+static void rebalance(symtab *st, symtab_entry *node)
+{
+    while (node != NULL) {
+        update_height(node);
+        if (tree_height(node->left) - tree_height(node->right) > 1) {
+            symtab_entry *left = node->left;
+            if (tree_height(left->right) > tree_height(left->left)) {
+                rotate_up(st, left->right);
+            }
+            left = node->left;
+            rotate_up(st, left);
+            node = left;
+        } else if (tree_height(node->right) - tree_height(node->left) > 1) {
+            symtab_entry *right = node->right;
+            if (tree_height(right->left) > tree_height(right->right)) {
+                rotate_up(st, right->left);
+            }
+            right = node->right;
+            rotate_up(st, right);
+            node = right;
+        }
+        node = node->parent;
+    }
+}
+
 /**
- * Inserts a new entry in a binary tree.
- * It's implemented recursively although that's a bad thing.
- * @param p The root of the tree
- * @param e A new entry to be inserted
+ * Inserts a new entry; the caller then balances the path to the root.
  */
 static void binary_insert(symtab_entry *p, symtab_entry *e)
 {
@@ -157,61 +229,35 @@ static void binary_insert(symtab_entry *p, symtab_entry *e)
 
 /**
  * Deletes an entry from a binary tree.
- * @param p Root node
- * @param z Entry to delete
+ * Surviving entries keep their identity and all type-specific attributes.
  */
-static void binary_delete(symtab *st, symtab_entry *z)
+static void binary_delete(symtab *st, symtab_entry *node)
 {
-    symtab_entry *y;
-    symtab_entry *x;
-    symtab_entry *p;
-    if ((st == NULL) || (z == NULL)) { return; }
-
-    if ((z->left == NULL) || (z->right == NULL)) {
-        y = z;
-    }
-    else {
-        y = binary_succ(z);
-    }
-
-    if (y->left != NULL) {
-        x = y->left;
-    }
-    else {
-        x = y->right;
-    }
-
-    p = y->parent;
-    if (x != NULL) {
-        x->parent = p;
-    }
-
-    if (p == NULL) {
-        st->root = x;
-    }
-    else if (y == p->left) {
-        p->left = x;
-    }
-    else {
-        p->right = x;
-    }
-
-    if (y != z) {
-        symtab_finalize(z->symtab);
-        SAFE_FREE(z->id);
-        z->id = (char *)malloc(strlen(y->id)+1);
-        if (z->id != NULL) {
-            strcpy(z->id, y->id);
+    symtab_entry *from;
+    if (st == NULL || node == NULL) { return; }
+    if (node->left != NULL && node->right != NULL) {
+        /* Move the successor node, rather than copying its owned payload.
+           Balance from its former parent up through its new position. */
+        symtab_entry *successor = binary_min(node->right);
+        from = successor->parent;
+        if (from != node) {
+            replace_tree_child(st, successor, successor->right);
+            successor->right = node->right;
+            successor->right->parent = successor;
+        } else {
+            from = successor;
         }
-        z->type = y->type;
-        z->flags = y->flags;
-        z->ref_count = y->ref_count;
-        z->def = y->def;
-        z->symtab = y->symtab;
-        z->tag = y->tag;
+        replace_tree_child(st, node, successor);
+        successor->left = node->left;
+        successor->left->parent = successor;
+        update_height(successor);
     } else {
-        symtab_entry_finalize(y);
+        from = node->parent;
+        replace_tree_child(st, node, node->left != NULL ? node->left : node->right);
     }
+    node->left = node->right = node->parent = NULL;
+    symtab_entry_finalize(node);
+    rebalance(st, from);
 }
 
 /**
@@ -303,6 +349,7 @@ symtab_entry *symtab_enter(const char *id, symbol_type type, astnode *def, int f
         e->left = NULL;
         e->right = NULL;
         e->parent = NULL;
+        e->height = 1;
         e->symtab = NULL;
         /* Put it into symbol table */
         if (st->root == NULL) {
@@ -311,6 +358,7 @@ symtab_entry *symtab_enter(const char *id, symbol_type type, astnode *def, int f
         else {
         /* Insert entry in binary tree */
             binary_insert(st->root, e);
+            rebalance(st, e->parent);
         }
     }
     /* Return the newly created symbol table entry */

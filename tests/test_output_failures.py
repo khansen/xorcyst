@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the real assembler with test-only I/O and analysis allocation faults."""
 import collections
+import json
 import os
 from pathlib import Path
 import re
@@ -166,6 +167,29 @@ class OutputFailures(unittest.TestCase):
                         self.assertEqual(path.read_bytes(), previous[path])
                     self.assert_no_temporary_files()
             print(f'Checked {len(sites)} xref analysis allocation failures with NL={nl}', flush=True)
+
+    def test_xref_buffer_failure_preserves_content_and_close_failure_is_reported(self):
+        xref = self.root / 'xref.json'
+        flags = (f'--xref={xref}', '--xref-instructions=true')
+        for count in (1, 256):
+            with self.subTest(instructions=count):
+                self.source.write_text('.ORG $8000\nEntry:\n' + 'NOP\n' * count + 'END\n')
+                baseline = self.run_xasm(*flags, nl=False)
+                self.assertEqual(baseline.returncode, 0, baseline.stderr.decode())
+                self.assertEqual(xref.stat().st_size > 65536, count == 256)
+                expected = json.loads(xref.read_bytes())
+                del expected['build']['timestamp_utc']
+                for operation in ('xref_setvbuf', 'xref_fclose'):
+                    result = self.run_xasm(*flags, nl=False, faults={'XASM_TEST_IO_FAILURE': operation})
+                    self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                    if operation == 'xref_setvbuf':
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        actual = json.loads(xref.read_bytes())
+                        del actual['build']['timestamp_utc']
+                        self.assertEqual(actual, expected)
+                    else:
+                        self.assertGreater(result.returncode, 0, result.stderr.decode())
+                        self.assertIn(b'could not emit complete xref records', result.stderr)
 
     def test_binary_completion_failures_preserve_outputs(self):
         manifest = self.root / 'deps.json'

@@ -127,6 +127,7 @@ struct tag_symtab_entry {
     struct tag_symtab_entry *left;
     struct tag_symtab_entry *right;
     struct tag_symtab_entry *parent;
+    int height;  /* AVL subtree height; a leaf has height 1. */
 };
 
 typedef struct tag_symtab_entry symtab_entry;
