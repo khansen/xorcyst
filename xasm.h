@@ -114,6 +114,9 @@ struct tag_xasm_arguments {
     int xref_data;
     int xref_instructions;
     const char *instruction_records_file;
+    const char *fceux_nl_rom_prefix;
+    const char *fceux_nl_ram_file;
+    int fceux_nl_mirror_16k;
     int xref_include_owner;
     int xref_include_locals;
     int xref_include_anon;

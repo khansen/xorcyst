@@ -142,6 +142,9 @@ static struct option long_options[] = {
   { "xref-data", required_argument, 0, 0 },
   { "xref-instructions", required_argument, 0, 0 },
   { "instruction-records-output", required_argument, 0, 0 },
+  { "fceux-nl-rom-prefix", required_argument, 0, 0 },
+  { "fceux-nl-ram-output", required_argument, 0, 0 },
+  { "fceux-nl-mirror-16k", no_argument, 0, 0 },
   { "xref-include-owner", required_argument, 0, 0 },
   { "xref-include-locals", required_argument, 0, 0 },
   { "xref-include-anon", required_argument, 0, 0 },
@@ -207,6 +210,8 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--xref-data=true|false]\n\
             [--xref-instructions=true|false]\n\
             [--instruction-records-output=FILE]\n\
+            [--fceux-nl-rom-prefix=PREFIX] [--fceux-nl-ram-output=FILE]\n\
+            [--fceux-nl-mirror-16k]\n\
             [--dependency-manifest=FILE]\n\
             [--xref-include-owner=true|false]\n\
             [--xref-include-locals=true|false]\n\
@@ -259,6 +264,16 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
                             Include versioned instruction/operand records\n\
     --instruction-records-output=FILE\n\
                             Separate instruction JSON (requires dependency manifest)\n\
+    --fceux-nl-rom-prefix=PREFIX\n\
+                            Write FCEUX .nl labels for resolved addresses\n\
+                            >= $8000 to PREFIX<bank>.nl, one file per\n\
+                            16KB page of the raw PRG image (hex bank\n\
+                            number, starting at 0)\n\
+    --fceux-nl-ram-output=FILE\n\
+                            FCEUX .nl labels for resolved addresses < $8000\n\
+    --fceux-nl-mirror-16k  Name both CPU windows of a 16KB NROM image\n\
+                            ($8000-$BFFF and $C000-$FFFF;\n\
+                            requires exactly 16384 PRG bytes)\n\
     --dependency-manifest=FILE\n\
                             Snapshot/hash consumed inputs (pure-binary v1)\n\
     --xref-include-locals=BOOL\n\
@@ -672,6 +687,9 @@ parse_arguments (int argc, char **argv)
     xasm_args.xref_data = 0;
     xasm_args.xref_instructions = 0;
     xasm_args.instruction_records_file = NULL;
+    xasm_args.fceux_nl_rom_prefix = NULL;
+    xasm_args.fceux_nl_ram_file = NULL;
+    xasm_args.fceux_nl_mirror_16k = 0;
     xasm_args.xref_include_owner = 0;
     xasm_args.xref_include_locals = 0;
     xasm_args.xref_include_anon = 0;
@@ -844,6 +862,14 @@ parse_arguments (int argc, char **argv)
             } else if (strcmp(long_options[index].name, "instruction-records-output") == 0) {
                 if (optarg[0] == '\0') cli_error("--instruction-records-output requires a nonempty filename");
                 xasm_args.instruction_records_file = optarg;
+            } else if (strcmp(long_options[index].name, "fceux-nl-rom-prefix") == 0) {
+                if (optarg[0] == '\0') cli_error("--fceux-nl-rom-prefix requires a nonempty prefix");
+                xasm_args.fceux_nl_rom_prefix = optarg;
+            } else if (strcmp(long_options[index].name, "fceux-nl-ram-output") == 0) {
+                if (optarg[0] == '\0') cli_error("--fceux-nl-ram-output requires a nonempty filename");
+                xasm_args.fceux_nl_ram_file = optarg;
+            } else if (strcmp(long_options[index].name, "fceux-nl-mirror-16k") == 0) {
+                xasm_args.fceux_nl_mirror_16k = 1;
             } else if (strcmp(long_options[index].name, "xref-include-owner") == 0) {
                 if (!parse_bool_value(optarg, &xasm_args.xref_include_owner)) {
                     cli_error("invalid value for --xref-include-owner: `%s' (expected true|false)", optarg);
@@ -1015,6 +1041,14 @@ parse_arguments (int argc, char **argv)
 
     if (xasm_args.instruction_records_file && !xasm_args.dependency_manifest)
         cli_error("--instruction-records-output requires --dependency-manifest in version 1");
+
+    if ((xasm_args.fceux_nl_rom_prefix != NULL || xasm_args.fceux_nl_ram_file != NULL)
+        && !xasm_args.pure_binary)
+        cli_error("--fceux-nl-rom-prefix/--fceux-nl-ram-output require --pure-binary "
+                  "(resolved addresses aren't final in relocatable/object output)");
+
+    if (xasm_args.fceux_nl_mirror_16k && xasm_args.fceux_nl_rom_prefix == NULL)
+        cli_error("--fceux-nl-mirror-16k requires --fceux-nl-rom-prefix=PREFIX");
 
     if (xasm_args.dependency_manifest && (!xasm_args.pure_binary
         || (xasm_args.xref_file && xasm_args.xref_format != XREF_FORMAT_JSON)))
@@ -1415,11 +1449,35 @@ static int protect_analysis_sources(const astnode *node)
     return 1;
 }
 
+/* The manifest reserves its own destination at startup. Every other output,
+   including expanded analysis paths and the binary staging path, is validated
+   here before the first output file is opened. */
+static int validate_output_destinations(const xasm_arguments *args,
+                                        const analysis_output_plan *analysis_outputs,
+                                        const char *binary_temporary)
+{
+    return dependencies_output(args->output_file)
+        && dependencies_output(binary_temporary)
+        && dependencies_output(args->listing_file)
+        && validate_analysis_outputs(analysis_outputs)
+        && (!args->xref_summary || dependencies_output(args->xref_summary_output))
+        && (!args->analyze_index_patterns || dependencies_output(args->index_patterns_output))
+        && (!args->data_consumers || dependencies_output(args->data_consumers_output))
+        && (!args->analyze_data_coverage || dependencies_output(args->data_coverage_output));
+}
+
 int main(int argc, char *argv[]) {
     FILE *output_fp;
     int output_generated = 0;
     int exit_code = 0;
     char *default_outfile = 0;
+    int needs_instruction_provenance;
+    int needs_output_protection;
+    int needs_analysis;
+    int destinations_validated = 0;
+    char *tmp_outfile = NULL;
+    analysis_result *analysis = NULL;
+    analysis_output_plan *analysis_outputs = NULL;
 
     /* Working directory is needed for include statements */
     xasm_path = getcwd(NULL, 0);
@@ -1431,6 +1489,19 @@ int main(int argc, char *argv[]) {
     dependencies_arguments(argc, argv);
     parse_arguments (argc, argv);
 
+    /* Whether anything requested needs capture_instruction_provenance()
+       installed (see prepare_xref_instruction_provenance): computed once
+       here so every site that gates on it -- install, finalize, and the
+       root_node fallback below -- can't drift out of sync with each other
+       as reasons to need it are added. */
+    needs_instruction_provenance =
+        xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.fceux_nl_ram_file;
+
+    needs_output_protection = xasm_args.dependency_manifest
+        || xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file;
+    needs_analysis = xasm_args.xref_file || xasm_args.instruction_records_file
+        || xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file;
+
     if (xasm_args.dependency_manifest
         && !dependencies_start(program_version, xasm_args.dependency_manifest)) {
         dependencies_clear();
@@ -1439,8 +1510,14 @@ int main(int argc, char *argv[]) {
         return 3;
     }
 
-    if ((xasm_args.xref_instructions || xasm_args.instruction_records_file)
-        && !prepare_xref_instruction_provenance()) {
+    if (!xasm_args.dependency_manifest && needs_output_protection
+        && !dependencies_start_output_protection()) {
+        dependencies_clear();
+        free(xasm_path);
+        return 3;
+    }
+
+    if (needs_instruction_provenance && !prepare_xref_instruction_provenance()) {
         fprintf(stderr, "error: could not initialize instruction provenance\n");
         err_count++;
     }
@@ -1464,14 +1541,14 @@ int main(int argc, char *argv[]) {
     yyparse();
 
     if (root_node == NULL) {
-        if (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.dependency_manifest)
+        if (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest)
             root_node = astnode_create(LIST_NODE, loc_preserve);
         if (root_node == NULL) {
             clear_xref_instruction_provenance();
             symtab_finalize(symbol_table);
             dependencies_clear();
             free(xasm_path);
-            return (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.dependency_manifest) ? 3 : 0;
+            return (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest) ? 3 : 0;
         }
     }
 
@@ -1492,8 +1569,7 @@ int main(int argc, char *argv[]) {
         err_count++;
     }
 
-    if ((xasm_args.xref_instructions || xasm_args.instruction_records_file)
-        && !finish_xref_instruction_provenance(root_node)) {
+    if (needs_instruction_provenance && !finish_xref_instruction_provenance(root_node)) {
         fprintf(stderr, "error: could not finalize instruction provenance\n");
         err_count++;
     }
@@ -1515,7 +1591,7 @@ int main(int argc, char *argv[]) {
     /* Print the final AST (debugging) */
 //    astnode_print(root_node, 0);
 
-    if (xasm_args.dependency_manifest && !protect_analysis_sources(root_node)) goto cleanup;
+    if (needs_output_protection && !protect_analysis_sources(root_node)) goto cleanup;
 
     /* If no errors, proceed with code generation. */
     if (total_errors() == 0) {
@@ -1525,10 +1601,11 @@ int main(int argc, char *argv[]) {
             int default_outfile_len = strlen(xasm_args.input_file)
                                     + /*dot*/1 + strlen(default_ext) + 1;
             default_outfile = (char *)malloc(default_outfile_len);
+            if (default_outfile == NULL) { exit_code = 3; goto cleanup; }
             change_extension(xasm_args.input_file, default_ext, default_outfile);
             xasm_args.output_file = default_outfile;
         }
-        if (xasm_args.dependency_manifest && xasm_args.compare_file) {
+        if (needs_output_protection && xasm_args.compare_file) {
             FILE *reference = dependencies_open(xasm_args.compare_file, "rb", DEP_COMPARISON);
             if (!reference) {
                 fprintf(stderr, "error: could not read `%s'\n", xasm_args.compare_file);
@@ -1537,58 +1614,88 @@ int main(int argc, char *argv[]) {
             }
             fclose(reference);
         }
-        if (!dependencies_output(xasm_args.output_file)
-            || !dependencies_output(xasm_args.listing_file)
-            || !dependencies_output(xasm_args.xref_file)
-            || !dependencies_output(xasm_args.instruction_records_file)
-            || (xasm_args.xref_summary && !dependencies_output(xasm_args.xref_summary_output))
-            || (xasm_args.analyze_index_patterns && !dependencies_output(xasm_args.index_patterns_output))
-            || (xasm_args.data_consumers && !dependencies_output(xasm_args.data_consumers_output))
-            || (xasm_args.analyze_data_coverage && !dependencies_output(xasm_args.data_coverage_output))) goto cleanup;
-        /* Attempt to open file for writing */
+        /* Collect once, then expand the exact destinations before publication. */
+        if (needs_analysis) {
+            analysis_options options = {
+                .pure_binary = xasm_args.pure_binary,
+                .include_data = xasm_args.xref_data,
+                .include_instructions = xasm_args.xref_instructions || xasm_args.instruction_records_file != NULL,
+                .include_owner = xasm_args.xref_include_owner,
+                .include_locals = xasm_args.xref_include_locals,
+                .include_anon = xasm_args.xref_include_anon,
+                .collect_rom_labels = xasm_args.fceux_nl_rom_prefix != NULL,
+                .collect_ram_names = xasm_args.fceux_nl_ram_file != NULL,
+                .mirror_16k = xasm_args.fceux_nl_mirror_16k
+            };
+            analysis_output_options outputs = {
+                .xref_file = xasm_args.xref_file,
+                .format = (xref_format)xasm_args.xref_format,
+                .xref_instructions = xasm_args.xref_instructions,
+                .instruction_records_file = xasm_args.instruction_records_file,
+                .rom_prefix = xasm_args.fceux_nl_rom_prefix,
+                .ram_file = xasm_args.fceux_nl_ram_file,
+                .source_file = xasm_args.input_file,
+                .output_file = xasm_args.output_file
+            };
+            analysis = collect_analysis(root_node, &options);
+            if (analysis == NULL) {
+                fprintf(stderr, "error: could not collect assembly analysis\n");
+                exit_code = 3;
+                goto cleanup;
+            }
+            analysis_outputs = plan_analysis_outputs(analysis, &outputs);
+            if (analysis_outputs == NULL) {
+                fprintf(stderr, "error: could not plan analysis destinations\n");
+                exit_code = 3;
+                goto cleanup;
+            }
+        }
         size_t tmp_len = strlen(xasm_args.output_file) + 5;
-        char *tmp_outfile = (char *)malloc(tmp_len);
+        tmp_outfile = (char *)malloc(tmp_len);
         if (tmp_outfile == NULL) {
             fprintf(stderr, "error: out of memory\n");
+            exit_code = 3;
+            goto cleanup;
+        }
+        snprintf(tmp_outfile, tmp_len, "%s.tmp", xasm_args.output_file);
+        if (!validate_output_destinations(&xasm_args, analysis_outputs, tmp_outfile)) {
+            exit_code = 3;
+            goto cleanup;
+        }
+        destinations_validated = 1;
+
+        output_fp = fopen(tmp_outfile, "wb");
+        if (output_fp == NULL) {
+            fprintf(stderr, "error: could not open `%s' for writing\n", tmp_outfile);
             err_count++;
         } else {
-            snprintf(tmp_outfile, tmp_len, "%s.tmp", xasm_args.output_file);
-            if (!dependencies_output(tmp_outfile)) { free(tmp_outfile); goto cleanup; }
-            output_fp = fopen(tmp_outfile, "wb");
-            if (output_fp == NULL) {
-                fprintf(stderr, "error: could not open `%s' for writing\n", tmp_outfile);
-                err_count++;
-                free(tmp_outfile);
+            verbose("Generating final output...");
+            if (xasm_args.pure_binary) {
+                astproc_fifth_pass(root_node, output_fp);
             } else {
-                verbose("Generating final output...");
-                if (xasm_args.pure_binary) {
-                    astproc_fifth_pass(root_node, output_fp);
-                } else {
-                    codegen_write(root_node, output_fp);
-                }
-                fclose(output_fp);
-                if (total_errors() != 0) {
+                codegen_write(root_node, output_fp);
+            }
+            fclose(output_fp);
+            if (total_errors() != 0) {
+                remove(tmp_outfile);
+                output_generated = 0;
+            } else {
+                /* Ensure destination is removed first so rename() succeeds portably */
+                remove(xasm_args.output_file);
+                if (rename(tmp_outfile, xasm_args.output_file) != 0) {
+                    fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);
+                    err_count++;
                     remove(tmp_outfile);
                     output_generated = 0;
                 } else {
-                    /* Ensure destination is removed first so rename() succeeds portably */
-                    remove(xasm_args.output_file);
-                    if (rename(tmp_outfile, xasm_args.output_file) != 0) {
-                        fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);
-                        err_count++;
-                        remove(tmp_outfile);
-                        output_generated = 0;
-                    } else {
-                        output_generated = 1;
-                    }
+                    output_generated = 1;
                 }
-                free(tmp_outfile);
             }
         }
     }
 
     if ((output_generated || total_errors() != 0) && xasm_args.listing_file != NULL) {
-        if (!output_generated && !dependencies_output(xasm_args.listing_file)) goto cleanup;
+        if (!destinations_validated && !dependencies_output(xasm_args.listing_file)) goto cleanup;
         verbose("Generating listing...");
         if (!generate_listing(root_node,
                               xasm_args.listing_file,
@@ -1599,24 +1706,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if ((exit_code == 0) && output_generated
-        && (xasm_args.xref_file != NULL || xasm_args.instruction_records_file != NULL)) {
+    if ((exit_code == 0) && output_generated && analysis != NULL) {
         verbose("Generating xref...");
-        if (!generate_xref(root_node,
-                           xasm_args.xref_file,
-                           (xref_format)xasm_args.xref_format,
-                           xasm_args.xref_data,
-                           xasm_args.xref_instructions,
-                           xasm_args.instruction_records_file,
-                           xasm_args.xref_include_owner,
-                           xasm_args.xref_include_locals,
-                           xasm_args.xref_include_anon,
-                           xasm_args.input_file,
-                           xasm_args.output_file,
-                           xasm_args.pure_binary)) {
-            exit_code = 3;
-        }
+        if (!write_analysis_outputs(analysis, analysis_outputs)) exit_code = 3;
     }
+    free_analysis(analysis);
+    analysis = NULL;
     clear_xref_data_directive_provenance();
 
     if ((exit_code == 0) && output_generated && xasm_args.xref_summary) {
@@ -1698,6 +1793,10 @@ int main(int argc, char *argv[]) {
     }
 
 cleanup:
+    free_analysis(analysis);
+    free_analysis_outputs(analysis_outputs);
+    free(tmp_outfile);
+    clear_xref_data_directive_provenance();
     if (xasm_args.dependency_manifest && exit_code == 0 && total_errors() == 0
         && output_generated && !dependencies_write(xasm_args.dependency_manifest)) exit_code = 3;
     if (dependencies_failed()) exit_code = 3;

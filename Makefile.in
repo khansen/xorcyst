@@ -109,7 +109,7 @@ PROGRAMS = $(bin_PROGRAMS)
 am_xasm_OBJECTS = astnode.$(OBJEXT) astproc.$(OBJEXT) \
 	charmap.$(OBJEXT) codegen.$(OBJEXT) opcode.$(OBJEXT) \
 	parser.$(OBJEXT) scanner.$(OBJEXT) symtab.$(OBJEXT) \
-	listing.$(OBJEXT) dependencies.$(OBJEXT) sha256.$(OBJEXT) \
+	listing.$(OBJEXT) fceux_nl.$(OBJEXT) dependencies.$(OBJEXT) sha256.$(OBJEXT) \
 	xasm.$(OBJEXT) my_getopt.$(OBJEXT)
 xasm_OBJECTS = $(am_xasm_OBJECTS)
 xasm_LDADD = $(LDADD)
@@ -135,7 +135,7 @@ am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/astnode.Po ./$(DEPDIR)/astproc.Po \
 	./$(DEPDIR)/charmap.Po ./$(DEPDIR)/codegen.Po \
 	./$(DEPDIR)/dependencies.Po ./$(DEPDIR)/hashtab.Po \
-	./$(DEPDIR)/listing.Po ./$(DEPDIR)/my_getopt.Po \
+	./$(DEPDIR)/listing.Po ./$(DEPDIR)/fceux_nl.Po ./$(DEPDIR)/my_getopt.Po \
 	./$(DEPDIR)/opcode.Po ./$(DEPDIR)/parser.Po \
 	./$(DEPDIR)/scanner.Po ./$(DEPDIR)/script.Po \
 	./$(DEPDIR)/sha256.Po ./$(DEPDIR)/symtab.Po \
@@ -318,7 +318,7 @@ xasm_SOURCES = \
   opcode.c opcode.h \
   parser.c scanner.c \
   symtab.c symtab.h \
-  listing.c listing.h \
+  listing.c listing.h fceux_nl.c fceux_nl.h \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
   xasm.c \
   my_getopt.c my_getopt.h getopt.h
@@ -454,6 +454,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dependencies.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hashtab.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/listing.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fceux_nl.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/my_getopt.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/opcode.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/parser.Po@am__quote@ # am--include-marker
@@ -772,6 +773,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/dependencies.Po
 	-rm -f ./$(DEPDIR)/hashtab.Po
 	-rm -f ./$(DEPDIR)/listing.Po
+	-rm -f ./$(DEPDIR)/fceux_nl.Po
 	-rm -f ./$(DEPDIR)/my_getopt.Po
 	-rm -f ./$(DEPDIR)/opcode.Po
 	-rm -f ./$(DEPDIR)/parser.Po
@@ -836,6 +838,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/dependencies.Po
 	-rm -f ./$(DEPDIR)/hashtab.Po
 	-rm -f ./$(DEPDIR)/listing.Po
+	-rm -f ./$(DEPDIR)/fceux_nl.Po
 	-rm -f ./$(DEPDIR)/my_getopt.Po
 	-rm -f ./$(DEPDIR)/opcode.Po
 	-rm -f ./$(DEPDIR)/parser.Po

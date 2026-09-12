@@ -9,6 +9,7 @@
 #include "opcode.h"
 #include "dependencies.h"
 #include "utf8.h"
+#include "fceux_nl.h"
 #include <stdint.h>
 
 #define SOURCE_LINE_BUFFER_SIZE 1024
@@ -1337,9 +1338,11 @@ static int append_rendered_text(char **buffer, size_t *length, size_t *capacity,
         return 1;
     }
     add = strlen(text);
+    if (add == SIZE_MAX || *length > SIZE_MAX - add - 1) return 0;
     if (*length + add + 1 > *capacity) {
         size_t new_capacity = (*capacity == 0) ? 64 : *capacity;
         while (new_capacity < *length + add + 1) {
+            if (new_capacity > SIZE_MAX / 2) { new_capacity = *length + add + 1; break; }
             new_capacity *= 2;
         }
         tmp = (char *)realloc(*buffer, new_capacity);
@@ -1378,10 +1381,14 @@ static const char *rendered_operator(arithmetic_operator oper)
     }
 }
 
+typedef char *(*expression_name_formatter)(const char *name, const void *arg);
+
 static int render_expression_recursive(const astnode *expr,
                                        char **buffer,
                                        size_t *length,
-                                       size_t *capacity)
+                                       size_t *capacity,
+                                       expression_name_formatter format_name,
+                                       const void *name_arg)
 {
     char number[32];
     const char *prefix = NULL;
@@ -1392,12 +1399,40 @@ static int render_expression_recursive(const astnode *expr,
         case INTEGER_NODE:
             snprintf(number, sizeof(number), "%d", expr->integer);
             return append_rendered_text(buffer, length, capacity, number);
+        case STRING_NODE: {
+            const unsigned char *text = (const unsigned char *)expr->string;
+            if (!append_rendered_text(buffer, length, capacity, "\"")) return 0;
+            for (; *text; text++) {
+                char escaped[5];
+                if (*text == '#' || *text < 32 || *text == 127) {
+                    snprintf(escaped, sizeof(escaped), "\\x%02X", *text);
+                } else if (*text == '\\' || *text == '"') {
+                    escaped[0] = '\\'; escaped[1] = *text; escaped[2] = '\0';
+                } else {
+                    escaped[0] = *text; escaped[1] = '\0';
+                }
+                if (!append_rendered_text(buffer, length, capacity, escaped)) return 0;
+            }
+            return append_rendered_text(buffer, length, capacity, "\"");
+        }
+        case DATATYPE_NODE:
+            if (expr->datatype == USER_DATATYPE)
+                return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg);
+            return append_rendered_text(buffer, length, capacity,
+                expr->datatype == BYTE_DATATYPE ? "byte" : expr->datatype == CHAR_DATATYPE ? "char"
+                : expr->datatype == WORD_DATATYPE ? "word" : "dword");
         case CURRENT_PC_NODE:
             return append_rendered_text(buffer, length, capacity, "$" );
         case IDENTIFIER_NODE:
         case LOCAL_ID_NODE:
         case FORWARD_BRANCH_NODE:
         case BACKWARD_BRANCH_NODE:
+            if (format_name != NULL) {
+                char *name = format_name(expr->string, name_arg);
+                int ok = name != NULL && append_rendered_text(buffer, length, capacity, name);
+                free(name);
+                return ok;
+            }
             return append_rendered_text(buffer, length, capacity, expr->string);
         case ARITHMETIC_NODE:
             switch (expr->oper) {
@@ -1411,33 +1446,33 @@ static int render_expression_recursive(const astnode *expr,
             }
             if (prefix != NULL) {
                 return append_rendered_text(buffer, length, capacity, prefix)
-                    && render_expression_recursive(LHS(expr), buffer, length, capacity);
+                    && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg);
             }
             return append_rendered_text(buffer, length, capacity, "(")
-                && render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, rendered_operator(expr->oper))
-                && render_expression_recursive(RHS(expr), buffer, length, capacity)
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, ")");
         case DOT_NODE:
-            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+            return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, ".")
-                && render_expression_recursive(RHS(expr), buffer, length, capacity);
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg);
         case SCOPE_NODE:
-            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+            return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, "::")
-                && render_expression_recursive(RHS(expr), buffer, length, capacity);
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg);
         case INDEX_NODE:
-            return render_expression_recursive(LHS(expr), buffer, length, capacity)
+            return render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, "[")
-                && render_expression_recursive(RHS(expr), buffer, length, capacity)
+                && render_expression_recursive(RHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, "]");
         case SIZEOF_NODE:
             return append_rendered_text(buffer, length, capacity, "SIZEOF(")
-                && render_expression_recursive(LHS(expr), buffer, length, capacity)
+                && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg)
                 && append_rendered_text(buffer, length, capacity, ")");
         case MASK_NODE:
             return append_rendered_text(buffer, length, capacity, "MASK ")
-                && render_expression_recursive(LHS(expr), buffer, length, capacity);
+                && render_expression_recursive(LHS(expr), buffer, length, capacity, format_name, name_arg);
         default:
             return 0;
     }
@@ -1448,7 +1483,7 @@ static char *render_expression(const astnode *expr)
     char *buffer = NULL;
     size_t length = 0;
     size_t capacity = 0;
-    if (!render_expression_recursive(expr, &buffer, &length, &capacity)) {
+    if (!render_expression_recursive(expr, &buffer, &length, &capacity, NULL, NULL)) {
         free(buffer);
         return xstrdup("");
     }
@@ -2245,6 +2280,14 @@ typedef struct tag_xref_meta {
     int segment_id;
 } xref_meta;
 
+/* Emitted extent of an assembly segment, indexed by segment_id. Empty
+   segments have size zero; end labels do not imply an additional byte. */
+typedef struct {
+    int cpu_start;
+    long output_start;
+    long size;
+} xref_output_extent;
+
 typedef struct tag_xref_build_context {
     xref_symbol *symbols;
     int symbol_count;
@@ -2276,6 +2319,11 @@ typedef struct tag_xref_build_context {
     /* Real symbols are collected independently of output scope filters. */
     int *symbol_index; /* open-addressed name -> symbol array index + 1 */
     size_t symbol_index_capacity;
+    int collect_memory_operands;
+    int collect_output_extents;
+    xref_output_extent *output_extents;
+    size_t output_extent_capacity;
+    fceux_nl_table nl;
 } xref_build_context;
 
 typedef struct tag_xref_instr {
@@ -3006,6 +3054,90 @@ static int xref_visit_label(astnode *label, void *arg, astnode **next)
     return 0;
 }
 
+/* Local labels carry a compiler namespace suffix. NL uses the lexical
+   owner and source name; a root-scope local has an empty owner. */
+static char *nl_symbol_name(const char *raw, const void *owner_arg)
+{
+    const char *owner = owner_arg;
+    char *base, *name;
+    if (raw[0] != '@' || raw[1] != '@') return xstrdup(raw);
+    base = base_without_hash_suffix(raw);
+    if (base == NULL) return NULL;
+    name = str_concat(owner != NULL ? owner : "", base);
+    free(base);
+    return name;
+}
+
+/* Expressions containing anonymous labels have no stable debugger name. */
+static int nl_operand_has_name(const xref_data_provenance *operand)
+{
+    int i;
+    if (operand->referenced_symbol_count == 0) return 0;
+    for (i = 0; i < operand->referenced_symbol_count; i++) {
+        const char *kind, *scope;
+        classify_symbol_name(operand->referenced_symbols[i], &kind, &scope);
+        if (strcmp(scope, "anonymous") == 0) return 0;
+    }
+    return 1;
+}
+
+static int collect_memory_operand(xref_build_context *ctx, const astnode *expr, int address)
+{
+    char *name = NULL;
+    size_t length = 0, capacity = 0;
+    if (!render_expression_recursive(expr, &name, &length, &capacity, nl_symbol_name,
+                                    ctx->lexical_owner_symbol != NULL ? ctx->lexical_owner_symbol : "")) {
+        free(name);
+        fprintf(stderr, "error: could not render FCEUX memory operand\n");
+        return 0;
+    }
+    /* The enclosing parentheses of a binary expression serve no purpose in
+       a standalone debugger name. Nested parentheses still preserve meaning. */
+    if (length > 1 && name[0] == '(' && name[length - 1] == ')') {
+        memmove(name, name + 1, length - 2);
+        name[length - 2] = '\0';
+    }
+    return fceux_nl_add(&ctx->nl, FCEUX_NL_RAM_BANK, address, name);
+}
+
+/* All emitted byte kinds advance through here, so layout does not depend
+   on whether those bytes have labels or instruction records. */
+static void advance_xref_position(xref_build_context *ctx, int size)
+{
+    if (ctx->pure_binary && !in_dataseg) {
+        if (ctx->collect_output_extents && size > 0 && !ctx->failed) {
+            size_t segment = (size_t)ctx->current_segment_id;
+            if (segment >= ctx->output_extent_capacity) {
+                size_t capacity = ctx->output_extent_capacity ? ctx->output_extent_capacity : 16;
+                xref_output_extent *grown;
+                while (capacity <= segment) {
+                    if (capacity > SIZE_MAX / 2 / sizeof(*grown)) { ctx->failed = 1; return; }
+                    capacity *= 2;
+                }
+                grown = realloc(ctx->output_extents, capacity * sizeof(*grown));
+                if (grown == NULL) {
+                    ctx->failed = 1;
+                } else {
+                    memset(grown + ctx->output_extent_capacity, 0,
+                           (capacity - ctx->output_extent_capacity) * sizeof(*grown));
+                    ctx->output_extents = grown;
+                    ctx->output_extent_capacity = capacity;
+                }
+            }
+            if (!ctx->failed) {
+                xref_output_extent *extent = &ctx->output_extents[segment];
+                if (extent->size == 0) {
+                    extent->cpu_start = get_current_pc();
+                    extent->output_start = ctx->output_offset;
+                }
+                extent->size += size;
+            }
+        }
+        ctx->output_offset += size;
+    }
+    add_current_pc(size);
+}
+
 static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
 {
     xref_build_context *ctx = (xref_build_context *)arg;
@@ -3111,14 +3243,29 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         }
     }
 
+    if (ctx->collect_memory_operands && LHS(instr) != NULL
+        && is_supported_xref_data_direct_mode(instr->instr.mode)
+        && strcmp(meta.access, "call") != 0 && strcmp(meta.access, "jump") != 0) {
+        unsigned long id = instr->analysis_origin_id;
+        int address;
+        if (id == 0 || id > instruction_provenance_count
+            || !eval_expression_int(LHS(instr), &address, 0)) {
+            ctx->failed = 1;
+            goto finish;
+        }
+        if (address >= 0 && address < 0x8000
+            && nl_operand_has_name(&instruction_provenance_records[id - 1].operand)
+            && !collect_memory_operand(ctx,
+                instruction_provenance_records[id - 1].operand.original_expression, address)) {
+            ctx->failed = 1;
+        }
+    }
+
 finish:
     if (record_instruction) {
         ctx->instr_count++;
     }
-    add_current_pc(len);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += len;
-    }
+    advance_xref_position(ctx, len);
     return 0;
 }
 
@@ -3204,10 +3351,7 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
         index++;
     }
 
-    add_current_pc(item_count * bytes_per_item);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += item_count * bytes_per_item;
-    }
+    advance_xref_position(ctx, item_count * bytes_per_item);
     return 0;
 }
 
@@ -3218,10 +3362,7 @@ static int xref_visit_storage(astnode *storage, void *arg, astnode **next)
     (void)next;
     classify_pending_labels(ctx, 2);
     if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
-        add_current_pc(count);
-        if (ctx->pure_binary && !in_dataseg) {
-            ctx->output_offset += count;
-        }
+        advance_xref_position(ctx, count);
     }
     return 0;
 }
@@ -3231,10 +3372,7 @@ static int xref_visit_binary(astnode *node, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     (void)next;
     classify_pending_labels(ctx, 2);
-    add_current_pc(node->binary.size);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += node->binary.size;
-    }
+    advance_xref_position(ctx, node->binary.size);
     return 0;
 }
 
@@ -3281,6 +3419,8 @@ static void free_xref_context(xref_build_context *ctx)
     ctx->data_directive_ref_capacity = 0;
 
     free(ctx->symbol_index);
+    free(ctx->output_extents);
+    fceux_nl_free(&ctx->nl);
     free(ctx->pending_label_indexes);
     ctx->pending_label_indexes = NULL;
     ctx->pending_label_count = 0;
@@ -3468,7 +3608,7 @@ static int build_xref_owner_index(const xref_build_context *ctx, xref_owner_inde
         entries[entry_count].segment_id = s->segment_id;
         entries[entry_count].cpu_address = s->cpu_address;
         entries[entry_count].symbol_index = i;
-        /* Tie-break key = position in ctx->symbols. generate_xref() sorts the
+        /* Tie-break key = position in ctx->symbols. collect_analysis() sorts the
            symbol table (xref_symbol_compare) before emit, so this is the xref
            symbol sort order, not raw insertion order -- but it is exactly the
            order the old linear owner scan walked, so ownership is unchanged. */
@@ -4862,16 +5002,11 @@ static int emit_xref_text(const char *filename, const xref_build_context *ctx)
     return 1;
 }
 
-static int emit_xref_csv(const char *filename, const xref_build_context *ctx)
+static int emit_xref_csv(const char *sym_name, const char *ref_name, const xref_build_context *ctx)
 {
     FILE *sym_fp;
     FILE *ref_fp;
-    char sym_name[1024];
-    char ref_name[1024];
     int i;
-    snprintf(sym_name, sizeof(sym_name), "%s.symbols.csv", filename);
-    snprintf(ref_name, sizeof(ref_name), "%s.refs.csv", filename);
-    if (!dependencies_output(sym_name) || !dependencies_output(ref_name)) return 0;
     sym_fp = fopen(sym_name, "w");
     if (sym_fp == NULL) {
         fprintf(stderr, "error: could not open `%s' for writing\n", sym_name);
@@ -5031,10 +5166,7 @@ static int summary_visit_instruction(astnode *instr, void *arg, astnode **next)
         }
     }
 
-    add_current_pc(len);
-    if (ctx->pure_binary && !in_dataseg) {
-        ctx->output_offset += len;
-    }
+    advance_xref_position(ctx, len);
     return 0;
 }
 
@@ -9129,18 +9261,80 @@ int generate_data_coverage(astnode *root,
 
 /* ---- end analyze-index-patterns ---- */
 
-int generate_xref(astnode *root,
-                  const char *filename,
-                  xref_format format,
-                  int include_data,
-                  int include_instructions,
-                  const char *instruction_records_file,
-                  int include_owner,
-                  int include_locals,
-                  int include_anon,
-                  const char *source_file,
-                  const char *output_file,
-                  int pure_binary)
+/* Project resolved facts into NL records. Physical pages depend only on
+   emitted offsets, never on segment count, CPU windows, or label density. */
+static int build_fceux_nl(xref_build_context *ctx, int rom, int ram, int mirror_16k)
+{
+    int i;
+    size_t j;
+    if (rom) {
+        for (j = 0; j < ctx->output_extent_capacity; j++) {
+            const xref_output_extent *extent = &ctx->output_extents[j];
+            if (extent->size == 0) continue;
+            if (extent->cpu_start < 0x8000
+                || extent->cpu_start > 0xFFFF
+                || extent->size > 0x10000L - extent->cpu_start) {
+                fprintf(stderr, "error: FCEUX ROM export requires a raw PRG image "
+                        "with emitted bytes addressed in $8000-$FFFF\n");
+                return 0;
+            }
+            if (mirror_16k && (extent->output_start % FCEUX_NL_PAGE_SIZE
+                              != extent->cpu_start % FCEUX_NL_PAGE_SIZE)) {
+                fprintf(stderr, "error: FCEUX 16KB mirror has inconsistent CPU and PRG offsets\n");
+                return 0;
+            }
+        }
+    }
+    if (mirror_16k && ctx->output_offset != FCEUX_NL_PAGE_SIZE) {
+        fprintf(stderr, "error: --fceux-nl-mirror-16k requires exactly 16384 PRG bytes\n");
+        return 0;
+    }
+    for (i = 0; i < ctx->symbol_count; i++) {
+        const xref_symbol *symbol = &ctx->symbols[i];
+        int address = symbol->cpu_address;
+        if (!symbol->defined || !symbol->has_cpu_address
+            || strcmp(symbol->scope, "anonymous") == 0) continue;
+        if (ram && symbol->is_dataseg && address >= 0 && address < 0x8000) {
+            if (!fceux_nl_add(&ctx->nl, FCEUX_NL_RAM_BANK, address,
+                             nl_symbol_name(symbol->name, symbol->owner))) return 0;
+        }
+        if (rom && symbol->has_output_offset && address >= 0x8000 && address <= 0xFFFF) {
+            const xref_output_extent *extent;
+            long bank = symbol->output_offset / FCEUX_NL_PAGE_SIZE;
+            if (symbol->segment_id < 0
+                || (size_t)symbol->segment_id >= ctx->output_extent_capacity) continue;
+            extent = &ctx->output_extents[symbol->segment_id];
+            /* One-past-the-end and empty-segment labels identify no ROM byte. */
+            if (extent->size == 0 || symbol->output_offset < extent->output_start
+                || symbol->output_offset >= extent->output_start + extent->size) continue;
+            if (!fceux_nl_add(&ctx->nl, bank, address,
+                             nl_symbol_name(symbol->name, symbol->owner))) return 0;
+            if (mirror_16k && !fceux_nl_add(&ctx->nl, bank, address ^ 0x4000,
+                                           nl_symbol_name(symbol->name, symbol->owner))) return 0;
+        }
+    }
+    return 1;
+}
+
+struct tag_analysis_result {
+    xref_build_context facts;
+};
+
+struct tag_analysis_output_plan {
+    analysis_output_options options;
+    char *csv_symbols;
+    char *csv_references;
+    fceux_nl_output_plan nl;
+};
+
+void free_analysis(analysis_result *analysis)
+{
+    if (analysis == NULL) return;
+    free_xref_context(&analysis->facts);
+    free(analysis);
+}
+
+analysis_result *collect_analysis(astnode *root, const analysis_options *options)
 {
     static astnodeprocmap map[] = {
         { DATASEG_NODE, xref_visit_dataseg },
@@ -9170,28 +9364,32 @@ int generate_xref(astnode *root,
         { TOMBSTONE_NODE, list_noop },
         { 0, NULL }
     };
-    xref_build_context ctx;
+    analysis_result *analysis = calloc(1, sizeof(*analysis));
+    xref_build_context *ctx;
     symbol_ident_list constants;
     int i;
     int ok = 1;
 
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.include_locals = include_locals;
-    ctx.include_anon = include_anon;
-    ctx.include_data = include_data;
-    ctx.include_instructions = include_instructions || instruction_records_file != NULL;
-    ctx.include_owner = include_owner;
-    ctx.pure_binary = pure_binary;
-    ctx.output_offset = 0;
-    ctx.current_segment_id = 0;
-    ctx.next_segment_id = 1;
+    if (analysis == NULL) return NULL;
+    ctx = &analysis->facts;
+    ctx->include_locals = options->include_locals;
+    ctx->include_anon = options->include_anon;
+    ctx->include_data = options->include_data;
+    ctx->include_instructions = options->include_instructions;
+    ctx->include_owner = options->include_owner;
+    ctx->pure_binary = options->pure_binary;
+    ctx->collect_memory_operands = options->collect_ram_names;
+    ctx->collect_output_extents = options->collect_rom_labels;
+    ctx->output_offset = 0;
+    ctx->current_segment_id = 0;
+    ctx->next_segment_id = 1;
 
     in_dataseg = 0;
     dataseg_pc = 0;
     codeseg_pc = 0;
     close_source_cache();
-    astproc_walk(root, &ctx, map);
-    if (ctx.failed) {
+    astproc_walk(root, ctx, map);
+    if (ctx->failed) {
         ok = 0;
     }
 
@@ -9208,7 +9406,7 @@ int generate_xref(astnode *root,
             }
             if (e->def != NULL) {
                 if (eval_expression_int(e->def, (int *)&value, 0)) {
-                    if (!add_or_update_xref_symbol(&ctx,
+                    if (!add_or_update_xref_symbol(ctx,
                                                    e->id,
                                                    "equ",
                                                    "global",
@@ -9225,7 +9423,7 @@ int generate_xref(astnode *root,
                         break;
                     }
                 } else {
-                    if (!add_or_update_xref_symbol(&ctx,
+                    if (!add_or_update_xref_symbol(ctx,
                                                    e->id,
                                                    "equ",
                                                    "global",
@@ -9248,10 +9446,10 @@ int generate_xref(astnode *root,
     }
 
     if (ok) {
-        for (i = 0; i < ctx.data_directive_ref_count; i++) {
-            xref_data_directive_reference *record = &ctx.data_directive_refs[i];
+        for (i = 0; i < ctx->data_directive_ref_count; i++) {
+            xref_data_directive_reference *record = &ctx->data_directive_refs[i];
             int value = 0;
-            if (!eval_expression_int_with_xref(record->final_expression, &ctx, &value, 0)) {
+            if (!eval_expression_int_with_xref(record->final_expression, ctx, &value, 0)) {
                 ok = 0;
                 break;
             }
@@ -9261,40 +9459,100 @@ int generate_xref(astnode *root,
     }
 
     if (ok) {
-        qsort(ctx.symbols, (size_t)ctx.symbol_count, sizeof(xref_symbol), xref_symbol_compare);
-        qsort(ctx.refs, (size_t)ctx.ref_count, sizeof(xref_ref), xref_ref_compare);
-        ok = rebuild_xref_symbol_index(&ctx);
-
-        if (ok && filename != NULL) {
-            if (format == XREF_FORMAT_JSON) {
-                ok = emit_xref_json(filename, &ctx, include_data, include_instructions, source_file, output_file, pure_binary);
-            } else if (format == XREF_FORMAT_TEXT) {
-                ok = emit_xref_text(filename, &ctx);
-            } else if (format == XREF_FORMAT_CSV) {
-                ok = emit_xref_csv(filename, &ctx);
-            } else {
-                ok = 0;
-            }
-        }
+        qsort(ctx->symbols, (size_t)ctx->symbol_count, sizeof(xref_symbol), xref_symbol_compare);
+        qsort(ctx->refs, (size_t)ctx->ref_count, sizeof(xref_ref), xref_ref_compare);
+        ok = rebuild_xref_symbol_index(ctx);
     }
-
-    if (ok && instruction_records_file != NULL) {
-        FILE *fp = fopen(instruction_records_file, "w");
-        if (fp == NULL) {
-            fprintf(stderr, "error: could not open instruction records `%s' for writing\n", instruction_records_file);
-            ok = 0;
-        } else {
-            ok = emit_instruction_records(fp, &ctx);
-            fputc('\n', fp);
-            if (ferror(fp)) ok = 0;
-            if (fclose(fp) != 0) ok = 0;
-            if (!ok) fprintf(stderr, "error: could not write instruction records `%s'\n", instruction_records_file);
-        }
+    if (ok && (options->collect_rom_labels || options->collect_ram_names)) {
+        ok = build_fceux_nl(ctx, options->collect_rom_labels,
+                            options->collect_ram_names, options->mirror_16k);
     }
-
     close_source_cache();
-    free_xref_context(&ctx);
-    return ok;
+    if (!ok) {
+        free_analysis(analysis);
+        return NULL;
+    }
+    return analysis;
+}
+
+void free_analysis_outputs(analysis_output_plan *plan)
+{
+    if (plan == NULL) return;
+    free(plan->csv_symbols);
+    free(plan->csv_references);
+    fceux_nl_free_outputs(&plan->nl);
+    free(plan);
+}
+
+analysis_output_plan *plan_analysis_outputs(const analysis_result *analysis,
+                                            const analysis_output_options *options)
+{
+    analysis_output_plan *plan = calloc(1, sizeof(*plan));
+    long size = analysis->facts.output_offset;
+    if (plan == NULL) return NULL;
+    plan->options = *options;
+    if (options->xref_file != NULL && options->format == XREF_FORMAT_CSV) {
+        plan->csv_symbols = str_concat(options->xref_file, ".symbols.csv");
+        plan->csv_references = str_concat(options->xref_file, ".refs.csv");
+        if (plan->csv_symbols == NULL || plan->csv_references == NULL) goto fail;
+    }
+    if (!fceux_nl_plan_outputs(&plan->nl, options->rom_prefix, options->ram_file,
+                               size / FCEUX_NL_PAGE_SIZE + (size % FCEUX_NL_PAGE_SIZE != 0))) goto fail;
+    return plan;
+fail:
+    free_analysis_outputs(plan);
+    return NULL;
+}
+
+int validate_analysis_outputs(const analysis_output_plan *plan)
+{
+    size_t i;
+    if (plan == NULL) return 1;
+    if (plan->options.format == XREF_FORMAT_CSV) {
+        if (!dependencies_output(plan->csv_symbols)
+            || !dependencies_output(plan->csv_references)) return 0;
+    } else if (!dependencies_output(plan->options.xref_file)) return 0;
+    if (!dependencies_output(plan->options.instruction_records_file)) return 0;
+    for (i = 0; i < plan->nl.count; i++) {
+        if (!dependencies_output(plan->nl.destinations[i].path)) return 0;
+    }
+    return 1;
+}
+
+int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan)
+{
+    const analysis_output_options *options = &plan->options;
+    const xref_build_context *ctx = &analysis->facts;
+    int ok = 1;
+    if (options->xref_file != NULL) {
+        switch (options->format) {
+            case XREF_FORMAT_JSON:
+                ok = emit_xref_json(options->xref_file, ctx, ctx->include_data,
+                                    options->xref_instructions, options->source_file,
+                                    options->output_file, ctx->pure_binary);
+                break;
+            case XREF_FORMAT_TEXT:
+                ok = emit_xref_text(options->xref_file, ctx);
+                break;
+            case XREF_FORMAT_CSV:
+                ok = emit_xref_csv(plan->csv_symbols, plan->csv_references, ctx);
+                break;
+            default: return 0;
+        }
+    }
+    if (ok && options->instruction_records_file != NULL) {
+        FILE *fp = fopen(options->instruction_records_file, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "error: could not open instruction records `%s' for writing\n", options->instruction_records_file);
+            return 0;
+        }
+        ok = emit_instruction_records(fp, ctx);
+        fputc('\n', fp);
+        if (ferror(fp)) ok = 0;
+        if (fclose(fp) != 0) ok = 0;
+        if (!ok) fprintf(stderr, "error: could not write instruction records `%s'\n", options->instruction_records_file);
+    }
+    return ok && fceux_nl_write(&analysis->facts.nl, &plan->nl);
 }
 
 typedef struct tag_audit_label {

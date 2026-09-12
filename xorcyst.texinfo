@@ -356,6 +356,24 @@ Directs output to the file @code{FILE} rather than the default file.
 @item --pure-binary
 Specifies that the output should be in the form of pure 6502 code. This will only succeed if the input has no external dependencies.
 
+@item --fceux-nl-rom-prefix PREFIX
+Writes FCEUX debugger name files as @file{PREFIX<bank>.nl}. Bank numbers are
+uppercase hexadecimal physical 16KB PRG page numbers. Requires
+@code{--pure-binary} output containing the complete raw PRG payload, without
+an iNES header or CHR data. Local labels are included independently of xref
+scope options. Unlabeled pages produce empty files.
+
+@item --fceux-nl-ram-output FILE
+Writes FCEUX names for dataseg labels and named direct memory operands below
+@code{$8000}. Requires @code{--pure-binary}. Constants used only as immediate
+values and literal-only addresses are excluded. Aliases at one address appear
+in the comment field.
+
+@item --fceux-nl-mirror-16k
+Names both CPU windows of a 16KB NROM image. Requires
+@code{--fceux-nl-rom-prefix} and exactly 16384 emitted PRG bytes. Existing
+higher-numbered name files are not removed automatically.
+
 @item --swap-parens
 Changes the operators used to specify indirection from @code{[ ]} to @code{( )}. @code{[ ]} takes over @code{( )}'s role in arithmetic expressions.
 
