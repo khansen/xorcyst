@@ -49,6 +49,10 @@ static int binary_rename(const char *from, const char *to)
 #undef fclose
 #undef rename
 
+static int nl_mkstemp(char *template)
+{
+    return io_fault("nl_mkstemp") ? -1 : mkstemp(template);
+}
 static FILE *nl_fdopen(int fd, const char *mode)
 {
     return io_fault("nl_fdopen") ? NULL : fdopen(fd, mode);
@@ -66,6 +70,7 @@ static int nl_rename(const char *from, const char *to)
 {
     return io_fault("nl_rename") ? -1 : rename(from, to);
 }
+#define mkstemp nl_mkstemp
 #define fdopen nl_fdopen
 #define ferror nl_ferror
 #define fclose nl_fclose

@@ -276,14 +276,16 @@ Every injected allocation failure must produce a nonzero exit without a crash;
 failures before publication must preserve all existing destinations. This does
 not cover allocations in parsing, AST evaluation, or path validation.
 
-The same harness injects 32 I/O failure scenarios after temporary-file creation.
+The same harness injects 35 I/O failure scenarios during temporary-file creation
+and subsequent output operations.
 Binary `fdopen` failures cover fresh and existing staging files. Binary `ferror`,
 `fclose`, and `rename` failures cover fresh and existing destinations, raw binary
 output with NL enabled and disabled, and object output. Successful replacement
-is also checked in all three modes. Each NL `fdopen`, `ferror`, `fclose`, and
-`rename` operation is failed at the RAM file and both ROM banks, checking
-temporary-file cleanup, preservation of the failed and later destinations, and
-the documented retention of files already published. `TEST_FAULT_CFLAGS` can add sanitizers to this build;
+is also checked in all three modes. Each NL `mkstemp`, `fdopen`, `ferror`,
+`fclose`, and `rename` operation is failed at the RAM file and both ROM banks,
+checking temporary-file cleanup, preservation of the failed and later
+destinations, and the documented retention of files already published.
+`TEST_FAULT_CFLAGS` can add sanitizers to this build;
 normal exporter and address-view tests are also checked with AddressSanitizer
 and UndefinedBehaviorSanitizer.
 

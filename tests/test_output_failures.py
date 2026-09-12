@@ -93,7 +93,7 @@ class OutputFailures(unittest.TestCase):
         self.assertEqual(published[self.bank0], b'$8000#First#\n')
         self.assertEqual(published[self.bank1], b'$C000#Second#\n')
         manifest = self.root / 'deps.json'
-        for operation in ('nl_fdopen', 'nl_ferror', 'nl_fclose', 'nl_rename'):
+        for operation in ('nl_mkstemp', 'nl_fdopen', 'nl_ferror', 'nl_fclose', 'nl_rename'):
             for fail_at in range(len(ordered)):
                 with self.subTest(operation=operation, fail_at=fail_at):
                     previous = self.seed_outputs([manifest])
