@@ -231,14 +231,24 @@ initialization closes the descriptor and removes the regular staging file.
 Exclusive creation records staging-file ownership. A failed descriptor check
 removes a file created by this invocation and preserves a pre-existing node.
 
-The binary and each NL file are written to temporary files beside their
+The binary and each sidecar are written to temporary files beside their
 destinations. Publication requires a clear stream error indicator and a
 successful close, followed by a direct rename over the destination. A write,
 close, or rename failure leaves that destination's previous contents intact
 and removes the temporary file. Binary failures prevent analysis and manifest
 publication; diagnostic listings may still describe the failed build.
 The entire set of output files is not an atomic transaction: a later filesystem
-error may follow successful replacement of an earlier file.
+error may follow successful replacement of an earlier file. The shared sidecar
+writer covers listings, all xref formats, standalone instruction records,
+summaries, data analyses, NL files, and manifests. CSV closes both streams
+before either file is published. The manifest still revalidates consumed
+inputs after closing its staged stream and before publishing it.
+
+Sidecar stages use a fixed-length `.xasm-XXXXXX` basename in the destination
+directory, so long destination basenames remain supported. Only stages created
+by this invocation are removed. Publication replaces a symlink itself and
+rejects FIFOs, sockets, devices, and directories. Analyses that select stdout
+check stream/flush errors without closing stdout.
 
 JSON xref owner, address, and data-flow analysis completes before its destination
 is opened, so those allocation failures preserve existing xref contents. Symbol
@@ -286,8 +296,8 @@ queries, verifying that unknown capabilities still reject case/Unicode aliases
 while permitting distinct names.
 
 `tests/test_output_failures.py` builds the real assembler with test-only wrappers
-around its CLI, exporter, analysis, and symbol-table translation units. Its nine
-tests inject
+around its CLI, shared output writer, analysis, and symbol-table translation units.
+Its tests inject
 476 allocations during shared collection (including symbol/index and extent
 growth and long local RAM expressions), three during shared destination
 planning, 108 during NL name projection, and the visible-address-index allocation.
@@ -297,6 +307,13 @@ cleanup and preservation of existing xref and NL destinations.
 Every injected allocation failure must produce a nonzero exit without a crash;
 failures before publication must preserve all existing destinations. This does
 not cover allocations in parsing, AST evaluation, or path validation.
+
+The output matrix fails allocation, creation, stream initialization, stream
+status, close, and rename for every sidecar format with existing and absent
+destinations. It verifies preservation of the failed destination and cleanup
+of owned stages, including both CSV files, diagnostic listings, instruction
+serialization failures, and stdout analysis errors. Long filenames, unowned
+stage-like filenames, and non-regular destinations are covered separately.
 
 The same harness injects 37 I/O failure scenarios during temporary-file creation
 and subsequent output operations.

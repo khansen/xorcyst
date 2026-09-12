@@ -91,7 +91,7 @@ directory being maliciously mutated between filesystem operations.
 {
   "schema": "xasm-dependencies",
   "version": "1",
-  "producer_version": "xasm 1.6.1",
+  "producer_version": "xasm 1.7.0-dev",
   "invocation": {"cwd": "/work", "argv": ["/tools/xasm", "--pure-binary", "input.asm", "--dependency-manifest=inputs.json"]},
   "inputs": [{"path": "/work/input.asm", "size": 18, "sha256": "<64 lowercase hex digits>", "roles": ["source"]}],
   "missing_paths": []

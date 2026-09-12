@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ([2.71])
-AC_INIT([xorcyst],[1.6.1])
+AC_INIT([xorcyst], m4_esyscmd_s([sed -n 's/^#define XORCYST_VERSION "\(.*\)"/\1/p' version.h]))
 
 AC_CONFIG_SRCDIR([astnode.c])
 AC_CONFIG_HEADERS([config.h])

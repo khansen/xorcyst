@@ -1,3 +1,15 @@
+Version 1.7.0-dev (unreleased):
+- Add FCEUX ROM/RAM debugger name export using physical PRG page offsets,
+  independent of xref filters, with optional 16 KiB NROM mirroring.
+- Add versioned instruction/operand records, standalone instruction sidecars,
+  data-directive references, and content-hashed dependency manifests.
+- Add structured listings, xref summaries, data-reference and index-pattern
+  analyses, data consumers/coverage, raw-address audits, and binary comparison.
+- Preserve output destinations on failed sidecar writes, closes, and renames;
+  report listing and stdout analysis errors and validate destination aliases.
+- Improve parser, AST removal, symbol lookup, and JSON serialization costs.
+- Run Linux/macOS regressions and sanitizer checks in GitHub Actions.
+
 Version 1.6.1:
 - Modernize autotools
 Version 1.6.0:
