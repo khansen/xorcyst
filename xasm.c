@@ -1456,10 +1456,11 @@ static int protect_analysis_sources(const astnode *node)
    here before the first output file is opened. */
 static int validate_output_destinations(const xasm_arguments *args,
                                         const analysis_output_plan *analysis_outputs,
+                                        const char *binary_output,
                                         const char *binary_temporary)
 {
     struct stat staging;
-    if (!(dependencies_output(args->output_file)
+    if (!(dependencies_output(binary_output)
         && dependencies_output(binary_temporary)
         && dependencies_output(args->listing_file)
         && validate_analysis_outputs(analysis_outputs)
@@ -1467,11 +1468,31 @@ static int validate_output_destinations(const xasm_arguments *args,
         && (!args->analyze_index_patterns || dependencies_output(args->index_patterns_output))
         && (!args->data_consumers || dependencies_output(args->data_consumers_output))
         && (!args->analyze_data_coverage || dependencies_output(args->data_coverage_output)))) return 0;
-    if (lstat(binary_temporary, &staging) == 0 && S_ISLNK(staging.st_mode)) {
-        fprintf(stderr, "error: binary staging path is a symbolic link: %s\n", binary_temporary);
+    if (lstat(binary_temporary, &staging) == 0 && !S_ISREG(staging.st_mode)) {
+        fprintf(stderr, "error: binary staging path is not a regular file: %s\n", binary_temporary);
         return 0;
     }
     return 1;
+}
+
+static FILE *open_binary_temporary(const char *path)
+{
+    struct stat staging;
+    FILE *fp;
+    /* A FIFO substituted after validation must not block this open. Check the
+       opened descriptor before truncating or writing any bytes. */
+    int fd = open(path, O_WRONLY | O_CREAT | O_NOFOLLOW | O_NONBLOCK, 0666);
+    if (fd < 0) return NULL;
+    if (fstat(fd, &staging) != 0 || !S_ISREG(staging.st_mode)) {
+        close(fd);
+        return NULL;
+    }
+    fp = ftruncate(fd, 0) == 0 ? fdopen(fd, "wb") : NULL;
+    if (fp == NULL) {
+        close(fd);
+        remove(path);
+    }
+    return fp;
 }
 
 int main(int argc, char *argv[]) {
@@ -1484,6 +1505,7 @@ int main(int argc, char *argv[]) {
     int needs_analysis;
     int assembly_ready;
     int destinations_validated = 0;
+    const char *binary_outfile = NULL;
     char *tmp_outfile = NULL;
     analysis_result *analysis = NULL;
     analysis_output_plan *analysis_outputs = NULL;
@@ -1606,7 +1628,8 @@ int main(int argc, char *argv[]) {
        analysis collects layout without requiring exportable names or operands. */
     assembly_ready = total_errors() == 0;
     if (assembly_ready || (needs_output_protection && xasm_args.listing_file != NULL)) {
-        if (xasm_args.output_file == NULL) {
+        binary_outfile = xasm_args.output_file;
+        if (binary_outfile == NULL) {
             /* Create default name of output */
             const char *default_ext = "o";
             int default_outfile_len = strlen(xasm_args.input_file)
@@ -1614,7 +1637,8 @@ int main(int argc, char *argv[]) {
             default_outfile = (char *)malloc(default_outfile_len);
             if (default_outfile == NULL) { exit_code = 3; goto cleanup; }
             change_extension(xasm_args.input_file, default_ext, default_outfile);
-            xasm_args.output_file = default_outfile;
+            binary_outfile = default_outfile;
+            if (assembly_ready) xasm_args.output_file = default_outfile;
         }
         if (needs_output_protection && !dependencies_protect_source(xasm_args.compare_file))
             goto cleanup;
@@ -1649,7 +1673,7 @@ int main(int argc, char *argv[]) {
                 .ram_file = xasm_args.fceux_nl_ram_file,
                 .mirror_16k = xasm_args.fceux_nl_mirror_16k,
                 .source_file = xasm_args.input_file,
-                .output_file = xasm_args.output_file
+                .output_file = binary_outfile
             };
             analysis = collect_analysis(root_node, &options);
             if (analysis == NULL) {
@@ -1668,24 +1692,22 @@ int main(int argc, char *argv[]) {
                 goto cleanup;
             }
         }
-        size_t tmp_len = strlen(xasm_args.output_file) + 5;
+        size_t tmp_len = strlen(binary_outfile) + 5;
         tmp_outfile = (char *)malloc(tmp_len);
         if (tmp_outfile == NULL) {
             fprintf(stderr, "error: out of memory\n");
             exit_code = 3;
             goto cleanup;
         }
-        snprintf(tmp_outfile, tmp_len, "%s.tmp", xasm_args.output_file);
-        if (!validate_output_destinations(&xasm_args, analysis_outputs, tmp_outfile)) {
+        snprintf(tmp_outfile, tmp_len, "%s.tmp", binary_outfile);
+        if (!validate_output_destinations(&xasm_args, analysis_outputs, binary_outfile, tmp_outfile)) {
             exit_code = 3;
             goto cleanup;
         }
         destinations_validated = 1;
     }
     if (assembly_ready) {
-        int output_fd = open(tmp_outfile, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0666);
-        output_fp = output_fd < 0 ? NULL : fdopen(output_fd, "wb");
-        if (output_fd >= 0 && output_fp == NULL) close(output_fd);
+        output_fp = open_binary_temporary(tmp_outfile);
         if (output_fp == NULL) {
             fprintf(stderr, "error: could not open `%s' for writing\n", tmp_outfile);
             err_count++;

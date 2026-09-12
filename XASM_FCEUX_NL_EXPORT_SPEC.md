@@ -144,7 +144,9 @@ and serialization:
    all real label definitions and their CPU/output coordinates. An indexed
    name lookup updates definitions and resolves analysis references. Index
    values are array indexes, not pointers invalidated by `realloc`; the index
-   is rebuilt after the symbol array is sorted. Local owners borrow the
+   is rebuilt after the symbol array is sorted. Symbol insertion and definition
+   updates allocate all required fields before publishing the change, so a
+   failed allocation cannot expose an incomplete entry. Local owners borrow the
    stable name of their real owning symbol, without duplicating the string.
 2. **Project output views.** Xref's scope controls filter its serialization
    and address/name resolution. They do not discard real definitions from
@@ -209,13 +211,19 @@ Diagnostic listings also use this validation after assembly errors, including
 reservations for the comparison reference, binary, expanded CSV files and NL
 files. Name projection is skipped on those failed builds. If layout collection
 cannot resolve a required storage size, it leaves outputs untouched.
+An implicit binary filename is reserved for validation without changing the
+diagnostic listing's output metadata; an explicitly requested filename remains
+in that metadata.
 
 Path comparison follows dangling symlink chains as well as existing files and
 symlinked directories. On macOS it queries filesystem case sensitivity and uses
 the system CoreFoundation Unicode comparison facilities for future filenames,
 including case and normalization aliases. The macOS build links that system
-framework; other builds retain POSIX path comparison. Binary staging symlinks
-are rejected, and the staging open uses `O_NOFOLLOW`.
+framework; other builds retain POSIX path comparison. Existing binary staging
+paths must be regular files; symlinks, FIFOs, directories, and sockets are
+rejected before publication. The staging open uses `O_NOFOLLOW | O_NONBLOCK`
+and checks the opened descriptor before truncating or writing. A failed stream
+initialization closes the descriptor and removes the regular staging file.
 
 Each NL file is written to a temporary file beside its destination and renamed
 only after successful completion. Failures leave that file's previous contents
@@ -230,7 +238,7 @@ This replaces the preliminary branch's unbounded, unchecked stale-file deletion.
 
 ## Validation
 
-`tests/test_fceux_nl.py` has 40 tests, with matrices covering xref formats,
+`tests/test_fceux_nl.py` has 43 tests, with matrices covering xref formats,
 local/anonymous filters, and analysis outputs. It covers physical page numbering, unlabeled pages,
 local-only pages, the exact `$C000` boundary, end labels, multiple origins per
 page, four-window layouts, hexadecimal filenames beyond bank 9, both NROM
@@ -253,10 +261,24 @@ retain their contents apart from the expected invocation argument changes.
 
 `tests/test_fceux_nl_alloc.c` injects failures at the 79 allocations reached in
 the NL table, destination planning, writer, and fixture-name allocations.
-Each injected failure must return failure. This does not fault-inject shared
-analysis collection, address/name indexes, expression rendering, or path
-validation. Normal execution of the exporter and address-view tests is also
-checked with AddressSanitizer and UndefinedBehaviorSanitizer.
+Each injected failure must return failure.
+
+`tests/test_output_failures.py` builds the real assembler with test-only wrappers
+around its CLI, exporter, and analysis translation units. Its four tests inject
+476 allocations during shared collection (including symbol/index and extent
+growth and long local RAM expressions), three during shared destination
+planning, 108 during NL name projection, and the visible-address-index allocation.
+Every injected allocation failure must produce a nonzero exit without a crash;
+failures before publication must preserve all existing destinations. This does
+not cover allocations in parsing, AST evaluation, or path validation.
+
+The same harness injects binary `fdopen` failures and NL `fdopen`, `ferror`,
+`fclose`, and `rename` failures after temporary-file creation. Each NL operation
+is failed at the RAM file and both ROM banks, checking temporary-file cleanup,
+preservation of the failed and later destinations, and the documented retention
+of files already published. `TEST_FAULT_CFLAGS` can add sanitizers to this build;
+normal exporter and address-view tests are also checked with AddressSanitizer
+and UndefinedBehaviorSanitizer.
 
 `tests/verify_fceux_projects.py` provides opt-in checks using larger, external
 projects and a pre-feature executable. It compares binary bytes, diagnostics,
@@ -329,3 +351,12 @@ identical outputs and diagnostics. Temporary phase instrumentation measured
 collection plus serialization at 0.80, 2.07 and 3.99 ms after indexing; the
 preceding feature build measured 4.98, 66.41 and 252.10 ms. These phase timings
 isolate the addressed regression from the assembler's other costs.
+
+After staging and allocation-failure hardening, all 22 configured NESrev projects
+pass the seven-mode matrix against the same master baseline with NL off/on.
+Every PRG matches its configured reference, warning baselines match, and the
+66 regenerated NL files match the previously installed files byte-for-byte.
+This corpus includes eighteen mirrored 16 KB NROM programs, one 32 KB NROM
+program, and three 128 KB MMC1 programs. Five paired hidden-local runs after
+these fixes measured total CPU ratios of 1.03, 1.00 and 1.02 for 1,000, 4,000
+and 8,000 locals/reads, within the existing acceptance threshold.

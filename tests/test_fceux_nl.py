@@ -3,6 +3,8 @@
 import json
 import os
 import shlex
+import socket
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -547,6 +549,97 @@ END
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(bank.read_text(), 'preserve symbols\n')
         self.assertEqual(self.output.read_bytes(), b'preserve binary')
+
+    def test_diagnostic_listing_metadata_preserves_requested_binary_path(self):
+        self.source.write_text('.ORG $8000\nRTS\n.ERROR "stop"\nEND\n')
+        listing = self.root / 'listing.json'
+        for explicit_output in (False, True):
+            baseline = None
+            for protection in ('none', 'nl', 'manifest', 'both'):
+                with self.subTest(output=explicit_output, protection=protection):
+                    flags = [str(XASM), '--pure-binary', str(self.source),
+                             f'--listing={listing}', '--listing-format=json']
+                    if explicit_output:
+                        flags += ['-o', str(self.output)]
+                    if protection in ('nl', 'both'):
+                        flags += [f'--fceux-nl-rom-prefix={self.prefix}', f'--fceux-nl-ram-output={self.ram}']
+                    if protection in ('manifest', 'both'):
+                        flags += [f'--dependency-manifest={self.root}/deps.json']
+                    result = subprocess.run(flags, capture_output=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    data = json.loads(listing.read_bytes())
+                    self.assertEqual(data['output_file'], str(self.output) if explicit_output else '')
+                    data.pop('timestamp_utc', None)
+                    if baseline is None:
+                        baseline = data
+                    self.assertEqual(data, baseline)
+                    self.assertFalse(self.output.exists())
+                    self.assertFalse(self.source.with_suffix('.o').exists())
+
+    def test_nonregular_binary_staging_nodes_fail_without_publishing(self):
+        self.source.write_text('.ORG $8000\nRTS\nEND\n')
+        stage = Path(str(self.output) + '.tmp')
+        listing = self.root / 'listing.json'
+        for kind in ('fifo', 'directory', 'socket'):
+            with self.subTest(kind=kind):
+                connection = None
+                if kind == 'fifo':
+                    os.mkfifo(stage)
+                elif kind == 'directory':
+                    stage.mkdir()
+                else:
+                    connection = socket.socket(socket.AF_UNIX)
+                    previous_directory = os.getcwd()
+                    try:
+                        # AF_UNIX limits pathname length, including temp parents.
+                        os.chdir(self.root)
+                        connection.bind(stage.name)
+                    except PermissionError:
+                        connection.close()
+                        self.skipTest('Unix socket creation is restricted in this environment')
+                    finally:
+                        os.chdir(previous_directory)
+                try:
+                    node_type = stat.S_IFMT(stage.stat().st_mode)
+                    for protection in ('none', 'nl', 'manifest'):
+                        with self.subTest(protection=protection):
+                            paths = [self.output, listing, self.ram]
+                            for path in paths:
+                                path.write_bytes(b'preserve ' + path.name.encode())
+                            expected = {path: path.read_bytes() for path in paths}
+                            flags = [f'--listing={listing}', '--listing-format=json']
+                            if protection == 'nl':
+                                flags += [f'--fceux-nl-ram-output={self.ram}']
+                            if protection == 'manifest':
+                                flags += [f'--dependency-manifest={self.root}/deps.json']
+                            result = subprocess.run([str(XASM), '--pure-binary', str(self.source),
+                                                     '-o', str(self.output), *flags], capture_output=True, timeout=5)
+                            self.assertNotEqual(result.returncode, 0)
+                            self.assertIn(b'not a regular file', result.stderr)
+                            self.assertEqual({path: path.read_bytes() for path in paths}, expected)
+                            self.assertEqual(stat.S_IFMT(stage.stat().st_mode), node_type)
+                finally:
+                    if connection is not None:
+                        connection.close()
+                    if kind == 'directory':
+                        stage.rmdir()
+                    else:
+                        stage.unlink()
+
+    def test_diagnostic_listing_still_reserves_implicit_binary_destination(self):
+        self.source.write_text('.ORG $8000\nRTS\n.ERROR "stop"\nEND\n')
+        implicit_output = self.source.with_suffix('.o')
+        for manifest in (False, True):
+            with self.subTest(manifest=manifest):
+                implicit_output.write_bytes(b'preserve binary')
+                flags = [str(XASM), '--pure-binary', str(self.source),
+                         f'--listing={implicit_output}', f'--fceux-nl-ram-output={self.ram}']
+                if manifest:
+                    flags += [f'--dependency-manifest={self.root}/deps.json']
+                result = subprocess.run(flags, capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b'aliases', result.stderr)
+                self.assertEqual(implicit_output.read_bytes(), b'preserve binary')
 
     def test_future_filesystem_equivalent_destinations_are_rejected(self):
         self.source.write_text('Port .EQU $2000\n.ORG $8000\nSTA Port\nEND\n')

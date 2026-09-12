@@ -26,7 +26,8 @@ typedef struct tag_listed_label {
 
 static FILE *listing_fp = NULL;
 static FILE *source_fp = NULL;
-static char *current_source_file = NULL;
+/* AST location filenames remain valid until the assembly is released. */
+static const char *current_source_file = NULL;
 static int current_source_line_cached = 0;
 static char source_line_buffer[SOURCE_LINE_BUFFER_SIZE];
 
@@ -134,10 +135,7 @@ static void close_source_cache(void)
         fclose(source_fp);
         source_fp = NULL;
     }
-    if (current_source_file != NULL) {
-        free(current_source_file);
-        current_source_file = NULL;
-    }
+    current_source_file = NULL;
     current_source_line_cached = 0;
 }
 
@@ -373,12 +371,7 @@ static const char *get_source_line(const char *filename, int line)
             return "";
         }
 
-        current_source_file = xstrdup(filename);
-        if (current_source_file == NULL) {
-            fclose(source_fp);
-            source_fp = NULL;
-            return "";
-        }
+        current_source_file = filename;
     }
 
     if (line <= current_source_line_cached) {
@@ -2724,35 +2717,44 @@ static int add_or_update_xref_symbol(xref_build_context *ctx,
     int index;
     xref_symbol *s;
 
+    if (ctx->failed) return 0;
     index = find_xref_symbol_index(ctx, name);
     if (index < 0) {
+        xref_symbol candidate = {0};
         if (!ensure_xref_symbol_capacity(ctx)) {
             return 0;
         }
         if (ctx->symbol_index_capacity / 2 <= (size_t)ctx->symbol_count + 1
             && !rebuild_xref_symbol_index(ctx)) return 0;
-        index = ctx->symbol_count++;
-        s = &ctx->symbols[index];
-        memset(s, 0, sizeof(*s));
-        s->name = xstrdup(name);
-        s->kind = xstrdup(kind);
-        s->scope = xstrdup(scope);
-        if (s->name == NULL || s->kind == NULL || s->scope == NULL) {
+        candidate.name = xstrdup(name);
+        candidate.kind = xstrdup(kind);
+        candidate.scope = xstrdup(scope);
+        if (candidate.name == NULL || candidate.kind == NULL || candidate.scope == NULL) {
+            free(candidate.name);
+            free(candidate.kind);
+            free(candidate.scope);
             ctx->failed = 1;
             return 0;
         }
+        index = ctx->symbol_count++;
+        s = &ctx->symbols[index];
+        *s = candidate;
         index_xref_symbol(ctx, index);
     } else {
         s = &ctx->symbols[index];
         if (defined && !s->defined) {
-            free(s->kind);
-            free(s->scope);
-            s->kind = xstrdup(kind);
-            s->scope = xstrdup(scope);
-            if (s->kind == NULL || s->scope == NULL) {
+            char *new_kind = xstrdup(kind);
+            char *new_scope = xstrdup(scope);
+            if (new_kind == NULL || new_scope == NULL) {
+                free(new_kind);
+                free(new_scope);
                 ctx->failed = 1;
                 return 0;
             }
+            free(s->kind);
+            free(s->scope);
+            s->kind = new_kind;
+            s->scope = new_scope;
         }
     }
 
