@@ -497,15 +497,29 @@ void astnode_replace(astnode *old_node, astnode *new_node)
     }
 }
 
+/* Detach a known child without computing its position in the sibling list. */
+static void unlink_child(astnode *parent, astnode *child)
+{
+    if (child->prev_sibling != NULL) {
+        child->prev_sibling->next_sibling = child->next_sibling;
+    } else {
+        parent->first_child = child->next_sibling;
+    }
+    if (child->next_sibling != NULL) {
+        child->next_sibling->prev_sibling = child->prev_sibling;
+    }
+    child->parent = child->prev_sibling = child->next_sibling = NULL;
+}
+
 /**
- * Removes a node from a tree.
+ * Removes a node from a tree in constant time, retaining its children.
  * @param n The node to remove (can't be the root of the tree)
  */
 void astnode_remove(astnode *n)
 {
     astnode *p = astnode_get_parent(n);
     if (n && p) {
-        astnode_remove_child(p, n);
+        unlink_child(p, n);
     }
 }
 
@@ -519,20 +533,8 @@ int astnode_remove_child(astnode *p, astnode *c)
 {
     int i;
     i = astnode_get_child_index(p, c);
-    if (i == 0) {
-        /* Remove head of list. */
-        p->first_child = c->next_sibling;
-        if (p->first_child) {
-            p->first_child->prev_sibling = NULL;
-        }
-        c->parent = c->next_sibling = c->prev_sibling = NULL;
-    }
-    else if (i > 0) {
-        c->prev_sibling->next_sibling = c->next_sibling;
-        if (c->next_sibling) {
-            c->next_sibling->prev_sibling = c->prev_sibling;
-        }
-        c->parent = c->next_sibling = c->prev_sibling = NULL;
+    if (i >= 0) {
+        unlink_child(p, c);
     }
     return i;
 }
