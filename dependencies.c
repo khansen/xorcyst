@@ -143,12 +143,18 @@ static int same_future_name(const char *parent, const char *a, const char *b)
 #ifdef __APPLE__
     /* Darwin filesystems expose case sensitivity; CoreFoundation supplies
        Unicode comparison without changing the assembler's process locale. */
-    long sensitive = pathconf(parent, _PC_CASE_SENSITIVE);
+    long sensitive;
     CFStringRef left, right;
     CFStringCompareFlags flags = kCFCompareNonliteral;
     int same;
-    if (sensitive < 0) { failure("cannot determine output filesystem case sensitivity", parent); return 1; }
-    if (!sensitive) flags |= kCFCompareCaseInsensitive;
+    errno = 0;
+    sensitive = pathconf(parent, _PC_CASE_SENSITIVE);
+    if (sensitive < 0 && errno != 0) {
+        failure("cannot determine output filesystem case sensitivity", parent);
+        return 1;
+    }
+    /* An indeterminate result must still protect potential case aliases. */
+    if (sensitive <= 0) flags |= kCFCompareCaseInsensitive;
     left = CFStringCreateWithCString(NULL, a, kCFStringEncodingUTF8);
     right = CFStringCreateWithCString(NULL, b, kCFStringEncodingUTF8);
     same = left == NULL || right == NULL || CFStringCompare(left, right, flags) == kCFCompareEqualTo;

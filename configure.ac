@@ -47,6 +47,21 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #error Not Darwin
 #endif
 ]], [[]])], [DARWIN_LIBS="-framework CoreFoundation"], [DARWIN_LIBS=""])
+if test "x$DARWIN_LIBS" != "x"; then
+  AC_MSG_CHECKING([for CoreFoundation headers and framework])
+  xasm_save_LIBS=$LIBS
+  LIBS="$LIBS $DARWIN_LIBS"
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+#include <CoreFoundation/CoreFoundation.h>
+]], [[
+CFStringRef name = CFStringCreateWithCString(NULL, "xasm", kCFStringEncodingUTF8);
+if (name != NULL) CFRelease(name);
+]])], [AC_MSG_RESULT([yes])], [
+    AC_MSG_RESULT([no])
+    AC_MSG_ERROR([CoreFoundation headers and framework are required for Darwin output path protection])
+  ])
+  LIBS=$xasm_save_LIBS
+fi
 AC_SUBST([DARWIN_LIBS])
 
 dnl Checks for header files.

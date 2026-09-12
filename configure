@@ -639,8 +639,7 @@ ac_includes_default="\
 
 ac_header_c_list=
 ac_func_c_list=
-ac_subst_vars='DARWIN_LIBS
-am__EXEEXT_FALSE
+ac_subst_vars='am__EXEEXT_FALSE
 am__EXEEXT_TRUE
 LTLIBOBJS
 LIBOBJS
@@ -652,6 +651,7 @@ build_os
 build_vendor
 build_cpu
 build
+DARWIN_LIBS
 LEXLIB
 LEX
 YACC
@@ -6277,7 +6277,6 @@ if test "x$LEX" = "x:"; then
 printf "%s\n" "$as_me: WARNING: No lex/flex found; scanner.c will not be regenerated from scanner.l" >&2;}
 fi
 
-
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -6301,6 +6300,43 @@ else case e in #(
 esac
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+if test "x$DARWIN_LIBS" != "x"; then
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for CoreFoundation headers and framework" >&5
+printf %s "checking for CoreFoundation headers and framework... " >&6; }
+  xasm_save_LIBS=$LIBS
+  LIBS="$LIBS $DARWIN_LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#include <CoreFoundation/CoreFoundation.h>
+
+int
+main (void)
+{
+
+CFStringRef name = CFStringCreateWithCString(NULL, "xasm", kCFStringEncodingUTF8);
+if (name != NULL) CFRelease(name);
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+else case e in #(
+  e)
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+    as_fn_error $? "CoreFoundation headers and framework are required for Darwin output path protection" "$LINENO" 5
+   ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$xasm_save_LIBS
+fi
 
 
 ac_fn_c_check_header_compile "$LINENO" "stddef.h" "ac_cv_header_stddef_h" "$ac_includes_default"

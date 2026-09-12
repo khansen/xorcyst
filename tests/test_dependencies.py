@@ -26,6 +26,12 @@ class Dependencies(unittest.TestCase):
                         str(ROOT / "tests/dependency_driver.c"), str(ROOT / "dependencies.c"),
                         str(ROOT / "sha256.c"), "-o", str(cls.driver),
                         *(["-framework", "CoreFoundation"] if sys.platform == "darwin" else [])], check=True)
+        if sys.platform == "darwin":
+            cls.pathconf_driver = Path(cls.build.name) / "pathconf-driver"
+            subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
+                            str(ROOT / "tests/dependency_driver.c"), str(ROOT / "tests/test_pathconf_faults.c"),
+                            str(ROOT / "sha256.c"), "-o", str(cls.pathconf_driver),
+                            "-framework", "CoreFoundation"], check=True)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="xasm-dependencies-")
@@ -212,6 +218,30 @@ class Dependencies(unittest.TestCase):
         run = subprocess.run([str(self.driver), 'protect-alias', 'outputs', str(relative), str(other)],
                              capture_output=True, timeout=5)
         self.assertEqual(run.returncode, 0, run.stderr)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin filesystem capabilities")
+    def test_future_names_with_unknown_or_failed_case_sensitivity(self):
+        for mode, first, second, expected in (
+                ("unknown", "out.bin", "other.nl", 0),
+                ("unknown", "out.bin", "OUT.BIN", 3),
+                ("unknown", "Résumé.nl", "RE\u0301SUME\u0301.NL", 3),
+                ("sensitive", "out.bin", "OUT.BIN", 0),
+                ("insensitive", "out.bin", "OUT.BIN", 3),
+                ("error", "out.bin", "other.nl", 3)):
+            with self.subTest(mode=mode, first=first, second=second):
+                run = subprocess.run([str(self.pathconf_driver), 'protect-alias', 'outputs',
+                                      str(self.root / first), str(self.root / second)], capture_output=True,
+                                     env={**os.environ, 'XASM_TEST_CASE_SENSITIVITY': mode}, timeout=5)
+                self.assertIn(f'INJECT_PATHCONF {mode}'.encode(), run.stderr)
+                self.assertEqual(run.returncode, expected, run.stderr)
+                if mode == 'error':
+                    self.assertIn(b'cannot determine output filesystem case sensitivity', run.stderr)
+                else:
+                    self.assertNotIn(b'cannot determine output filesystem case sensitivity', run.stderr)
+                if expected == 3 and mode != 'error':
+                    self.assertIn(b'aliases', run.stderr)
+                self.assertFalse((self.root / first).exists())
+                self.assertFalse((self.root / second).exists())
 
     def test_output_symlink_cycles_fail_without_hanging(self):
         first, second = self.root / 'first', self.root / 'second'

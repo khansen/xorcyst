@@ -219,7 +219,11 @@ Path comparison follows dangling symlink chains as well as existing files and
 symlinked directories. On macOS it queries filesystem case sensitivity and uses
 the system CoreFoundation Unicode comparison facilities for future filenames,
 including case and normalization aliases. The macOS build links that system
-framework; other builds retain POSIX path comparison. Existing binary staging
+framework; configure checks its headers and linkage without executing target
+code, and the framework supplements project-wide link additions. Other builds
+retain POSIX path comparison. An indeterminate case-sensitivity query uses
+case-insensitive comparison conservatively; query errors still stop publication.
+Existing binary staging
 paths must be regular files; symlinks, FIFOs, directories, and sockets are
 rejected before publication. The staging open uses `O_NOFOLLOW | O_NONBLOCK`
 and checks the opened descriptor before truncating or writing. A failed stream
@@ -266,6 +270,13 @@ retain their contents apart from the expected invocation argument changes.
 `tests/test_fceux_nl_alloc.c` injects failures at the 79 allocations reached in
 the NL table, destination planning, writer, and fixture-name allocations.
 Each injected failure must return failure.
+
+`tests/test_build_configuration.py` checks generated build rules in an isolated
+source copy: both programs retain global link additions, and Darwin configure
+rejects missing CoreFoundation headers or an unavailable framework. The
+dependency suite injects known, indeterminate, and failed case-sensitivity
+queries, verifying that unknown capabilities still reject case/Unicode aliases
+while permitting distinct names.
 
 `tests/test_output_failures.py` builds the real assembler with test-only wrappers
 around its CLI, exporter, and analysis translation units. Its six tests inject
