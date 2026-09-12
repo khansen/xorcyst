@@ -556,10 +556,18 @@ static const char *datatype_directive_name(datatype type)
 static void print_json_string_n(FILE *fp, const char *s, size_t length)
 {
     const unsigned char *p = (const unsigned char *)s;
+    size_t i, start = 0;
     fputc('"', fp);
     if (p != NULL) {
-        while (length-- > 0) {
-            unsigned char c = *p++;
+        for (i = 0; i < length; i++) {
+            unsigned char c = p[i];
+            if (c >= 0x20 && c != '"' && c != '\\') {
+                continue;
+            }
+            /* Write the ordinary bytes before this escape as one span. */
+            if (i > start) {
+                fwrite(p + start, 1, i - start, fp);
+            }
             switch (c) {
                 case '\"': fputs("\\\"", fp); break;
                 case '\\': fputs("\\\\", fp); break;
@@ -568,14 +576,12 @@ static void print_json_string_n(FILE *fp, const char *s, size_t length)
                 case '\n': fputs("\\n", fp); break;
                 case '\r': fputs("\\r", fp); break;
                 case '\t': fputs("\\t", fp); break;
-                default:
-                if (c < 0x20) {
-                    fprintf(fp, "\\u%04X", c);
-                } else {
-                    fputc(c, fp);
-                }
-                break;
+                default: fprintf(fp, "\\u%04X", c); break;
             }
+            start = i + 1;
+        }
+        if (length > start) {
+            fwrite(p + start, 1, length - start, fp);
         }
     }
     fputc('"', fp);
