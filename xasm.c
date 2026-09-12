@@ -1712,19 +1712,23 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "error: could not open `%s' for writing\n", tmp_outfile);
             err_count++;
         } else {
+            int output_ok;
             verbose("Generating final output...");
             if (xasm_args.pure_binary) {
                 astproc_fifth_pass(root_node, output_fp);
             } else {
                 codegen_write(root_node, output_fp);
             }
-            fclose(output_fp);
+            output_ok = !ferror(output_fp);
+            if (fclose(output_fp) != 0) output_ok = 0;
+            if (!output_ok) {
+                fprintf(stderr, "error: could not write `%s'\n", tmp_outfile);
+                err_count++;
+            }
             if (total_errors() != 0) {
                 remove(tmp_outfile);
                 output_generated = 0;
             } else {
-                /* Ensure destination is removed first so rename() succeeds portably */
-                remove(xasm_args.output_file);
                 if (rename(tmp_outfile, xasm_args.output_file) != 0) {
                     fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);
                     err_count++;

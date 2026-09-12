@@ -225,10 +225,14 @@ rejected before publication. The staging open uses `O_NOFOLLOW | O_NONBLOCK`
 and checks the opened descriptor before truncating or writing. A failed stream
 initialization closes the descriptor and removes the regular staging file.
 
-Each NL file is written to a temporary file beside its destination and renamed
-only after successful completion. Failures leave that file's previous contents
-intact. The entire set of output files is not an atomic transaction: a later
-filesystem error may follow successful replacement of an earlier file.
+The binary and each NL file are written to temporary files beside their
+destinations. Publication requires a clear stream error indicator and a
+successful close, followed by a direct rename over the destination. A write,
+close, or rename failure leaves that destination's previous contents intact
+and removes the temporary file. Binary failures prevent analysis and manifest
+publication; diagnostic listings may still describe the failed build.
+The entire set of output files is not an atomic transaction: a later filesystem
+error may follow successful replacement of an earlier file.
 
 The exporter does **not** delete files for higher bank numbers left from an
 earlier invocation. A matching filename alone does not establish ownership;
@@ -264,7 +268,7 @@ the NL table, destination planning, writer, and fixture-name allocations.
 Each injected failure must return failure.
 
 `tests/test_output_failures.py` builds the real assembler with test-only wrappers
-around its CLI, exporter, and analysis translation units. Its four tests inject
+around its CLI, exporter, and analysis translation units. Its six tests inject
 476 allocations during shared collection (including symbol/index and extent
 growth and long local RAM expressions), three during shared destination
 planning, 108 during NL name projection, and the visible-address-index allocation.
@@ -272,11 +276,14 @@ Every injected allocation failure must produce a nonzero exit without a crash;
 failures before publication must preserve all existing destinations. This does
 not cover allocations in parsing, AST evaluation, or path validation.
 
-The same harness injects binary `fdopen` failures and NL `fdopen`, `ferror`,
-`fclose`, and `rename` failures after temporary-file creation. Each NL operation
-is failed at the RAM file and both ROM banks, checking temporary-file cleanup,
-preservation of the failed and later destinations, and the documented retention
-of files already published. `TEST_FAULT_CFLAGS` can add sanitizers to this build;
+The same harness injects 32 I/O failure scenarios after temporary-file creation.
+Binary `fdopen` failures cover fresh and existing staging files. Binary `ferror`,
+`fclose`, and `rename` failures cover fresh and existing destinations, raw binary
+output with NL enabled and disabled, and object output. Successful replacement
+is also checked in all three modes. Each NL `fdopen`, `ferror`, `fclose`, and
+`rename` operation is failed at the RAM file and both ROM banks, checking
+temporary-file cleanup, preservation of the failed and later destinations, and
+the documented retention of files already published. `TEST_FAULT_CFLAGS` can add sanitizers to this build;
 normal exporter and address-view tests are also checked with AddressSanitizer
 and UndefinedBehaviorSanitizer.
 

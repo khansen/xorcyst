@@ -47,12 +47,14 @@ class OutputFailures(unittest.TestCase):
         self.source.write_text('Port .EQU $10\n.ORG $8000\nFirst:\nSTA Port\n'
                                '.DSB $4000-($-$8000)\n.ORG $C000\nSecond:\nRTS\nEND\n')
 
-    def run_xasm(self, *extra, faults=None):
+    def run_xasm(self, *extra, faults=None, pure_binary=True, nl=True):
         environment = {key: value for key, value in os.environ.items() if not key.startswith('XASM_TEST_')}
         environment.update(faults or {})
-        return subprocess.run([str(self.executable), '--pure-binary', str(self.source), '-o', str(self.output),
-                               f'--fceux-nl-rom-prefix={self.root}/game.nes.',
-                               f'--fceux-nl-ram-output={self.ram}', *extra],
+        flags = ['--pure-binary'] if pure_binary else []
+        if nl:
+            flags += [f'--fceux-nl-rom-prefix={self.root}/game.nes.',
+                      f'--fceux-nl-ram-output={self.ram}']
+        return subprocess.run([str(self.executable), str(self.source), '-o', str(self.output), *flags, *extra],
                               capture_output=True, env=environment, timeout=15)
 
     def seed_outputs(self, extra=()):
@@ -104,6 +106,47 @@ class OutputFailures(unittest.TestCase):
                         self.assertEqual(path.read_bytes(), published[path] if index < fail_at else previous[path])
                     self.assertEqual(manifest.read_bytes(), previous[manifest])
                     self.assert_no_temporary_files()
+
+    def test_binary_completion_failures_preserve_outputs(self):
+        manifest = self.root / 'deps.json'
+        xref = self.root / 'xref.json'
+        for pure_binary, nl in ((True, False), (True, True), (False, False)):
+            self.source.write_text(('.ORG $8000\n' if pure_binary else '') + 'Entry:\nNOP\nRTS\nEND\n')
+            flags = [f'--xref={xref}']
+            if pure_binary:
+                flags.append(f'--dependency-manifest={manifest}')
+            for operation in ('binary_ferror', 'binary_fclose', 'binary_rename'):
+                for existing_binary in (False, True):
+                    with self.subTest(pure_binary=pure_binary, nl=nl, operation=operation,
+                                      existing_binary=existing_binary):
+                        previous = self.seed_outputs([manifest, xref])
+                        if not existing_binary:
+                            self.output.unlink()
+                            del previous[self.output]
+                        result = self.run_xasm(*flags, pure_binary=pure_binary, nl=nl,
+                                               faults={'XASM_TEST_IO_FAILURE': operation})
+                        self.assertGreater(result.returncode, 0, result.stderr.decode())
+                        self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                        self.assertEqual(self.output.exists(), existing_binary)
+                        self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+                        self.assert_no_temporary_files()
+
+    def test_successful_binary_replacement(self):
+        for pure_binary, nl in ((True, False), (True, True), (False, False)):
+            with self.subTest(pure_binary=pure_binary, nl=nl):
+                self.source.write_text(('.ORG $8000\n' if pure_binary else '') + 'Entry:\nNOP\nRTS\nEND\n')
+                result = self.run_xasm(pure_binary=pure_binary, nl=nl)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                expected = self.output.read_bytes()
+                self.assertTrue(expected)
+                previous = self.seed_outputs()
+                result = self.run_xasm(pure_binary=pure_binary, nl=nl)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(self.output.read_bytes(), expected)
+                if not nl:
+                    for path in (self.ram, self.bank0, self.bank1):
+                        self.assertEqual(path.read_bytes(), previous[path])
+                self.assert_no_temporary_files()
 
     def test_shared_collection_and_projection_allocation_failures(self):
         owner = 'Owner' + 'o' * 200
