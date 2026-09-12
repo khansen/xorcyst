@@ -374,7 +374,8 @@ static const char *get_source_line(const char *filename, int line)
         current_source_file = filename;
     }
 
-    if (line <= current_source_line_cached) {
+    /* Several operands can request the same line; its text is already cached. */
+    if (line < current_source_line_cached) {
         rewind(source_fp);
         current_source_line_cached = 0;
     }

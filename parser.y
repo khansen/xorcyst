@@ -86,6 +86,7 @@ static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mod
     const char *label;
     const char *ident;
     astnode *node;
+    struct { astnode *head; astnode *tail; } node_list;
 };
 
 %define parse.error verbose
@@ -101,7 +102,9 @@ static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mod
 %token <label> LOCAL_LABEL
 %token <mnemonic> MNEMONIC
 
-%type <node> identifier identifier_opt local_id assembly_unit statement labelable_statement statement_list statement_list_opt if_statement elif_statement elif_statement_list elif_statement_list_opt ifdef_statement ifndef_statement macro_decl_statement macro_statement exitm_statement instruction_statement data_statement storage_statement null_statement incsrc_statement incbin_statement equ_statement undef_statement assign_statement public_statement extrn_statement dataseg_statement codeseg_statement charmap_statement struc_decl_statement union_decl_statement enum_decl_statement record_decl_statement instruction expression extended_expression expression_opt arithmetic_expression comparison_expression literal label label_decl identifier_list expression_list file_specifier param_list_opt arg_list_opt else_part_opt scope_access struc_access struc_initializer field_initializer_list field_initializer_list_opt field_initializer datatype storage named_data_statement unnamed_data_statement named_storage_statement unnamed_storage_statement proc_statement rept_statement do_statement label_statement message_statement warning_statement error_statement while_statement define_statement align_statement org_statement symbol_type enum_item_list enum_item record_field_list record_field sizeof_arg label_addr_part_opt label_type_part_opt from_part_opt indexed_identifier
+%type <node> identifier identifier_opt local_id assembly_unit statement labelable_statement statement_list_opt if_statement elif_statement elif_statement_list elif_statement_list_opt ifdef_statement ifndef_statement macro_decl_statement macro_statement exitm_statement instruction_statement data_statement storage_statement null_statement incsrc_statement incbin_statement equ_statement undef_statement assign_statement public_statement extrn_statement dataseg_statement codeseg_statement charmap_statement struc_decl_statement union_decl_statement enum_decl_statement record_decl_statement instruction expression extended_expression expression_opt arithmetic_expression comparison_expression literal label label_decl identifier_list expression_list file_specifier param_list_opt arg_list_opt else_part_opt scope_access struc_access struc_initializer field_initializer_list field_initializer_list_opt field_initializer datatype storage named_data_statement unnamed_data_statement named_storage_statement unnamed_storage_statement proc_statement rept_statement do_statement label_statement message_statement warning_statement error_statement while_statement define_statement align_statement org_statement symbol_type enum_item_list enum_item record_field_list record_field sizeof_arg label_addr_part_opt label_type_part_opt from_part_opt indexed_identifier
+
+%type <node_list> statement_list
 
 %token _LABEL_ BYTE CHAR WORD DWORD DSB DSW DSD DATASEG CODESEG IF IFDEF IFNDEF ELSE ELIF ENDIF INCSRC INCBIN MACRO REPT WHILE DO UNTIL ENDM EXITM ALIGN EQU UNDEF DEFINE END PUBLIC EXTRN CHARMAP STRUC UNION ENDS RECORD ENUM ENDE PROC ENDP SIZEOF MASK TAG MESSAGE WARNING ERROR ZEROPAGE ORG
 
@@ -133,7 +136,7 @@ static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mod
 %start assembly_unit
 %%
 assembly_unit:
-    statement_list end_opt { root_node = astnode_create_list($1); }
+    statement_list end_opt { root_node = astnode_create_list($1.head); }
     ;
 
 end_opt:
@@ -142,15 +145,24 @@ end_opt:
     ;
 
 statement_list:
-    labelable_statement { $$ = $1; }
+    /* Each list keeps its own tail on the parser stack, including nested
+       bodies. Appending a statement must not scan all preceding statements. */
+    labelable_statement {
+         $$.head = $1;
+         $$.tail = astnode_get_last_sibling($1);
+        }
     | statement_list labelable_statement {
-         if ($1 != NULL) { $$ = $1; astnode_add_sibling($$, $2); }
-         else { $$ = $2; }
+         $$ = $1;
+         if ($2 != NULL) {
+             if ($$.tail != NULL) astnode_add_sibling($$.tail, $2);
+             else $$.head = $2;
+             $$.tail = astnode_get_last_sibling($2);
+         }
         }
     ;
 
 statement_list_opt:
-    statement_list { $$ = $1; }
+    statement_list { $$ = $1.head; }
     | { $$ = NULL; }
     ;
 

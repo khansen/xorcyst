@@ -139,8 +139,9 @@ union YYSTYPE
     const char *label;
     const char *ident;
     astnode *node;
+    struct { astnode *head; astnode *tail; } node_list;
 
-#line 144 "parser.h"
+#line 145 "parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
