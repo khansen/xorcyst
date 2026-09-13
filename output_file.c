@@ -37,6 +37,7 @@ static int set_output_permissions(output_writer *output)
            symlink's usually unrestricted mode onto the replacement file. */
         mode = info.st_mode & 0777;
     } else {
+        /* A new regular file must not inherit a directory or device's mode. */
         /* xasm is single-threaded; restore the process mask immediately. */
         mask = umask(0);
         umask(mask);

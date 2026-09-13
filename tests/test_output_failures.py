@@ -333,6 +333,35 @@ class OutputFailures(unittest.TestCase):
                     self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o664)
                 self.assert_no_temporary_files()
 
+    def test_symlink_to_nonregular_target_uses_umask_and_preserves_target(self):
+        listing, manifest = self.root / 'listing.json', self.root / 'deps.json'
+        for kind in ('directory', 'fifo'):
+            target = self.root / ('target-' + kind)
+            if kind == 'directory':
+                target.mkdir()
+                (target / 'contents').write_bytes(b'original contents\n')
+            else:
+                os.mkfifo(target)
+            target.chmod(0o755 if kind == 'directory' else 0o666)
+            before = target.lstat()
+            for protection in ('none', 'nl', 'manifest'):
+                with self.subTest(kind=kind, protection=protection):
+                    listing.unlink(missing_ok=True)
+                    listing.symlink_to(target.name)
+                    flags = [f'--listing={listing}', '--listing-format=json']
+                    if protection == 'manifest':
+                        flags.append(f'--dependency-manifest={manifest}')
+                    result = self.run_xasm(*flags, nl=protection == 'nl', umask=0o027)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertFalse(listing.is_symlink())
+                    self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o640)
+                    self.assertIn('records', json.loads(listing.read_bytes()))
+                    after = target.lstat()
+                    self.assertEqual((after.st_ino, after.st_mode), (before.st_ino, before.st_mode))
+                    if kind == 'directory':
+                        self.assertEqual((target / 'contents').read_bytes(), b'original contents\n')
+                    self.assert_no_temporary_files()
+
     def test_unavailable_symlink_metadata_uses_umask_without_weakening_validation(self):
         listing, manifest = self.root / 'listing.json', self.root / 'deps.json'
         blocked = self.root / 'blocked'

@@ -6,7 +6,8 @@ Version 1.7.0-dev (unreleased):
 - Add structured listings, xref summaries, data-reference and index-pattern
   analyses, data consumers/coverage, raw-address audits, and binary comparison.
 - Preserve output destinations on failed sidecar writes, closes, and renames;
-  report listing and stdout analysis errors and validate destination aliases.
+  report listing and stdout analysis errors. With NL export or a dependency
+  manifest enabled, reject output paths that refer to inputs or other outputs.
 - Improve parser, AST removal, symbol lookup, and JSON serialization costs.
 - Run Linux/macOS regressions and sanitizer checks in GitHub Actions.
 

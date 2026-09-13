@@ -111,17 +111,19 @@ Unused EQU diagnostics are controlled by `--warn-unused-equ`,
 Output completion
 -----------------
 
-Destinations are checked for aliases to consumed inputs and other outputs
-before publication. Binary output and sidecars replace their destination only
-after serialization, stream checks, and close succeed. Existing files survive
-failed writes or renames, and owned temporary files are removed. CSV finishes
+With NL export or a dependency manifest enabled, xasm rejects output paths that
+refer to an input file or another output. Binary output and sidecars replace
+their destination only after serialization, stream checks, and close succeed.
+Existing files survive failed writes or renames, and owned temporary files are
+removed. CSV finishes
 both streams before publishing either file. Sidecar publication replaces a
 symlink itself and rejects FIFOs, sockets, devices, and directories; use the
 analysis stdout options for pipes. Sidecars preserve existing read, write, and
-execute permission bits (using the target's bits when replacing a symlink).
-New sidecars, and symlink replacements whose target permissions cannot be read,
-use mode 0666 filtered by the process umask. NL/manifest destination validation
-still rejects symlink paths that cannot be resolved safely.
+execute permission bits of regular files (including regular symlink targets).
+New sidecars, and symlink replacements whose target is not a regular file or
+whose permissions cannot be read, use mode 0666 filtered by the process umask.
+NL export and dependency manifests also reject symlink paths that cannot be
+resolved safely.
 
 Publication happens one file at a time. A later failure can leave earlier
 outputs updated. Stdout cannot be staged. Disregard
