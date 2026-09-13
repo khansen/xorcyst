@@ -61,6 +61,20 @@ class InputHandling(unittest.TestCase):
                 result = self.run_tool('xasm', source)
                 self.assertNotEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_failed_instruction_allocation_frees_operand_and_prior_statements(self):
+        for instruction in ('NOP', 'ASL A', 'LDA #Port+2', 'LDA Port+2',
+                            'LDA Port+2,X', 'LDA Port+2,Y', 'LDA [Port+2,X]',
+                            'LDA [Port+2],Y', 'JMP [Port+2]'):
+            with self.subTest(instruction=instruction):
+                source = ('Port .EQU $10\n.ORG $8000\nEntry:\n.DB "payload"\nNOP\n'
+                          + instruction + '\nRTS\nEND\n')
+                result = self.run_tool('xasm', source)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                result = self.run_tool('xasm', source, {'XASM_TEST_INSTRUCTION_ALLOC_FAIL': '1'})
+                self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+                self.assertIn(b'INJECT_INSTRUCTION_ALLOC', result.stderr)
+                self.assertIn(b'memory exhausted', result.stderr)
+
     def test_excessive_macro_and_include_nesting_is_rejected(self):
         for source in ('MACRO Again\nAgain\nENDM\nAgain\n', '.INCSRC "input.asm"\n'):
             with self.subTest(source=source):

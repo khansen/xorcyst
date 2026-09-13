@@ -1004,6 +1004,7 @@ astnode *astnode_create_null(location loc)
 astnode *astnode_create_instruction(instruction_mnemonic mnemonic, addressing_mode mode, astnode *operand, location loc)
 {
     astnode *n = astnode_create(INSTRUCTION_NODE, loc);
+    if (n == NULL) return NULL; /* The caller still owns operand. */
     /* Store the mnemonic and addressing mode */
     n->instr.mnemonic = mnemonic;
     n->instr.mode = mode;
