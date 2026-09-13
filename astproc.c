@@ -2824,7 +2824,7 @@ static int enter_macro(astnode *macro_def, void *arg, astnode **next)
     assert(astnode_get_type(id) == IDENTIFIER_NODE);
     if (symtab_enter(id->ident, MACRO_SYMBOL, macro_def, 0) == NULL) {
         /* ### This could be allowed, you know... */
-        err(macro_def->loc, "duplicate symbol `%s'", id->ident);
+        if (!symtab_failed()) err(macro_def->loc, "duplicate symbol `%s'", id->ident);
         astnode_finalize(macro_def);
         return 0;
     }
@@ -2958,7 +2958,7 @@ static astnode *enter_struc_atomic_field(astnode *c, astnode *offset, ordered_fi
         0
     );
     if (fe == NULL) {
-        err(c->loc, "duplicate symbol `%s' in structure `%s'", field_id->ident, struc_id->ident);
+        if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in structure `%s'", field_id->ident, struc_id->ident);
         return(offset);
     }
     /* Add to ordered list of fields */
@@ -3030,7 +3030,7 @@ astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list
             0
         );
         if (fe == NULL) {
-            err(ls->entry->def->loc, "duplicate symbol `%s' in structure `%s'", ls->entry->id, struc_id->ident);
+            if (!symtab_failed()) err(ls->entry->def->loc, "duplicate symbol `%s' in structure `%s'", ls->entry->id, struc_id->ident);
             continue;
         }
         /* Set field offset */
@@ -3066,7 +3066,7 @@ static int enter_struc(astnode *struc_def, void *arg, astnode **next)
     assert(astnode_is_type(struc_id, IDENTIFIER_NODE));
     se = symtab_enter(struc_id->ident, STRUC_SYMBOL, struc_def, 0);
     if (se == NULL) {
-        err(struc_def->loc, "duplicate symbol `%s'", struc_id->ident);
+        if (!symtab_failed()) err(struc_def->loc, "duplicate symbol `%s'", struc_id->ident);
     } else {
         /* Put the fields of the structure in local symbol table */
         se->symtab = symtab_create();
@@ -3155,7 +3155,7 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
             0
         );
         if (fe == NULL) {
-            err(c->loc, "duplicate symbol `%s' in union `%s'", field_id->ident, se->id);
+            if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in union `%s'", field_id->ident, se->id);
             astnode_finalize(field_size);
             continue;
         }
@@ -3193,7 +3193,7 @@ static int enter_union(astnode *union_def, void *arg, astnode **next)
         assert(astnode_get_type(union_id) == IDENTIFIER_NODE);
         se = symtab_enter(union_id->ident, UNION_SYMBOL, union_def, 0);
         if (se == NULL) {
-            err(union_def->loc, "duplicate symbol `%s'", union_id->ident);
+            if (!symtab_failed()) err(union_def->loc, "duplicate symbol `%s'", union_id->ident);
         } else {
             /* Put the fields of the union in local symbol table */
             enter_union_fields(se, union_def);
@@ -3219,7 +3219,7 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
     assert(astnode_get_type(enum_id) == IDENTIFIER_NODE);
     se = symtab_enter(enum_id->ident, ENUM_SYMBOL, enum_def, 0);
     if (se == NULL) {
-        err(enum_def->loc, "duplicate symbol `%s'", enum_id->ident);
+        if (!symtab_failed()) err(enum_def->loc, "duplicate symbol `%s'", enum_id->ident);
     } else {
         /* Add all the enum symbols to its own symbol table */
         se->symtab = symtab_create();
@@ -3247,7 +3247,7 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
                 }
             }
             if (symtab_enter(id->ident, CONSTANT_SYMBOL, val, 0) == NULL) {
-                err(c->loc, "duplicate symbol `%s' in enumeration `%s'", id->ident, enum_id->ident);
+                if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in enumeration `%s'", id->ident, enum_id->ident);
                 astnode_finalize(val);
                 val = NULL;
                 continue;
@@ -3279,7 +3279,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
     assert(astnode_get_type(record_id) == IDENTIFIER_NODE);
     se = symtab_enter(record_id->ident, RECORD_SYMBOL, record_def, 0);
     if (se == NULL) {
-        err(record_def->loc, "duplicate symbol `%s'", record_id->ident);
+        if (!symtab_failed()) err(record_def->loc, "duplicate symbol `%s'", record_id->ident);
     }
     else {
         /* Add all the record fields to record's own symbol table */
@@ -3306,7 +3306,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
             /* Attempt to enter field in record's symbol table */
             fe = symtab_enter(field_id->ident, VAR_SYMBOL, c, 0);
             if (fe == NULL) {
-                err(c->loc, "duplicate symbol `%s' in record `%s'", field_id->ident, record_id->ident);
+                if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in record `%s'", field_id->ident, record_id->ident);
                 continue;
             }
             /* Add to ordered list of fields */

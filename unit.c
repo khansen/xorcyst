@@ -393,6 +393,10 @@ int xasm_unit_read(const char *filename, xasm_unit *u)
     if (!read_error) get_segment(fp, &u->dataseg);
     if (!read_error) get_segment(fp, &u->codeseg);
     if (!read_error) get_expressions(fp, u);
+    if (!read_error && fgetc(fp) != EOF) {
+        fprintf(stderr, "%s: unexpected bytes after object expressions\n", filename);
+        read_error = 1;
+    }
 
 finish:
     if (ferror(fp)) read_error = 1;

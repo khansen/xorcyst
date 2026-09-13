@@ -82,6 +82,19 @@ class InputHandling(unittest.TestCase):
             self.assertIn(b'INJECT_SYMTAB', result.stderr)
             self.assertIn(b'out of memory', result.stderr)
 
+    def test_duplicate_symbols_still_report_the_actual_error(self):
+        cases = ('MACRO Again\nNOP\nENDM\n' * 2,
+                 'STRUC Pair\nField BYTE\nField BYTE\nENDS\n',
+                 'UNION Pair\nField BYTE\nField WORD\nENDS\n',
+                 'ENUM Values\nOne\nOne\nENDE\n',
+                 'RECORD Bits field:1,field:2\n')
+        for source in cases:
+            with self.subTest(source=source):
+                result = self.run_tool('xasm', source)
+                self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+                self.assertIn(b'duplicate symbol', result.stderr)
+                self.assertNotIn(b'out of memory', result.stderr)
+
     def test_symbol_allocation_failures_reach_the_cli_without_partial_outputs(self):
         source = ('STRUC Pair\nFirst BYTE\nSecond BYTE\nENDS\n'
                   'UNION Either\nByteValue BYTE\nWordValue WORD\nENDS\n'
@@ -99,6 +112,7 @@ class InputHandling(unittest.TestCase):
                         break
                     self.assertNotEqual(result.returncode, 0, result.stderr.decode())
                     self.assertIn(b'out of memory', result.stderr)
+                    self.assertNotIn(b'duplicate symbol', result.stderr)
             else:
                 self.fail('symbol allocation sweep did not reach the end')
 
@@ -143,6 +157,13 @@ class InputHandling(unittest.TestCase):
         result = self.run_tool('xlnk', 'link{file=unit.o,origin=$8000}\n')
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('f3ff00'))
+
+    def test_trailing_object_bytes_are_rejected(self):
+        for valid in (object_file(), self.object_with_metadata()):
+            for trailing in (b'\0', b'garbage', object_file()):
+                with self.subTest(trailing=trailing):
+                    result = self.check_bad_object(valid + trailing)
+                    self.assertIn(b'unexpected bytes after object expressions', result.stderr)
 
     def test_every_truncated_prefix_of_an_object_is_rejected(self):
         objects = [object_file(code=bytes.fromhex('f80000f3'), expressions=[bytes.fromhex('0101')]),

@@ -117,6 +117,7 @@
 
 #include <stddef.h>
 #include <limits.h>
+#include <stdint.h>
 
 /* Global statics for bytecode walking - NOTE: NOT REENTRANT!
    bytecode_walk cannot be called recursively or from multiple threads. */
@@ -2006,7 +2007,7 @@ static void register_one_local(const unsigned char *b, void *arg)
     int i= 1;
     /* Argument points to a pointer which points to the local struct to fill in */
     local **lpptr = (local **)arg;
-    local *lptr = *lpptr;
+    local *lptr = (*lpptr)++;
     /* Initialize some fields */
     lptr->resolved = 0;
     lptr->ref_count = 0;
@@ -2022,12 +2023,12 @@ static void register_one_local(const unsigned char *b, void *arg)
         check_bounds(b, i, len);
         /* Allocate space for name */
         lptr->name = (char *)malloc( len + 1 );
-        if (lptr->name != NULL) {
-            /* Copy name from bytecodes */
-            memcpy(lptr->name, &b[i], len);
-            /* Zero-terminate string */
-            lptr->name[len] = '\0';
+        if (lptr->name == NULL) {
+            err("out of memory creating exported local symbol");
+            return;
         }
+        memcpy(lptr->name, &b[i], len);
+        lptr->name[len] = '\0';
         i += len;
     }
     if (lptr->flags & XASM_LABEL_FLAG_ALIGN) {
@@ -2044,8 +2045,6 @@ static void register_one_local(const unsigned char *b, void *arg)
                 lptr->align, lptr->resolved);
     }
 #endif
-    /* Point to next local in array */
-    *lpptr += 1;
 }
 
 /**
@@ -2595,6 +2594,20 @@ static void set_output(xlnk_script *s, xlnk_script_command *c, void *arg)
     verbose(1, "  output goes to `%s'", file);
 }
 
+/* Used by both layout planning and streaming, since inputs can change between
+   the two passes. Check both counters before changing either one. */
+static int advance_copy_offsets(xlnk_script *s, xlnk_script_command *c, uintmax_t size)
+{
+    if (size > (uintmax_t)((int64_t)INT_MAX - bank_offset)
+        || size > (uintmax_t)((int64_t)INT_MAX - pc)) {
+        scripterr(s, c, "copy input is too large");
+        return 0;
+    }
+    bank_offset = (int)((int64_t)bank_offset + (int64_t)size);
+    pc = (int)((int64_t)pc + (int64_t)size);
+    return 1;
+}
+
 /**
  * Copies a file to output according to 'copy' script command.
  * @param s Linker script
@@ -2608,7 +2621,6 @@ static void copy_to_output(xlnk_script *s, xlnk_script_command *c, void *arg)
     FILE *cf;
     unsigned char bytes[8192];
     size_t count;
-    long copied = 0;
     if (output->stream == NULL) {
         scripterr(s, c, "no output open");
         return;
@@ -2620,17 +2632,15 @@ static void copy_to_output(xlnk_script *s, xlnk_script_command *c, void *arg)
         return;
     }
     while ((count = fread(bytes, 1, sizeof(bytes), cf)) != 0) {
+        if (!advance_copy_offsets(s, c, count)) break;
         if (fwrite(bytes, 1, count, output->stream) != count) {
             scripterr(s, c, "could not write `%s'", output->path);
             break;
         }
-        copied += count;
     }
     if (ferror(cf)) scripterr(s, c, "could not read `%s'", file);
     if (fclose(cf) != 0) scripterr(s, c, "could not close `%s'", file);
     if (err_count != 0) return;
-    bank_offset += copied;
-    pc += copied;
     if (bank_offset > bank_size) {
         scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
     }
@@ -3025,11 +3035,8 @@ static void inc_offset_copy(xlnk_script *s, xlnk_script_command *c, void *arg)
         long size;
         if (fseek(fp, 0, SEEK_END) != 0 || (size = ftell(fp)) < 0) {
             scripterr(s, c, "could not determine size of `%s'", file);
-        } else if (size > INT_MAX - bank_offset || size > INT_MAX - pc) {
-            scripterr(s, c, "input `%s' is too large", file);
         } else {
-            bank_offset += size;
-            pc += size;
+            advance_copy_offsets(s, c, (uintmax_t)size);
         }
         if (fclose(fp) != 0) scripterr(s, c, "could not close `%s'", file);
         if (bank_offset > bank_size) {

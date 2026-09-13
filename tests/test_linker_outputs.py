@@ -64,9 +64,10 @@ class LinkerOutputs(unittest.TestCase):
                     self.assertEqual(result.returncode, 1, result.stderr.decode())
                     self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
                     self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
+                    self.assertIn(b'CLOSED_STAGE', result.stderr)
 
     def test_staging_close_and_publish_failures_stop_output_switches(self):
-        for operation in ('create', 'flush', 'close', 'rename'):
+        for operation in ('create', 'flush', 'permissions', 'close', 'rename'):
             for target in ('first', 'second'):
                 with self.subTest(operation=operation, target=target):
                     self.seed()
@@ -74,6 +75,9 @@ class LinkerOutputs(unittest.TestCase):
                                              fault=operation, target=target)
                     self.assertEqual(result.returncode, 1, result.stderr.decode())
                     self.assertIn(('INJECT ' + operation).encode(), result.stderr)
+                    if operation != 'create':
+                        # Even failed flush/permission paths must close the real descriptor.
+                        self.assertEqual(result.stderr.count(b'CLOSED_STAGE'), 1 if target == 'first' else 2)
                     self.assertEqual((self.root / 'first').read_bytes(),
                                      b'previous first' if target == 'first' else b'\0' * 3)
                     self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
@@ -88,6 +92,40 @@ class LinkerOutputs(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stderr.decode())
                 self.assertIn(('INJECT ' + operation).encode(), result.stderr)
                 self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
+
+    def test_copy_growth_after_planning_cannot_overflow_layout(self):
+        # Each simulated read fits its buffer; writes are discarded by the harness.
+        # Cover both the bank-offset bound and a PC that reaches its bound first.
+        for bank in ('', 'bank{size=$7FFFFFFF,origin=$FFFF}\n'):
+            with self.subTest(bank=bank):
+                self.seed()
+                result = self.run_linker(bank + 'copy{file=payload}\n', fault='large_copy')
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertIn(b'INJECT large_copy', result.stderr)
+                self.assertIn(b'copy input is too large', result.stderr)
+                self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
+
+    def test_copy_offset_overflow_is_rejected_during_planning(self):
+        # No huge output is created: layout must reject this before publication.
+        self.seed()
+        result = self.run_linker('pad{size=$7FFFFFFE}\ncopy{file=payload}\n')
+        self.assertEqual(result.returncode, 1, result.stderr.decode())
+        self.assertIn(b'copy input is too large', result.stderr)
+        self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
+
+    def test_failed_exported_local_name_allocation_prevents_publication(self):
+        code = bytes.fromhex('f601044669727374f400eaf601055365636f6e64f40060f3')
+        (self.root / 'unit.o').write_bytes(object_file(code=code))
+        script = 'link{file=unit.o,origin=$8000}\n'
+        result = self.run_linker(script)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'first').read_bytes(), bytes.fromhex('ea60'))
+        self.seed()
+        result = self.run_linker(script, fault='local_name')
+        self.assertEqual(result.returncode, 1, result.stderr.decode())
+        self.assertIn(b'INJECT local_name', result.stderr)
+        self.assertIn(b'out of memory creating exported local symbol', result.stderr)
+        self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
 
     def test_successful_switches_finish_each_file_and_keep_copy_order(self):
         self.seed()
