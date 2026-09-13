@@ -238,6 +238,7 @@ static void branch_push()
         depth++;
     }
     if (depth >= 500) {
+        free(s);
         fprintf(stderr, "error: nesting depth limit exceeded (macros, loops or procedures nested too deeply)\n");
         exit(EXIT_FAILURE);
     }
@@ -342,6 +343,22 @@ static void err(location loc, const char *fmt, ...)
     err_count++;
 }
 
+/* Callers unwind only successfully activated scopes. */
+static int push_symbol_scope(symtab *table, location loc)
+{
+    if (symtab_push(table)) return 1;
+    err(loc, table == NULL ? "invalid symbol scope" : "out of memory activating symbol scope");
+    return 0;
+}
+
+/* Used for detached definitions whose ownership transfers on insertion. */
+static symtab_entry *enter_owned_symbol(const char *name, symbol_type type, astnode *definition, int flags)
+{
+    symtab_entry *entry = symtab_enter(name, type, definition, flags);
+    if (entry == NULL) astnode_finalize(definition);
+    return entry;
+}
+
 /**
  * Issues a warning.
  * @param loc File location of warning
@@ -393,7 +410,7 @@ static void astproc_walk_recursive(astnode *n, void *arg, const astnodeprocmap *
 {
     astnode *c;
     astnode *t;
-    if (n == NULL) { return; }
+    if (n == NULL || symtab_failed()) { return; }
     astnodeproc p = astproc_node_type_to_proc(astnode_get_type(n), map);
     if (p != NULL) {
         if (!p(n, arg, next))
@@ -1259,7 +1276,7 @@ static astnode *reduce_scope(astnode *expr)
     ns = symtab_lookup(namespace->ident);
     if (ns != NULL) {
         /* Look up the local symbol */
-        symtab_push(ns->symtab);
+        if (!push_symbol_scope(ns->symtab, expr->loc)) return expr;
         symbol = RHS(expr);
         sym = symtab_lookup(symbol->ident);
         if (sym != NULL) {
@@ -1346,7 +1363,7 @@ static astnode *reduce_dot_recursive(astnode *expr)
     if (astnode_is_type(expr, DOT_NODE)) {
         /* Next field */
         def = symtab_global_lookup(LHS(type)->ident);
-        symtab_push(def->symtab);
+        if (!push_symbol_scope(def->symtab, expr->loc)) return offset;
         term = reduce_dot_recursive(expr);
         symtab_pop();
         /* Construct sum */
@@ -1402,7 +1419,10 @@ static astnode *reduce_dot(astnode *expr)
         );
     }
     /* Add offsets recursively */
-    symtab_push(def->symtab);
+    if (!push_symbol_scope(def->symtab, expr->loc)) {
+        astnode_finalize(term1);
+        return expr;
+    }
     term2 = reduce_dot_recursive(expr);
     symtab_pop();
     /* Calculate final sum */
@@ -1448,7 +1468,7 @@ static astnode *reduce_mask(astnode *mask)
         }
         else {
             /* Look up the local symbol */
-            symtab_push(ns->symtab);
+            if (!push_symbol_scope(ns->symtab, mask->loc)) return mask;
             symbol = RHS(expr);
             sym = symtab_lookup(symbol->ident);
             if (sym != NULL) {
@@ -1659,7 +1679,7 @@ static void reduce_record(symtab_entry *r, astnode *init, astnode *flat)
         return;
     }
     /* Go through fields */
-    symtab_push(r->symtab);
+    if (!push_symbol_scope(r->symtab, init->loc)) return;
     result = astnode_create_integer(0, init->loc);
     for (val = init->first_child, list = r->struc.fields; (val != NULL) && (list != NULL); list = list->next, val = val->next_sibling) {
         if (astnode_is_type(val, NULL_NODE)) {
@@ -1739,7 +1759,7 @@ static void reduce_enum(symtab_entry *e, astnode *expr, astnode *list)
     }
     else {
         /* Look up the enumeration symbol */
-        symtab_push(e->symtab);
+        if (!push_symbol_scope(e->symtab, expr->loc)) return;
         sym = symtab_lookup(expr->ident);
         symtab_pop();
         /* Make byte data node (symbol value) */
@@ -1778,7 +1798,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
         return;
     }
     /* Go through fields */
-    symtab_push(s->symtab);
+    if (!push_symbol_scope(s->symtab, init->loc)) return;
     fill = astnode_clone(s->struc.size, flat->loc);
     for (val = init->first_child, list = s->struc.fields; (val != NULL) && (list != NULL); list = list->next, val = val->next_sibling) {
         if (astnode_is_type(val, NULL_NODE)) {
@@ -1918,7 +1938,7 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
         return;
     }
     /* Go through fields */
-    symtab_push(s->symtab);
+    if (!push_symbol_scope(s->symtab, init->loc)) return;
     fill = astnode_clone(s->struc.size, flat->loc);
     for (val = init->first_child, list = s->struc.fields; (val != NULL) && (list != NULL); list = list->next, val = val->next_sibling) {
         e = list->entry;
@@ -2399,13 +2419,14 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
     e = symtab_lookup(id->ident);
     if (e == NULL) {
         // TODO: Check that expression is a constant?
-        symtab_enter(id->ident, CONSTANT_SYMBOL, expr, EQU_FLAG);
+        enter_owned_symbol(id->ident, CONSTANT_SYMBOL, expr, EQU_FLAG);
     } else {
         /* Symbol is being redefined */
         /* This is not allowed for EQU equate! */
         if (!astnode_equal((astnode *)(e->def), expr)) {
             warn(equ->loc, "redefinition of `%s' is not identical; ignored", id->ident);
         }
+        astnode_finalize(expr);
     }
     astnode_remove(equ);
     astnode_finalize(equ);
@@ -2436,7 +2457,7 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
     if (e == NULL) {
         /* Symbol is being defined for the first time */
         /* Note that the VOLATILE_FLAG is set */
-        symtab_enter(id->ident, CONSTANT_SYMBOL, expr, VOLATILE_FLAG);
+        enter_owned_symbol(id->ident, CONSTANT_SYMBOL, expr, VOLATILE_FLAG);
     } else {
         /* Symbol is being redefined */
         /* This is OK for ASSIGN equate, simply replace definition */
@@ -2803,7 +2824,9 @@ static int enter_macro(astnode *macro_def, void *arg, astnode **next)
     assert(astnode_get_type(id) == IDENTIFIER_NODE);
     if (symtab_enter(id->ident, MACRO_SYMBOL, macro_def, 0) == NULL) {
         /* ### This could be allowed, you know... */
-        err(macro_def->loc, "duplicate symbol `%s'", id->ident);
+        if (!symtab_failed()) err(macro_def->loc, "duplicate symbol `%s'", id->ident);
+        astnode_finalize(macro_def);
+        return 0;
     }
     astnode_remove(macro_def);
     return 0;
@@ -2829,6 +2852,7 @@ static int enter_label(astnode *label, void *arg, astnode **next)
         symtab_remove(label->ident);
     }
     e = symtab_enter(label->ident, LABEL_SYMBOL, label, (in_dataseg ? DATA_FLAG : 0) | symbol_modifiers );
+    if (e == NULL) return 0;
     /* Check if hardcoded address */
     addr = reduce_expression_complete(RHS(label), FOLD_PC_NO);
     if (astnode_is_type(addr, INTEGER_NODE)) {
@@ -2866,7 +2890,7 @@ static int enter_var(astnode *var, void *arg, astnode **next)
         warn(var->loc, "zeropage modifier has no effect in code segment");
         var->modifiers &= ~ZEROPAGE_FLAG;
     }
-    symtab_enter(id->ident, VAR_SYMBOL, astnode_clone(RHS(var), var->loc), (in_dataseg ? DATA_FLAG : 0) | var->modifiers | symbol_modifiers);
+    enter_owned_symbol(id->ident, VAR_SYMBOL, astnode_clone(RHS(var), var->loc), (in_dataseg ? DATA_FLAG : 0) | var->modifiers | symbol_modifiers);
     return 1;
 }
 
@@ -2927,14 +2951,14 @@ static astnode *enter_struc_atomic_field(astnode *c, astnode *offset, ordered_fi
         err(c->loc, "data initialization not allowed here");
         return(offset);
     }
-    fe = symtab_enter(
+    fe = enter_owned_symbol(
         field_id->ident,
         VAR_SYMBOL,
         astnode_clone(field_data, field_data->loc),
         0
     );
     if (fe == NULL) {
-        err(c->loc, "duplicate symbol `%s' in structure `%s'", field_id->ident, struc_id->ident);
+        if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in structure `%s'", field_id->ident, struc_id->ident);
         return(offset);
     }
     /* Add to ordered list of fields */
@@ -2972,6 +2996,7 @@ static void enter_union_fields(symtab_entry *, astnode *);
  * @param n Node of type UNION_DECL_NODE
  * @param offset Current parent structure offset
  * @param plist Ordered list of parent structure's fields
+ * The main AST owns n, which remains attached to its structure on every path.
  */
 astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list ***plist, astnode *struc_id)
 {
@@ -2988,7 +3013,9 @@ astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list
     }
     snprintf(id_str, sizeof (id_str), "%d", id++);
     se = symtab_enter(id_str, UNION_SYMBOL, n, 0);
+    if (se == NULL) return offset;
     enter_union_fields(se, n);
+    if (se->symtab == NULL) return offset;
     /* Add to ordered list of fields */
     (**plist) = malloc(sizeof(ordered_field_list));
     (**plist)->entry = se;
@@ -2997,14 +3024,14 @@ astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list
     /* Add to parent structure as well, with same offsets */
     for (ls = se->struc.fields; ls != NULL; ls = ls->next) {
         /* Try to enter field in structure's symbol table */
-        fe = symtab_enter(
+        fe = enter_owned_symbol(
             ls->entry->id,
             VAR_SYMBOL,
             astnode_clone(ls->entry->def, ls->entry->def->loc),
             0
         );
         if (fe == NULL) {
-            err(ls->entry->def->loc, "duplicate symbol `%s' in structure `%s'", ls->entry->id, struc_id->ident);
+            if (!symtab_failed()) err(ls->entry->def->loc, "duplicate symbol `%s' in structure `%s'", ls->entry->id, struc_id->ident);
             continue;
         }
         /* Set field offset */
@@ -3040,10 +3067,14 @@ static int enter_struc(astnode *struc_def, void *arg, astnode **next)
     assert(astnode_is_type(struc_id, IDENTIFIER_NODE));
     se = symtab_enter(struc_id->ident, STRUC_SYMBOL, struc_def, 0);
     if (se == NULL) {
-        err(struc_def->loc, "duplicate symbol `%s'", struc_id->ident);
+        if (!symtab_failed()) err(struc_def->loc, "duplicate symbol `%s'", struc_id->ident);
     } else {
         /* Put the fields of the structure in local symbol table */
         se->symtab = symtab_create();
+        if (se->symtab == NULL) {
+            err(struc_def->loc, "out of memory creating symbol scope");
+            return 0;
+        }
         offset = astnode_create_integer(0, struc_def->loc); /* offset = 0 */
         plist = &se->struc.fields;
         for (c = struc_id->next_sibling; c != NULL; c = c->next_sibling) {
@@ -3083,6 +3114,10 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
     symtab_entry *fe;
 
     se->symtab = symtab_create();
+    if (se->symtab == NULL) {
+        err(union_def->loc, "out of memory creating symbol scope");
+        return;
+    }
     se->struc.size = astnode_create_integer(0, union_def->loc);
     plist = &se->struc.fields;
     /* Process field declarations */
@@ -3114,14 +3149,14 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
             /* Use default size: 1 byte */
             field_size = astnode_create_integer(1, field_data->loc);
         }
-        fe = symtab_enter(
+        fe = enter_owned_symbol(
             field_id->ident,
             VAR_SYMBOL,
             astnode_clone(field_data, field_data->loc),
             0
         );
         if (fe == NULL) {
-            err(c->loc, "duplicate symbol `%s' in union `%s'", field_id->ident, se->id);
+            if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in union `%s'", field_id->ident, se->id);
             astnode_finalize(field_size);
             continue;
         }
@@ -3159,7 +3194,7 @@ static int enter_union(astnode *union_def, void *arg, astnode **next)
         assert(astnode_get_type(union_id) == IDENTIFIER_NODE);
         se = symtab_enter(union_id->ident, UNION_SYMBOL, union_def, 0);
         if (se == NULL) {
-            err(union_def->loc, "duplicate symbol `%s'", union_id->ident);
+            if (!symtab_failed()) err(union_def->loc, "duplicate symbol `%s'", union_id->ident);
         } else {
             /* Put the fields of the union in local symbol table */
             enter_union_fields(se, union_def);
@@ -3185,10 +3220,14 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
     assert(astnode_get_type(enum_id) == IDENTIFIER_NODE);
     se = symtab_enter(enum_id->ident, ENUM_SYMBOL, enum_def, 0);
     if (se == NULL) {
-        err(enum_def->loc, "duplicate symbol `%s'", enum_id->ident);
+        if (!symtab_failed()) err(enum_def->loc, "duplicate symbol `%s'", enum_id->ident);
     } else {
         /* Add all the enum symbols to its own symbol table */
         se->symtab = symtab_create();
+        if (se->symtab == NULL) {
+            err(enum_def->loc, "out of memory creating symbol scope");
+            return 0;
+        }
         val = NULL;
         for (c = enum_id->next_sibling; c != NULL; c = c->next_sibling) {
             if (astnode_is_type(c, IDENTIFIER_NODE)) {
@@ -3209,7 +3248,9 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
                 }
             }
             if (symtab_enter(id->ident, CONSTANT_SYMBOL, val, 0) == NULL) {
-                err(c->loc, "duplicate symbol `%s' in enumeration `%s'", id->ident, enum_id->ident);
+                if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in enumeration `%s'", id->ident, enum_id->ident);
+                astnode_finalize(val);
+                val = NULL;
                 continue;
             }
         }
@@ -3239,17 +3280,21 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
     assert(astnode_get_type(record_id) == IDENTIFIER_NODE);
     se = symtab_enter(record_id->ident, RECORD_SYMBOL, record_def, 0);
     if (se == NULL) {
-        err(record_def->loc, "duplicate symbol `%s'", record_id->ident);
+        if (!symtab_failed()) err(record_def->loc, "duplicate symbol `%s'", record_id->ident);
     }
     else {
         /* Add all the record fields to record's own symbol table */
         se->symtab = symtab_create();
+        if (se->symtab == NULL) {
+            err(record_def->loc, "out of memory creating symbol scope");
+            return 0;
+        }
         offset = 8;
         plist = &se->struc.fields;
         for (c = record_id->next_sibling; c != NULL; c = c->next_sibling) {
             /* c has two children: field identifier and its width */
             field_id = LHS(c);
-            field_width = astnode_clone(reduce_expression(RHS(c), FOLD_PC_NO), RHS(c)->loc);
+            field_width = reduce_expression(RHS(c), FOLD_PC_NO);
             /* Validate the width -- must be positive integer literal */
             if (!astnode_is_type(field_width, INTEGER_NODE)) {
                 err(c->loc, "record member `%s' is not of constant size", field_id->ident);
@@ -3262,7 +3307,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
             /* Attempt to enter field in record's symbol table */
             fe = symtab_enter(field_id->ident, VAR_SYMBOL, c, 0);
             if (fe == NULL) {
-                err(c->loc, "duplicate symbol `%s' in record `%s'", field_id->ident, record_id->ident);
+                if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in record `%s'", field_id->ident, record_id->ident);
                 continue;
             }
             /* Add to ordered list of fields */
@@ -3274,7 +3319,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
             offset = offset - field_width->integer;
             fe->field.offset = astnode_create_integer(offset, c->loc);
             /* Set field size (width) */
-            fe->field.size = field_width;
+            fe->field.size = astnode_clone(field_width, field_width->loc);
         }
         size = 8 - offset;
         if (size > 8) {
@@ -3353,7 +3398,7 @@ static int tag_extrn_symbols(astnode *extrn, void *arg, astnode **next)
             // TODO: store external unit name
             switch (astnode_get_type(type)) {
                 case DATATYPE_NODE:
-                symtab_enter(id->ident, VAR_SYMBOL, astnode_create_data(astnode_clone(type, extrn->loc), NULL, extrn->loc), EXTRN_FLAG);
+                enter_owned_symbol(id->ident, VAR_SYMBOL, astnode_create_data(astnode_clone(type, extrn->loc), NULL, extrn->loc), EXTRN_FLAG);
                 break;
 
                 case INTEGER_NODE:
@@ -3590,7 +3635,10 @@ static int validate_ref(astnode *n, void *arg, astnode **next)
         }
         for (i=0; i<list.size; i++) {
             enum_def = symtab_lookup(list.idents[i]);
-            symtab_push(enum_def->symtab);
+            if (!push_symbol_scope(enum_def->symtab, n->loc)) {
+                symtab_list_finalize(&list);
+                return 0;
+            }
             e = symtab_lookup(n->ident);
             symtab_pop();
             if (e != NULL) {
@@ -3715,7 +3763,7 @@ static int validate_scoperef(astnode *n, void *arg, astnode **next)
             case RECORD_SYMBOL:
             case ENUM_SYMBOL:
             /* OK, check the symbol */
-            symtab_push(e->symtab);
+            if (!push_symbol_scope(e->symtab, n->loc)) return 0;
             e = symtab_lookup(symbol->ident);
             if (e == NULL) {
                 err(n->loc, "unknown symbol `%s' in namespace `%s'", symbol->ident, namespace->ident);
@@ -3794,7 +3842,7 @@ static void validate_dotref_recursive(astnode *n, astnode *top)
                     astnode_finalize(top);
                 } else {
                     /* Next field */
-                    symtab_push(def->symtab);
+                    if (!push_symbol_scope(def->symtab, n->loc)) return;
                     validate_dotref_recursive(n, top);
                     symtab_pop();
                 }
@@ -3855,7 +3903,7 @@ static int validate_dotref(astnode *n, void *arg, astnode **next)
                 return 0;
             } else {
                 /* Verify fields recursively */
-                symtab_push(def->symtab);
+                if (!push_symbol_scope(def->symtab, n->loc)) return 0;
                 validate_dotref_recursive(n, n);
                 symtab_pop();
             }

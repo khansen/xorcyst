@@ -91,6 +91,9 @@ hashtab *hashtab_create(int size, keyhashproc keyhsh, keycompareproc keycmp)
             for (i=0; i<size; i++) {
                 ht->slots[i] = NULL;
             }
+        } else {
+            free(ht);
+            return NULL;
         }
     }
     /* Return the created hash table */
@@ -103,7 +106,7 @@ hashtab *hashtab_create(int size, keyhashproc keyhsh, keycompareproc keycmp)
  * @param key Key
  * @param data Data
  */
-void hashtab_put(hashtab *ht, void *key, void *data)
+int hashtab_put(hashtab *ht, void *key, void *data)
 {
     int i;
     hashtab_slot *s;
@@ -126,7 +129,9 @@ void hashtab_put(hashtab *ht, void *key, void *data)
             for (s = ht->slots[i]; s->next != NULL; s = s->next) ;
             s->next = fresh;
         }
+        return 1;
     }
+    return 0;
 }
 
 /**
@@ -175,6 +180,7 @@ void hashtab_finalize(hashtab *ht)
     hashtab_slot *s;
     hashtab_slot *t;
     int i;
+    if (ht == NULL) return;
     for (i=0; i<ht->size; i++) {
         s = ht->slots[i];
         while (s != NULL) {

@@ -154,7 +154,10 @@ typedef struct tag_symbol_ident_list symbol_ident_list;
 
 /* Function prototypes */
 symtab *symtab_create();
-void symtab_push(symtab *);
+/* Push returns 0 without changing the stack on failure; empty pop returns NULL. */
+int symtab_push(symtab *);
+/* Sticky allocation failure for this assembly, reset when creating a new root. */
+int symtab_failed(void);
 symtab *symtab_pop();
 symtab *symtab_tos();
 symtab *symtab_parent();

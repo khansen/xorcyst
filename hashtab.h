@@ -59,7 +59,8 @@ typedef struct tag_hashtab hashtab;
 
 /** Function prototypes */
 hashtab *hashtab_create(int, keyhashproc, keycompareproc);
-void hashtab_put(hashtab *, void *, void *);
+/* Returns zero on allocation failure; keys and data remain caller-owned. */
+int hashtab_put(hashtab *, void *, void *);
 void *hashtab_get(hashtab *, void *);
 void *hashtab_remove(hashtab *, void *);
 void hashtab_finalize(hashtab *);

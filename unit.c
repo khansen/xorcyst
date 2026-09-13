@@ -35,6 +35,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "unit.h"
 #include "objdef.h"
 
@@ -161,17 +162,12 @@ static void get_const(FILE *fp, xasm_unit *u, int i)
  */
 static void get_constants(FILE *fp, xasm_unit *u)
 {
-    int i;
-    int count = get_2(fp);
-    if (count > 0) {
-        u->constants = (xasm_constant *)malloc(sizeof(xasm_constant) * count);
-    } else {
-        u->constants = NULL;
-    }
-    for (i=0; i<count; i++) {
-        get_const(fp, u, i);
-    }
+    int i, count = get_2(fp);
+    if (read_error || count == 0) return;
+    u->constants = calloc((size_t)count, sizeof(*u->constants));
+    if (u->constants == NULL) { read_error = 1; return; }
     u->const_count = count;
+    for (i = 0; i < count && !read_error; i++) get_const(fp, u, i);
 }
 
 /**
@@ -195,18 +191,12 @@ static void get_ext(FILE *fp, xasm_unit *u, int i)
  */
 static void get_externals(FILE *fp, xasm_unit *u)
 {
-    int i;
-    int count;
-    count = get_2(fp);
-    if (count > 0) {
-        u->externals = (xasm_external *)malloc(sizeof(xasm_external) * count);
-    } else {
-        u->externals = NULL;
-    }
-    for (i=0; i<count; i++) {
-        get_ext(fp, u, i);
-    }
+    int i, count = get_2(fp);
+    if (read_error || count == 0) return;
+    u->externals = calloc((size_t)count, sizeof(*u->externals));
+    if (u->externals == NULL) { read_error = 1; return; }
     u->ext_count = count;
+    for (i = 0; i < count && !read_error; i++) get_ext(fp, u, i);
 }
 
 /**
@@ -369,18 +359,10 @@ int xasm_unit_read(const char *filename, xasm_unit *u)
     unsigned char version;
 
     read_error = 0;
+    memset(u, 0, sizeof(*u));
     u->name = filename;
     fp = fopen(filename, "rb");
-    if (fp == NULL) {
-        u->const_count = 0;
-        u->ext_count = 0;
-        u->expr_count = 0;
-        u->dataseg.size = 0;
-        u->dataseg.bytes = NULL;
-        u->codeseg.size = 0;
-        u->codeseg.bytes = NULL;
-        return 0;
-    }
+    if (fp == NULL) return 0;
 
     magic = get_2(fp);
     if (read_error || magic != XASM_MAGIC) {
@@ -397,21 +379,28 @@ int xasm_unit_read(const char *filename, xasm_unit *u)
     }
 
     get_constants(fp, u);
+    if (read_error) goto finish;
 
     /* Read # of units explicitly imported from */
     count = get_1(fp);
     /* Read unit names */
-    for (i=0; i<count; i++) {
+    for (i=0; i<count && !read_error; i++) {
         char *s = get_str_8(fp);
         SAFE_FREE(s);
     }
 
-    get_externals(fp, u);
-    get_segment(fp, &u->dataseg);
-    get_segment(fp, &u->codeseg);
-    get_expressions(fp, u);
+    if (!read_error) get_externals(fp, u);
+    if (!read_error) get_segment(fp, &u->dataseg);
+    if (!read_error) get_segment(fp, &u->codeseg);
+    if (!read_error) get_expressions(fp, u);
+    if (!read_error && fgetc(fp) != EOF) {
+        fprintf(stderr, "%s: unexpected bytes after object expressions\n", filename);
+        read_error = 1;
+    }
 
-    fclose(fp);
+finish:
+    if (ferror(fp)) read_error = 1;
+    if (fclose(fp) != 0) read_error = 1;
 
     if (read_error) {
         xasm_unit_finalize(u);
@@ -504,6 +493,7 @@ void xasm_unit_finalize(xasm_unit *u)
 
     finalize_segment(&u->dataseg);
     finalize_segment(&u->codeseg);
+    memset(u, 0, sizeof(*u));
 }
 
 /**

@@ -1004,6 +1004,7 @@ astnode *astnode_create_null(location loc)
 astnode *astnode_create_instruction(instruction_mnemonic mnemonic, addressing_mode mode, astnode *operand, location loc)
 {
     astnode *n = astnode_create(INSTRUCTION_NODE, loc);
+    if (n == NULL) return NULL; /* The caller still owns operand. */
     /* Store the mnemonic and addressing mode */
     n->instr.mnemonic = mnemonic;
     n->instr.mode = mode;
@@ -1036,7 +1037,7 @@ astnode *astnode_create_identifier(const char *ident, location loc)
 astnode *astnode_create_integer(int value, location loc)
 {
     astnode *n = astnode_create(INTEGER_NODE, loc);
-    n->integer = value;
+    if (n != NULL) n->integer = value;
     return n;
 }
 
@@ -1048,10 +1049,14 @@ astnode *astnode_create_integer(int value, location loc)
 astnode *astnode_create_string(const char *value, location loc)
 {
     astnode *n = astnode_create(STRING_NODE, loc);
+    if (n == NULL) return NULL;
     /* Allocate and store text */
     n->string = (char *)malloc(strlen(value)+1);
     if (n->string != NULL) {
         strcpy(n->string, value);
+    } else {
+        astnode_finalize(n);
+        return NULL;
     }
     return n;
 }

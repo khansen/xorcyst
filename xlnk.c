@@ -113,9 +113,11 @@
 #include "script.h"
 #include "unit.h"
 #include "hashtab.h"
+#include "output_file.h"
 
 #include <stddef.h>
 #include <limits.h>
+#include <stdint.h>
 
 /* Global statics for bytecode walking - NOTE: NOT REENTRANT!
    bytecode_walk cannot be called recursively or from multiple threads. */
@@ -472,22 +474,31 @@ static void maybe_print_debug_tip()
     }
 }
 
-/**
- * Issues an error.
- * @param fmt format string for printf
- */
+static void report_error(const char *fmt, va_list ap)
+{
+    maybe_print_location();
+    fprintf(stderr, "error: ");
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    maybe_print_debug_tip();
+    err_count++;
+}
+
+/* Errors that cannot be deferred to a later relocation pass. */
+static void err_always(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    report_error(fmt, ap);
+    va_end(ap);
+}
+
+/* First-pass relocation may defer errors for forward instruction operands. */
 static void err(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    if (!suppress) {
-        maybe_print_location();
-        fprintf(stderr, "error: ");
-        vfprintf(stderr, fmt, ap);
-        fprintf(stderr, "\n");
-        maybe_print_debug_tip();
-        err_count++;
-    }
+    if (!suppress) report_error(fmt, ap);
     va_end(ap);
 }
 
@@ -795,6 +806,7 @@ static void bytecode_walk(const unsigned char *bytes, int size, xasm_bytecodepro
             break;
         }
     } while (cmd != XASM_CMD_END);
+    if (i != size) err("unexpected bytes after segment terminator");
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1112,6 +1124,41 @@ static void eval_expression(xunit *u, int exid, xasm_constant *result)
     eval_recursive(u, exp, result);
 }
 
+/* The first relocation pass suppresses errors for unresolved forward labels;
+   later relocation and both writers require a resolved integer operand. */
+static int eval_instruction_operand(xunit *u, int exid, xasm_constant *result)
+{
+    eval_expression(u, exid, result);
+    if (result->type == XASM_INTEGER_CONSTANT) return 1;
+    err("instruction operand must evaluate to an integer");
+    finalize_constant(result);
+    return 0;
+}
+
+static int valid_storage_count(long count)
+{
+    if (count > 0 && count < 0x10000) return 1;
+    err_always("storage size out of range (must be 1..65535 bytes)");
+    return 0;
+}
+
+static int eval_storage_count(xunit *u, int exid, int *count)
+{
+    xasm_constant result;
+    int valid = 0;
+    eval_expression(u, exid, &result);
+    if (result.type != XASM_INTEGER_CONSTANT) {
+        /* Unlike instruction operands, an unresolved storage size prevents
+           this pass from assigning correct addresses to subsequent labels. */
+        err_always("storage size must evaluate to an integer during layout");
+    } else if (valid_storage_count(result.integer)) {
+        *count = (int)result.integer;
+        valid = 1;
+    }
+    finalize_constant(&result);
+    return valid;
+}
+
 /*--------------------------------------------------------------------------*/
 /* Functions for incrementing PC, with error handling for wraparound. */
 
@@ -1176,29 +1223,13 @@ static void inc_pc_4(const unsigned char *b, void *arg)
  */
 static void inc_pc_dsb(const unsigned char *b, void *arg)
 {
-    xasm_constant c;
+    int count;
     int exid;
     calc_address_args *args = (calc_address_args *)arg;
     int i = 1;
     /* Get expression ID */
     exid = get_2(b, &i);
-    /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    /* Handle the result */
-    if (c.type == XASM_INTEGER_CONSTANT) {
-        /* An array of bytes will be located here */
-        /* Advance PC appropriately */
-        inc_pc( c.integer, arg );
-    }
-    else if (c.type == XASM_STRING_CONSTANT) {
-        err("unexpected string operand (`%s') to storage directive", c.string);
-    }
-    else {
-        //err("unresolved symbol");
-        assert(0);
-    }
-
-    finalize_constant(&c);
+    if (eval_storage_count(args->xu, exid, &count)) inc_pc(count, arg);
 }
 
 static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
@@ -1213,10 +1244,7 @@ static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
     op = get_1(b, &i);
     /* Get expression ID */
     exid = get_2(b, &i);
-    /* Evaluate it */
-    eval_expression(args->xu, exid, &c);
-    /* Handle the result */
-    if (c.type == XASM_INTEGER_CONSTANT && !wide) {
+    if (eval_instruction_operand(args->xu, exid, &c) && !wide) {
 	mode = opcode_addressing_mode(op);
         /* See if it can be reduced to ZP instruction */
         if ((c.integer < 0x100) &&
@@ -1225,13 +1253,6 @@ static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
             op = t;
             ((unsigned char*)b)[1] = t;
         }
-    }
-    else if (c.type == XASM_STRING_CONSTANT) {
-        err("invalid instruction operand (string)");
-    }
-    else {
-        /* Address not available yet (forward reference). */
-        //err("unresolved symbol");
     }
     /* Advance PC */
     inc_pc( opcode_length(op), arg );
@@ -1301,8 +1322,7 @@ static void write_instr(const unsigned char *b, void *arg)
     /* Get expression ID */
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
+    if (!eval_instruction_operand(args->xu, exid, &c)) return;
     /* Write the opcode */
     fputc(op, args->fp);
     if (opcode_length(op) == 2) {
@@ -1462,7 +1482,7 @@ static void write_dsi16(const unsigned char *b, void *arg)
  */
 static void write_dsb(const unsigned char *b, void *arg)
 {
-    xasm_constant c;
+    int count;
     int i;
     int exid;
     write_binary_args *args = (write_binary_args *)arg;
@@ -1470,16 +1490,9 @@ static void write_dsb(const unsigned char *b, void *arg)
     i = 1;
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
-    if (c.integer < 0) {
-        err("negative count");
-    } else if (c.integer > 0) {
-        for (i=0; i<c.integer; i++) {
-            fputc(0, args->fp);
-        }
-        inc_pc( c.integer, arg );
-    }
+    if (!eval_storage_count(args->xu, exid, &count)) return;
+    for (i = 0; i < count; i++) fputc(0, args->fp);
+    inc_pc(count, arg);
 }
 
 /**
@@ -1619,8 +1632,7 @@ static void asm_write_instr(const unsigned char *b, void *arg)
     /* Get expression ID */
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
+    if (!eval_instruction_operand(args->xu, exid, &c)) return;
     /* Write the opcode */
     fprintf(args->fp, "%s", opcode_to_string(op));
     switch (mode) {
@@ -1781,7 +1793,7 @@ static void asm_write_dsi16(const unsigned char *b, void *arg)
  */
 static void asm_write_dsb(const unsigned char *b, void *arg)
 {
-    xasm_constant c;
+    int count;
     int i;
     int exid;
     write_binary_args *args = (write_binary_args *)arg;
@@ -1789,15 +1801,9 @@ static void asm_write_dsb(const unsigned char *b, void *arg)
     i = 1;
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
-    if (c.integer < 0) {
-        err("negative count");
-    }
-    else if (c.integer > 0) {
-        fprintf(args->fp, ".DSB $%X\n", (unsigned)c.integer);
-        inc_pc( c.integer, arg );
-    }
+    if (!eval_storage_count(args->xu, exid, &count)) return;
+    fprintf(args->fp, ".DSB $%X\n", (unsigned)count);
+    inc_pc(count, arg);
 }
 
 /**
@@ -1921,6 +1927,10 @@ static void create_local_array(int size, local_array *la)
     la->size = size;
     if (size > 0) {
         la->entries = (local *)calloc(size, sizeof(local));
+        if (la->entries == NULL) {
+            la->size = 0;
+            err("out of memory creating local symbol array");
+        }
     }
     else {
         la->entries = NULL;
@@ -2001,7 +2011,7 @@ static void register_one_local(const unsigned char *b, void *arg)
     int i= 1;
     /* Argument points to a pointer which points to the local struct to fill in */
     local **lpptr = (local **)arg;
-    local *lptr = *lpptr;
+    local *lptr = (*lpptr)++;
     /* Initialize some fields */
     lptr->resolved = 0;
     lptr->ref_count = 0;
@@ -2014,14 +2024,15 @@ static void register_one_local(const unsigned char *b, void *arg)
     if (lptr->flags & XASM_LABEL_FLAG_EXPORT) {
         /* Get the length of the name */
         len = get_1(b, &i) + 1;
+        check_bounds(b, i, len);
         /* Allocate space for name */
         lptr->name = (char *)malloc( len + 1 );
-        if (lptr->name != NULL) {
-            /* Copy name from bytecodes */
-            memcpy(lptr->name, &b[i], len);
-            /* Zero-terminate string */
-            lptr->name[len] = '\0';
+        if (lptr->name == NULL) {
+            err("out of memory creating exported local symbol");
+            return;
         }
+        memcpy(lptr->name, &b[i], len);
+        lptr->name[len] = '\0';
         i += len;
     }
     if (lptr->flags & XASM_LABEL_FLAG_ALIGN) {
@@ -2038,8 +2049,6 @@ static void register_one_local(const unsigned char *b, void *arg)
                 lptr->align, lptr->resolved);
     }
 #endif
-    /* Point to next local in array */
-    *lpptr += 1;
 }
 
 /**
@@ -2069,7 +2078,12 @@ static void register_locals(const unsigned char *b, int size, local_array *la, x
         NULL    /* CMD_WIDE_INSTR */
     };
     /* Create array of locals */
-    create_local_array(count_locals(b, size), la);
+    {
+        int count = count_locals(b, size);
+        if (err_count != 0) return;
+        create_local_array(count, la);
+        if (err_count != 0) return;
+    }
     /* Prepare args */
     lptr = la->entries;
     lpptr = &lptr;
@@ -2096,7 +2110,7 @@ static void enter_exported_symbol(hashtab *tab, void *key, void *data, xasm_unit
     }
     else {
         verbose(1, "      %s", (char*)key);
-        hashtab_put(tab, key, data);
+        if (!hashtab_put(tab, key, data)) err("out of memory registering exported symbol");
     }
 }
 
@@ -2453,6 +2467,63 @@ static void register_ram_blocks(xlnk_script *sc)
 /*--------------------------------------------------------------------------*/
 /* Functions for loading and initial processing of units in script. */
 
+/* Validate object references before any address calculation indexes their arrays. */
+static void validate_object_expression(const xunit *u, const xasm_expression *expr)
+{
+    if (expr == NULL) { err("missing object expression"); return; }
+    switch (expr->type) {
+        case XASM_LOCAL_EXPRESSION:
+            if (expr->local_id < 0 || expr->local_id >= u->data_locals.size + u->code_locals.size)
+                err("invalid local symbol index in object expression");
+            break;
+        case XASM_EXTERNAL_EXPRESSION:
+            if (expr->extrn_id < 0 || expr->extrn_id >= u->_unit_.ext_count)
+                err("invalid external symbol index in object expression");
+            break;
+        case XASM_OPERATOR_EXPRESSION:
+            validate_object_expression(u, expr->op_expr.lhs);
+            if (expr->op_expr.rhs != NULL) validate_object_expression(u, expr->op_expr.rhs);
+            break;
+        default: break;
+    }
+}
+
+static void validate_object_operand(const unsigned char *bytes, void *arg)
+{
+    xunit *u = arg;
+    int offset = 1, index;
+    if (bytes[0] == XASM_CMD_INSTR || bytes[0] == XASM_CMD_WIDE_INSTR) {
+        int opcode = get_1(bytes, &offset);
+        if (opcode_addressing_mode(opcode) == INVALID_MODE || opcode_length(opcode) < 2)
+            err("invalid instruction opcode in object file");
+    }
+    index = get_2(bytes, &offset);
+    if (index >= u->_unit_.expr_count) err("invalid expression index in object bytecode");
+}
+
+static void validate_object_storage(const unsigned char *bytes, void *arg)
+{
+    int offset = 1;
+    (void)arg;
+    valid_storage_count((bytes[0] == XASM_CMD_DSI8
+                         ? get_1(bytes, &offset) : get_2(bytes, &offset)) + 1);
+}
+
+static void validate_object(xunit *u)
+{
+    int i;
+    xasm_bytecodeproc handlers[XASM_CMD_WIDE_INSTR - XASM_CMD_END + 1] = {0};
+    const int operands[] = {XASM_CMD_INSTR, XASM_CMD_WIDE_INSTR, XASM_CMD_DB,
+                           XASM_CMD_DW, XASM_CMD_DD, XASM_CMD_DSB};
+    for (i = 0; i < (int)(sizeof(operands) / sizeof(*operands)); i++)
+        handlers[operands[i] - XASM_CMD_END] = validate_object_operand;
+    handlers[XASM_CMD_DSI8 - XASM_CMD_END] = validate_object_storage;
+    handlers[XASM_CMD_DSI16 - XASM_CMD_END] = validate_object_storage;
+    bytecode_walk(u->_unit_.dataseg.bytes, u->_unit_.dataseg.size, handlers, u);
+    bytecode_walk(u->_unit_.codeseg.bytes, u->_unit_.codeseg.size, handlers, u);
+    for (i = 0; i < u->_unit_.expr_count; i++) validate_object_expression(u, u->_unit_.expressions[i]);
+}
+
 /**
  * Registers (parses etc.) one unit based on 'link' script command.
  * @param s Linker script
@@ -2476,20 +2547,23 @@ static void register_one_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
         return;
     }
     xu->loaded = 1;
+    (*i)++;
     verbose(1, "  unit `%s' loaded", file);
 
     verbose(1, "    registering local symbols...");
     register_locals(xu->_unit_.dataseg.bytes, xu->_unit_.dataseg.size, &xu->data_locals, xu);
     register_locals(xu->_unit_.codeseg.bytes, xu->_unit_.codeseg.size, &xu->code_locals, xu);
 
+    if (err_count != 0) return;
+    validate_object(xu);
+    if (err_count != 0) return;
+
     verbose(1, "    registering public symbols...");
     enter_exported_constants(&xu->_unit_);
     enter_exported_locals(&xu->data_locals, &xu->_unit_);
     enter_exported_locals(&xu->code_locals, &xu->_unit_);
 
-    hashtab_put(unit_hash, (void*)file, xu);
-    /* Increment unit index */
-    (*i)++;
+    if (!hashtab_put(unit_hash, (void*)file, xu)) err("out of memory registering unit");
 }
 
 /**
@@ -2521,20 +2595,31 @@ script commands. */
 static void set_output(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
-    FILE **fpp;
+    output_writer *output = arg;
     require_arg(s, c, "file", file);
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp != NULL) {
-        fclose(*fpp);
+    if (output->stream != NULL && !output_file_finish(output, 1)) {
+        err_count++;
+        return;
     }
-    *fpp = fopen(file, "wb");
-    if (*fpp == NULL) {
-        scripterr(s, c, "could not open `%s' for writing", file);
+    if (!output_file_open(output, file)) {
+        err_count++;
+        return;
     }
-    else {
-        verbose(1, "  output goes to `%s'", file);
+    verbose(1, "  output goes to `%s'", file);
+}
+
+/* Used by both layout planning and streaming, since inputs can change between
+   the two passes. Check both counters before changing either one. */
+static int advance_copy_offsets(xlnk_script *s, xlnk_script_command *c, uintmax_t size)
+{
+    if (size > (uintmax_t)((int64_t)INT_MAX - bank_offset)
+        || size > (uintmax_t)((int64_t)INT_MAX - pc)) {
+        scripterr(s, c, "copy input is too large");
+        return 0;
     }
+    bank_offset = (int)((int64_t)bank_offset + (int64_t)size);
+    pc = (int)((int64_t)pc + (int64_t)size);
+    return 1;
 }
 
 /**
@@ -2546,32 +2631,42 @@ static void set_output(xlnk_script *s, xlnk_script_command *c, void *arg)
 static void copy_to_output(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
-    FILE **fpp;
+    output_writer *output = arg;
     FILE *cf;
-    unsigned char k;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp == NULL) {
+    unsigned char bytes[8192];
+    size_t count;
+    uintmax_t copied = 0;
+    if (output->stream == NULL) {
         scripterr(s, c, "no output open");
+        return;
     }
-    else {
-        require_arg(s, c, "file", file);
-        cf = fopen(file, "rb");
-        if (cf == NULL) {
-            scripterr(s, c, "could not open `%s' for reading", file);
+    require_arg(s, c, "file", file);
+    cf = fopen(file, "rb");
+    if (cf == NULL) {
+        scripterr(s, c, "could not open `%s' for reading", file);
+        return;
+    }
+    while ((count = fread(bytes, 1, sizeof(bytes), cf)) != 0) {
+        if (count > (uintmax_t)c->planned_copy_size - copied) {
+            scripterr(s, c, "copy input `%s' changed size after layout planning", file);
+            break;
         }
-        else {
-            verbose(1, "  copying `%s' to output at position %ld...", file, ftell(*fpp) );
-            for (k = fgetc(cf); !feof(cf); k = fgetc(cf) ) {
-                fputc(k, *fpp);
-            }
-            bank_offset += ftell(cf);
-            pc += ftell(cf);
-            fclose(cf);
-            if (bank_offset > bank_size) {
-                scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
-            }
+        if (!advance_copy_offsets(s, c, count)) break;
+        if (fwrite(bytes, 1, count, output->stream) != count) {
+            scripterr(s, c, "could not write `%s'", output->path);
+            break;
         }
+        copied += count;
+    }
+    if (ferror(cf)) scripterr(s, c, "could not read `%s'", file);
+    if (fclose(cf) != 0) scripterr(s, c, "could not close `%s'", file);
+    if (err_count != 0) return;
+    if (copied != (uintmax_t)c->planned_copy_size) {
+        scripterr(s, c, "copy input `%s' changed size after layout planning", file);
+        return;
+    }
+    if (bank_offset > bank_size) {
+        scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
     }
 }
 
@@ -2619,19 +2714,17 @@ static void start_bank(xlnk_script *s, xlnk_script_command *c, void *arg)
  */
 static void write_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
-    FILE **fpp;
+    output_writer *output = arg;
     xunit *xu;
     const char *file;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp == NULL) {
+    if (output->stream == NULL) {
         scripterr(s, c, "no output open");
     }
     else {
         require_arg(s, c, "file", file);
         xu = (xunit *)hashtab_get(unit_hash, (void*)file);
-        verbose(1, "  appending unit `%s' to output at position %ld...", file, ftell(*fpp));
-        write_as_binary(*fpp, xu);
+        verbose(1, "  appending unit `%s' to output at position %ld...", file, ftell(output->stream));
+        write_as_binary(output->stream, xu);
         bank_offset += xu->code_size;
         if (bank_offset > bank_size) {
             scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
@@ -2647,7 +2740,7 @@ static void write_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
  */
 static void write_pad(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
-    FILE **fpp;
+    output_writer *output = arg;
     int i;
     int count;
     int offset;
@@ -2655,9 +2748,7 @@ static void write_pad(xlnk_script *s, xlnk_script_command *c, void *arg)
     const char *offset_str;
     const char *origin_str;
     const char *size_str;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp == NULL) {
+    if (output->stream == NULL) {
         scripterr(s, c, "no output open");
     }
     else {
@@ -2684,7 +2775,7 @@ static void write_pad(xlnk_script *s, xlnk_script_command *c, void *arg)
             verbose(1, "  padding %d bytes...", count);
         }
         for (i=0; i<count; i++) {
-            fputc(0, *fpp);
+            fputc(0, output->stream);
         }
         bank_offset += count;
         pc += count;
@@ -2723,10 +2814,8 @@ static void maybe_pad_bank(xlnk_script *s, xlnk_script_command *c, FILE *fp)
  */
 static void write_bank(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
-    FILE **fpp;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    maybe_pad_bank(s, c, *fpp);
+    output_writer *output = arg;
+    maybe_pad_bank(s, c, output->stream);
     start_bank(s, c, arg);
 }
 
@@ -2737,32 +2826,35 @@ static void write_bank(xlnk_script *s, xlnk_script_command *c, void *arg)
  */
 static void generate_binary_output(xlnk_script *sc, const char *output_file)
 {
-    FILE *fp = NULL;
-    /* Table of mappings for our purpose */
-    static xlnk_script_commandprocmap map[] = {
-        { XLNK_OUTPUT_COMMAND, set_output },
-        { XLNK_COPY_COMMAND, copy_to_output },
-        { XLNK_BANK_COMMAND, write_bank },
-        { XLNK_LINK_COMMAND, write_unit },
-        { XLNK_PAD_COMMAND, write_pad },
-        { XLNK_BAD_COMMAND, NULL }
-    };
-    /* Reset offsets */
-    bank_size = 0x7FFFFFFF;
+    output_writer output = {0};
+    xlnk_script_command *command;
+    bank_size = INT_MAX;
     bank_offset = 0;
     bank_origin = 0;
     bank_id = -1;
     pc = 0;
-    /* Open default output if one is provided */
-    if (output_file) {
-        fp = fopen(output_file, "wb");
-        if (fp == NULL)
-            err("could not open `%s' for writing", output_file);
+    if (output_file != NULL && !output_file_open(&output, output_file)) {
+        err_count++;
+        return;
     }
-    /* Do the walk */
-    xlnk_script_walk(sc, map, (void *)&fp);
-    /* Pad last bank if necessary */
-    maybe_pad_bank(sc, sc->first_command, fp);
+    /* Stop on the first error. In particular, a failed close when switching
+       output files must not open or replace any subsequent destination. */
+    for (command = sc->first_command; command != NULL && err_count == 0; command = command->next) {
+        switch (command->type) {
+            case XLNK_OUTPUT_COMMAND: set_output(sc, command, &output); break;
+            case XLNK_COPY_COMMAND: copy_to_output(sc, command, &output); break;
+            case XLNK_BANK_COMMAND: write_bank(sc, command, &output); break;
+            case XLNK_LINK_COMMAND: write_unit(sc, command, &output); break;
+            case XLNK_PAD_COMMAND: write_pad(sc, command, &output); break;
+            default: break;
+        }
+        /* Covers bytecode and padding writes as well as copied input. */
+        if (err_count == 0 && output.stream != NULL && ferror(output.stream))
+            err("could not write output `%s'", output.path);
+    }
+    if (err_count == 0) maybe_pad_bank(sc, sc->first_command, output.stream);
+    if (err_count != 0) output_file_discard(&output);
+    else if (output.stream != NULL && !output_file_finish(&output, 1)) err_count++;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -2947,30 +3039,44 @@ static void generate_assembly_output(xlnk_script *sc, FILE *fp)
 
 /*--------------------------------------------------------------------------*/
 
-/**
- * Increases bank offset and PC according to size of the file specified by
- * 'copy' script command.
- * @param s Linker script
- * @param c Command of type COPY_COMMAND
- * @param arg Not used
- */
-static void inc_offset_copy(xlnk_script *s, xlnk_script_command *c, void *arg)
+/* Plan file sizes before relocation. I/O errors must not be suppressed along
+   with the first relocation pass's expected unresolved forward references. */
+static void plan_copy_input(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
     FILE *fp;
+    long size = -1;
     require_arg(s, c, "file", file);
     fp = fopen(file, "rb");
     if (fp == NULL) {
         scripterr(s, c, "could not open `%s' for reading", file);
+        return;
     }
-    else {
-        fseek(fp, 0, SEEK_END);
-        bank_offset += ftell(fp);
-        pc += ftell(fp);
-        fclose(fp);
-        if (bank_offset > bank_size) {
-            scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
-        }
+    if (fseek(fp, 0, SEEK_END) != 0 || (size = ftell(fp)) < 0) {
+        scripterr(s, c, "could not determine size of `%s'", file);
+    }
+    if (fclose(fp) != 0) {
+        scripterr(s, c, "could not close `%s'", file);
+        return;
+    }
+    c->planned_copy_size = size;
+}
+
+static void plan_copy_inputs(xlnk_script *sc)
+{
+    static xlnk_script_commandprocmap map[] = {
+        { XLNK_COPY_COMMAND, plan_copy_input },
+        { XLNK_BAD_COMMAND, NULL }
+    };
+    xlnk_script_walk(sc, map, NULL);
+}
+
+/* Apply the same prevalidated copy lengths in every relocation pass. */
+static void inc_offset_copy(xlnk_script *s, xlnk_script_command *c, void *arg)
+{
+    if (!advance_copy_offsets(s, c, (uintmax_t)c->planned_copy_size)) return;
+    if (bank_offset > bank_size) {
+        scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
     }
 }
 
@@ -3121,8 +3227,8 @@ int main(int argc, char **argv)
 
     verbose(1, "parsing linker script...");
     if (xlnk_script_parse(program_args.input_file, &sc) == 0) {
-        /* Something bad happened when parsing script, halt */
-        return(1);
+        xlnk_script_finalize(&sc);
+        return 1;
     }
 
     verbose(1, "registering RAM blocks...");
@@ -3131,6 +3237,10 @@ int main(int argc, char **argv)
     constant_hash = hashtab_create(23, HASHTAB_STRKEYHSH, HASHTAB_STRKEYCMP);
     label_hash = hashtab_create(23, HASHTAB_STRKEYHSH, HASHTAB_STRKEYCMP);
     unit_hash = hashtab_create(11, HASHTAB_STRKEYHSH, HASHTAB_STRKEYCMP);
+    if (constant_hash == NULL || label_hash == NULL || unit_hash == NULL) {
+        err("out of memory creating linker hash tables");
+        goto cleanup;
+    }
 
     unit_count = xlnk_script_count_command_type(&sc, XLNK_LINK_COMMAND);
     if (unit_count > 0) {
@@ -3142,6 +3252,7 @@ int main(int argc, char **argv)
     }
     verbose(1, "loading units...");
     register_units(&sc);
+    if (err_count == 0) plan_copy_inputs(&sc);
 
     /* Only continue with processing if no unresolved symbols */
     if (err_count == 0) {
@@ -3162,7 +3273,7 @@ int main(int argc, char **argv)
             suppress = 1;
             relocate_units(&sc);
             suppress = 0;
-            relocate_units(&sc);
+            if (err_count == 0) relocate_units(&sc);
 
             if (err_count == 0) {
                 verbose(1, "generating output...");
@@ -3173,6 +3284,7 @@ int main(int argc, char **argv)
         }
     }
 
+cleanup:
     verbose(1, "cleaning up...");
 
     for (i=0; i<unit_count; i++) {
@@ -3182,6 +3294,7 @@ int main(int argc, char **argv)
             xasm_unit_finalize( &units[i]._unit_ );
         }
     }
+    free(units);
     hashtab_finalize(label_hash);
     hashtab_finalize(constant_hash);
     hashtab_finalize(unit_hash);
