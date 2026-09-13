@@ -1079,15 +1079,16 @@ parse_arguments (int argc, char **argv)
  * @param infile Filename whose extension to change
  * @param ext New extension
  * @param outfile Destination filename
+ * @param outfile_size Destination buffer size
  */
-static void change_extension(const char *infile, const char *ext, char *outfile)
+static void change_extension(const char *infile, const char *ext, char *outfile, size_t outfile_size)
 {
     char *p;
     /* Find the last dot. */
     p = strrchr(infile, '.');
     if (p == NULL) {
         /* There is no dot, simply concatenate extension. */
-        sprintf(outfile, "%s.%s", infile, ext);
+        snprintf(outfile, outfile_size, "%s.%s", infile, ext);
     }
     else {
         /* Copy the name up to and including the last dot */
@@ -1640,11 +1641,11 @@ int main(int argc, char *argv[]) {
         if (binary_outfile == NULL) {
             /* Create default name of output */
             const char *default_ext = "o";
-            int default_outfile_len = strlen(xasm_args.input_file)
-                                    + /*dot*/1 + strlen(default_ext) + 1;
+            size_t default_outfile_len = strlen(xasm_args.input_file)
+                                       + /*dot*/1 + strlen(default_ext) + 1;
             default_outfile = (char *)malloc(default_outfile_len);
             if (default_outfile == NULL) { exit_code = 3; goto cleanup; }
-            change_extension(xasm_args.input_file, default_ext, default_outfile);
+            change_extension(xasm_args.input_file, default_ext, default_outfile, default_outfile_len);
             binary_outfile = default_outfile;
             if (assembly_ready) xasm_args.output_file = default_outfile;
         }

@@ -2044,13 +2044,15 @@ const char *capture_xref_instruction_source(const char *filename, const char *di
 {
     const char *base = strrchr(filename, '/');
     char *resolved;
+    size_t resolved_size;
     instruction_source *source;
     if (!xasm_utf8_valid(filename, strlen(filename))
         || !xasm_utf8_valid(directory, strlen(directory))) return NULL;
     base = base != NULL ? base + 1 : filename;
-    resolved = (char *)malloc(strlen(directory) + strlen(base) + 2);
+    resolved_size = strlen(directory) + strlen(base) + 2;
+    resolved = (char *)malloc(resolved_size);
     if (resolved == NULL) return NULL;
-    sprintf(resolved, "%s/%s", directory, base);
+    snprintf(resolved, resolved_size, "%s/%s", directory, base);
     source = instruction_source_file(resolved, fp);
     free(resolved);
     return source != NULL ? source->filename : NULL;
