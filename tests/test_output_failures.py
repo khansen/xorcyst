@@ -57,8 +57,11 @@ class OutputFailures(unittest.TestCase):
         if nl:
             flags += [f'--fceux-nl-rom-prefix={self.root}/game.nes.',
                       f'--fceux-nl-ram-output={self.ram}']
-        return subprocess.run([str(self.executable), str(self.source), '-o', str(self.output), *flags, *extra],
-                              capture_output=True, env=environment, timeout=15)
+        result = subprocess.run([str(self.executable), str(self.source), '-o', str(self.output), *flags, *extra],
+                                capture_output=True, env=environment, timeout=15)
+        # Expected nonzero exits must not hide sanitizer failures during fault injection.
+        self.assertNotRegex(result.stderr, rb'ERROR: (?:AddressSanitizer|LeakSanitizer)|runtime error:')
+        return result
 
     def seed_outputs(self, extra=()):
         previous = {}

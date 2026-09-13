@@ -4540,6 +4540,107 @@ void astproc_third_pass(astnode *root)
 
 /*---------------------------------------------------------------------------*/
 
+/* Evaluate an arithmetic operator without taking ownership of its operands. */
+static astnode *eval_arithmetic(const astnode *expr, const astnode *lhs, const astnode *rhs)
+{
+    switch (expr->oper) {
+        /* Binary ops */
+        case PLUS_OPERATOR:
+        case MINUS_OPERATOR:
+        case MUL_OPERATOR:
+        case DIV_OPERATOR:
+        case MOD_OPERATOR:
+        case AND_OPERATOR:
+        case OR_OPERATOR:
+        case XOR_OPERATOR:
+        case SHL_OPERATOR:
+        case SHR_OPERATOR:
+        case LT_OPERATOR:
+        case GT_OPERATOR:
+        case EQ_OPERATOR:
+        case NE_OPERATOR:
+        case LE_OPERATOR:
+        case GE_OPERATOR:
+        if (astnode_is_type(lhs, INTEGER_NODE)
+            && astnode_is_type(rhs, INTEGER_NODE)) {
+            /* Both sides are integer literals. */
+            switch (expr->oper) {
+                case PLUS_OPERATOR:  return astnode_create_integer(lhs->integer + rhs->integer, expr->loc);
+                case MINUS_OPERATOR: return astnode_create_integer(lhs->integer - rhs->integer, expr->loc);
+                case MUL_OPERATOR:   return astnode_create_integer(lhs->integer * rhs->integer, expr->loc);
+                case DIV_OPERATOR:
+                    if (rhs->integer == 0) {
+                        err(expr->loc, "division by zero in expression");
+                        return astnode_create_integer(0, expr->loc);
+                    } else {
+                        return astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
+                    }
+                case MOD_OPERATOR:
+                    if (rhs->integer == 0) {
+                        err(expr->loc, "modulo by zero in expression");
+                        return astnode_create_integer(0, expr->loc);
+                    } else {
+                        return astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
+                    }
+                case AND_OPERATOR:   return astnode_create_integer(lhs->integer & rhs->integer, expr->loc);
+                case OR_OPERATOR:    return astnode_create_integer(lhs->integer | rhs->integer, expr->loc);
+                case XOR_OPERATOR:   return astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);
+                case SHL_OPERATOR:   return astnode_create_integer(lhs->integer << rhs->integer, expr->loc);
+                case SHR_OPERATOR:   return astnode_create_integer(lhs->integer >> rhs->integer, expr->loc);
+                case LT_OPERATOR:    return astnode_create_integer(lhs->integer < rhs->integer, expr->loc);
+                case GT_OPERATOR:    return astnode_create_integer(lhs->integer > rhs->integer, expr->loc);
+                case EQ_OPERATOR:    return astnode_create_integer(lhs->integer == rhs->integer, expr->loc);
+                case NE_OPERATOR:    return astnode_create_integer(lhs->integer != rhs->integer, expr->loc);
+                case LE_OPERATOR:    return astnode_create_integer(lhs->integer <= rhs->integer, expr->loc);
+                case GE_OPERATOR:    return astnode_create_integer(lhs->integer >= rhs->integer, expr->loc);
+
+                default:    /* ### Error, actually */
+                break;
+            }
+        }
+        /* Use some mathematical identities... */
+        else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 0))
+            && (expr->oper == PLUS_OPERATOR)) {
+            /* 0+expr == expr */
+            return astnode_clone(rhs, rhs->loc);
+        } else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 0))
+            && (expr->oper == PLUS_OPERATOR)) {
+            /* expr+0 == expr */
+            return astnode_clone(lhs, lhs->loc);
+        } else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 1))
+            && (expr->oper == MUL_OPERATOR)) {
+            /* 1*expr == expr */
+            return astnode_clone(rhs, rhs->loc);
+        } else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 1))
+            && ((expr->oper == MUL_OPERATOR) || (expr->oper == DIV_OPERATOR)) ) {
+            /* expr*1 == expr */
+            /* expr/1 == expr */
+            return astnode_clone(lhs, lhs->loc);
+        }
+        break;
+
+        /* Unary ops */
+        case NEG_OPERATOR:
+        case NOT_OPERATOR:
+        case LO_OPERATOR:
+        case HI_OPERATOR:
+        case UMINUS_OPERATOR:
+        case BANK_OPERATOR:
+        if (astnode_is_type(lhs, INTEGER_NODE)) {
+            switch (expr->oper) {
+                case NEG_OPERATOR:  return astnode_create_integer(~lhs->integer, expr->loc);
+                case NOT_OPERATOR:  return astnode_create_integer(!lhs->integer, expr->loc);
+                case LO_OPERATOR:   return astnode_create_integer(lhs->integer & 0xFF, expr->loc);
+                case HI_OPERATOR:   return astnode_create_integer((lhs->integer >> 8) & 0xFF, expr->loc);
+                case UMINUS_OPERATOR: return astnode_create_integer(-lhs->integer, expr->loc);
+                default: break;
+            }
+        }
+        break;
+    } /* switch */
+    return NULL;
+}
+
 /**
  * Evaluates the given expression, _without_ replacing it in the AST
  * (unlike astproc_reduce_expression() and friends).
@@ -4551,102 +4652,11 @@ static astnode *eval_expression(astnode *expr)
         case ARITHMETIC_NODE: {
         astnode *lhs = eval_expression(LHS(expr));
         astnode *rhs = eval_expression(RHS(expr));
-        switch (expr->oper) {
-            /* Binary ops */
-            case PLUS_OPERATOR:
-            case MINUS_OPERATOR:
-            case MUL_OPERATOR:
-            case DIV_OPERATOR:
-            case MOD_OPERATOR:
-            case AND_OPERATOR:
-            case OR_OPERATOR:
-            case XOR_OPERATOR:
-            case SHL_OPERATOR:
-            case SHR_OPERATOR:
-            case LT_OPERATOR:
-            case GT_OPERATOR:
-            case EQ_OPERATOR:
-            case NE_OPERATOR:
-            case LE_OPERATOR:
-            case GE_OPERATOR:
-            if (astnode_is_type(lhs, INTEGER_NODE)
-                && astnode_is_type(rhs, INTEGER_NODE)) {
-                /* Both sides are integer literals. */
-                switch (expr->oper) {
-                    case PLUS_OPERATOR:  return astnode_create_integer(lhs->integer + rhs->integer, expr->loc);
-                    case MINUS_OPERATOR: return astnode_create_integer(lhs->integer - rhs->integer, expr->loc);
-                    case MUL_OPERATOR:   return astnode_create_integer(lhs->integer * rhs->integer, expr->loc);
-                    case DIV_OPERATOR:
-                        if (rhs->integer == 0) {
-                            err(expr->loc, "division by zero in expression");
-                            return astnode_create_integer(0, expr->loc);
-                        } else {
-                            return astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
-                        }
-                    case MOD_OPERATOR:
-                        if (rhs->integer == 0) {
-                            err(expr->loc, "modulo by zero in expression");
-                            return astnode_create_integer(0, expr->loc);
-                        } else {
-                            return astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
-                        }
-                    case AND_OPERATOR:   return astnode_create_integer(lhs->integer & rhs->integer, expr->loc);
-                    case OR_OPERATOR:    return astnode_create_integer(lhs->integer | rhs->integer, expr->loc);
-                    case XOR_OPERATOR:   return astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);
-                    case SHL_OPERATOR:   return astnode_create_integer(lhs->integer << rhs->integer, expr->loc);
-                    case SHR_OPERATOR:   return astnode_create_integer(lhs->integer >> rhs->integer, expr->loc);
-                    case LT_OPERATOR:    return astnode_create_integer(lhs->integer < rhs->integer, expr->loc);
-                    case GT_OPERATOR:    return astnode_create_integer(lhs->integer > rhs->integer, expr->loc);
-                    case EQ_OPERATOR:    return astnode_create_integer(lhs->integer == rhs->integer, expr->loc);
-                    case NE_OPERATOR:    return astnode_create_integer(lhs->integer != rhs->integer, expr->loc);
-                    case LE_OPERATOR:    return astnode_create_integer(lhs->integer <= rhs->integer, expr->loc);
-                    case GE_OPERATOR:    return astnode_create_integer(lhs->integer >= rhs->integer, expr->loc);
-
-                    default:    /* ### Error, actually */
-                    break;
-                }
-            }
-            /* Use some mathematical identities... */
-            else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 0))
-                && (expr->oper == PLUS_OPERATOR)) {
-                /* 0+expr == expr */
-                return astnode_clone(rhs, rhs->loc);
-            } else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 0))
-                && (expr->oper == PLUS_OPERATOR)) {
-                /* expr+0 == expr */
-                return astnode_clone(lhs, lhs->loc);
-            } else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 1))
-                && (expr->oper == MUL_OPERATOR)) {
-                /* 1*expr == expr */
-                return astnode_clone(rhs, rhs->loc);
-            } else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 1))
-                && ((expr->oper == MUL_OPERATOR) || (expr->oper == DIV_OPERATOR)) ) {
-                /* expr*1 == expr */
-                /* expr/1 == expr */
-                return astnode_clone(lhs, lhs->loc);
-            }
-            break;
-
-            /* Unary ops */
-            case NEG_OPERATOR:
-            case NOT_OPERATOR:
-            case LO_OPERATOR:
-            case HI_OPERATOR:
-            case UMINUS_OPERATOR:
-            case BANK_OPERATOR:
-            if (astnode_is_type(lhs, INTEGER_NODE)) {
-                switch (expr->oper) {
-                    case NEG_OPERATOR:  return astnode_create_integer(~lhs->integer, expr->loc);
-                    case NOT_OPERATOR:  return astnode_create_integer(!lhs->integer, expr->loc);
-                    case LO_OPERATOR:   return astnode_create_integer(lhs->integer & 0xFF, expr->loc);
-                    case HI_OPERATOR:   return astnode_create_integer((lhs->integer >> 8) & 0xFF, expr->loc);
-                    case UMINUS_OPERATOR: return astnode_create_integer(-lhs->integer, expr->loc);
-                    default: break;
-                }
-            }
-            break;
-          } /* switch */
-        } break;
+        astnode *result = eval_arithmetic(expr, lhs, rhs);
+        astnode_finalize(lhs);
+        astnode_finalize(rhs);
+        return result;
+        }
 
         case INTEGER_NODE:
         return astnode_clone(expr, expr->loc);
