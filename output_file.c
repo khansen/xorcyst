@@ -22,6 +22,25 @@ static int replaceable_destination(const char *path)
     return S_ISREG(info.st_mode) || S_ISLNK(info.st_mode);
 }
 
+static int set_output_permissions(output_writer *output)
+{
+    struct stat info;
+    mode_t mode, mask;
+    int exists = stat(output->path, &info) == 0;
+    if (!exists && errno != ENOENT) return 0;
+    if (exists && S_ISREG(info.st_mode)) {
+        /* Follow a destination symlink for its access bits, never copy the
+           symlink's usually unrestricted mode onto the replacement file. */
+        mode = info.st_mode & 0777;
+    } else {
+        /* xasm is single-threaded; restore the process mask immediately. */
+        mask = umask(0);
+        umask(mask);
+        mode = 0666 & ~mask;
+    }
+    return fchmod(fileno(output->stream), mode) == 0;
+}
+
 void output_file_discard(output_writer *output)
 {
     if (output->stream != NULL && output->stream != stdout) fclose(output->stream);
@@ -76,8 +95,12 @@ int output_file_close(output_writer *output, int success)
     if (ferror(output->stream)) success = 0;
     if (output->path == NULL) {
         if (fflush(output->stream) != 0) success = 0;
-    } else if (fclose(output->stream) != 0) {
-        success = 0;
+    } else {
+        /* Keep the stage private until serialization has finished. Apply the
+           final permissions through its owned descriptor before publication. */
+        if (success && fflush(output->stream) != 0) success = 0;
+        if (success && !set_output_permissions(output)) success = 0;
+        if (fclose(output->stream) != 0) success = 0;
     }
     output->stream = NULL;
     output->ready = success;

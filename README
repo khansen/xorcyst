@@ -115,7 +115,9 @@ after serialization, stream checks, and close succeed. Existing files survive
 failed writes or renames, and owned temporary files are removed. CSV finishes
 both streams before publishing either file. Sidecar publication replaces a
 symlink itself and rejects FIFOs, sockets, devices, and directories; use the
-analysis stdout options for pipes.
+analysis stdout options for pipes. Sidecars preserve existing read, write, and
+execute permission bits (using the target's bits when replacing a symlink).
+New sidecars use mode 0666 filtered by the process umask.
 
 Publication happens one file at a time. A later failure can leave earlier
 outputs updated. Stdout cannot be staged. Disregard

@@ -95,6 +95,10 @@ static int output_fflush(FILE *fp)
     int result = fflush(fp);
     return output_fault("output_fflush") ? EOF : result;
 }
+static int output_fchmod(int fd, mode_t mode)
+{
+    return output_fault("output_fchmod") ? -1 : fchmod(fd, mode);
+}
 static int output_rename(const char *from, const char *to)
 {
     return output_fault("output_rename") ? -1 : rename(from, to);
@@ -105,6 +109,7 @@ static int output_rename(const char *from, const char *to)
 #define ferror output_ferror
 #define fclose output_fclose
 #define fflush output_fflush
+#define fchmod output_fchmod
 #define rename output_rename
 #define output_file_open output_file_open_impl
 #define output_file_close output_file_close_impl
@@ -118,6 +123,7 @@ static int output_rename(const char *from, const char *to)
 #undef ferror
 #undef fclose
 #undef fflush
+#undef fchmod
 #undef rename
 #undef output_file_open
 #undef output_file_close
