@@ -2110,7 +2110,7 @@ static void enter_exported_symbol(hashtab *tab, void *key, void *data, xasm_unit
     }
     else {
         verbose(1, "      %s", (char*)key);
-        hashtab_put(tab, key, data);
+        if (!hashtab_put(tab, key, data)) err("out of memory registering exported symbol");
     }
 }
 
@@ -2563,7 +2563,7 @@ static void register_one_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
     enter_exported_locals(&xu->data_locals, &xu->_unit_);
     enter_exported_locals(&xu->code_locals, &xu->_unit_);
 
-    hashtab_put(unit_hash, (void*)file, xu);
+    if (!hashtab_put(unit_hash, (void*)file, xu)) err("out of memory registering unit");
 }
 
 /**
@@ -3237,6 +3237,10 @@ int main(int argc, char **argv)
     constant_hash = hashtab_create(23, HASHTAB_STRKEYHSH, HASHTAB_STRKEYCMP);
     label_hash = hashtab_create(23, HASHTAB_STRKEYHSH, HASHTAB_STRKEYCMP);
     unit_hash = hashtab_create(11, HASHTAB_STRKEYHSH, HASHTAB_STRKEYCMP);
+    if (constant_hash == NULL || label_hash == NULL || unit_hash == NULL) {
+        err("out of memory creating linker hash tables");
+        goto cleanup;
+    }
 
     unit_count = xlnk_script_count_command_type(&sc, XLNK_LINK_COMMAND);
     if (unit_count > 0) {
@@ -3280,6 +3284,7 @@ int main(int argc, char **argv)
         }
     }
 
+cleanup:
     verbose(1, "cleaning up...");
 
     for (i=0; i<unit_count; i++) {

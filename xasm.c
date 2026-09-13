@@ -648,7 +648,7 @@ static int validate_ident(char *id)
 }
 
 /* Parses program arguments. */
-static void
+static int
 parse_arguments (int argc, char **argv)
 {
     int key;
@@ -767,6 +767,10 @@ parse_arguments (int argc, char **argv)
                 } else {
                     id = optarg;
                     val = astnode_create_integer(0, loc);
+                }
+                if (val == NULL) {
+                    fprintf(stderr, "error: out of memory creating command-line definition\n");
+                    return 0;
                 }
                 if (validate_ident(id)) {
                     symtab_entry *e;
@@ -1072,6 +1076,7 @@ parse_arguments (int argc, char **argv)
     if (xasm_args.listing_file == NULL && xasm_args.listing_format_set) {
         warn_global("W0017", "--listing-format is ignored because --listing is not set");
     }
+    return 1;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1534,7 +1539,7 @@ int main(int argc, char *argv[]) {
 
     /* Parse our arguments. */
     dependencies_arguments(argc, argv);
-    parse_arguments (argc, argv);
+    if (!parse_arguments(argc, argv)) { exit_code = 1; goto cleanup; }
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
     /* Whether anything requested needs capture_instruction_provenance()
@@ -1552,17 +1557,14 @@ int main(int argc, char *argv[]) {
 
     if (xasm_args.dependency_manifest
         && !dependencies_start(program_version, xasm_args.dependency_manifest)) {
-        dependencies_clear();
-        symtab_finalize(symbol_table);
-        free(xasm_path);
-        return 3;
+        exit_code = 3;
+        goto cleanup;
     }
 
     if (!xasm_args.dependency_manifest && needs_output_protection
         && !dependencies_start_output_protection()) {
-        dependencies_clear();
-        free(xasm_path);
-        return 3;
+        exit_code = 3;
+        goto cleanup;
     }
 
     if (needs_instruction_provenance && !prepare_xref_instruction_provenance()) {
@@ -1575,12 +1577,8 @@ int main(int argc, char *argv[]) {
                  xasm_args.swap_parens,
                  xasm_args.case_insensitive)) {
         fprintf(stderr, "error: could not open `%s' for reading\n", xasm_args.input_file);
-        clear_xref_instruction_provenance();
-        symtab_finalize(symbol_table);
         exit_code = dependencies_failed() ? 3 : 1;
-        dependencies_clear();
-        free(xasm_path);
-        return exit_code;
+        goto cleanup;
     }
 
  /* Parse it into a syntax tree */

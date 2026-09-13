@@ -13,3 +13,19 @@ static void *unit_calloc(size_t count, size_t size) { return fail_unit_allocatio
 #define malloc unit_malloc
 #define calloc unit_calloc
 #include "../unit.c"
+#undef malloc
+#undef calloc
+#undef SAFE_FREE
+
+static void *hash_malloc(size_t size)
+{
+    static int index;
+    const char *fail = getenv("XLNK_TEST_HASH_FAIL");
+    if (fail != NULL && index++ == atoi(fail)) {
+        fprintf(stderr, "INJECT_HASH\n");
+        return NULL;
+    }
+    return malloc(size);
+}
+#define malloc hash_malloc
+#include "../hashtab.c"

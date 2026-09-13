@@ -18,7 +18,8 @@ class InputHandling(unittest.TestCase):
         cls.tools = {name: Path(build.name) / name for name in ('xasm', 'xlnk')}
         build_tool('xasm', cls.tools['xasm'], 'TEST_INPUT_CFLAGS',
                    {'symtab.c': 'tests/test_symtab_alloc.c', 'astnode.c': 'tests/test_astnode_alloc.c'})
-        build_tool('xlnk', cls.tools['xlnk'], 'TEST_INPUT_CFLAGS', {'unit.c': 'tests/test_unit_alloc.c'})
+        build_tool('xlnk', cls.tools['xlnk'], 'TEST_INPUT_CFLAGS',
+                   {'unit.c': 'tests/test_unit_alloc.c', 'hashtab.c': None})
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='xorcyst-input-')
@@ -317,6 +318,49 @@ class InputHandling(unittest.TestCase):
             result = self.run_tool('xasm', '.DB "[",Value,"]"\n', arguments=[argument])
             self.assertEqual(result.returncode, 0, result.stderr.decode())
             self.assertEqual((self.root / 'output').read_bytes(), b'[]')
+
+    def test_command_line_definition_allocation_failures(self):
+        for argument in ('-DValue="text"', '-DValue=""', '-DValue=', '-DValue=1', '-DValue'):
+            faults = ['XASM_TEST_VALUE_NODE_FAIL']
+            if argument not in ('-DValue=1', '-DValue'):
+                faults.append('XASM_TEST_STRING_TEXT_FAIL')
+            for fault in faults:
+                with self.subTest(argument=argument, fault=fault):
+                    result = self.run_tool('xasm', '.DB Value\n',
+                                           {fault: '1', 'XASM_TEST_EMPTY_STACK_AT_EXIT': '1'},
+                                           arguments=[argument])
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertIn(b'INJECT_', result.stderr)
+                    self.assertIn(b'out of memory creating command-line definition', result.stderr)
+
+    def test_missing_source_releases_root_scope(self):
+        environment = dict(os.environ, XASM_TEST_EMPTY_STACK_AT_EXIT='1')
+        result = subprocess.run([str(self.tools['xasm']), 'missing.asm', '-DValue="text"'],
+                                cwd=self.root, env=environment, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 1, result.stderr.decode())
+        self.assertIn(b'could not open', result.stderr)
+        self.assertNotRegex(result.stderr, SANITIZER_REPORT)
+
+    def test_linker_hash_allocation_failures_preserve_all_outputs(self):
+        # One exported constant, one exported label and the unit registration
+        # exercise every hash insertion path, after all six table allocations.
+        # Use a second object to add an exported label without altering metadata.
+        (self.root / 'unit.o').write_bytes(self.object_with_metadata())
+        (self.root / 'label.o').write_bytes(object_file(code=bytes.fromhex('f601004cf400eaf3')))
+        for index in range(20):
+            (self.root / 'second').write_bytes(b'previous second')
+            result = self.run_tool('xlnk', 'pad{size=1}\noutput{file=second}\n'
+                                   'link{file=unit.o,origin=$8000}\nlink{file=label.o}\n',
+                                   {'XLNK_TEST_HASH_FAIL': str(index)})
+            if b'INJECT_HASH' not in result.stderr:
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(index, 10)
+                break
+            self.assertEqual(result.returncode, 1, result.stderr.decode())
+            self.assertIn(b'out of memory', result.stderr)
+            self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
+        else:
+            self.fail('hash allocation sweep did not reach the end')
 
     def test_rejected_command_line_definitions_release_their_values(self):
         cases = [(['-DValue=1', '-DValue=2'], '.DB Value\n', b'\x01', b'already defined'),
