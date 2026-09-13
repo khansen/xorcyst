@@ -272,6 +272,9 @@ class OutputFailures(unittest.TestCase):
                                                                   'XASM_TEST_OUTPUT_PATH': str(target)})
                             self.assertEqual(result.returncode, code, result.stderr.decode())
                             self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                            if name == 'manifest':
+                                errors = [line for line in result.stderr.splitlines() if line.startswith(b'error:')]
+                                self.assertEqual(len(errors), 1, result.stderr.decode())
                             for index, path in enumerate(paths):
                                 # CSV closes both streams before either rename. A
                                 # failure of the second rename cannot undo the first.
@@ -329,6 +332,42 @@ class OutputFailures(unittest.TestCase):
                     self.assertEqual(target.read_bytes(), b'previous target\n')
                     self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o664)
                 self.assert_no_temporary_files()
+
+    def test_unavailable_symlink_metadata_uses_umask_without_weakening_validation(self):
+        listing, manifest = self.root / 'listing.json', self.root / 'deps.json'
+        blocked = self.root / 'blocked'
+        blocked.mkdir()
+        target = blocked / 'target.json'
+        target.write_bytes(b'original target\n')
+        for kind in ('cycle', 'restricted'):
+            for protection in ('none', 'nl', 'manifest'):
+                with self.subTest(kind=kind, protection=protection):
+                    if kind == 'restricted' and os.geteuid() == 0:
+                        self.skipTest('root bypasses directory search permissions')
+                    previous = self.seed_outputs([manifest])
+                    listing.unlink(missing_ok=True)
+                    listing.symlink_to(listing.name if kind == 'cycle' else target)
+                    flags = [f'--listing={listing}', '--listing-format=json']
+                    if protection == 'manifest':
+                        flags.append(f'--dependency-manifest={manifest}')
+                    if kind == 'restricted':
+                        blocked.chmod(0)
+                    try:
+                        result = self.run_xasm(*flags, nl=protection == 'nl', umask=0o027)
+                        if protection == 'none':
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertFalse(listing.is_symlink())
+                            self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o640)
+                            json.loads(listing.read_text())
+                        else:
+                            self.assertEqual(result.returncode, 3, result.stderr.decode())
+                            self.assertIn(b'cannot resolve output path', result.stderr)
+                            self.assertTrue(listing.is_symlink())
+                            self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+                        self.assert_no_temporary_files()
+                    finally:
+                        blocked.chmod(0o700)
+                    self.assertEqual(target.read_bytes(), b'original target\n')
 
     def test_diagnostic_listing_failures_preserve_previous_outputs(self):
         self.source.write_text(self.source.read_text().replace('END', '.ERROR "broken build"\nEND'))

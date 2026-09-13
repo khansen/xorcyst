@@ -249,8 +249,11 @@ directory, so long destination basenames remain supported. Only stages created
 by this invocation are removed. Publication replaces a symlink itself and
 rejects FIFOs, sockets, devices, and directories. After successful serialization,
 the writer preserves an existing regular destination's read/write/execute bits
-(following a destination symlink for those bits), or applies mode 0666 filtered
-by the process umask for a new file. Failure to set these permissions discards
+(following a destination symlink for those bits when available), or applies
+mode 0666 filtered by the process umask for a new file or an uninspectable
+symlink target. This permission fallback does not weaken NL/manifest alias
+validation: unresolvable output paths still fail before any publication.
+Failure to set these permissions discards
 the stage and preserves the destination. Analyses that select stdout check
 stream/flush errors without closing stdout.
 
@@ -321,7 +324,10 @@ stage-like filenames, and non-regular destinations are covered separately.
 Permission tests cover existing modes 0600, 0644, 0664, and 0755 and new outputs
 under umasks 0002, 0022, and 0077 for every sidecar format, including both CSV
 files, NL banks, and manifests. Symlink replacements also cover existing and
-missing targets without modifying the target.
+missing targets without modifying the target. Inaccessible and cyclic targets
+use the umask when replacing a listing symlink without NL/manifest protection;
+the same paths are rejected before any writes when that protection is enabled.
+Manifest I/O failures emit one diagnostic while retaining the failure status.
 
 The same harness injects I/O failures during temporary-file creation
 and subsequent output operations.

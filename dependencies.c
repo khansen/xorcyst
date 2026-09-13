@@ -489,7 +489,7 @@ int dependencies_write(const char *path)
         return 0;
     }
     if (!output_file_open(&output, absolute)) {
-        failure("cannot create manifest output", absolute);
+        failed = 1; /* The writer already reported the destination failure. */
         free(absolute);
         return 0;
     }
@@ -533,9 +533,7 @@ int dependencies_write(const char *path)
     if (ok) ok = dependencies_validate();
     if (ok) ok = output_file_publish(&output);
     output_file_discard(&output);
-    if (!ok) {
-        failure("could not publish dependency manifest", absolute);
-    }
+    if (!ok) failed = 1; /* The writer or validation already reported the cause. */
     free(absolute);
     return ok;
 }

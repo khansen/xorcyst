@@ -26,8 +26,12 @@ static int set_output_permissions(output_writer *output)
 {
     struct stat info;
     mode_t mode, mask;
-    int exists = stat(output->path, &info) == 0;
+    int exists = lstat(output->path, &info) == 0;
     if (!exists && errno != ENOENT) return 0;
+    /* Target permissions are optional when replacing a symlink itself. If
+       its target is inaccessible or cyclic, use normal creation permissions.
+       The invocation planner separately enforces destination alias checks. */
+    if (exists && S_ISLNK(info.st_mode)) exists = stat(output->path, &info) == 0;
     if (exists && S_ISREG(info.st_mode)) {
         /* Follow a destination symlink for its access bits, never copy the
            symlink's usually unrestricted mode onto the replacement file. */

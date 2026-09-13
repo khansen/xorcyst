@@ -119,7 +119,9 @@ both streams before publishing either file. Sidecar publication replaces a
 symlink itself and rejects FIFOs, sockets, devices, and directories; use the
 analysis stdout options for pipes. Sidecars preserve existing read, write, and
 execute permission bits (using the target's bits when replacing a symlink).
-New sidecars use mode 0666 filtered by the process umask.
+New sidecars, and symlink replacements whose target permissions cannot be read,
+use mode 0666 filtered by the process umask. NL/manifest destination validation
+still rejects symlink paths that cannot be resolved safely.
 
 Publication happens one file at a time. A later failure can leave earlier
 outputs updated. Stdout cannot be staged. Disregard

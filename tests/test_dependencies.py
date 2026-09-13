@@ -423,7 +423,9 @@ class Dependencies(unittest.TestCase):
         self.manifest = self.root / "absent/receipt.json"
         run = self.run_asm()
         self.assertEqual(run.returncode, 3, run.stderr)
-        self.assertIn(b"cannot create manifest output", run.stderr)
+        self.assertIn(b"could not write output", run.stderr)
+        self.assertIn(os.fsencode(self.manifest), run.stderr)
+        self.assertEqual(sum(line.startswith(b'error:') for line in run.stderr.splitlines()), 1)
         self.assertFalse(self.manifest.exists())
 
     def test_nonregular_input_refuses_without_hanging(self):
