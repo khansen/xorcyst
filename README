@@ -1,43 +1,141 @@
-This is The XORcyst version 1.6.1, a set of tools for 6502 software development.
+The XORcyst is a set of tools for 6502 software development: the `xasm`
+assembler and `xlnk` linker. This development tree is version 1.7.0-dev.
+Run `xasm --version` or `xlnk --version` to identify an installed build.
 
-See the documentation in the doc/ directory.
+Build and test
+--------------
 
-See INSTALL for generic installation instructions.
+Normal builds use the checked-in parser, scanner, and configure script. A C
+compiler, make, and a POSIX shell are required; Bison and Flex are not required.
+On macOS, the command-line developer tools provide the CoreFoundation framework
+used for filesystem path comparison. The test suite also requires Python 3.
 
-Run regression tests with:
-
+    ./configure --disable-maintainer-mode
+    make -j2
     sh tests/regression.sh
 
-Recent workflow features in `xasm`:
+Use `make install` to install the tools. See INSTALL for prefix and compiler
+options. CI runs the regression suite on Linux and macOS and runs symbol-table,
+AST/JSON, and output-failure tests under ASan/UBSan on Linux. Tests use generated
+fixtures and do not require game ROMs or a NESrev checkout.
 
-- Structured listings:
-  - `--listing=<file>`
-  - `--listing-format=text|json|ndjson` (default `text`)
-- Cross-reference output:
-  - `--xref=<file>`
-  - `--xref-format=text|csv|json` (default `json`)
-  - `--xref-include-locals=true|false`
-  - `--xref-include-anon=true|false`
-- Unused `.EQU` diagnostics:
-  - `--warn-unused-equ`
-  - `--Werror=unused-equ`
-  - `--Wno-unused-equ`
-- Raw-address audit:
-  - `--audit-raw-addresses`
-  - `--audit-level=warn|error`
-  - `--audit-rom-range=<lo>-<hi>`
-  - `--audit-output-format=text|json`
-- Built-in parity compare:
-  - `--compare=<reference.bin>`
-  - `--compare-offset=<n>`
-  - `--compare-length=<n>`
-  - `--compare-max-mismatches=<n>`
-  - `--compare-format=text|json`
-  - `--compare-cpu-base=<addr>`
+See xorcyst.texinfo and the doc/ directory for the assembly language and linker
+script reference. `xasm --help` lists all current command-line options.
 
-Feature-specific non-zero exits:
+Assembly and verification
+-------------------------
 
-- `2` CLI misuse (invalid option values)
-- `3` file I/O failure
-- `4` audit findings when `--audit-level=error`
-- `5` compare mismatch
+    xasm game.asm -o game.o
+    xasm --pure-binary game.asm -o game.prg
+
+Object output is intended for `xlnk`; pure-binary output requires all addresses
+to be resolved by the assembler. To check a raw binary against a reference:
+
+    xasm --pure-binary game.asm -o game.prg --compare=reference.prg
+
+For a reference containing a header or other regions, use `--compare-offset`
+and `--compare-length`. `--compare-format=json` produces a structured report;
+`--compare-max-mismatches` limits the displayed mismatches.
+`--compare-cpu-base=ADDR` supplies a fallback CPU base for mismatches without
+an address from the assembler's source map.
+
+Listings and cross-references
+-----------------------------
+
+`--listing=FILE` supports `--listing-format=text|json|ndjson` (default text).
+`--xref=FILE` supports `--xref-format=json|text|csv` (default JSON). CSV expands
+the supplied prefix into `.symbols.csv` and `.refs.csv` destinations.
+
+A complete JSON xref, including local/anonymous symbols, data references,
+lexical owners, and structured instruction records:
+
+    xasm --pure-binary game.asm -o game.prg \
+      --xref=game.xref.json --xref-include-locals=true \
+      --xref-include-anon=true --xref-data=true \
+      --xref-include-owner=true --xref-instructions=true \
+      --listing=game.listing.json --listing-format=json
+
+The optional instruction stream includes every emitted instruction, independent
+of xref symbol filters. It preserves source spans, pre-fold expression trees,
+and final instruction bytes. Lexical owners do not prove control flow.
+
+To write instruction records separately:
+
+    xasm --pure-binary game.asm -o game.prg \
+      --instruction-records-output=game.instructions.json \
+      --dependency-manifest=game.dependencies.json
+
+The standalone instruction output requires a dependency manifest in version 1.
+A manifest records consumed-input hashes, lookup misses, invocation arguments,
+and producer identity. It is published last, after input revalidation. Consumers
+must still validate their own configuration and output identity when reusing
+artifacts. See XASM_INSTRUCTION_RECORDS_SPEC.md,
+XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md, and XASM_DEPENDENCY_MANIFEST_SPEC.md.
+
+FCEUX debugger names
+-------------------
+
+    xasm --pure-binary game.asm -o game.prg \
+      --fceux-nl-rom-prefix=game.nes. \
+      --fceux-nl-ram-output=game.nes.ram.nl
+
+Use the reference ROM's pathname followed by a dot as the ROM prefix. Output
+files are named `game.nes.0.nl`, `game.nes.1.nl`, and so on, using uppercase
+hexadecimal physical 16 KiB PRG page numbers. Put these files beside that ROM.
+The assembled binary must contain the complete raw PRG payload, without an iNES
+header or CHR data. Unlabeled pages still receive empty files.
+
+NL export includes local labels independently of xref flags. RAM names come
+from dataseg labels and named direct memory operands below $8000; immediate-only
+constants and anonymous operands are excluded. For a 16 KiB NROM program, add
+`--fceux-nl-mirror-16k` to name both CPU windows. This option requires exactly
+16384 emitted bytes. Higher-numbered files from earlier builds are not deleted;
+the build process should manage obsolete sidecars. See XASM_FCEUX_NL_EXPORT_SPEC.md.
+
+Analysis and diagnostics
+------------------------
+
+Optional analyses include `--xref-summary`, `--analyze-index-patterns`,
+`--data-consumers`, and `--analyze-data-coverage`. Each supports text, JSON, and
+NDJSON output. The corresponding destination flags are `--xref-summary-output`,
+`--index-patterns-output`, `--data-consumers-output`, and `--data-coverage-output`.
+Without a destination, these analyses write to stdout. When combining analyses,
+give each one an explicit output path. See XASM_INDEX_BOUND_ANALYSIS_SPEC.md for
+the evidence and limits of index-bound inference.
+
+Unused EQU diagnostics are controlled by `--warn-unused-equ`,
+`--Werror=unused-equ`, and `--Wno-unused-equ`. The raw-address audit uses
+`--audit-raw-addresses`, `--audit-level=warn|error`,
+`--audit-rom-range=LO-HI`, and `--audit-output-format=text|json`.
+
+Output completion
+-----------------
+
+A failed invocation can leave some outputs updated. Check the exit status
+before using generated artifacts; an output file's existence does not mean the
+build succeeded. Diagnostic listings can still be produced for failed assemblies.
+
+Exit statuses: 0 success; 1 assembly or binary-generation error; 2 CLI misuse;
+3 destination validation or listing/xref/instruction-record/NL/manifest failure
+(and comparison/audit I/O errors); 4 audit findings at error level; 5 comparison
+mismatch; 6 xref-summary failure; 7 index-pattern failure; 8 data-consumer
+failure; 9 data-coverage failure. An assembly error can take precedence over
+a later diagnostic-listing error. Any nonzero status means the invocation failed.
+
+Maintainer builds
+-----------------
+
+`version.h` is the version source for both tools and configure. After changing
+it, regenerate configure with Autoconf 2.72; regenerate Makefile.in with
+Automake 1.18.1 after Makefile.am changes. Keep those generated files in commits.
+Use Bison 3.8.2 and Flex 2.6.4 for parser/lexer regeneration. Ordinary builds
+should leave maintainer mode disabled.
+
+Real-project compatibility checks are opt-in and keep project inputs read-only:
+
+    python3 tests/verify_fceux_projects.py \
+      --baseline /path/to/previous/xasm --candidate ./xasm \
+      --source /path/to/project/asm/project.asm --report /tmp/xasm-check.json
+
+The report compares binary bytes, diagnostics, and analysis outputs across
+seven modes with NL disabled/enabled, and records paired timing samples.

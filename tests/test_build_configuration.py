@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise generated configure and Makefile rules in an isolated source copy."""
 import os
+import re
 from pathlib import Path
 import shlex
 import shutil
@@ -39,6 +40,10 @@ class BuildConfiguration(unittest.TestCase):
     def test_global_link_additions_reach_both_programs(self):
         configured = self.configure()
         self.assertEqual(configured.returncode, 0, configured.stdout + configured.stderr)
+        version = re.search(r'^#define XORCYST_VERSION "([^"]+)"',
+                            (self.source / 'version.h').read_text(), re.M)[1]
+        self.assertIn(f'#define PACKAGE_VERSION "{version}"',
+                      (self.build / 'config.h').read_text())
         probe = self.build / 'probe.c'
         probe.write_text('int xasm_ldadd_probe(void) { return 42; }\n')
         object_file = self.build / 'probe.o'
@@ -53,6 +58,8 @@ class BuildConfiguration(unittest.TestCase):
                 self.assertTrue(b'xasm_ldadd_probe' in symbols, f'{program} did not link the LDADD object')
                 run = subprocess.run([str(self.build / program), '--help'], capture_output=True)
                 self.assertEqual(run.returncode, 0, run.stderr)
+                reported = subprocess.check_output([str(self.build / program), '--version'])
+                self.assertEqual(reported, f'{program} {version}\n'.encode())
 
     @unittest.skipUnless(sys.platform == 'darwin', 'Darwin SDK requirement')
     def test_missing_corefoundation_headers_fail_at_configure(self):

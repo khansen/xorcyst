@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include "fceux_nl.h"
+#include "output_file.h"
 
 int fceux_nl_add(fceux_nl_table *table, long bank, int address, char *name)
 {
@@ -82,28 +83,10 @@ static char *bank_path(const char *prefix, long bank)
 /* Replace each file only after its complete contents have been written. */
 static int write_file(const char *path, const fceux_nl_table *table, size_t start, size_t end)
 {
-    size_t length = strlen(path);
-    char *temporary;
-    FILE *fp = NULL;
-    int fd = -1, ok = 0;
-    temporary = length > SIZE_MAX - 12 ? NULL : malloc(length + 12);
-    if (temporary == NULL) goto done;
-    snprintf(temporary, length + 12, "%s.XXXXXX", path);
-    fd = mkstemp(temporary);
-    if (fd < 0) goto done;
-    fp = fdopen(fd, "w");
-    if (fp == NULL) { close(fd); goto done; }
-    write_entries(fp, table, start, end);
-    ok = !ferror(fp);
-    if (fclose(fp) != 0) ok = 0;
-    if (ok && rename(temporary, path) != 0) ok = 0;
-done:
-    if (!ok) {
-        fprintf(stderr, "error: could not write FCEUX .nl file `%s'\n", path);
-        if (fd >= 0) unlink(temporary);
-    }
-    free(temporary);
-    return ok;
+    output_writer output;
+    if (!output_file_open(&output, path)) return 0;
+    write_entries(output.stream, table, start, end);
+    return output_file_finish(&output, 1);
 }
 
 void fceux_nl_free_outputs(fceux_nl_output_plan *plan)

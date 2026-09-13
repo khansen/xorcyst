@@ -100,6 +100,7 @@
  * contents of the final binary.
  */
 
+#include "version.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -176,7 +177,7 @@ static int str_to_int(const char *s)
 /*--------------------------------------------------------------------------*/
 /* Argument parsing stuff. */
 
-static char program_version[] = "xlnk 1.6.1";
+static char program_version[] = "xlnk " XORCYST_VERSION;
 
 struct tag_xlnk_arguments {
     const char *input_file;

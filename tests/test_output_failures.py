@@ -6,10 +6,13 @@ import os
 from pathlib import Path
 import re
 import shlex
+import socket
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -25,7 +28,7 @@ class OutputFailures(unittest.TestCase):
         sources = re.search(r'^xasm_SOURCES = (.*?)(?=\n\n)',
                             (REPO / 'Makefile.am').read_text(), re.M | re.S)[1]
         sources = [REPO / word for word in sources.replace('\\\n', ' ').split()
-                   if word.endswith('.c') and word not in ('xasm.c', 'listing.c', 'symtab.c', 'fceux_nl.c')]
+                   if word.endswith('.c') and word not in ('xasm.c', 'listing.c', 'symtab.c', 'fceux_nl.c', 'output_file.c')]
         sources += [REPO / 'tests/test_io_faults.c', REPO / 'tests/test_analysis_faults.c']
         command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO), '-Wall',
                    *shlex.split(os.environ.get('TEST_FAULT_CFLAGS', '-O0 -g')),
@@ -48,15 +51,30 @@ class OutputFailures(unittest.TestCase):
         self.source.write_text('Port .EQU $10\n.ORG $8000\nFirst:\nSTA Port\n'
                                '.DSB $4000-($-$8000)\n.ORG $C000\nSecond:\nRTS\nEND\n')
 
-    def run_xasm(self, *extra, faults=None, pure_binary=True, nl=True):
+    def run_xasm(self, *extra, faults=None, pure_binary=True, nl=True, umask=-1):
         environment = {key: value for key, value in os.environ.items() if not key.startswith('XASM_TEST_')}
         environment.update(faults or {})
         flags = ['--pure-binary'] if pure_binary else []
         if nl:
             flags += [f'--fceux-nl-rom-prefix={self.root}/game.nes.',
                       f'--fceux-nl-ram-output={self.ram}']
-        return subprocess.run([str(self.executable), str(self.source), '-o', str(self.output), *flags, *extra],
-                              capture_output=True, env=environment, timeout=15)
+        result = subprocess.run([str(self.executable), str(self.source), '-o', str(self.output), *flags, *extra],
+                                capture_output=True, env=environment, timeout=15, umask=umask)
+        # Expected nonzero exits must not hide sanitizer failures during fault injection.
+        self.assertGreaterEqual(result.returncode, 0, result.stderr.decode())
+        self.assertNotRegex(result.stderr, rb'(?:AddressSanitizer|LeakSanitizer|UndefinedBehaviorSanitizer):|runtime error:')
+        return result
+
+    def test_runner_rejects_signals_and_sanitizer_reports_on_failure_exits(self):
+        reports = (b'AddressSanitizer:DEADLYSIGNAL', b'ERROR: AddressSanitizer: heap-use-after-free',
+                   b'ERROR: LeakSanitizer: detected memory leaks',
+                   b'UndefinedBehaviorSanitizer:DEADLYSIGNAL', b'runtime error: invalid access')
+        for code, stderr in [(3, report) for report in reports] + [(-11, b'')]:
+            with self.subTest(code=code, stderr=stderr):
+                result = subprocess.CompletedProcess([], code, b'', stderr)
+                with mock.patch('subprocess.run', return_value=result):
+                    with self.assertRaises(AssertionError):
+                        self.run_xasm()
 
     def seed_outputs(self, extra=()):
         previous = {}
@@ -67,6 +85,7 @@ class OutputFailures(unittest.TestCase):
 
     def assert_no_temporary_files(self):
         self.assertFalse(Path(str(self.output) + '.tmp').exists())
+        self.assertEqual(list(self.root.glob('.xasm-*')), [])
         for path in (self.ram, self.bank0, self.bank1):
             self.assertEqual(list(self.root.glob(path.name + '.*')), [])
 
@@ -94,7 +113,8 @@ class OutputFailures(unittest.TestCase):
         self.assertEqual(published[self.bank0], b'$8000#First#\n')
         self.assertEqual(published[self.bank1], b'$C000#Second#\n')
         manifest = self.root / 'deps.json'
-        for operation in ('nl_mkstemp', 'nl_fdopen', 'nl_ferror', 'nl_fclose', 'nl_rename'):
+        for operation in ('output_malloc', 'output_mkstemp', 'output_fdopen', 'output_ferror',
+                          'output_fflush', 'output_fchmod', 'output_fclose', 'output_rename'):
             for fail_at in range(len(ordered)):
                 with self.subTest(operation=operation, fail_at=fail_at):
                     previous = self.seed_outputs([manifest])
@@ -179,8 +199,8 @@ class OutputFailures(unittest.TestCase):
                 self.assertEqual(xref.stat().st_size > 65536, count == 256)
                 expected = json.loads(xref.read_bytes())
                 del expected['build']['timestamp_utc']
-                for operation in ('xref_setvbuf', 'xref_fclose'):
-                    result = self.run_xasm(*flags, nl=False, faults={'XASM_TEST_IO_FAILURE': operation})
+                for operation in ('xref_setvbuf', 'output_fclose'):
+                    result = self.run_xasm(*flags, nl=False, faults={'XASM_TEST_IO_FAILURE': operation, 'XASM_TEST_OUTPUT_PATH': str(xref)})
                     self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
                     if operation == 'xref_setvbuf':
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
@@ -189,7 +209,302 @@ class OutputFailures(unittest.TestCase):
                         self.assertEqual(actual, expected)
                     else:
                         self.assertGreater(result.returncode, 0, result.stderr.decode())
-                        self.assertIn(b'could not emit complete xref records', result.stderr)
+                        self.assertIn(b'could not write output', result.stderr)
+
+    def test_listing_stream_failures_stop_analysis_and_manifest_publication(self):
+        listing, xref, manifest = [self.root / name for name in ('listing.txt', 'xref.json', 'deps.json')]
+        for fmt in ('text', 'json', 'ndjson'):
+            for operation in ('output_ferror', 'output_fclose'):
+                with self.subTest(format=fmt, operation=operation):
+                    previous = self.seed_outputs([xref, manifest])
+                    result = self.run_xasm(f'--listing={listing}', f'--listing-format={fmt}',
+                                           f'--xref={xref}', f'--dependency-manifest={manifest}',
+                                           faults={'XASM_TEST_IO_FAILURE': operation, 'XASM_TEST_OUTPUT_PATH': str(listing)})
+                    self.assertEqual(result.returncode, 3, result.stderr.decode())
+                    self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                    self.assertIn(b'could not write output', result.stderr)
+                    for path in (xref, manifest, self.ram, self.bank0, self.bank1):
+                        self.assertEqual(path.read_bytes(), previous[path])
+                    self.assert_no_temporary_files()
+
+    def sidecar_cases(self):
+        for fmt in ('text', 'json', 'ndjson'):
+            path = self.root / ('listing.' + fmt)
+            yield 'listing-' + fmt, [f'--listing={path}', f'--listing-format={fmt}'], [path], 3
+        for fmt in ('text', 'json', 'csv'):
+            path = self.root / ('xref.' + fmt)
+            paths = [Path(str(path) + suffix) for suffix in ('.symbols.csv', '.refs.csv')] if fmt == 'csv' else [path]
+            yield 'xref-' + fmt, [f'--xref={path}', f'--xref-format={fmt}'], paths, 3
+        path = self.root / 'instructions.json'
+        yield 'instructions', [f'--instruction-records-output={path}'], [path], 3
+        for feature, option, code in (('xref-summary', 'xref-summary', 6),
+                                      ('analyze-index-patterns', 'index-patterns', 7),
+                                      ('data-consumers', 'data-consumers', 8),
+                                      ('analyze-data-coverage', 'data-coverage', 9)):
+            for fmt in ('text', 'json', 'ndjson'):
+                path = self.root / (option + '.' + fmt)
+                yield option + '-' + fmt, [f'--{feature}', f'--{option}-output={path}',
+                                           f'--{option}-format={fmt}'], [path], code
+
+    def test_sidecar_failures_preserve_destinations_and_remove_owned_stages(self):
+        manifest = self.root / 'deps.json'
+        operations = ('output_malloc', 'output_mkstemp', 'output_fdopen',
+                      'output_ferror', 'output_fflush', 'output_fchmod', 'output_fclose', 'output_rename')
+        cases = [*self.sidecar_cases(), ('manifest', [], [manifest], 3)]
+        for name, flags, paths, code in cases:
+            # Version 1 manifests require JSON when xref is requested.
+            if name not in ('xref-text', 'xref-csv'):
+                flags = [*flags, f'--dependency-manifest={manifest}']
+            baseline = self.run_xasm(*flags)
+            self.assertEqual(baseline.returncode, 0, baseline.stderr.decode())
+            published = {path: path.read_bytes() for path in paths}
+            for target_index, target in enumerate(paths):
+                for operation in operations:
+                    for existing in (False, True):
+                        with self.subTest(output=name, target=target.name, operation=operation, existing=existing):
+                            previous = self.seed_outputs(set(paths) | {manifest})
+                            for path in previous:
+                                path.chmod(0o664)
+                            if not existing:
+                                for path in paths:
+                                    path.unlink()
+                            result = self.run_xasm(*flags, faults={'XASM_TEST_IO_FAILURE': operation,
+                                                                  'XASM_TEST_OUTPUT_PATH': str(target)})
+                            self.assertEqual(result.returncode, code, result.stderr.decode())
+                            self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                            if name == 'manifest':
+                                errors = [line for line in result.stderr.splitlines() if line.startswith(b'error:')]
+                                self.assertEqual(len(errors), 1, result.stderr.decode())
+                            for index, path in enumerate(paths):
+                                # CSV closes both streams before either rename. A
+                                # failure of the second rename cannot undo the first.
+                                if operation == 'output_rename' and index < target_index:
+                                    self.assertEqual(path.read_bytes(), published[path])
+                                elif existing:
+                                    self.assertEqual(path.read_bytes(), previous[path])
+                                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o664)
+                                else:
+                                    self.assertFalse(path.exists())
+                            if manifest not in paths:
+                                self.assertEqual(manifest.read_bytes(), previous[manifest])
+                            self.assert_no_temporary_files()
+
+    def test_sidecar_permissions_preserve_existing_modes_and_respect_umask(self):
+        manifest = self.root / 'deps.json'
+        cases = [*self.sidecar_cases(), ('manifest', [], [manifest], 3)]
+        for name, flags, paths, _ in cases:
+            paths = [*paths, self.ram, self.bank0, self.bank1]
+            if name not in ('xref-text', 'xref-csv'):
+                flags = [*flags, f'--dependency-manifest={manifest}']
+                paths = list(dict.fromkeys([*paths, manifest]))
+            for mask in (0o002, 0o022, 0o077):
+                for existing_mode in (None, 0o600, 0o644, 0o664, 0o755):
+                    with self.subTest(output=name, umask=oct(mask), existing_mode=existing_mode):
+                        for path in paths:
+                            path.unlink(missing_ok=True)
+                            if existing_mode is not None:
+                                path.write_bytes(b'previous output\n')
+                                path.chmod(existing_mode)
+                        result = self.run_xasm(*flags, umask=mask)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        expected = existing_mode if existing_mode is not None else 0o666 & ~mask
+                        for path in paths:
+                            self.assertEqual(stat.S_IMODE(path.stat().st_mode), expected, str(path))
+                            self.assertNotEqual(path.read_bytes(), b'previous output\n')
+                        self.assert_no_temporary_files()
+
+    def test_symlink_replacement_uses_target_permissions_or_umask_when_dangling(self):
+        listing, target = self.root / 'listing.json', self.root / 'target.json'
+        for existing in (False, True):
+            with self.subTest(existing=existing):
+                listing.unlink(missing_ok=True)
+                if existing:
+                    target.write_bytes(b'previous target\n')
+                    target.chmod(0o664)
+                listing.symlink_to(target.name)
+                result = self.run_xasm(f'--listing={listing}', '--listing-format=json', umask=0o027)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertFalse(listing.is_symlink())
+                self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o664 if existing else 0o640)
+                json.loads(listing.read_text())
+                self.assertEqual(target.exists(), existing)
+                if existing:
+                    self.assertEqual(target.read_bytes(), b'previous target\n')
+                    self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o664)
+                self.assert_no_temporary_files()
+
+    def test_symlink_to_nonregular_target_uses_umask_and_preserves_target(self):
+        listing, manifest = self.root / 'listing.json', self.root / 'deps.json'
+        for kind in ('directory', 'fifo'):
+            target = self.root / ('target-' + kind)
+            if kind == 'directory':
+                target.mkdir()
+                (target / 'contents').write_bytes(b'original contents\n')
+            else:
+                os.mkfifo(target)
+            target.chmod(0o755 if kind == 'directory' else 0o666)
+            before = target.lstat()
+            for protection in ('none', 'nl', 'manifest'):
+                with self.subTest(kind=kind, protection=protection):
+                    listing.unlink(missing_ok=True)
+                    listing.symlink_to(target.name)
+                    flags = [f'--listing={listing}', '--listing-format=json']
+                    if protection == 'manifest':
+                        flags.append(f'--dependency-manifest={manifest}')
+                    result = self.run_xasm(*flags, nl=protection == 'nl', umask=0o027)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertFalse(listing.is_symlink())
+                    self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o640)
+                    self.assertIn('records', json.loads(listing.read_bytes()))
+                    after = target.lstat()
+                    self.assertEqual((after.st_ino, after.st_mode), (before.st_ino, before.st_mode))
+                    if kind == 'directory':
+                        self.assertEqual((target / 'contents').read_bytes(), b'original contents\n')
+                    self.assert_no_temporary_files()
+
+    def test_unavailable_symlink_metadata_uses_umask_without_weakening_validation(self):
+        listing, manifest = self.root / 'listing.json', self.root / 'deps.json'
+        blocked = self.root / 'blocked'
+        blocked.mkdir()
+        target = blocked / 'target.json'
+        target.write_bytes(b'original target\n')
+        for kind in ('cycle', 'restricted'):
+            for protection in ('none', 'nl', 'manifest'):
+                with self.subTest(kind=kind, protection=protection):
+                    if kind == 'restricted' and os.geteuid() == 0:
+                        self.skipTest('root bypasses directory search permissions')
+                    previous = self.seed_outputs([manifest])
+                    listing.unlink(missing_ok=True)
+                    listing.symlink_to(listing.name if kind == 'cycle' else target)
+                    flags = [f'--listing={listing}', '--listing-format=json']
+                    if protection == 'manifest':
+                        flags.append(f'--dependency-manifest={manifest}')
+                    if kind == 'restricted':
+                        blocked.chmod(0)
+                    try:
+                        result = self.run_xasm(*flags, nl=protection == 'nl', umask=0o027)
+                        if protection == 'none':
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertFalse(listing.is_symlink())
+                            self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o640)
+                            json.loads(listing.read_text())
+                        else:
+                            self.assertEqual(result.returncode, 3, result.stderr.decode())
+                            self.assertIn(b'cannot resolve output path', result.stderr)
+                            self.assertTrue(listing.is_symlink())
+                            self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+                        self.assert_no_temporary_files()
+                    finally:
+                        blocked.chmod(0o700)
+                    self.assertEqual(target.read_bytes(), b'original target\n')
+
+    def test_diagnostic_listing_failures_preserve_previous_outputs(self):
+        self.source.write_text(self.source.read_text().replace('END', '.ERROR "broken build"\nEND'))
+        listing, manifest = self.root / 'listing.json', self.root / 'deps.json'
+        flags = (f'--listing={listing}', '--listing-format=json', f'--dependency-manifest={manifest}')
+        for operation in ('output_mkstemp', 'output_fdopen', 'output_ferror', 'output_fflush',
+                          'output_fchmod', 'output_fclose', 'output_rename'):
+            with self.subTest(operation=operation):
+                previous = self.seed_outputs([listing, manifest])
+                result = self.run_xasm(*flags, faults={'XASM_TEST_IO_FAILURE': operation,
+                                                      'XASM_TEST_OUTPUT_PATH': str(listing)})
+                self.assertEqual(result.returncode, 3, result.stderr.decode())
+                self.assertIn(b'broken build', result.stderr)
+                self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+                self.assert_no_temporary_files()
+        result = self.run_xasm(*flags)
+        self.assertEqual(result.returncode, 1, result.stderr.decode())
+        self.assertIn('records', json.loads(listing.read_bytes()))
+        for path in previous:
+            if path != listing:
+                self.assertEqual(path.read_bytes(), previous[path])
+
+    def test_instruction_serialization_allocation_failure_discards_partial_output(self):
+        self.source.write_text('.ORG $8000\nLDA #1\nSTA $10\nEND\n')
+        manifest = self.root / 'deps.json'
+        for standalone in (False, True):
+            path = self.root / 'instructions.json'
+            flags = ([f'--instruction-records-output={path}'] if standalone
+                     else [f'--xref={path}', '--xref-instructions=true']) + [f'--dependency-manifest={manifest}']
+            baseline = self.run_xasm(*flags, faults={'XASM_TEST_ALLOC_PHASE': 'xref'})
+            self.assertEqual(baseline.returncode, 0, baseline.stderr.decode())
+            sites = re.findall(rb'ALLOC_SITE xref (\d+) instruction_source_span', baseline.stderr)
+            self.assertTrue(sites, baseline.stderr.decode())
+            for site in sites:
+                with self.subTest(standalone=standalone, allocation=site):
+                    previous = self.seed_outputs([path, manifest])
+                    result = self.run_xasm(*flags, faults={'XASM_TEST_ALLOC_PHASE': 'xref',
+                                                          'XASM_TEST_ALLOC_AT': site.decode()})
+                    self.assertEqual(result.returncode, 3, result.stderr.decode())
+                    self.assertIn(b'INJECT_ALLOC', result.stderr)
+                    for output in (path, manifest, self.ram, self.bank0, self.bank1):
+                        self.assertEqual(output.read_bytes(), previous[output])
+                    self.assert_no_temporary_files()
+
+    def test_stdout_analysis_errors_are_reported_before_manifest_publication(self):
+        manifest = self.root / 'deps.json'
+        for name, flags, _, code in self.sidecar_cases():
+            if not name.startswith(('xref-summary-', 'index-patterns-', 'data-consumers-', 'data-coverage-')):
+                continue
+            flags = [flag for flag in flags if '-output=' not in flag] + [f'--dependency-manifest={manifest}']
+            for operation in ('output_ferror', 'output_fflush'):
+                with self.subTest(output=name, operation=operation):
+                    previous = self.seed_outputs([manifest])
+                    result = self.run_xasm(*flags, faults={'XASM_TEST_IO_FAILURE': operation,
+                                                          'XASM_TEST_OUTPUT_PATH': 'stdout'})
+                    self.assertEqual(result.returncode, code, result.stderr.decode())
+                    self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
+                    self.assertEqual(manifest.read_bytes(), previous[manifest])
+                    self.assert_no_temporary_files()
+
+    def test_staging_supports_long_names_and_preserves_unowned_paths(self):
+        # Appending a suffix to the destination basename would exceed NAME_MAX.
+        listing = self.root / ('l' * 255)
+        unowned = self.root / '.xasm-XXXXXX'
+        unowned.write_bytes(b'not owned by this invocation')
+        result = self.run_xasm(f'--listing={listing}', '--listing-format=json')
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertIn('records', json.loads(listing.read_bytes()))
+        result = self.run_xasm(f'--listing={listing}', faults={'XASM_TEST_IO_FAILURE': 'output_mkstemp',
+                                                              'XASM_TEST_OUTPUT_PATH': str(listing)})
+        self.assertEqual(result.returncode, 3, result.stderr.decode())
+        self.assertEqual(unowned.read_bytes(), b'not owned by this invocation')
+        self.assertEqual(list(self.root.glob('.xasm-*')), [unowned])
+
+    def test_publication_does_not_replace_special_files(self):
+        listing = self.root / 'listing.json'
+        for kind in ('fifo', 'directory', 'socket'):
+            with self.subTest(kind=kind):
+                handle = None
+                if kind == 'fifo':
+                    os.mkfifo(listing)
+                elif kind == 'directory':
+                    listing.mkdir()
+                else:
+                    handle = socket.socket(socket.AF_UNIX)
+                    # AF_UNIX has a small pathname limit on macOS.
+                    saved = Path.cwd()
+                    try:
+                        os.chdir(self.root)
+                        handle.bind(listing.name)
+                    finally:
+                        os.chdir(saved)
+                try:
+                    before = listing.lstat()
+                    result = self.run_xasm(f'--listing={listing}', '--listing-format=json')
+                    self.assertEqual(result.returncode, 3, result.stderr.decode())
+                    after = listing.lstat()
+                    self.assertEqual((after.st_ino, stat.S_IFMT(after.st_mode)),
+                                     (before.st_ino, stat.S_IFMT(before.st_mode)))
+                    self.assert_no_temporary_files()
+                finally:
+                    if handle is not None:
+                        handle.close()
+                    if kind == 'directory':
+                        listing.rmdir()
+                    else:
+                        listing.unlink()
 
     def test_binary_completion_failures_preserve_outputs(self):
         manifest = self.root / 'deps.json'

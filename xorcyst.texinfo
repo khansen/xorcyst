@@ -356,6 +356,80 @@ Directs output to the file @code{FILE} rather than the default file.
 @item --pure-binary
 Specifies that the output should be in the form of pure 6502 code. This will only succeed if the input has no external dependencies.
 
+@item --listing FILE
+Writes a source listing. @code{--listing-format=text|json|ndjson} selects the
+format; the default is text. A diagnostic listing may also be produced after
+an assembly error. Listing write and close failures produce a nonzero exit.
+
+@item --xref FILE
+Writes symbol definitions and reference sites.
+@code{--xref-format=json|text|csv} selects the format; the default is JSON.
+CSV uses @file{FILE.symbols.csv} and @file{FILE.refs.csv}.
+@code{--xref-include-locals=true} and @code{--xref-include-anon=true} include
+symbols normally excluded from the xref view.
+
+@item --xref-data=true
+Adds data references and pointer-use facts to JSON xref.
+@code{--xref-include-owner=true} adds lexical routine owners. Lexical ownership
+does not establish control-flow reachability.
+
+@item --xref-instructions=true
+Adds a separately versioned instruction-record section to JSON xref. Requires
+@code{--pure-binary}. Records include source spans, pre-fold expression trees,
+and final instruction bytes, independently of xref symbol filters.
+
+@item --instruction-records-output FILE
+Writes the instruction records as a standalone JSON document. Version 1
+requires @code{--dependency-manifest} and @code{--pure-binary}. An ordinary JSON
+xref may be requested in the same invocation. See
+@file{XASM_INSTRUCTION_RECORDS_SPEC.md} for the record contract.
+
+@item --dependency-manifest FILE
+Records consumed-input hashes, failed lookup paths, invocation arguments,
+and producer identity. Requires @code{--pure-binary} and JSON format for any
+requested xref. The manifest is published after all requested production work
+succeeds and the inputs are revalidated. See
+@file{XASM_DEPENDENCY_MANIFEST_SPEC.md} for reuse and freshness requirements.
+
+@item --xref-summary
+Summarizes callable labels, jump targets, and data labels.
+@code{--xref-summary-output=FILE} selects a file instead of stdout;
+@code{--xref-summary-format=json|ndjson|text} selects its format.
+
+@item --analyze-index-patterns
+Reports indexed-access patterns and bounds supported by local instruction
+evidence. Use @code{--index-patterns-output=FILE} and
+@code{--index-patterns-format=json|ndjson|text}. See
+@file{XASM_INDEX_BOUND_ANALYSIS_SPEC.md} for inference limits.
+
+@item --data-consumers
+Aggregates access sites and observed offsets for eligible data spans. Use
+@code{--data-consumers-output=FILE} and
+@code{--data-consumers-format=json|ndjson|text}.
+
+@item --analyze-data-coverage
+Reports byte-exact covered and uncovered ranges for eligible data spans. Use
+@code{--data-coverage-output=FILE} and
+@code{--data-coverage-format=json|ndjson|text}. An access with an unresolved
+runtime index does not establish exact coverage.
+
+@item --warn-unused-equ
+Enables unused @code{EQU} diagnostics. @code{--Werror=unused-equ} makes them
+errors; @code{--Wno-unused-equ} suppresses them.
+
+@item --audit-raw-addresses
+Audits literal addresses in instruction operands. Use
+@code{--audit-level=warn|error}, @code{--audit-rom-range=LO-HI}, and
+@code{--audit-output-format=text|json} to select severity, range, and format.
+
+@item --compare FILE
+Compares assembled binary bytes with a reference. @code{--compare-offset=N}
+and @code{--compare-length=N} select the reference region;
+@code{--compare-format=text|json} selects the report format.
+@code{--compare-max-mismatches=N} limits displayed mismatches.
+@code{--compare-cpu-base=ADDR} supplies a fallback CPU base for mismatches
+without a mapped CPU address.
+
 @item --fceux-nl-rom-prefix PREFIX
 Writes FCEUX debugger name files as @file{PREFIX<bank>.nl}. Bank numbers are
 uppercase hexadecimal physical 16KB PRG page numbers. Requires

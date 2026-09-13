@@ -107,6 +107,7 @@
 #include "listing.h"
 #include "xasm.h"
 #include "dependencies.h"
+#include "version.h"
 
 /*---------------------------------------------------------------------------*/
 
@@ -126,7 +127,7 @@ char *xasm_path;
 /*---------------------------------------------------------------------------*/
 /* Argument parsing stuff. */
 
-static char program_version[] = "xasm 1.6.1";
+static char program_version[] = "xasm " XORCYST_VERSION;
 
 /* Argument variables set by arg parser. */
 xasm_arguments xasm_args;

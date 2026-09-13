@@ -24,13 +24,13 @@ class Dependencies(unittest.TestCase):
         cls.driver = Path(cls.build.name) / "driver"
         subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
                         str(ROOT / "tests/dependency_driver.c"), str(ROOT / "dependencies.c"),
-                        str(ROOT / "sha256.c"), "-o", str(cls.driver),
+                        str(ROOT / "sha256.c"), str(ROOT / "output_file.c"), "-o", str(cls.driver),
                         *(["-framework", "CoreFoundation"] if sys.platform == "darwin" else [])], check=True)
         if sys.platform == "darwin":
             cls.pathconf_driver = Path(cls.build.name) / "pathconf-driver"
             subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra", "-I", str(ROOT),
                             str(ROOT / "tests/dependency_driver.c"), str(ROOT / "tests/test_pathconf_faults.c"),
-                            str(ROOT / "sha256.c"), "-o", str(cls.pathconf_driver),
+                            str(ROOT / "sha256.c"), str(ROOT / "output_file.c"), "-o", str(cls.pathconf_driver),
                             "-framework", "CoreFoundation"], check=True)
 
     def setUp(self):
@@ -423,7 +423,9 @@ class Dependencies(unittest.TestCase):
         self.manifest = self.root / "absent/receipt.json"
         run = self.run_asm()
         self.assertEqual(run.returncode, 3, run.stderr)
-        self.assertIn(b"cannot create manifest output", run.stderr)
+        self.assertIn(b"could not write output", run.stderr)
+        self.assertIn(os.fsencode(self.manifest), run.stderr)
+        self.assertEqual(sum(line.startswith(b'error:') for line in run.stderr.splitlines()), 1)
         self.assertFalse(self.manifest.exists())
 
     def test_nonregular_input_refuses_without_hanging(self):

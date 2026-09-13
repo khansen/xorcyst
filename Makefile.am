@@ -14,12 +14,13 @@ xasm_SOURCES = \
   parser.c scanner.c \
   symtab.c symtab.h \
   listing.c listing.h fceux_nl.c fceux_nl.h \
+  output_file.c output_file.h \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
-  xasm.c \
+  xasm.c version.h \
   my_getopt.c my_getopt.h getopt.h
 
 xlnk_SOURCES = \
-  xlnk.c \
+  xlnk.c version.h \
   script.c script.h \
   unit.c unit.h \
   hashtab.c hashtab.h \

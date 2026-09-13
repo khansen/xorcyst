@@ -488,7 +488,8 @@ END
                 f"--instruction-records-output={sidecar}", str(source)]
         run = subprocess.run(args, capture_output=True)
         self.assertEqual(run.returncode, 3, run.stderr)
-        self.assertIn(b"could not open instruction records", run.stderr)
+        self.assertIn(b"could not write output", run.stderr)
+        self.assertIn(str(sidecar).encode(), run.stderr)
         self.assertFalse(manifest.exists())
         self.assertEqual(output.read_bytes(), b"\x60")
         sidecar.rmdir()

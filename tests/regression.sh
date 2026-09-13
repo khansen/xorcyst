@@ -189,7 +189,7 @@ run_expect_compare_mismatch() {
         fail "failed to build compare mismatch fixture for $asm_file"
     fi
     cp "$out_file" "$ref_file"
-    printf '\x00' | dd of="$ref_file" bs=1 seek=0 conv=notrunc >/dev/null 2>&1
+    printf '\000' | dd of="$ref_file" bs=1 seek=0 conv=notrunc >/dev/null 2>&1
 
     set +e
     "$XASM" --pure-binary --compare="$ref_file" --compare-max-mismatches=1 "$asm_file" -o "$out_file" >"$log_file" 2>&1
@@ -1022,7 +1022,7 @@ ASM
         fi
     done
 
-    printf '\x00' | dd of="$compare_ref" bs=1 seek=0 conv=notrunc >/dev/null 2>&1
+    printf '\000' | dd of="$compare_ref" bs=1 seek=0 conv=notrunc >/dev/null 2>&1
     set +e
     "$XASM" --pure-binary --compare="$compare_ref" --compare-max-mismatches=1 --compare-format=json "$asm_file" -o "$out_file" >"$compare_mismatch_json" 2>"$log_file"
     status=$?
@@ -1212,8 +1212,8 @@ ASM
         fail "edge hardening: failed to assemble compare fixture"
     fi
     cp "$out_cmp" "$ref_cmp"
-    printf '\xFF' | dd of="$ref_cmp" bs=1 seek=1 conv=notrunc >/dev/null 2>&1
-    printf '\xEE' | dd of="$ref_cmp" bs=1 seek=3 conv=notrunc >/dev/null 2>&1
+    printf '\377' | dd of="$ref_cmp" bs=1 seek=1 conv=notrunc >/dev/null 2>&1
+    printf '\356' | dd of="$ref_cmp" bs=1 seek=3 conv=notrunc >/dev/null 2>&1
 
     set +e
     "$XASM" --pure-binary --compare="$ref_cmp" --compare-offset=1 --compare-length=4 --compare-max-mismatches=2 "$asm_cmp" -o "$out_cmp" >"$log_cmp" 2>&1
@@ -1513,7 +1513,7 @@ if ! "$XASM" "$TMPDIR/link_unit_b.asm" -o "$TMPDIR/link_unit_b.o" >/dev/null 2>&
     fail "failed to build linker fixture unit B"
 fi
 
-printf '\xAA\xBB' > "$TMPDIR/link_header.bin"
+printf '\252\273' > "$TMPDIR/link_header.bin"
 
 cat > "$TMPDIR/link_ok.script" <<EOF
 output{file=$TMPDIR/link_ok.bin}
@@ -2214,7 +2214,7 @@ if ! grep -q "49159" "$TMPDIR/equ-pc-complex.log"; then
 fi
 
 # Test: Binary include (.incbin) PC tracking
-printf '\x01\x02\x03\x04\x05' > "$TMPDIR/five-bytes.bin"
+printf '\001\002\003\004\005' > "$TMPDIR/five-bytes.bin"
 cat > "$TMPDIR/incbin-pc-tracking.asm" <<'ASM'
     ORG $C000
     LDA #1          ; 2 bytes
@@ -2344,7 +2344,7 @@ if ! grep -q "WHILE loop iteration limit exceeded" "$TMPDIR/infinite-while.log";
 fi
 
 # Regression: INCBIN in DATASEG must not crash in pure binary mode
-printf '\x01\x02\x03' > "$TMPDIR/three-bytes.bin"
+printf '\001\002\003' > "$TMPDIR/three-bytes.bin"
 cat > "$TMPDIR/dataseg-incbin-crash.asm" <<ASM
 ORG \$C000
 DATASEG
@@ -2676,7 +2676,7 @@ fi
 # Linker regression: malformed object files
 # Test 1: Missing XASM_CMD_END in codeseg
 # Header: MAGIC(FACE), VER(14), CONST(0000), UNIT(00), EXTRN(0000), DATA(000001), END(F3), CODE(000004), INSTR(F7), OP(00), EXID(0000)
-printf '\xfa\xce\x14\x00\x00\x00\x00\x00\x00\x00\x01\xf3\x00\x00\x04\xf7\x00\x00\x00\x00\x00' > "$TMPDIR/malformed1.o"
+printf '\372\316\024\000\000\000\000\000\000\000\001\363\000\000\004\367\000\000\000\000\000' > "$TMPDIR/malformed1.o"
 cat > "$TMPDIR/malformed1.script" <<EOF
 output{file=$TMPDIR/malformed1.bin}
 bank{size=\$100,origin=\$8000}
@@ -2686,7 +2686,7 @@ run_xlnk_expect_error_no_crash "$TMPDIR/malformed1.script" "unexpected end of by
 
 # Test 2: Truncated string in constant
 # MAGIC(FACE), VER(14), CONST(0001), STRLEN(05), STR(ABC - truncated)
-printf '\xfa\xce\x14\x00\x01\x05ABC' > "$TMPDIR/malformed2.o"
+printf '\372\316\024\000\001\005ABC' > "$TMPDIR/malformed2.o"
 cat > "$TMPDIR/malformed2.script" <<EOF
 output{file=$TMPDIR/malformed2.bin}
 bank{size=\$100,origin=\$8000}
@@ -2699,8 +2699,8 @@ run_xlnk_expect_error_no_crash "$TMPDIR/malformed2.script" "failed to load unit"
 # We need enough bytes to satisfy recursive reads if we didn't have depth limit.
 # But with limit it should fail early.
 {
-    printf '\xfa\xce\x14\x00\x00\x00\x00\x00\x00\x00\x01\xf3\x00\x00\x01\xf3\x00\x01'
-    for i in $(seq 1 501); do printf '\x10'; done
+    printf '\372\316\024\000\000\000\000\000\000\000\001\363\000\000\001\363\000\001'
+    for i in $(seq 1 501); do printf '\020'; done
 } > "$TMPDIR/malformed3.o"
 cat > "$TMPDIR/malformed3.script" <<EOF
 output{file=$TMPDIR/malformed3.bin}

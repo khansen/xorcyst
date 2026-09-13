@@ -231,14 +231,32 @@ initialization closes the descriptor and removes the regular staging file.
 Exclusive creation records staging-file ownership. A failed descriptor check
 removes a file created by this invocation and preserves a pre-existing node.
 
-The binary and each NL file are written to temporary files beside their
+The binary and each sidecar are written to temporary files beside their
 destinations. Publication requires a clear stream error indicator and a
 successful close, followed by a direct rename over the destination. A write,
 close, or rename failure leaves that destination's previous contents intact
 and removes the temporary file. Binary failures prevent analysis and manifest
 publication; diagnostic listings may still describe the failed build.
 The entire set of output files is not an atomic transaction: a later filesystem
-error may follow successful replacement of an earlier file.
+error may follow successful replacement of an earlier file. The shared sidecar
+writer covers listings, all xref formats, standalone instruction records,
+summaries, data analyses, NL files, and manifests. CSV closes both streams
+before either file is published. The manifest still revalidates consumed
+inputs after closing its staged stream and before publishing it.
+
+Sidecar stages use a fixed-length `.xasm-XXXXXX` basename in the destination
+directory, so long destination basenames remain supported. Only stages created
+by this invocation are removed. Publication replaces a symlink itself and
+rejects FIFOs, sockets, devices, and directories. After successful serialization,
+the writer preserves an existing regular destination's read/write/execute bits
+(following a destination symlink only when its target is a regular file), or
+applies mode 0666 filtered by the process umask for a new file, an uninspectable
+symlink target, or a target that is not a regular file. This permission fallback
+does not weaken NL/manifest alias validation: unresolvable output paths still
+fail before any publication.
+Failure to set these permissions discards
+the stage and preserves the destination. Analyses that select stdout check
+stream/flush errors without closing stdout.
 
 JSON xref owner, address, and data-flow analysis completes before its destination
 is opened, so those allocation failures preserve existing xref contents. Symbol
@@ -286,8 +304,8 @@ queries, verifying that unknown capabilities still reject case/Unicode aliases
 while permitting distinct names.
 
 `tests/test_output_failures.py` builds the real assembler with test-only wrappers
-around its CLI, exporter, analysis, and symbol-table translation units. Its nine
-tests inject
+around its CLI, shared output writer, analysis, and symbol-table translation units.
+Its tests inject
 476 allocations during shared collection (including symbol/index and extent
 growth and long local RAM expressions), three during shared destination
 planning, 108 during NL name projection, and the visible-address-index allocation.
@@ -298,14 +316,30 @@ Every injected allocation failure must produce a nonzero exit without a crash;
 failures before publication must preserve all existing destinations. This does
 not cover allocations in parsing, AST evaluation, or path validation.
 
-The same harness injects 37 I/O failure scenarios during temporary-file creation
+The output matrix fails allocation, creation, stream initialization, stream
+status, flush, permission setting, close, and rename for every sidecar format
+with existing and absent destinations. It verifies preservation of the failed destination and cleanup
+of owned stages, including both CSV files, diagnostic listings, instruction
+serialization failures, and stdout analysis errors. Long filenames, unowned
+stage-like filenames, and non-regular destinations are covered separately.
+Permission tests cover existing modes 0600, 0644, 0664, and 0755 and new outputs
+under umasks 0002, 0022, and 0077 for every sidecar format, including both CSV
+files, NL banks, and manifests. Symlink replacements also cover regular files,
+directories, FIFOs, and missing targets without modifying the target. Directory
+and FIFO targets use the umask for the replacement regular file. Inaccessible
+and cyclic targets use the umask when replacing a listing symlink without
+NL/manifest protection; the same paths are rejected before any writes when
+that protection is enabled.
+Manifest I/O failures emit one diagnostic while retaining the failure status.
+
+The same harness injects I/O failures during temporary-file creation
 and subsequent output operations.
 Binary `fstat` and `fdopen` failures cover fresh and existing staging files.
 Binary `ferror`, `fclose`, and `rename` failures cover fresh and existing destinations, raw binary
 output with NL enabled and disabled, and object output. Successful replacement
 is also checked in all three modes. Each NL `mkstemp`, `fdopen`, `ferror`,
-`fclose`, and `rename` operation is failed at the RAM file and both ROM banks,
-checking temporary-file cleanup, preservation of the failed and later
+`fflush`, `fchmod`, `fclose`, and `rename` operation is failed at the RAM file and
+both ROM banks, checking temporary-file cleanup, preservation of the failed and later
 destinations, and the documented retention of files already published.
 `TEST_FAULT_CFLAGS` can add sanitizers to this build;
 normal exporter and address-view tests are also checked with AddressSanitizer

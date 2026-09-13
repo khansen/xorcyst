@@ -56,30 +56,118 @@ static int binary_rename(const char *from, const char *to)
 #undef fclose
 #undef rename
 
-static int nl_mkstemp(char *template)
+/* The writer owns all sidecar streams. Select failures by output destination,
+   keeping binary faults above independent of the sidecar publication order. */
+#include "../output_file.h"
+static const char *fault_output_path;
+
+static int output_fault(const char *operation)
 {
-    return io_fault("nl_mkstemp") ? -1 : mkstemp(template);
+    const char *selected = getenv("XASM_TEST_OUTPUT_PATH");
+    const char *path = fault_output_path != NULL ? fault_output_path : "stdout";
+    if (selected != NULL && strcmp(selected, path) != 0) return 0;
+    return io_fault(operation);
 }
-static FILE *nl_fdopen(int fd, const char *mode)
+
+static void *output_malloc(size_t size)
 {
-    return io_fault("nl_fdopen") ? NULL : fdopen(fd, mode);
+    return output_fault("output_malloc") ? NULL : malloc(size);
 }
-static int nl_ferror(FILE *fp)
+static int output_mkstemp(char *template)
 {
-    return io_fault("nl_ferror") ? 1 : ferror(fp);
+    return output_fault("output_mkstemp") ? -1 : mkstemp(template);
 }
-static int nl_fclose(FILE *fp)
+static FILE *output_fdopen(int fd, const char *mode)
+{
+    return output_fault("output_fdopen") ? NULL : fdopen(fd, mode);
+}
+static int output_ferror(FILE *fp)
+{
+    return output_fault("output_ferror") ? 1 : ferror(fp);
+}
+static int output_fclose(FILE *fp)
 {
     int result = fclose(fp);
-    return io_fault("nl_fclose") ? EOF : result;
+    return output_fault("output_fclose") ? EOF : result;
 }
-static int nl_rename(const char *from, const char *to)
+static int output_fflush(FILE *fp)
 {
-    return io_fault("nl_rename") ? -1 : rename(from, to);
+    int result = fflush(fp);
+    return output_fault("output_fflush") ? EOF : result;
 }
-#define mkstemp nl_mkstemp
-#define fdopen nl_fdopen
-#define ferror nl_ferror
-#define fclose nl_fclose
-#define rename nl_rename
+static int output_fchmod(int fd, mode_t mode)
+{
+    return output_fault("output_fchmod") ? -1 : fchmod(fd, mode);
+}
+static int output_rename(const char *from, const char *to)
+{
+    return output_fault("output_rename") ? -1 : rename(from, to);
+}
+#define malloc output_malloc
+#define mkstemp output_mkstemp
+#define fdopen output_fdopen
+#define ferror output_ferror
+#define fclose output_fclose
+#define fflush output_fflush
+#define fchmod output_fchmod
+#define rename output_rename
+#define output_file_open output_file_open_impl
+#define output_file_close output_file_close_impl
+#define output_file_publish output_file_publish_impl
+#define output_file_finish output_file_finish_impl
+#define output_file_discard output_file_discard_impl
+#include "../output_file.c"
+#undef malloc
+#undef mkstemp
+#undef fdopen
+#undef ferror
+#undef fclose
+#undef fflush
+#undef fchmod
+#undef rename
+#undef output_file_open
+#undef output_file_close
+#undef output_file_publish
+#undef output_file_finish
+#undef output_file_discard
+
+int output_file_open(output_writer *output, const char *path)
+{
+    int result;
+    fault_output_path = path;
+    result = output_file_open_impl(output, path);
+    fault_output_path = NULL;
+    return result;
+}
+int output_file_close(output_writer *output, int success)
+{
+    int result;
+    fault_output_path = output->path;
+    result = output_file_close_impl(output, success);
+    fault_output_path = NULL;
+    return result;
+}
+int output_file_publish(output_writer *output)
+{
+    int result;
+    fault_output_path = output->path;
+    result = output_file_publish_impl(output);
+    fault_output_path = NULL;
+    return result;
+}
+int output_file_finish(output_writer *output, int success)
+{
+    int result;
+    fault_output_path = output->path;
+    result = output_file_finish_impl(output, success);
+    fault_output_path = NULL;
+    return result;
+}
+void output_file_discard(output_writer *output)
+{
+    fault_output_path = output->path;
+    output_file_discard_impl(output);
+    fault_output_path = NULL;
+}
+
 #include "../fceux_nl.c"
