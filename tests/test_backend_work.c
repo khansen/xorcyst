@@ -50,6 +50,7 @@ int test_remove_ast_nodes(int count)
         astnode_add_child(parent, nodes[i]);
     }
     astnode_remove(NULL);
+    astnode_finalize(NULL); /* Missing expression results are safe to release. */
     astnode_remove(parent);
     assert_children(parent, nodes, count);
     test_child_index_nodes = 0;

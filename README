@@ -36,6 +36,8 @@ to be resolved by the assembler. To check a raw binary against a reference:
 For a reference containing a header or other regions, use `--compare-offset`
 and `--compare-length`. `--compare-format=json` produces a structured report;
 `--compare-max-mismatches` limits the displayed mismatches.
+`--compare-cpu-base=ADDR` supplies a fallback CPU base for mismatches without
+an address from the assembler's source map.
 
 Listings and cross-references
 -----------------------------

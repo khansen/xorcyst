@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -60,8 +61,20 @@ class OutputFailures(unittest.TestCase):
         result = subprocess.run([str(self.executable), str(self.source), '-o', str(self.output), *flags, *extra],
                                 capture_output=True, env=environment, timeout=15, umask=umask)
         # Expected nonzero exits must not hide sanitizer failures during fault injection.
-        self.assertNotRegex(result.stderr, rb'ERROR: (?:AddressSanitizer|LeakSanitizer)|runtime error:')
+        self.assertGreaterEqual(result.returncode, 0, result.stderr.decode())
+        self.assertNotRegex(result.stderr, rb'(?:AddressSanitizer|LeakSanitizer|UndefinedBehaviorSanitizer):|runtime error:')
         return result
+
+    def test_runner_rejects_signals_and_sanitizer_reports_on_failure_exits(self):
+        reports = (b'AddressSanitizer:DEADLYSIGNAL', b'ERROR: AddressSanitizer: heap-use-after-free',
+                   b'ERROR: LeakSanitizer: detected memory leaks',
+                   b'UndefinedBehaviorSanitizer:DEADLYSIGNAL', b'runtime error: invalid access')
+        for code, stderr in [(3, report) for report in reports] + [(-11, b'')]:
+            with self.subTest(code=code, stderr=stderr):
+                result = subprocess.CompletedProcess([], code, b'', stderr)
+                with mock.patch('subprocess.run', return_value=result):
+                    with self.assertRaises(AssertionError):
+                        self.run_xasm()
 
     def seed_outputs(self, extra=()):
         previous = {}

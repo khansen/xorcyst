@@ -427,6 +427,8 @@ Compares assembled binary bytes with a reference. @code{--compare-offset=N}
 and @code{--compare-length=N} select the reference region;
 @code{--compare-format=text|json} selects the report format.
 @code{--compare-max-mismatches=N} limits displayed mismatches.
+@code{--compare-cpu-base=ADDR} supplies a fallback CPU base for mismatches
+without a mapped CPU address.
 
 @item --fceux-nl-rom-prefix PREFIX
 Writes FCEUX debugger name files as @file{PREFIX<bank>.nl}. Bank numbers are
