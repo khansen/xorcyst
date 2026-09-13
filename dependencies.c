@@ -49,8 +49,9 @@ static char *absolute_path(const char *path)
     }
     if (path[0] == '/') result = strdup(path);
     else {
-        result = malloc(strlen(directory) + strlen(path) + 2);
-        if (result) sprintf(result, "%s/%s", directory, path);
+        size_t size = strlen(directory) + strlen(path) + 2;
+        result = malloc(size);
+        if (result) snprintf(result, size, "%s/%s", directory, path);
     }
     if (!result) failure("out of memory", path);
     return result;
