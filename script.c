@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include <string.h>
 #include "script.h"
@@ -478,6 +479,10 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
             /* Skip white space */
             eat_ws(line, &i);
         }
+        i++; /* Eat '}'. Only whitespace or a comment may follow. */
+        while (isspace((unsigned char)line[i])) i++;
+        if (line[i] != '\0' && line[i] != '#')
+            err(filename, lineno, "unexpected text after command");
 next_line:
         ;
     }

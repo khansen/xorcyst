@@ -146,7 +146,15 @@ static void discard_parsed_nodes(astnode *node)
 %start assembly_unit
 %%
 assembly_unit:
-    statement_list end_opt { root_node = astnode_create_list($1.head); $$ = NULL; }
+    statement_list end_opt {
+        root_node = astnode_create_list($1.head);
+        if (root_node == NULL) {
+            /* Bison does not destroy the current rule's RHS on YYNOMEM. */
+            discard_parsed_nodes($1.head);
+            YYNOMEM;
+        }
+        $$ = NULL;
+    }
     ;
 
 end_opt:

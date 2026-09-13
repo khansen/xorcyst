@@ -796,6 +796,7 @@ static void bytecode_walk(const unsigned char *bytes, int size, xasm_bytecodepro
             break;
         }
     } while (cmd != XASM_CMD_END);
+    if (i != size) err("unexpected bytes after segment terminator");
 }
 
 /*--------------------------------------------------------------------------*/

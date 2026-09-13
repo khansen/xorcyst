@@ -15,7 +15,8 @@ class InputHandling(unittest.TestCase):
         build = tempfile.TemporaryDirectory(prefix='xorcyst-input-build-')
         cls.addClassCleanup(build.cleanup)
         cls.tools = {name: Path(build.name) / name for name in ('xasm', 'xlnk')}
-        build_tool('xasm', cls.tools['xasm'], 'TEST_INPUT_CFLAGS', {'symtab.c': 'tests/test_symtab_alloc.c'})
+        build_tool('xasm', cls.tools['xasm'], 'TEST_INPUT_CFLAGS',
+                   {'symtab.c': 'tests/test_symtab_alloc.c', 'astnode.c': 'tests/test_astnode_alloc.c'})
         build_tool('xlnk', cls.tools['xlnk'], 'TEST_INPUT_CFLAGS', {'unit.c': 'tests/test_unit_alloc.c'})
 
     def setUp(self):
@@ -40,6 +41,14 @@ class InputHandling(unittest.TestCase):
         self.assertEqual(list(self.root.glob('.xasm-*')), [])
         self.assertFalse((self.root / 'output.tmp').exists())
         return result
+
+    def test_failed_parser_root_allocation_is_an_error_and_frees_statements(self):
+        for source in ('\n', '.ORG $8000\nEntry:\nLDA #$42\n.DB "payload"\nRTS\n'):
+            with self.subTest(source=source):
+                result = self.run_tool('xasm', source, {'XASM_TEST_LIST_ALLOC_FAIL': '1'})
+                self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+                self.assertIn(b'INJECT_LIST_ALLOC', result.stderr)
+                self.assertIn(b'memory exhausted', result.stderr)
 
     def test_malformed_source_is_rejected_without_crashes_or_leaks(self):
         cases = ('LDA #(', 'PROC Incomplete\nNOP\n', 'MACRO Incomplete\nNOP\n',
@@ -105,6 +114,35 @@ class InputHandling(unittest.TestCase):
         (self.root / 'unit.o').write_bytes(data)
         result = self.run_tool('xlnk', 'link{file=unit.o,origin=$8000}\n')
         self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+        return result
+
+    def test_script_trailing_text_is_rejected_before_any_output(self):
+        for suffix in ('garbage', 'pad{size=1}', '\rgarbage', '} # comment'):
+            with self.subTest(suffix=suffix):
+                result = self.run_tool('xlnk', 'output{file=output} ' + suffix + '\npad{size=3}\n')
+                self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+                self.assertIn(b'unexpected text after command', result.stderr)
+
+    def test_script_trailing_whitespace_comments_and_crlf_are_accepted(self):
+        for ending in ('', '\n', '\r\n'):
+            for suffix in ('', ' \t', '# comment', ' \t# comment'):
+                with self.subTest(ending=ending, suffix=suffix):
+                    result = self.run_tool('xlnk', 'pad{size=3}' + suffix + ending)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual((self.root / 'output').read_bytes(), b'\0' * 3)
+
+    def test_segment_trailing_bytes_are_rejected(self):
+        for segment in ('data', 'code'):
+            for trailing in (b'\xff', b'\0', b'\xf3', bytes.fromhex('f400eaf3')):
+                with self.subTest(segment=segment, trailing=trailing):
+                    result = self.check_bad_object(object_file(**{segment: b'\xf3' + trailing}))
+                    self.assertIn(b'unexpected bytes after segment terminator', result.stderr)
+
+    def test_segment_terminator_inside_binary_payload_is_data(self):
+        (self.root / 'unit.o').write_bytes(object_file(code=bytes.fromhex('f402f3ff00f3')))
+        result = self.run_tool('xlnk', 'link{file=unit.o,origin=$8000}\n')
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('f3ff00'))
 
     def test_every_truncated_prefix_of_an_object_is_rejected(self):
         objects = [object_file(code=bytes.fromhex('f80000f3'), expressions=[bytes.fromhex('0101')]),
