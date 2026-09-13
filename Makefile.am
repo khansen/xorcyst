@@ -21,6 +21,7 @@ xasm_SOURCES = \
 
 xlnk_SOURCES = \
   xlnk.c version.h \
+  output_file.c output_file.h \
   script.c script.h \
   unit.c unit.h \
   hashtab.c hashtab.h \

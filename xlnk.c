@@ -113,6 +113,7 @@
 #include "script.h"
 #include "unit.h"
 #include "hashtab.h"
+#include "output_file.h"
 
 #include <stddef.h>
 #include <limits.h>
@@ -2521,20 +2522,17 @@ script commands. */
 static void set_output(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
-    FILE **fpp;
+    output_writer *output = arg;
     require_arg(s, c, "file", file);
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp != NULL) {
-        fclose(*fpp);
+    if (output->stream != NULL && !output_file_finish(output, 1)) {
+        err_count++;
+        return;
     }
-    *fpp = fopen(file, "wb");
-    if (*fpp == NULL) {
-        scripterr(s, c, "could not open `%s' for writing", file);
+    if (!output_file_open(output, file)) {
+        err_count++;
+        return;
     }
-    else {
-        verbose(1, "  output goes to `%s'", file);
-    }
+    verbose(1, "  output goes to `%s'", file);
 }
 
 /**
@@ -2546,32 +2544,35 @@ static void set_output(xlnk_script *s, xlnk_script_command *c, void *arg)
 static void copy_to_output(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
-    FILE **fpp;
+    output_writer *output = arg;
     FILE *cf;
-    unsigned char k;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp == NULL) {
+    unsigned char bytes[8192];
+    size_t count;
+    long copied = 0;
+    if (output->stream == NULL) {
         scripterr(s, c, "no output open");
+        return;
     }
-    else {
-        require_arg(s, c, "file", file);
-        cf = fopen(file, "rb");
-        if (cf == NULL) {
-            scripterr(s, c, "could not open `%s' for reading", file);
+    require_arg(s, c, "file", file);
+    cf = fopen(file, "rb");
+    if (cf == NULL) {
+        scripterr(s, c, "could not open `%s' for reading", file);
+        return;
+    }
+    while ((count = fread(bytes, 1, sizeof(bytes), cf)) != 0) {
+        if (fwrite(bytes, 1, count, output->stream) != count) {
+            scripterr(s, c, "could not write `%s'", output->path);
+            break;
         }
-        else {
-            verbose(1, "  copying `%s' to output at position %ld...", file, ftell(*fpp) );
-            for (k = fgetc(cf); !feof(cf); k = fgetc(cf) ) {
-                fputc(k, *fpp);
-            }
-            bank_offset += ftell(cf);
-            pc += ftell(cf);
-            fclose(cf);
-            if (bank_offset > bank_size) {
-                scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
-            }
-        }
+        copied += count;
+    }
+    if (ferror(cf)) scripterr(s, c, "could not read `%s'", file);
+    if (fclose(cf) != 0) scripterr(s, c, "could not close `%s'", file);
+    if (err_count != 0) return;
+    bank_offset += copied;
+    pc += copied;
+    if (bank_offset > bank_size) {
+        scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
     }
 }
 
@@ -2619,19 +2620,17 @@ static void start_bank(xlnk_script *s, xlnk_script_command *c, void *arg)
  */
 static void write_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
-    FILE **fpp;
+    output_writer *output = arg;
     xunit *xu;
     const char *file;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp == NULL) {
+    if (output->stream == NULL) {
         scripterr(s, c, "no output open");
     }
     else {
         require_arg(s, c, "file", file);
         xu = (xunit *)hashtab_get(unit_hash, (void*)file);
-        verbose(1, "  appending unit `%s' to output at position %ld...", file, ftell(*fpp));
-        write_as_binary(*fpp, xu);
+        verbose(1, "  appending unit `%s' to output at position %ld...", file, ftell(output->stream));
+        write_as_binary(output->stream, xu);
         bank_offset += xu->code_size;
         if (bank_offset > bank_size) {
             scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
@@ -2647,7 +2646,7 @@ static void write_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
  */
 static void write_pad(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
-    FILE **fpp;
+    output_writer *output = arg;
     int i;
     int count;
     int offset;
@@ -2655,9 +2654,7 @@ static void write_pad(xlnk_script *s, xlnk_script_command *c, void *arg)
     const char *offset_str;
     const char *origin_str;
     const char *size_str;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    if (*fpp == NULL) {
+    if (output->stream == NULL) {
         scripterr(s, c, "no output open");
     }
     else {
@@ -2684,7 +2681,7 @@ static void write_pad(xlnk_script *s, xlnk_script_command *c, void *arg)
             verbose(1, "  padding %d bytes...", count);
         }
         for (i=0; i<count; i++) {
-            fputc(0, *fpp);
+            fputc(0, output->stream);
         }
         bank_offset += count;
         pc += count;
@@ -2723,10 +2720,8 @@ static void maybe_pad_bank(xlnk_script *s, xlnk_script_command *c, FILE *fp)
  */
 static void write_bank(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
-    FILE **fpp;
-    /* Arg is pointer to file handle pointer */
-    fpp = (FILE **)arg;
-    maybe_pad_bank(s, c, *fpp);
+    output_writer *output = arg;
+    maybe_pad_bank(s, c, output->stream);
     start_bank(s, c, arg);
 }
 
@@ -2737,32 +2732,35 @@ static void write_bank(xlnk_script *s, xlnk_script_command *c, void *arg)
  */
 static void generate_binary_output(xlnk_script *sc, const char *output_file)
 {
-    FILE *fp = NULL;
-    /* Table of mappings for our purpose */
-    static xlnk_script_commandprocmap map[] = {
-        { XLNK_OUTPUT_COMMAND, set_output },
-        { XLNK_COPY_COMMAND, copy_to_output },
-        { XLNK_BANK_COMMAND, write_bank },
-        { XLNK_LINK_COMMAND, write_unit },
-        { XLNK_PAD_COMMAND, write_pad },
-        { XLNK_BAD_COMMAND, NULL }
-    };
-    /* Reset offsets */
-    bank_size = 0x7FFFFFFF;
+    output_writer output = {0};
+    xlnk_script_command *command;
+    bank_size = INT_MAX;
     bank_offset = 0;
     bank_origin = 0;
     bank_id = -1;
     pc = 0;
-    /* Open default output if one is provided */
-    if (output_file) {
-        fp = fopen(output_file, "wb");
-        if (fp == NULL)
-            err("could not open `%s' for writing", output_file);
+    if (output_file != NULL && !output_file_open(&output, output_file)) {
+        err_count++;
+        return;
     }
-    /* Do the walk */
-    xlnk_script_walk(sc, map, (void *)&fp);
-    /* Pad last bank if necessary */
-    maybe_pad_bank(sc, sc->first_command, fp);
+    /* Stop on the first error. In particular, a failed close when switching
+       output files must not open or replace any subsequent destination. */
+    for (command = sc->first_command; command != NULL && err_count == 0; command = command->next) {
+        switch (command->type) {
+            case XLNK_OUTPUT_COMMAND: set_output(sc, command, &output); break;
+            case XLNK_COPY_COMMAND: copy_to_output(sc, command, &output); break;
+            case XLNK_BANK_COMMAND: write_bank(sc, command, &output); break;
+            case XLNK_LINK_COMMAND: write_unit(sc, command, &output); break;
+            case XLNK_PAD_COMMAND: write_pad(sc, command, &output); break;
+            default: break;
+        }
+        /* Covers bytecode and padding writes as well as copied input. */
+        if (err_count == 0 && output.stream != NULL && ferror(output.stream))
+            err("could not write output `%s'", output.path);
+    }
+    if (err_count == 0) maybe_pad_bank(sc, sc->first_command, output.stream);
+    if (err_count != 0) output_file_discard(&output);
+    else if (output.stream != NULL && !output_file_finish(&output, 1)) err_count++;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -2964,10 +2962,16 @@ static void inc_offset_copy(xlnk_script *s, xlnk_script_command *c, void *arg)
         scripterr(s, c, "could not open `%s' for reading", file);
     }
     else {
-        fseek(fp, 0, SEEK_END);
-        bank_offset += ftell(fp);
-        pc += ftell(fp);
-        fclose(fp);
+        long size;
+        if (fseek(fp, 0, SEEK_END) != 0 || (size = ftell(fp)) < 0) {
+            scripterr(s, c, "could not determine size of `%s'", file);
+        } else if (size > INT_MAX - bank_offset || size > INT_MAX - pc) {
+            scripterr(s, c, "input `%s' is too large", file);
+        } else {
+            bank_offset += size;
+            pc += size;
+        }
+        if (fclose(fp) != 0) scripterr(s, c, "could not close `%s'", file);
         if (bank_offset > bank_size) {
             scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
         }

@@ -115,8 +115,9 @@ am_xasm_OBJECTS = astnode.$(OBJEXT) astproc.$(OBJEXT) \
 xasm_OBJECTS = $(am_xasm_OBJECTS)
 am__DEPENDENCIES_1 =
 xasm_DEPENDENCIES = $(am__DEPENDENCIES_1)
-am_xlnk_OBJECTS = xlnk.$(OBJEXT) script.$(OBJEXT) unit.$(OBJEXT) \
-	hashtab.$(OBJEXT) opcode.$(OBJEXT) my_getopt.$(OBJEXT)
+am_xlnk_OBJECTS = xlnk.$(OBJEXT) output_file.$(OBJEXT) \
+	script.$(OBJEXT) unit.$(OBJEXT) hashtab.$(OBJEXT) \
+	opcode.$(OBJEXT) my_getopt.$(OBJEXT)
 xlnk_OBJECTS = $(am_xlnk_OBJECTS)
 xlnk_LDADD = $(LDADD)
 AM_V_P = $(am__v_P_@AM_V@)
@@ -331,6 +332,7 @@ xasm_SOURCES = \
 
 xlnk_SOURCES = \
   xlnk.c version.h \
+  output_file.c output_file.h \
   script.c script.h \
   unit.c unit.h \
   hashtab.c hashtab.h \
