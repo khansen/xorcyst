@@ -11,7 +11,7 @@ import unittest
 
 
 XASM = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "xasm"
-XLNK = Path(__file__).resolve().parents[1] / "xlnk"
+XLNK = Path(os.environ.get("XLNK", Path(__file__).resolve().parents[1] / "xlnk")).resolve()
 
 
 class InstructionRecords(unittest.TestCase):

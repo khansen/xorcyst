@@ -38,8 +38,8 @@ jobs:
         run: |
           ./configure --disable-maintainer-mode YACC=: LEX=: CFLAGS='-g -O2 -Werror'
           make -j2
-      - name: Run regression suite
-        run: sh tests/regression.sh
+      - name: Test source archive, installed tools, and uninstall
+        run: make distcheck
 
   sanitizers:
     name: ASan and UBSan

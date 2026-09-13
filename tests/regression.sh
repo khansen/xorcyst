@@ -2,8 +2,9 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
-XASM="$ROOT_DIR/xasm"
-XLNK="$ROOT_DIR/xlnk"
+XASM=${XASM:-"$ROOT_DIR/xasm"}
+XLNK=${XLNK:-"$ROOT_DIR/xlnk"}
+export XASM XLNK
 cd "$ROOT_DIR"
 
 if [ ! -x "$XASM" ]; then

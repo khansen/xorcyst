@@ -14,6 +14,7 @@
 
 @SET_MAKE@
 
+
 VPATH = @srcdir@
 am__is_gnu_make = { \
   if test -z '$(MAKELEVEL)'; then \
@@ -97,14 +98,14 @@ am__aclocal_m4_deps = $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
-	$(am__configure_deps) $(am__DIST_COMMON)
+	$(am__configure_deps) $(dist_doc_DATA) $(am__DIST_COMMON)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_HEADER = config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-am__installdirs = "$(DESTDIR)$(bindir)"
+am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(docdir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_xasm_OBJECTS = astnode.$(OBJEXT) astproc.$(OBJEXT) \
 	charmap.$(OBJEXT) codegen.$(OBJEXT) opcode.$(OBJEXT) \
@@ -164,6 +165,33 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
+am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
+am__vpath_adj = case $$p in \
+    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
+    *) f=$$p;; \
+  esac;
+am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
+am__install_max = 40
+am__nobase_strip_setup = \
+  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
+am__nobase_strip = \
+  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
+am__nobase_list = $(am__nobase_strip_setup); \
+  for p in $$list; do echo "$$p $$p"; done | \
+  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
+  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
+    if (++n[$$2] == $(am__install_max)) \
+      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
+    END { for (dir in files) print dir, files[dir] }'
+am__base_list = \
+  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
+  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
+am__uninstall_files_from_dir = { \
+  { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
+  || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
+       $(am__cd) "$$dir" && echo $$files | $(am__xargs_n) 40 $(am__rm_f); }; \
+  }
+DATA = $(dist_doc_DATA)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP) \
 	config.h.in
 # Read a list of newline-separated strings from the standard input,
@@ -327,7 +355,7 @@ xasm_SOURCES = \
   listing.c listing.h fceux_nl.c fceux_nl.h \
   output_file.c output_file.h \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
-  xasm.c version.h \
+  xasm.c xasm.h version.h \
   my_getopt.c my_getopt.h getopt.h
 
 xlnk_SOURCES = \
@@ -341,7 +369,70 @@ xlnk_SOURCES = \
 
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
-EXTRA_DIST = parser.y scanner.l parser.h
+EXTRA_DIST = parser.y scanner.l parser.h \
+  tests/coverage_directives_control.asm \
+  tests/coverage_directives_layout.asm \
+  tests/coverage_directives_macros_io.asm \
+  tests/coverage_directives_types_symbols.asm \
+  tests/coverage_error_directive.asm \
+  tests/coverage_instructions.asm \
+  tests/coverage_org_pure.asm \
+  tests/dependency_driver.c \
+  tests/fixtures/charmap.txt \
+  tests/fixtures/data.bin \
+  tests/fixtures/include_target.asm \
+  tests/fixtures/xref_data_directives.asm \
+  tests/fixtures/xref_data_directives_object.asm \
+  tests/ifndef.asm \
+  tests/macro.asm \
+  tests/regression.sh \
+  tests/test_analysis_faults.c \
+  tests/test_analysis_symbols.py \
+  tests/test_backend_performance.py \
+  tests/test_backend_work.c \
+  tests/test_build_configuration.py \
+  tests/test_dependencies.py \
+  tests/test_fceux_nl.py \
+  tests/test_fceux_nl_alloc.c \
+  tests/test_frontend_performance.py \
+  tests/test_frontend_work.c \
+  tests/test_inputs.py \
+  tests/test_installation.py \
+  tests/test_instruction_records.py \
+  tests/test_io_faults.c \
+  tests/test_linker_outputs.py \
+  tests/test_output_failures.py \
+  tests/test_pathconf_faults.c \
+  tests/test_symtab.c \
+  tests/test_symtab.py \
+  tests/test_symtab_alloc.c \
+  tests/test_unit_alloc.c \
+  tests/test_xlnk_io_faults.c \
+  tests/tool_test_support.py \
+  tests/verify_fceux_projects.py \
+  doc/Assembler-Directives.html \
+  doc/Custom-Character-Maps.html \
+  doc/Error-and-Warning-Messages.html \
+  doc/Implementation-Details.html \
+  doc/Known-Bugs-and-Limitations.html \
+  doc/Linker-Script-Commands.html \
+  doc/Object-Code-Format.html \
+  doc/Overview.html \
+  doc/The-Assembler.html \
+  doc/The-Linker.html \
+  doc/What_0027s-New.html \
+  doc/index.html
+
+
+# Install the current feature documentation alongside the tools.
+dist_doc_DATA = README NEWS xorcyst.texinfo \
+  XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md \
+  XASM_DEPENDENCY_MANIFEST_SPEC.md \
+  XASM_FCEUX_NL_EXPORT_SPEC.md \
+  XASM_INDEX_BOUND_ANALYSIS_SPEC.md \
+  XASM_INSTRUCTION_RECORDS_SPEC.md
+
+DISTCHECK_CONFIGURE_FLAGS = --disable-maintainer-mode YACC=: LEX=:
 AM_CFLAGS = -Wall
 AM_LFLAGS = -i
 AM_YFLAGS = -d
@@ -494,6 +585,27 @@ am--depfiles: $(am__depfiles_remade)
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
+install-dist_docDATA: $(dist_doc_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(docdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(docdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(docdir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(docdir)" || exit $$?; \
+	done
+
+uninstall-dist_docDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(docdir)'; $(am__uninstall_files_from_dir)
 
 ID: $(am__tagged_files)
 	$(am__define_uniq_tagged_files); mkid -fID $$unique
@@ -733,10 +845,11 @@ distcleancheck: distclean
 	       $(distcleancheck_listfiles) ; \
 	       exit 1; } >&2
 check-am: all-am
+	$(MAKE) $(AM_MAKEFLAGS) check-local
 check: check-am
-all-am: Makefile $(PROGRAMS) config.h
+all-am: Makefile $(PROGRAMS) $(DATA) config.h
 installdirs:
-	for dir in "$(DESTDIR)$(bindir)"; do \
+	for dir in "$(DESTDIR)$(bindir)" "$(DESTDIR)$(docdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -810,7 +923,7 @@ info: info-am
 
 info-am:
 
-install-data-am:
+install-data-am: install-dist_docDATA
 
 install-dvi: install-dvi-am
 
@@ -836,7 +949,7 @@ install-ps: install-ps-am
 
 install-ps-am:
 
-installcheck-am:
+installcheck-am: installcheck-local
 
 maintainer-clean: maintainer-clean-am
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
@@ -875,29 +988,39 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-binPROGRAMS
+uninstall-am: uninstall-binPROGRAMS uninstall-dist_docDATA
 
-.MAKE: all install-am install-strip
+.MAKE: all check-am install-am install-strip
 
 .PHONY: CTAGS GTAGS TAGS all all-am am--depfiles am--refresh check \
-	check-am clean clean-binPROGRAMS clean-cscope clean-generic \
-	cscope cscopelist-am ctags ctags-am dist dist-all dist-bzip2 \
-	dist-bzip3 dist-gzip dist-lzip dist-shar dist-tarZ dist-xz \
-	dist-zip dist-zstd distcheck distclean distclean-compile \
-	distclean-generic distclean-hdr distclean-tags distcleancheck \
-	distdir distuninstallcheck dvi dvi-am html html-am info \
-	info-am install install-am install-binPROGRAMS install-data \
-	install-data-am install-dvi install-dvi-am install-exec \
+	check-am check-local clean clean-binPROGRAMS clean-cscope \
+	clean-generic cscope cscopelist-am ctags ctags-am dist \
+	dist-all dist-bzip2 dist-bzip3 dist-gzip dist-lzip dist-shar \
+	dist-tarZ dist-xz dist-zip dist-zstd distcheck distclean \
+	distclean-compile distclean-generic distclean-hdr \
+	distclean-tags distcleancheck distdir distuninstallcheck dvi \
+	dvi-am html html-am info info-am install install-am \
+	install-binPROGRAMS install-data install-data-am \
+	install-dist_docDATA install-dvi install-dvi-am install-exec \
 	install-exec-am install-html install-html-am install-info \
 	install-info-am install-man install-pdf install-pdf-am \
 	install-ps install-ps-am install-strip installcheck \
-	installcheck-am installdirs maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-compile \
-	mostlyclean-generic pdf pdf-am ps ps-am tags tags-am uninstall \
-	uninstall-am uninstall-binPROGRAMS
+	installcheck-am installcheck-local installdirs \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-compile mostlyclean-generic pdf pdf-am ps ps-am \
+	tags tags-am uninstall uninstall-am uninstall-binPROGRAMS \
+	uninstall-dist_docDATA
 
 .PRECIOUS: Makefile
 
+
+# Use the build-tree tools even when distcheck builds outside the source tree.
+check-local:
+	PYTHONDONTWRITEBYTECODE=1 XASM="$(abs_builddir)/xasm" XLNK="$(abs_builddir)/xlnk" \
+	  $(SHELL) "$(srcdir)/tests/regression.sh"
+
+installcheck-local:
+	python3 "$(srcdir)/tests/test_installation.py" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(docdir)"
 
 # Optional maintainer-only regeneration rules
 # (These are only used if someone runs make after editing parser.y/scanner.l)

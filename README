@@ -1,5 +1,5 @@
 The XORcyst is a set of tools for 6502 software development: the `xasm`
-assembler and `xlnk` linker. This development tree is version 1.7.0-dev.
+assembler and `xlnk` linker. This release is version 1.7.0.
 Run `xasm --version` or `xlnk --version` to identify an installed build.
 
 Build and test
@@ -12,11 +12,14 @@ used for filesystem path comparison. The test suite also requires Python 3.
 
     ./configure --disable-maintainer-mode
     make -j2
-    sh tests/regression.sh
+    make check
 
 Use `make install` to install the tools. See INSTALL for prefix and compiler
-options. CI runs the regression suite on Linux and macOS and runs symbol-table,
-AST/JSON, and output-failure tests under ASan/UBSan on Linux. Tests use generated
+options. `make installcheck` exercises the installed tools. CI runs
+`make distcheck` on Linux and macOS: it builds an unpacked source archive, runs
+the complete regression suite, and checks installation and uninstallation.
+Symbol-table, AST/JSON, malformed-input, and output-failure tests also run under
+ASan/UBSan on Linux. Tests use generated
 fixtures and do not require game ROMs or a NESrev checkout.
 
 See xorcyst.texinfo and the doc/ directory for the assembly language and linker
@@ -121,6 +124,9 @@ Exit statuses: 0 success; 1 assembly or binary-generation error; 2 CLI misuse;
 mismatch; 6 xref-summary failure; 7 index-pattern failure; 8 data-consumer
 failure; 9 data-coverage failure. An assembly error can take precedence over
 a later diagnostic-listing error. Any nonzero status means the invocation failed.
+These status codes describe xasm. xlnk also returns a nonzero status on input,
+write, close, or publication errors. A linker script publishes each completed
+file when it switches outputs; a later failure does not roll back earlier files.
 
 Maintainer builds
 -----------------
@@ -139,3 +145,12 @@ Real-project compatibility checks are opt-in and keep project inputs read-only:
 
 The report compares binary bytes, diagnostics, and analysis outputs across
 seven modes with NL disabled/enabled, and records paired timing samples.
+
+To prepare and validate a source archive (including tests and feature specs):
+
+    ./configure --disable-maintainer-mode
+    make distcheck
+
+This produces `xorcyst-1.7.0.tar.gz`. No parser or scanner regeneration is
+needed to build the archive. The installation checks use a temporary prefix;
+they do not replace the system installation.
