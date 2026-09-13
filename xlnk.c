@@ -1115,6 +1115,34 @@ static void eval_expression(xunit *u, int exid, xasm_constant *result)
     eval_recursive(u, exp, result);
 }
 
+/* The first relocation pass suppresses errors for unresolved forward labels;
+   later relocation and both writers require a resolved integer operand. */
+static int eval_instruction_operand(xunit *u, int exid, xasm_constant *result)
+{
+    eval_expression(u, exid, result);
+    if (result->type == XASM_INTEGER_CONSTANT) return 1;
+    err("instruction operand must evaluate to an integer");
+    finalize_constant(result);
+    return 0;
+}
+
+static int eval_storage_count(xunit *u, int exid, int *count)
+{
+    xasm_constant result;
+    int valid = 0;
+    eval_expression(u, exid, &result);
+    if (result.type != XASM_INTEGER_CONSTANT) {
+        err("storage size must evaluate to an integer");
+    } else if (result.integer <= 0 || result.integer >= 0x10000) {
+        err("storage size out of range (must be 1..65535 bytes)");
+    } else {
+        *count = (int)result.integer;
+        valid = 1;
+    }
+    finalize_constant(&result);
+    return valid;
+}
+
 /*--------------------------------------------------------------------------*/
 /* Functions for incrementing PC, with error handling for wraparound. */
 
@@ -1179,28 +1207,13 @@ static void inc_pc_4(const unsigned char *b, void *arg)
  */
 static void inc_pc_dsb(const unsigned char *b, void *arg)
 {
-    xasm_constant c;
+    int count;
     int exid;
     calc_address_args *args = (calc_address_args *)arg;
     int i = 1;
     /* Get expression ID */
     exid = get_2(b, &i);
-    /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    /* Handle the result */
-    if (c.type == XASM_INTEGER_CONSTANT) {
-        /* An array of bytes will be located here */
-        /* Advance PC appropriately */
-        inc_pc( c.integer, arg );
-    }
-    else if (c.type == XASM_STRING_CONSTANT) {
-        err("unexpected string operand (`%s') to storage directive", c.string);
-    }
-    else {
-        err("storage size could not be evaluated");
-    }
-
-    finalize_constant(&c);
+    if (eval_storage_count(args->xu, exid, &count)) inc_pc(count, arg);
 }
 
 static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
@@ -1215,10 +1228,7 @@ static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
     op = get_1(b, &i);
     /* Get expression ID */
     exid = get_2(b, &i);
-    /* Evaluate it */
-    eval_expression(args->xu, exid, &c);
-    /* Handle the result */
-    if (c.type == XASM_INTEGER_CONSTANT && !wide) {
+    if (eval_instruction_operand(args->xu, exid, &c) && !wide) {
 	mode = opcode_addressing_mode(op);
         /* See if it can be reduced to ZP instruction */
         if ((c.integer < 0x100) &&
@@ -1227,13 +1237,6 @@ static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
             op = t;
             ((unsigned char*)b)[1] = t;
         }
-    }
-    else if (c.type == XASM_STRING_CONSTANT) {
-        err("invalid instruction operand (string)");
-    }
-    else {
-        /* Address not available yet (forward reference). */
-        //err("unresolved symbol");
     }
     /* Advance PC */
     inc_pc( opcode_length(op), arg );
@@ -1303,8 +1306,7 @@ static void write_instr(const unsigned char *b, void *arg)
     /* Get expression ID */
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
+    if (!eval_instruction_operand(args->xu, exid, &c)) return;
     /* Write the opcode */
     fputc(op, args->fp);
     if (opcode_length(op) == 2) {
@@ -1464,7 +1466,7 @@ static void write_dsi16(const unsigned char *b, void *arg)
  */
 static void write_dsb(const unsigned char *b, void *arg)
 {
-    xasm_constant c;
+    int count;
     int i;
     int exid;
     write_binary_args *args = (write_binary_args *)arg;
@@ -1472,16 +1474,9 @@ static void write_dsb(const unsigned char *b, void *arg)
     i = 1;
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    if (c.type != XASM_INTEGER_CONSTANT) { err("storage size could not be evaluated"); finalize_constant(&c); return; }
-    if (c.integer < 0) {
-        err("negative count");
-    } else if (c.integer > 0) {
-        for (i=0; i<c.integer; i++) {
-            fputc(0, args->fp);
-        }
-        inc_pc( c.integer, arg );
-    }
+    if (!eval_storage_count(args->xu, exid, &count)) return;
+    for (i = 0; i < count; i++) fputc(0, args->fp);
+    inc_pc(count, arg);
 }
 
 /**
@@ -1621,8 +1616,7 @@ static void asm_write_instr(const unsigned char *b, void *arg)
     /* Get expression ID */
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
+    if (!eval_instruction_operand(args->xu, exid, &c)) return;
     /* Write the opcode */
     fprintf(args->fp, "%s", opcode_to_string(op));
     switch (mode) {
@@ -1783,7 +1777,7 @@ static void asm_write_dsi16(const unsigned char *b, void *arg)
  */
 static void asm_write_dsb(const unsigned char *b, void *arg)
 {
-    xasm_constant c;
+    int count;
     int i;
     int exid;
     write_binary_args *args = (write_binary_args *)arg;
@@ -1791,15 +1785,9 @@ static void asm_write_dsb(const unsigned char *b, void *arg)
     i = 1;
     exid = get_2(b, &i);
     /* Evaluate expression */
-    eval_expression(args->xu, exid, &c);
-    if (c.type != XASM_INTEGER_CONSTANT) { err("storage size could not be evaluated"); finalize_constant(&c); return; }
-    if (c.integer < 0) {
-        err("negative count");
-    }
-    else if (c.integer > 0) {
-        fprintf(args->fp, ".DSB $%X\n", (unsigned)c.integer);
-        inc_pc( c.integer, arg );
-    }
+    if (!eval_storage_count(args->xu, exid, &count)) return;
+    fprintf(args->fp, ".DSB $%X\n", (unsigned)count);
+    inc_pc(count, arg);
 }
 
 /**
@@ -2463,12 +2451,6 @@ static void register_ram_blocks(xlnk_script *sc)
 /*--------------------------------------------------------------------------*/
 /* Functions for loading and initial processing of units in script. */
 
-/**
- * Registers (parses etc.) one unit based on 'link' script command.
- * @param s Linker script
- * @param c Command of type LINK_COMMAND
- * @param arg Pointer to unit index
- */
 /* Validate object references before any address calculation indexes their arrays. */
 static void validate_object_expression(const xunit *u, const xasm_expression *expr)
 {
@@ -2516,6 +2498,12 @@ static void validate_object(xunit *u)
     for (i = 0; i < u->_unit_.expr_count; i++) validate_object_expression(u, u->_unit_.expressions[i]);
 }
 
+/**
+ * Registers (parses etc.) one unit based on 'link' script command.
+ * @param s Linker script
+ * @param c Command of type LINK_COMMAND
+ * @param arg Pointer to unit index
+ */
 static void register_one_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
@@ -3025,34 +3013,42 @@ static void generate_assembly_output(xlnk_script *sc, FILE *fp)
 
 /*--------------------------------------------------------------------------*/
 
-/**
- * Increases bank offset and PC according to size of the file specified by
- * 'copy' script command.
- * @param s Linker script
- * @param c Command of type COPY_COMMAND
- * @param arg Not used
- */
-static void inc_offset_copy(xlnk_script *s, xlnk_script_command *c, void *arg)
+/* Plan file sizes before relocation. I/O errors must not be suppressed along
+   with the first relocation pass's expected unresolved forward references. */
+static void plan_copy_input(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
+    FILE *fp;
+    long size = -1;
     require_arg(s, c, "file", file);
-    /* Keep every relocation pass and the output stream on the same layout. */
-    if (c->planned_copy_size < 0) {
-        FILE *fp = fopen(file, "rb");
-        long size;
-        if (fp == NULL) {
-            scripterr(s, c, "could not open `%s' for reading", file);
-            return;
-        }
-        if (fseek(fp, 0, SEEK_END) != 0 || (size = ftell(fp)) < 0) {
-            scripterr(s, c, "could not determine size of `%s'", file);
-        } else {
-            c->planned_copy_size = size;
-        }
-        if (fclose(fp) != 0) scripterr(s, c, "could not close `%s'", file);
+    fp = fopen(file, "rb");
+    if (fp == NULL) {
+        scripterr(s, c, "could not open `%s' for reading", file);
+        return;
     }
-    if (c->planned_copy_size < 0
-        || !advance_copy_offsets(s, c, (uintmax_t)c->planned_copy_size)) return;
+    if (fseek(fp, 0, SEEK_END) != 0 || (size = ftell(fp)) < 0) {
+        scripterr(s, c, "could not determine size of `%s'", file);
+    }
+    if (fclose(fp) != 0) {
+        scripterr(s, c, "could not close `%s'", file);
+        return;
+    }
+    c->planned_copy_size = size;
+}
+
+static void plan_copy_inputs(xlnk_script *sc)
+{
+    static xlnk_script_commandprocmap map[] = {
+        { XLNK_COPY_COMMAND, plan_copy_input },
+        { XLNK_BAD_COMMAND, NULL }
+    };
+    xlnk_script_walk(sc, map, NULL);
+}
+
+/* Apply the same prevalidated copy lengths in every relocation pass. */
+static void inc_offset_copy(xlnk_script *s, xlnk_script_command *c, void *arg)
+{
+    if (!advance_copy_offsets(s, c, (uintmax_t)c->planned_copy_size)) return;
     if (bank_offset > bank_size) {
         scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
     }
@@ -3226,6 +3222,7 @@ int main(int argc, char **argv)
     }
     verbose(1, "loading units...");
     register_units(&sc);
+    if (err_count == 0) plan_copy_inputs(&sc);
 
     /* Only continue with processing if no unresolved symbols */
     if (err_count == 0) {

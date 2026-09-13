@@ -93,6 +93,16 @@ class LinkerOutputs(unittest.TestCase):
                 self.assertIn(('INJECT ' + operation).encode(), result.stderr)
                 self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
 
+    def test_first_copy_planning_close_failure_prevents_publication(self):
+        self.seed()
+        result = self.run_linker('copy{file=payload}\noutput{file=second}\npad{size=1}\n',
+                                 fault='plan_close')
+        self.assertEqual(result.returncode, 1, result.stderr.decode())
+        self.assertEqual(result.stderr.count(b'INJECT plan_close'), 1)
+        self.assertIn(b'could not close', result.stderr)
+        self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
+        self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
+
     def test_copy_growth_after_planning_cannot_overflow_layout(self):
         # Reject an oversized stream at the planned length, before its simulated
         # >INT_MAX bytes can overflow counters. No multi-GB file is created.
@@ -168,6 +178,26 @@ class LinkerOutputs(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertEqual((self.root / 'first').read_bytes(), b'\0' * 3)
         self.assertEqual((self.root / 'second').read_bytes(), b'\0' * 5)
+
+    def test_failed_instruction_evaluation_prevents_all_publication(self):
+        for command in (0xF7, 0xFE):
+            with self.subTest(command=command):
+                # Equal strings produce the valid integer operand 1; their
+                # temporary allocation failure must fail during relocation.
+                code = bytes([command, 0xA9, 0, 0, 0xF3])
+                expression = bytes.fromhex('1a050058050058')
+                (self.root / 'unit.o').write_bytes(object_file(code=code, expressions=[expression]))
+                script = 'pad{size=3}\noutput{file=second}\nlink{file=unit.o,origin=$8000}\n'
+                result = self.run_linker(script)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual((self.root / 'second').read_bytes(), bytes.fromhex('a901'))
+                self.seed()
+                result = self.run_linker(script, fault='operand_eval')
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertIn(b'INJECT operand_eval', result.stderr)
+                self.assertIn(b'instruction operand must evaluate to an integer', result.stderr)
+                self.assertEqual((self.root / 'first').read_bytes(), b'previous first')
+                self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
 
     def test_copy_rejects_size_changes_from_an_earlier_output(self):
         for size in (13, 15):

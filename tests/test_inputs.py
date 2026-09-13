@@ -2,6 +2,7 @@
 """Run malformed inputs and allocation failures through the actual tools."""
 import os
 from pathlib import Path
+import resource
 import subprocess
 import tempfile
 import unittest
@@ -24,16 +25,22 @@ class InputHandling(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
-    def run_tool(self, name, content, environment=None):
+    def run_tool(self, name, content, environment=None, arguments=(), limited=False):
         source = 'input.asm' if name == 'xasm' else 'input.script'
         (self.root / source).write_bytes(content.encode() if isinstance(content, str) else content)
         (self.root / 'output').write_bytes(b'previous output')
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(('XASM_TEST_', 'XLNK_TEST_'))}
         env.update(environment or {})
+        def limit_resources():
+            # Malformed storage counts must not generate huge files or loops
+            # if the range check regresses.
+            resource.setrlimit(resource.RLIMIT_FSIZE, (65536, 65536))
+            resource.setrlimit(resource.RLIMIT_CPU, (1, 1))
         result = subprocess.run([str(self.tools[name]), source, '-o', 'output',
-                                 *(['--pure-binary'] if name == 'xasm' else [])],
-                                cwd=self.root, env=env, capture_output=True, timeout=20)
+                                 *(['--pure-binary'] if name == 'xasm' else []), *arguments],
+                                cwd=self.root, env=env, capture_output=True, timeout=20,
+                                preexec_fn=limit_resources if limited else None)
         self.assertGreaterEqual(result.returncode, 0, result.stderr.decode())
         self.assertNotRegex(result.stderr, SANITIZER_REPORT)
         if result.returncode:
@@ -211,6 +218,76 @@ class InputHandling(unittest.TestCase):
         for index, data in enumerate(cases):
             with self.subTest(index=index):
                 self.check_bad_object(data)
+
+    def test_instruction_operand_types_are_checked_before_any_output(self):
+        # A string, concatenated strings, and an undefined bank-of-integer
+        # operation are structurally valid expressions but invalid operands.
+        expressions = [bytes.fromhex(value) for value in
+                       ('050058', '10050058050059', '250101')]
+        for command in (0xF7, 0xFE):
+            for expression in expressions:
+                with self.subTest(command=command, expression=expression):
+                    code = bytes([command, 0xA9, 0, 0, 0xF3])
+                    (self.root / 'unit.o').write_bytes(object_file(code=code, expressions=[expression]))
+                    (self.root / 'second').write_bytes(b'previous second')
+                    result = self.run_tool('xlnk', 'pad{size=1}\noutput{file=second}\n'
+                                           'link{file=unit.o,origin=$8000}\n')
+                    self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertIn(b'instruction operand', result.stderr)
+                    self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
+
+    def test_integer_operands_from_strings_and_forward_labels_are_valid(self):
+        for command in (0xF7, 0xFE):
+            for opcode, suffix, expression, expected in (
+                    (0xA9, b'', bytes.fromhex('1a050058050058'), bytes.fromhex('a901')),
+                    (0xAD, bytes.fromhex('f600'), bytes.fromhex('080000'), bytes.fromhex('ad0380'))):
+                with self.subTest(command=command, opcode=opcode):
+                    code = bytes([command, opcode, 0, 0]) + suffix + b'\xf3'
+                    (self.root / 'unit.o').write_bytes(object_file(code=code, expressions=[expression]))
+                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=$8000}\n')
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_storage_counts_are_bounded_before_any_output(self):
+        expressions = [b'\x04' + n.to_bytes(4, 'big') for n in
+                       (0, 65536, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF)]
+        expressions.append(bytes.fromhex('240101'))  # -1
+        for segment in ('code', 'data'):
+            for expression in expressions:
+                with self.subTest(segment=segment, expression=expression):
+                    data = object_file(**{segment: bytes.fromhex('fd0000f3')}, expressions=[expression])
+                    (self.root / 'unit.o').write_bytes(data)
+                    (self.root / 'second').write_bytes(b'previous second')
+                    result = self.run_tool('xlnk', 'pad{size=1}\noutput{file=second}\n'
+                                           'link{file=unit.o,origin=0}\n', limited=True)
+                    self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertIn(b'storage size', result.stderr)
+                    self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
+
+    def test_valid_storage_count_boundaries(self):
+        for count in (1, 65535):
+            with self.subTest(count=count):
+                data = object_file(code=bytes.fromhex('fd0000f3'),
+                                   expressions=[b'\x04' + count.to_bytes(4, 'big')])
+                (self.root / 'unit.o').write_bytes(data)
+                result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n', limited=True)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual((self.root / 'output').read_bytes(), b'\0' * count)
+
+    def test_rejected_command_line_definitions_release_their_values(self):
+        cases = [(['-DValue=1', '-DValue=2'], '.DB Value\n', b'\x01', b'already defined'),
+                 (['-DValue=1', '-DValue'], '.DB Value\n', b'\x01', b'already defined'),
+                 (['-DValue="first"', '-DValue="second"'], '.DB Value\n', b'first', b'already defined'),
+                 (['-Dbad-name=3'], '.DB 0\n', b'\0', b'not a valid identifier'),
+                 (['-Dbad-name="unused"'], '.DB 0\n', b'\0', b'not a valid identifier')]
+        for arguments, source, expected, diagnostic in cases:
+            with self.subTest(arguments=arguments):
+                result = self.run_tool('xasm', source, arguments=arguments)
+                # Existing CLI behavior ignores rejected definitions and keeps
+                # the first value. LeakSanitizer checks ownership on these paths.
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertIn(diagnostic, result.stderr)
+                self.assertEqual((self.root / 'output').read_bytes(), expected)
 
     @staticmethod
     def object_with_metadata():

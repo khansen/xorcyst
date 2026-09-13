@@ -776,10 +776,12 @@ parse_arguments (int argc, char **argv)
                     } else {
                         /* Error, redefinition */
                         fprintf(stderr, "--ident: `%s' already defined\n", id);
+                        astnode_finalize(val);
                     }
                 } else {
                     /* Error, bad identifier */
                     fprintf(stderr, "--ident: `%s' is not a valid identifier\n", id);
+                    astnode_finalize(val);
                 }
             }
             break;

@@ -44,8 +44,9 @@ static FILE *copy_fopen(const char *path, const char *mode, const char *function
 }
 static void *link_malloc(size_t size, const char *function)
 {
-    return strcmp(function, "register_one_local") == 0 && fault("local_name", NULL)
-        ? NULL : malloc(size);
+    if ((strcmp(function, "register_one_local") == 0 && fault("local_name", NULL))
+        || (strcmp(function, "eval_recursive") == 0 && fault("operand_eval", NULL))) return NULL;
+    return malloc(size);
 }
 static size_t copy_fread(void *data, size_t size, size_t count, FILE *fp)
 {
@@ -72,9 +73,16 @@ static size_t copy_fwrite(const void *data, size_t size, size_t count, FILE *fp)
 static int copy_ferror(FILE *fp) { return fp == failed_input || ferror(fp); }
 static int copy_fclose(FILE *fp, const char *function)
 {
+    static int planning_close_failed;
     int result;
     if (fp == failed_input) failed_input = NULL;
     result = fclose(fp);
+    if (!planning_close_failed
+        && (strcmp(function, "inc_offset_copy") == 0 || strcmp(function, "plan_copy_input") == 0)
+        && fault("plan_close", NULL)) {
+        planning_close_failed = 1;
+        return EOF;
+    }
     return strcmp(function, "copy_to_output") == 0 && fault("read_close", NULL) ? EOF : result;
 }
 #define fread copy_fread
