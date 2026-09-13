@@ -101,6 +101,20 @@ class InputHandling(unittest.TestCase):
                   'ENUM Values\nOne\nTwo\nENDE\nRECORD Bits first:1,rest:7\n'
                   'Port .EQU $10\nMACRO Load\nLDA Port\nENDM\n'
                   'DATASEG\nBuffer BYTE\nCODESEG\n.ORG $8000\nEntry:\nLoad\nRTS\nEND\n')
+        self.check_symbol_allocation_failures(source)
+
+    def test_anonymous_union_allocation_failures_preserve_ast_ownership(self):
+        # Sweep both the anonymous symbol's insertion and its nested scope
+        # creation. Linux LeakSanitizer also checks cleanup of the attached AST.
+        source = ('STRUC Container\nBefore BYTE\nUNION\n'
+                  'ByteValue BYTE\nWordValue WORD\nENDS\nAfter BYTE\nENDS\n'
+                  '.ORG $8000\n.DB sizeof(Container)\nEND\n')
+        result = self.run_tool('xasm', source)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), b'\x04')
+        self.check_symbol_allocation_failures(source)
+
+    def check_symbol_allocation_failures(self, source):
         for function in ('symtab_create', 'symtab_enter', 'symtab_push'):
             for index in range(100):
                 with self.subTest(function=function, index=index):

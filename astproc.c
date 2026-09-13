@@ -2996,6 +2996,7 @@ static void enter_union_fields(symtab_entry *, astnode *);
  * @param n Node of type UNION_DECL_NODE
  * @param offset Current parent structure offset
  * @param plist Ordered list of parent structure's fields
+ * The main AST owns n, which remains attached to its structure on every path.
  */
 astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list ***plist, astnode *struc_id)
 {
