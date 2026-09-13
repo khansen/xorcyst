@@ -4711,6 +4711,7 @@ python3 "$ROOT_DIR/tests/test_dependencies.py" "$XASM"
 python3 "$ROOT_DIR/tests/test_fceux_nl.py" "$XASM"
 python3 "$ROOT_DIR/tests/test_output_failures.py"
 python3 "$ROOT_DIR/tests/test_linker_outputs.py"
+python3 "$ROOT_DIR/tests/test_inputs.py"
 python3 "$ROOT_DIR/tests/test_build_configuration.py"
 
 echo "All regression tests passed"

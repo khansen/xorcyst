@@ -257,6 +257,68 @@ static void test_scopes_and_type_enumeration(void)
     symtab_finalize(global);
 }
 
+extern void test_symtab_fail_after(int index);
+
+static void test_stack(void)
+{
+    symtab *tables[1024];
+    int i;
+    assert(symtab_pop() == NULL);
+    assert(symtab_lookup("missing") == NULL);
+    assert(symtab_global_lookup("missing") == NULL);
+    assert(symtab_size() == 0);
+    assert(!symtab_push(NULL));
+    for (i = 0; i < 1024; i++) {
+        tables[i] = symtab_create();
+        assert(tables[i] != NULL);
+        assert(tables[i]->parent == (i == 0 ? NULL : tables[i - 1]));
+    }
+    for (i = 1023; i >= 0; i--) {
+        assert(symtab_tos() == tables[i]);
+        assert(symtab_pop() == tables[i]);
+        symtab_finalize(tables[i]);
+    }
+    assert(symtab_pop() == NULL);
+}
+
+static void test_allocation_failures(void)
+{
+    symtab *table;
+    symtab_entry *original;
+    int i;
+    for (i = 0; i < 2; i++) {
+        test_symtab_fail_after(i); /* Table allocation, then initial stack allocation. */
+        assert(symtab_create() == NULL);
+        assert(symtab_failed());
+        assert(symtab_tos() == NULL && symtab_pop() == NULL);
+    }
+    test_symtab_fail_after(-1);
+    table = symtab_create();
+    original = enter_key(1);
+    for (i = 0; i < 2; i++) {
+        astnode *definition = integer(42);
+        test_symtab_fail_after(i); /* Entry allocation, then identifier allocation. */
+        assert(symtab_enter("New", CONSTANT_SYMBOL, definition, 0) == NULL);
+        assert(symtab_failed());
+        assert(symtab_lookup("New") == NULL);
+        assert(symtab_lookup("Key00001") == original);
+        assert(symtab_size() == 1 && table->root == original);
+        assert(definition->integer == 42); /* Failed insertion leaves ownership with the caller. */
+        astnode_finalize(definition);
+        check_balance(table, 1);
+    }
+    test_symtab_fail_after(-1);
+    for (i = 1; i < 32; i++) assert(symtab_push(table));
+    test_symtab_fail_after(0);
+    assert(!symtab_push(table)); /* Growth must not consume a stack slot on failure. */
+    assert(symtab_tos() == table && table->parent == NULL);
+    test_symtab_fail_after(-1);
+    assert(symtab_push(table));
+    for (i = 0; i < 33; i++) assert(symtab_pop() == table);
+    assert(symtab_pop() == NULL);
+    symtab_finalize(table);
+}
+
 int main(int argc, char **argv)
 {
     assert(argc == 2);
@@ -264,6 +326,8 @@ int main(int argc, char **argv)
     else if (strcmp(argv[1], "ordered") == 0) test_ordered_and_permuted_keys();
     else if (strcmp(argv[1], "ownership") == 0) test_owned_payloads_and_deep_successors();
     else if (strcmp(argv[1], "scopes") == 0) test_scopes_and_type_enumeration();
+    else if (strcmp(argv[1], "stack") == 0) test_stack();
+    else if (strcmp(argv[1], "allocation") == 0) test_allocation_failures();
     else return 1;
     assert(symtab_tos() == NULL);
     return 0;

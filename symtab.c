@@ -50,12 +50,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #define SAFE_FREE(a) if (a) { free(a); a = NULL; }
 
 /* Stack of symbol tables */
-static symtab *symtab_stack[32] = { NULL };
-static int stack_index = 0;
+static symtab **symtab_stack;
+static size_t stack_index, stack_capacity;
+static int allocation_failed;
+
+int symtab_failed(void) { return allocation_failed; }
 
 static void symtab_entry_finalize(symtab_entry *);
 
@@ -279,11 +283,13 @@ static symtab_entry *binary_search(symtab_entry *p, const char *id)
 static symtab_entry *lookup(symtab *st, const char *id, int recurse)
 {
     symtab_entry *e;
-    do {
+    if (id == NULL) return NULL;
+    while (st != NULL) {
         e = binary_search(st->root, id);
         if (e != NULL) { return e; }
+        if (!recurse) break;
         st = st->parent;
-    } while (recurse && st);
+    }
     return NULL;
 }
 
@@ -308,7 +314,7 @@ symtab_entry *symtab_lookup_recursive(const char *id)
  */
 symtab_entry *symtab_global_lookup(const char *id)
 {
-    return lookup(symtab_stack[0], id, 0);
+    return lookup(stack_index != 0 ? symtab_stack[0] : NULL, id, 0);
 }
 
 /**
@@ -322,7 +328,9 @@ symtab_entry *symtab_enter(const char *id, symbol_type type, astnode *def, int f
 {
     symtab *st = symtab_tos();
     /* See if this id already exists */
-    symtab_entry *e = symtab_lookup(id);
+    symtab_entry *e;
+    if (st == NULL || id == NULL) return NULL;
+    e = symtab_lookup(id);
     if (e != NULL) {
         /* Duplicate symbol. */
 //      printf("error: symtab_enter(): `%s' already exists\n", id);
@@ -334,9 +342,12 @@ symtab_entry *symtab_enter(const char *id, symbol_type type, astnode *def, int f
     if (e != NULL) {
         /* Set its fields */
         e->id = (char *)malloc(strlen(id)+1);
-        if (e->id != NULL) {
-            strcpy(e->id, id);
+        if (e->id == NULL) {
+            free(e);
+            allocation_failed = 1;
+            return NULL;
         }
+        strcpy(e->id, id);
         e->type = type;
         e->flags = flags;
         e->ref_count = 0;
@@ -361,7 +372,8 @@ symtab_entry *symtab_enter(const char *id, symbol_type type, astnode *def, int f
             rebalance(st, e->parent);
         }
     }
-    /* Return the newly created symbol table entry */
+    if (e == NULL) allocation_failed = 1;
+    /* Ownership of def transfers only after successful insertion. */
     return e;
 }
 
@@ -459,31 +471,50 @@ symtab *symtab_tos()
 /**
  * Creates a symbol table and pushes it on the symbol table stack.
  */
-symtab *symtab_create()
+symtab *symtab_create(void)
 {
-    symtab *st = (symtab *)malloc(sizeof(symtab));
-    if (st != NULL) {
-        st->root = NULL;
-        st->parent = symtab_tos();
-        symtab_push(st);
-    }
+    symtab *st;
+    if (stack_index == 0) allocation_failed = 0;
+    st = malloc(sizeof(*st));
+    if (st == NULL) { allocation_failed = 1; return NULL; }
+    st->root = NULL;
+    st->parent = symtab_tos();
+    if (!symtab_push(st)) { free(st); return NULL; }
     return st;
 }
 
-/**
- * Pushes a symbol table onto the stack.
- */
-void symtab_push(symtab *st)
+/* Failed pushes leave the active scope unchanged. A table's lexical parent
+   is independent of the stack, which can activate the same table repeatedly. */
+int symtab_push(symtab *st)
 {
+    if (st == NULL) return 0;
+    if (stack_index == stack_capacity) {
+        size_t capacity = stack_capacity == 0 ? 32 : stack_capacity * 2;
+        symtab **stack;
+        if (capacity < stack_capacity || capacity > SIZE_MAX / sizeof(*stack)) {
+            allocation_failed = 1;
+            return 0;
+        }
+        stack = realloc(symtab_stack, capacity * sizeof(*stack));
+        if (stack == NULL) { allocation_failed = 1; return 0; }
+        symtab_stack = stack;
+        stack_capacity = capacity;
+    }
     symtab_stack[stack_index++] = st;
+    return 1;
 }
 
-/**
- * Pops a symbol table from the stack.
- */
-symtab *symtab_pop()
+symtab *symtab_pop(void)
 {
-    return symtab_stack[--stack_index];
+    symtab *st;
+    if (stack_index == 0) return NULL;
+    st = symtab_stack[--stack_index];
+    if (stack_index == 0) {
+        free(symtab_stack);
+        symtab_stack = NULL;
+        stack_capacity = 0;
+    }
+    return st;
 }
 
 /**
@@ -508,7 +539,7 @@ int symtab_type_count(symbol_type type)
 {
     symtab *st = symtab_tos();
     int count = 0;
-    symtab_entry *e = binary_min(st->root);
+    symtab_entry *e = binary_min(st != NULL ? st->root : NULL);
     while (e != NULL) {
         if ((type == ANY_SYMBOL) || (e->type == type)) {
             count++;

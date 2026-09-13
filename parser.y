@@ -77,6 +77,14 @@ static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mod
     }
     return node;
 }
+static void discard_parsed_nodes(astnode *node)
+{
+    while (node != NULL) {
+        astnode *next = node->next_sibling;
+        astnode_finalize(node);
+        node = next;
+    }
+}
 %}
 
 %union {
@@ -90,6 +98,8 @@ static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mod
 };
 
 %define parse.error verbose
+%destructor { discard_parsed_nodes($$); } <node>
+%destructor { discard_parsed_nodes($$.head); } <node_list>
 
 %token <integer> INTEGER_LITERAL
 %token <string> STRING_LITERAL
@@ -136,7 +146,7 @@ static astnode *parsed_instruction(instruction_mnemonic mnemonic, addressing_mod
 %start assembly_unit
 %%
 assembly_unit:
-    statement_list end_opt { root_node = astnode_create_list($1.head); }
+    statement_list end_opt { root_node = astnode_create_list($1.head); $$ = NULL; }
     ;
 
 end_opt:

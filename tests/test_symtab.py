@@ -30,7 +30,8 @@ class SymbolTable(unittest.TestCase):
             raise AssertionError(result.stderr.decode())
         sources = re.search(r'^xasm_SOURCES = (.*?)(?=\n\n)',
                             (REPO / 'Makefile.am').read_text(), re.M | re.S)[1]
-        sources = [REPO / name for name in sources.replace('\\\n', ' ').split()
+        sources = [REPO / ('tests/test_symtab_alloc.c' if name == 'symtab.c' else name)
+                   for name in sources.replace('\\\n', ' ').split()
                    if name.endswith('.c') and name != 'xasm.c']
         command = [*compiler, *map(str, sources), str(REPO / 'tests/test_symtab.c'),
                    str(main), '-o', str(cls.executable)]
@@ -55,6 +56,12 @@ class SymbolTable(unittest.TestCase):
 
     def test_scope_lookup_and_type_enumeration(self):
         self.run_case('scopes')
+
+    def test_growing_scope_stack_and_empty_stack_operations(self):
+        self.run_case('stack')
+
+    def test_allocation_failures_preserve_stack_entries_and_definition_ownership(self):
+        self.run_case('allocation')
 
 
 if __name__ == '__main__':

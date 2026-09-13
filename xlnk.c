@@ -1195,8 +1195,7 @@ static void inc_pc_dsb(const unsigned char *b, void *arg)
         err("unexpected string operand (`%s') to storage directive", c.string);
     }
     else {
-        //err("unresolved symbol");
-        assert(0);
+        err("storage size could not be evaluated");
     }
 
     finalize_constant(&c);
@@ -1472,7 +1471,7 @@ static void write_dsb(const unsigned char *b, void *arg)
     exid = get_2(b, &i);
     /* Evaluate expression */
     eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
+    if (c.type != XASM_INTEGER_CONSTANT) { err("storage size could not be evaluated"); finalize_constant(&c); return; }
     if (c.integer < 0) {
         err("negative count");
     } else if (c.integer > 0) {
@@ -1791,7 +1790,7 @@ static void asm_write_dsb(const unsigned char *b, void *arg)
     exid = get_2(b, &i);
     /* Evaluate expression */
     eval_expression(args->xu, exid, &c);
-    assert(c.type == XASM_INTEGER_CONSTANT);
+    if (c.type != XASM_INTEGER_CONSTANT) { err("storage size could not be evaluated"); finalize_constant(&c); return; }
     if (c.integer < 0) {
         err("negative count");
     }
@@ -1922,6 +1921,10 @@ static void create_local_array(int size, local_array *la)
     la->size = size;
     if (size > 0) {
         la->entries = (local *)calloc(size, sizeof(local));
+        if (la->entries == NULL) {
+            la->size = 0;
+            err("out of memory creating local symbol array");
+        }
     }
     else {
         la->entries = NULL;
@@ -2015,6 +2018,7 @@ static void register_one_local(const unsigned char *b, void *arg)
     if (lptr->flags & XASM_LABEL_FLAG_EXPORT) {
         /* Get the length of the name */
         len = get_1(b, &i) + 1;
+        check_bounds(b, i, len);
         /* Allocate space for name */
         lptr->name = (char *)malloc( len + 1 );
         if (lptr->name != NULL) {
@@ -2070,7 +2074,12 @@ static void register_locals(const unsigned char *b, int size, local_array *la, x
         NULL    /* CMD_WIDE_INSTR */
     };
     /* Create array of locals */
-    create_local_array(count_locals(b, size), la);
+    {
+        int count = count_locals(b, size);
+        if (err_count != 0) return;
+        create_local_array(count, la);
+        if (err_count != 0) return;
+    }
     /* Prepare args */
     lptr = la->entries;
     lpptr = &lptr;
@@ -2460,6 +2469,53 @@ static void register_ram_blocks(xlnk_script *sc)
  * @param c Command of type LINK_COMMAND
  * @param arg Pointer to unit index
  */
+/* Validate object references before any address calculation indexes their arrays. */
+static void validate_object_expression(const xunit *u, const xasm_expression *expr)
+{
+    if (expr == NULL) { err("missing object expression"); return; }
+    switch (expr->type) {
+        case XASM_LOCAL_EXPRESSION:
+            if (expr->local_id < 0 || expr->local_id >= u->data_locals.size + u->code_locals.size)
+                err("invalid local symbol index in object expression");
+            break;
+        case XASM_EXTERNAL_EXPRESSION:
+            if (expr->extrn_id < 0 || expr->extrn_id >= u->_unit_.ext_count)
+                err("invalid external symbol index in object expression");
+            break;
+        case XASM_OPERATOR_EXPRESSION:
+            validate_object_expression(u, expr->op_expr.lhs);
+            if (expr->op_expr.rhs != NULL) validate_object_expression(u, expr->op_expr.rhs);
+            break;
+        default: break;
+    }
+}
+
+static void validate_object_operand(const unsigned char *bytes, void *arg)
+{
+    xunit *u = arg;
+    int offset = 1, index;
+    if (bytes[0] == XASM_CMD_INSTR || bytes[0] == XASM_CMD_WIDE_INSTR) {
+        int opcode = get_1(bytes, &offset);
+        if (opcode_addressing_mode(opcode) == INVALID_MODE || opcode_length(opcode) < 2)
+            err("invalid instruction opcode in object file");
+    }
+    index = get_2(bytes, &offset);
+    if (index >= u->_unit_.expr_count) err("invalid expression index in object bytecode");
+}
+
+static void validate_object(xunit *u)
+{
+    int i;
+    xasm_bytecodeproc handlers[XASM_CMD_WIDE_INSTR - XASM_CMD_END + 1] = {0};
+    const int operands[] = {XASM_CMD_INSTR, XASM_CMD_WIDE_INSTR, XASM_CMD_DB,
+                           XASM_CMD_DW, XASM_CMD_DD, XASM_CMD_DSB};
+    for (i = 0; i < (int)(sizeof(operands) / sizeof(*operands)); i++)
+        handlers[operands[i] - XASM_CMD_END] = validate_object_operand;
+    bytecode_walk(u->_unit_.dataseg.bytes, u->_unit_.dataseg.size, handlers, u);
+    bytecode_walk(u->_unit_.codeseg.bytes, u->_unit_.codeseg.size, handlers, u);
+    for (i = 0; i < u->_unit_.expr_count; i++) validate_object_expression(u, u->_unit_.expressions[i]);
+}
+
 static void register_one_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
@@ -2477,11 +2533,16 @@ static void register_one_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
         return;
     }
     xu->loaded = 1;
+    (*i)++;
     verbose(1, "  unit `%s' loaded", file);
 
     verbose(1, "    registering local symbols...");
     register_locals(xu->_unit_.dataseg.bytes, xu->_unit_.dataseg.size, &xu->data_locals, xu);
     register_locals(xu->_unit_.codeseg.bytes, xu->_unit_.codeseg.size, &xu->code_locals, xu);
+
+    if (err_count != 0) return;
+    validate_object(xu);
+    if (err_count != 0) return;
 
     verbose(1, "    registering public symbols...");
     enter_exported_constants(&xu->_unit_);
@@ -2489,8 +2550,6 @@ static void register_one_unit(xlnk_script *s, xlnk_script_command *c, void *arg)
     enter_exported_locals(&xu->code_locals, &xu->_unit_);
 
     hashtab_put(unit_hash, (void*)file, xu);
-    /* Increment unit index */
-    (*i)++;
 }
 
 /**
@@ -3125,8 +3184,8 @@ int main(int argc, char **argv)
 
     verbose(1, "parsing linker script...");
     if (xlnk_script_parse(program_args.input_file, &sc) == 0) {
-        /* Something bad happened when parsing script, halt */
-        return(1);
+        xlnk_script_finalize(&sc);
+        return 1;
     }
 
     verbose(1, "registering RAM blocks...");
@@ -3186,6 +3245,7 @@ int main(int argc, char **argv)
             xasm_unit_finalize( &units[i]._unit_ );
         }
     }
+    free(units);
     hashtab_finalize(label_hash);
     hashtab_finalize(constant_hash);
     hashtab_finalize(unit_hash);

@@ -772,7 +772,7 @@ parse_arguments (int argc, char **argv)
                     symtab_entry *e;
                     e = symtab_lookup(id);
                     if (e == NULL) {
-                        symtab_enter(id, CONSTANT_SYMBOL, val, 0);
+                        if (symtab_enter(id, CONSTANT_SYMBOL, val, 0) == NULL) astnode_finalize(val);
                     } else {
                         /* Error, redefinition */
                         fprintf(stderr, "--ident: `%s' already defined\n", id);
@@ -1524,10 +1524,16 @@ int main(int argc, char *argv[]) {
 
     /* Create global symbol table (auto-pushed on stack) */
     symbol_table = symtab_create();
+    if (symbol_table == NULL) {
+        fprintf(stderr, "error: out of memory creating symbol table\n");
+        free(xasm_path);
+        return 1;
+    }
 
     /* Parse our arguments. */
     dependencies_arguments(argc, argv);
     parse_arguments (argc, argv);
+    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
     /* Whether anything requested needs capture_instruction_provenance()
        installed (see prepare_xref_instruction_provenance): computed once
@@ -1578,17 +1584,14 @@ int main(int argc, char *argv[]) {
  /* Parse it into a syntax tree */
     //yydebug = -1;
     verbose("Parsing input...");
-    yyparse();
+    if (yyparse() != 0) { exit_code = 1; goto cleanup; }
 
     if (root_node == NULL) {
         if (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest)
             root_node = astnode_create(LIST_NODE, loc_preserve);
         if (root_node == NULL) {
-            clear_xref_instruction_provenance();
-            symtab_finalize(symbol_table);
-            dependencies_clear();
-            free(xasm_path);
-            return (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest) ? 3 : 0;
+            exit_code = (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest) ? 3 : 0;
+            goto cleanup;
         }
     }
 
@@ -1602,6 +1605,7 @@ int main(int argc, char *argv[]) {
     /* First pass does a lot of stuff. */
     verbose("First pass...");
     astproc_first_pass(root_node);
+    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
     if (xasm_args.xref_file != NULL
         && xasm_args.xref_format == XREF_FORMAT_JSON
         && !finish_xref_data_directive_provenance(root_node)) {
@@ -1617,15 +1621,18 @@ int main(int argc, char *argv[]) {
     /* Second pass does more stuff. */
     verbose("Second pass...");
     astproc_second_pass(root_node);
+    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
     /* Third pass is fun. */
     verbose("Third pass...");
     astproc_third_pass(root_node);
+    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
     if (xasm_args.pure_binary) {
         /* Do another pass to prepare for writing pure 6502 */
         verbose("Fourth pass...");
         astproc_fourth_pass(root_node);
+        if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
     }
 
     /* Print the final AST (debugging) */
@@ -1848,6 +1855,9 @@ int main(int argc, char *argv[]) {
         exit_code = run_compare(root_node);
     }
 
+    goto cleanup;
+symbol_failure:
+    fprintf(stderr, "error: out of memory building symbol table\n");
 cleanup:
     free_analysis(analysis);
     free_analysis_outputs(analysis_outputs);

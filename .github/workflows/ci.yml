@@ -50,6 +50,8 @@ jobs:
       TEST_SYMTAB_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_BACKEND_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_FAULT_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
+      TEST_LINKER_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
+      TEST_INPUT_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -64,4 +66,7 @@ jobs:
           python3 tests/test_symtab.py
           python3 tests/test_backend_performance.py
       - name: Check output and allocation failure paths
-        run: python3 tests/test_output_failures.py
+        run: |
+          python3 tests/test_output_failures.py
+          python3 tests/test_linker_outputs.py
+          python3 tests/test_inputs.py

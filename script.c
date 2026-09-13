@@ -40,6 +40,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <string.h>
 #include "script.h"
@@ -119,7 +120,7 @@ static int is_valid_command_arg(xlnk_command_type type, const char *candidate_ar
         { XLNK_PAD_COMMAND,      pad_args }
     };
     /* Find arg array for command */
-    for (i=0; (int)ok_args[i].type != -1; i++) {
+    for (i=0; i < (int)(sizeof(ok_args) / sizeof(*ok_args)); i++) {
         if (ok_args[i].type == type) {
             /* Now go through array of valid args for command */
             args = ok_args[i].args;
@@ -172,7 +173,7 @@ static int is_delim(unsigned char c, const char *delim)
  * @param delim Set of delimiters which may mark end of token
  * @param dest Where to store the grabbed token
  */
-static void get_token(const char *s, int *i, char *delim, char *dest)
+static int get_token(const char *s, int *i, const char *delim, char *dest, size_t capacity)
 {
     unsigned char c;
     int j = 0;
@@ -184,7 +185,7 @@ static void get_token(const char *s, int *i, char *delim, char *dest)
         if (is_delim(c, delim)) {
             /* End token */
             dest[j] = '\0';
-            return;
+            return 1;
         }
         else {
             /* check if escape character */
@@ -193,6 +194,7 @@ static void get_token(const char *s, int *i, char *delim, char *dest)
                 (*i)++;
                 /* Get next character */
                 c = s[*i];
+                if (c == 0 || c == '\n') return 0;
                 /* Convert to C escape char if applicable */
                 switch (c) {
                     case '0':   c = '\0';   break;
@@ -204,6 +206,7 @@ static void get_token(const char *s, int *i, char *delim, char *dest)
                     case 'r':   c = '\r';   break;
                 }
             }
+            if ((size_t)j + 1 >= capacity || c == 0) return 0;
             /* Copy to dest */
             dest[j++] = c;
             /* Increase i */
@@ -325,11 +328,13 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
     xlnk_script_command *cmd;
     xlnk_command_type type;
     int i;
-    char line[1024];
+    char *line = NULL;
+    size_t capacity = 0;
+    ssize_t length;
     char cmdname[256];
     char argname[256];
     char argvalue[256];
-    static int lineno = 0;
+    int lineno = 0;
     sc->name = filename;
     sc->first_command = NULL;
     /* Attempt to open script */
@@ -339,16 +344,23 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
         return 0;
     }
     /* Read commands */
-    while (fgets(line, 1023, fp) != NULL) {
+    while ((length = getline(&line, &capacity, fp)) >= 0) {
         /* Increase line number */
         lineno++;
+        if (length > INT_MAX || memchr(line, 0, (size_t)length) != NULL) {
+            err(filename, lineno, "invalid script line");
+            continue;
+        }
         /* Skip white space */
         i = 0;
         eat_ws(line, &i);
         /* Skip line if comment or end */
         if ( (line[i] == '#') || (line[i] == '\0') || (line[i] == '\n') ) continue;
         /* Get command name */
-        get_token(line, &i, " \t{", cmdname);
+        if (!get_token(line, &i, " \t{", cmdname, sizeof(cmdname))) {
+            err(filename, lineno, "token too long or incomplete escape");
+            goto next_line;
+        }
         /* Check that it's a valid command */
         if (strlen(cmdname) == 0) {
             err(filename, lineno, "command expected");
@@ -373,6 +385,9 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
                     cmd->line = lineno;
                     /* Add command to script */
                     add_command(sc, cmd);
+                } else {
+                    err(filename, lineno, "out of memory creating command");
+                    goto next_line;
                 }
             }
         }
@@ -386,8 +401,9 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
         i++;    /* Eat '{' */
         /* Get argument(s) */
         while (line[i] != '}') {
-            if (line[i] == '\0') {
-                break;
+            if (line[i] == '\0' || line[i] == '\n') {
+                err(filename, lineno, "} expected");
+                goto next_line;
             }
             /* */
             if (cmd->first_arg != NULL) {
@@ -396,33 +412,39 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
                 /* Next token should be , */
                 if (line[i] != ',') {
                     err(filename, lineno, ", expected");
-                    continue;
+                    goto next_line;
                 }
                 i++;    /* Eat , */
             }
             /* Skip white space */
             eat_ws(line, &i);
             /* Get argument name */
-            get_token(line, &i, " \t=", argname);
+            if (!get_token(line, &i, " \t=", argname, sizeof(argname))) {
+                err(filename, lineno, "token too long or incomplete escape");
+                goto next_line;
+            }
             if (strlen(argname) == 0) {
                 err(filename, lineno, "argument name expected");
-                continue;
+                goto next_line;
             }
             /* Skip white space */
             eat_ws(line, &i);
             /* Next token should be '=' */
             if (line[i] != '=') {
                 err(filename, lineno, "= expected");
-                continue;
+                goto next_line;
             }
             i++;    /* Eat '=' */
             /* Skip white space */
             eat_ws(line, &i);
             /* Get value */
-            get_token(line, &i, " \t},", argvalue);
+            if (!get_token(line, &i, " \t},", argvalue, sizeof(argvalue))) {
+                err(filename, lineno, "token too long or incomplete escape");
+                goto next_line;
+            }
             if (strlen(argvalue) == 0) {
                 err(filename, lineno, "value expected for argument `%s'", argname);
-                continue;
+                goto next_line;
             }
             // Check if the argument name is valid for this command */
             if (is_valid_command_arg(cmd->type, argname) ) {
@@ -431,26 +453,38 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
                 if (arg != NULL) {
                     arg->key = (char *)malloc( strlen(argname)+1 );
                     arg->value = (char *)malloc( strlen(argvalue)+1 );
+                    if (arg->key == NULL || arg->value == NULL) {
+                        free(arg->key);
+                        free(arg->value);
+                        free(arg);
+                        err(filename, lineno, "out of memory creating argument");
+                        goto next_line;
+                    }
                     /* Copy fields */
                     strcpy(arg->key, argname);
                     strcpy(arg->value, argvalue);
                     /* Store argument in list */
                     add_arg(cmd, arg);
+                } else {
+                    err(filename, lineno, "out of memory creating argument");
+                    goto next_line;
                 }
             }
             else {
                 /* Not valid argument name */
                 err(filename, lineno, "invalid argument `%s'", argname);
-                continue;
+                goto next_line;
             }
             /* Skip white space */
             eat_ws(line, &i);
         }
+next_line:
+        ;
     }
-    /* Close script */
-    fclose(fp);
-    /* Success */
-    return 1;
+    if (!feof(fp) || ferror(fp)) err(filename, lineno, "could not read script");
+    if (fclose(fp) != 0) err(filename, lineno, "could not close script");
+    free(line);
+    return err_count == 0;
 }
 
 /**
