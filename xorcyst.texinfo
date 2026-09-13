@@ -1248,6 +1248,11 @@ copy@{file=header.bin@}
 
 You can also use the @code{copy}-command inside banks of course, anywhere you like. In this case the internal Program Counter and bank offset will be advanced in the same manner as when a unit is linked and copied to the output with the @code{link}-command. The only difference is that you can tell in advance how much the offsets will be increased (by looking at the size of the file that is copied).
 
+Files used by @code{copy} must retain their size during linking, including files
+replaced by earlier output commands. A size change fails the current output
+because it would invalidate the addresses calculated during layout. Files
+published by earlier output commands remain in place.
+
 @section Padding the output
 
 You can pad the output explicitly with the @code{pad}-command. This will write an appropriate number of zero-bytes to the output file. The following are the (mutually exclusive) arguments to the command.

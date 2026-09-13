@@ -2621,6 +2621,7 @@ static void copy_to_output(xlnk_script *s, xlnk_script_command *c, void *arg)
     FILE *cf;
     unsigned char bytes[8192];
     size_t count;
+    uintmax_t copied = 0;
     if (output->stream == NULL) {
         scripterr(s, c, "no output open");
         return;
@@ -2632,15 +2633,24 @@ static void copy_to_output(xlnk_script *s, xlnk_script_command *c, void *arg)
         return;
     }
     while ((count = fread(bytes, 1, sizeof(bytes), cf)) != 0) {
+        if (count > (uintmax_t)c->planned_copy_size - copied) {
+            scripterr(s, c, "copy input `%s' changed size after layout planning", file);
+            break;
+        }
         if (!advance_copy_offsets(s, c, count)) break;
         if (fwrite(bytes, 1, count, output->stream) != count) {
             scripterr(s, c, "could not write `%s'", output->path);
             break;
         }
+        copied += count;
     }
     if (ferror(cf)) scripterr(s, c, "could not read `%s'", file);
     if (fclose(cf) != 0) scripterr(s, c, "could not close `%s'", file);
     if (err_count != 0) return;
+    if (copied != (uintmax_t)c->planned_copy_size) {
+        scripterr(s, c, "copy input `%s' changed size after layout planning", file);
+        return;
+    }
     if (bank_offset > bank_size) {
         scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
     }
@@ -3025,23 +3035,26 @@ static void generate_assembly_output(xlnk_script *sc, FILE *fp)
 static void inc_offset_copy(xlnk_script *s, xlnk_script_command *c, void *arg)
 {
     const char *file;
-    FILE *fp;
     require_arg(s, c, "file", file);
-    fp = fopen(file, "rb");
-    if (fp == NULL) {
-        scripterr(s, c, "could not open `%s' for reading", file);
-    }
-    else {
+    /* Keep every relocation pass and the output stream on the same layout. */
+    if (c->planned_copy_size < 0) {
+        FILE *fp = fopen(file, "rb");
         long size;
+        if (fp == NULL) {
+            scripterr(s, c, "could not open `%s' for reading", file);
+            return;
+        }
         if (fseek(fp, 0, SEEK_END) != 0 || (size = ftell(fp)) < 0) {
             scripterr(s, c, "could not determine size of `%s'", file);
         } else {
-            advance_copy_offsets(s, c, (uintmax_t)size);
+            c->planned_copy_size = size;
         }
         if (fclose(fp) != 0) scripterr(s, c, "could not close `%s'", file);
-        if (bank_offset > bank_size) {
-            scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
-        }
+    }
+    if (c->planned_copy_size < 0
+        || !advance_copy_offsets(s, c, (uintmax_t)c->planned_copy_size)) return;
+    if (bank_offset > bank_size) {
+        scripterr(s, c, "bank size (%d) exceeded by %d bytes", bank_size, bank_offset - bank_size);
     }
 }
 

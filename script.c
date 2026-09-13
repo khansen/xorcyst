@@ -384,6 +384,7 @@ int xlnk_script_parse(const char *filename, xlnk_script *sc)
                     cmd->first_arg = NULL;
                     /* Store line number */
                     cmd->line = lineno;
+                    cmd->planned_copy_size = -1;
                     /* Add command to script */
                     add_command(sc, cmd);
                 } else {

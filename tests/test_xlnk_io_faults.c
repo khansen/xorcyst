@@ -23,6 +23,25 @@ static int fault(const char *operation, const char *path)
 }
 
 static FILE *failed_input;
+static FILE *copy_fopen(const char *path, const char *mode, const char *function)
+{
+    if (strcmp(function, "copy_to_output") == 0) {
+        const char *selected = getenv("XLNK_TEST_FAULT");
+        if (selected != NULL && (strcmp(selected, "copy_grow") == 0
+                                 || strcmp(selected, "copy_shrink") == 0)) {
+            FILE *update = fopen(path, "r+b");
+            long size;
+            if (update == NULL || fseek(update, 0, SEEK_END) != 0
+                || (size = ftell(update)) < 1) abort();
+            if (strcmp(selected, "copy_grow") == 0) {
+                if (fputc(0xA5, update) == EOF) abort();
+            } else if (ftruncate(fileno(update), size - 1) != 0) abort();
+            if (fclose(update) != 0) abort();
+            fprintf(stderr, "INJECT %s\n", selected);
+        }
+    }
+    return fopen(path, mode);
+}
 static void *link_malloc(size_t size, const char *function)
 {
     return strcmp(function, "register_one_local") == 0 && fault("local_name", NULL)
@@ -59,12 +78,14 @@ static int copy_fclose(FILE *fp, const char *function)
     return strcmp(function, "copy_to_output") == 0 && fault("read_close", NULL) ? EOF : result;
 }
 #define fread copy_fread
+#define fopen(path, mode) copy_fopen(path, mode, __func__)
 #define ferror copy_ferror
 #define fclose(fp) copy_fclose(fp, __func__)
 #define fwrite copy_fwrite
 #define malloc(size) link_malloc(size, __func__)
 #include "../xlnk.c"
 #undef fread
+#undef fopen
 #undef ferror
 #undef fclose
 #undef fwrite

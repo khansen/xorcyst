@@ -171,6 +171,11 @@ ram{start=0x6000, end=0x6000}    # only if the board has WRAM
 
 <p>You can also use the <code class="code">copy</code>-command inside banks of course, anywhere you like. In this case the internal Program Counter and bank offset will be advanced in the same manner as when a unit is linked and copied to the output with the <code class="code">link</code>-command. The only difference is that you can tell in advance how much the offsets will be increased (by looking at the size of the file that is copied).
 </p>
+<p>Files used by <code class="code">copy</code> must retain their size during linking, including files
+replaced by earlier output commands. A size change fails the current output
+because it would invalidate the addresses calculated during layout. Files
+published by earlier output commands remain in place.
+</p>
 </div>
 <div class="section-level-extent" id="Padding-the-output">
 <h3 class="section"><span>4.7 Padding the output<a class="copiable-link" href="#Padding-the-output"> &para;</a></span></h3>

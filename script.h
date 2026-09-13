@@ -70,6 +70,7 @@ struct tag_xlnk_script_command {
     xlnk_command_type type;
     xlnk_command_arg *first_arg;
     int line;
+    long planned_copy_size; /* COPY layout size; -1 until planned. */
     struct tag_xlnk_script_command *next;
 };
 

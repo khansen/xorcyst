@@ -127,6 +127,9 @@ a later diagnostic-listing error. Any nonzero status means the invocation failed
 These status codes describe xasm. xlnk also returns a nonzero status on input,
 write, close, or publication errors. A linker script publishes each completed
 file when it switches outputs; a later failure does not roll back earlier files.
+Files used by `copy` must retain their size during linking, including files
+replaced by earlier output commands. A size change fails the current output
+because it would invalidate the addresses calculated during layout.
 
 Maintainer builds
 -----------------
