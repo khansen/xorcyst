@@ -1,57 +1,81 @@
-<html lang="en">
+<!DOCTYPE html>
+<html>
+<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
 <head>
-<title>Linker Script Commands - The XORcyst Manual</title>
-<meta http-equiv="Content-Type" content="text/html">
-<meta name="description" content="The XORcyst Manual">
-<meta name="generator" content="makeinfo 4.7">
-<link title="Top" rel="start" href="index.html#Top">
-<link rel="prev" href="Assembler-Directives.html#Assembler-Directives" title="Assembler Directives">
-<link rel="next" href="Object-Code-Format.html#Object-Code-Format" title="Object Code Format">
-<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!-- This is the manual for The XORcyst version 1.7.0.
+
+Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
+<title>Linker Script Commands (The XORcyst Manual)</title>
+
+<meta name="description" content="Linker Script Commands (The XORcyst Manual)">
+<meta name="keywords" content="Linker Script Commands (The XORcyst Manual)">
+<meta name="resource-type" content="document">
+<meta name="distribution" content="global">
+<meta name="Generator" content="texi2any">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<link href="index.html" rel="start" title="Top">
+<link href="index.html#SEC_Contents" rel="contents" title="Table of Contents">
+<link href="index.html" rel="up" title="Top">
+<link href="Object-Code-Format.html" rel="next" title="Object Code Format">
+<link href="Assembler-Directives.html" rel="prev" title="Assembler Directives">
+<style type="text/css">
 <!--
-This is the manual for The XORcyst version 1.6.1.
+a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
+span:hover a.copiable-link {visibility: visible}
+-->
+</style>
 
-Copyright (C) 2004, 2005, 2007, 2008, 2009 Kent Hansen.-->
-<meta http-equiv="Content-Style-Type" content="text/css">
-<style type="text/css"><!--
-  pre.display { font-family:inherit }
-  pre.format  { font-family:inherit }
-  pre.smalldisplay { font-family:inherit; font-size:smaller }
-  pre.smallformat  { font-family:inherit; font-size:smaller }
-  pre.smallexample { font-size:smaller }
-  pre.smalllisp    { font-size:smaller }
-  span.sc { font-variant:small-caps }
-  span.roman { font-family: serif; font-weight: normal; } 
---></style>
+
 </head>
-<body>
-<div class="node">
-<p>
-<a name="Linker-Script-Commands"></a>Next:&nbsp;<a rel="next" accesskey="n" href="Object-Code-Format.html#Object-Code-Format">Object Code Format</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="Assembler-Directives.html#Assembler-Directives">Assembler Directives</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="index.html#Top">Top</a>
-<hr><br>
-</div>
 
-<h2 class="appendix">Appendix C Linker Script Commands</h2>
+<body lang="en">
+<div class="appendix-level-extent" id="Linker-Script-Commands">
+<div class="nav-panel">
+<p>
+Next: <a href="Object-Code-Format.html" accesskey="n" rel="next">Object Code Format</a>, Previous: <a href="Assembler-Directives.html" accesskey="p" rel="prev">Assembler Directives</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
+</div>
+<h2 class="appendix" id="Linker-Script-Commands-1"><span>Appendix C Linker Script Commands<a class="copiable-link" href="#Linker-Script-Commands-1"> &para;</a></span></h2>
 
 <p>The following is an alphabetical listing of the script commands recognized by the linker and the arguments they may take. Note that not all arguments are mandatory and some are mutually exclusive.
+</p>
+<dl class="table">
+<dt><code class="code">bank { size=<var class="var">size</var>, origin=<var class="var">origin-address</var> }</code></dt>
+<dd><p>Start a new bank of size <var class="var">size</var> bytes and set initial relocation address to <var class="var">origin-address</var>.
+</p>
+</dd>
+<dt><code class="code">copy { file=<var class="var">filename</var> }</code></dt>
+<dd><p>Copy contents of <var class="var">filename</var> to output.
+</p>
+</dd>
+<dt><code class="code">link { file=<var class="var">filename</var>, origin=<var class="var">origin-address</var> }</code></dt>
+<dd><p>Relocate code in the unit <var class="var">filename</var> to <var class="var">origin-address</var> and copy the result to output. (If an origin is not specified, the internally managed linker origin is used.)
+</p>
 
-     <dl>
-<dt><code>bank { size=</code><var>size</var><code>, origin=</code><var>origin-address</var><code> }</code><dd>Start a new bank of size <var>size</var> bytes and set initial relocation address to <var>origin-address</var>.
+</dd>
+<dt><code class="code">output { file=<var class="var">filename</var> }</code></dt>
+<dd><p>Set the linker output file.
+</p>
+</dd>
+<dt><code class="code">pad { origin=<var class="var">origin-address</var>, offset=<var class="var">offset</var>, size=<var class="var">size</var> }</code></dt>
+<dd><p>Pad to the given origin or bank offset, or pad <var class="var">size</var> bytes (only one of the arguments should be given).
+</p>
+</dd>
+<dt><code class="code">ram { start=<var class="var">start-address</var>, end=<var class="var">end-address</var> }</code></dt>
+<dd><p>Specify that 6502 RAM in the range <var class="var">start-address</var>...<var class="var">end-address</var> (non-inclusive) may be used by the linker to map contents of data segments.
+</p>
+</dd>
+</dl>
 
-     <br><dt><code>copy { file=</code><var>filename</var><code> }</code><dd>Copy contents of <var>filename</var> to output.
+</div>
+<hr>
+<div class="nav-panel">
+<p>
+Next: <a href="Object-Code-Format.html" accesskey="n" rel="next">Object Code Format</a>, Previous: <a href="Assembler-Directives.html" accesskey="p" rel="prev">Assembler Directives</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
+</div>
 
-     <br><dt><code>link { file=</code><var>filename</var><code>, origin=</code><var>origin-address</var><code> }</code><dd>Relocate code in the unit <var>filename</var> to <var>origin-address</var> and copy the result to output. (If an origin is not specified, the internally managed linker origin is used.)
 
-     <!-- @item options -->
-<br><dt><code>output { file=</code><var>filename</var><code> }</code><dd>Set the linker output file.
 
-     <br><dt><code>pad { origin=</code><var>origin-address</var><code>, offset=</code><var>offset</var><code>, size=</code><var>size</var><code> }</code><dd>Pad to the given origin or bank offset, or pad <var>size</var> bytes (only one of the arguments should be given).
-
-     <br><dt><code>ram { start=</code><var>start-address</var><code>, end=</code><var>end-address</var><code> }</code><dd>Specify that 6502 RAM in the range <var>start-address</var>...<var>end-address</var> (non-inclusive) may be used by the linker to map contents of data segments.
-
-   </dl>
-
-   </body></html>
-
+</body>
+</html>

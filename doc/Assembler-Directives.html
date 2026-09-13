@@ -1,136 +1,232 @@
-<html lang="en">
+<!DOCTYPE html>
+<html>
+<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
 <head>
-<title>Assembler Directives - The XORcyst Manual</title>
-<meta http-equiv="Content-Type" content="text/html">
-<meta name="description" content="The XORcyst Manual">
-<meta name="generator" content="makeinfo 4.7">
-<link title="Top" rel="start" href="index.html#Top">
-<link rel="prev" href="Known-Bugs-and-Limitations.html#Known-Bugs-and-Limitations" title="Known Bugs and Limitations">
-<link rel="next" href="Linker-Script-Commands.html#Linker-Script-Commands" title="Linker Script Commands">
-<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!-- This is the manual for The XORcyst version 1.7.0.
+
+Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
+<title>Assembler Directives (The XORcyst Manual)</title>
+
+<meta name="description" content="Assembler Directives (The XORcyst Manual)">
+<meta name="keywords" content="Assembler Directives (The XORcyst Manual)">
+<meta name="resource-type" content="document">
+<meta name="distribution" content="global">
+<meta name="Generator" content="texi2any">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<link href="index.html" rel="start" title="Top">
+<link href="index.html#SEC_Contents" rel="contents" title="Table of Contents">
+<link href="index.html" rel="up" title="Top">
+<link href="Linker-Script-Commands.html" rel="next" title="Linker Script Commands">
+<link href="Implementation-Details.html" rel="prev" title="Implementation Details">
+<style type="text/css">
 <!--
-This is the manual for The XORcyst version 1.6.1.
+a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
+span:hover a.copiable-link {visibility: visible}
+-->
+</style>
 
-Copyright (C) 2004, 2005, 2007, 2008, 2009 Kent Hansen.-->
-<meta http-equiv="Content-Style-Type" content="text/css">
-<style type="text/css"><!--
-  pre.display { font-family:inherit }
-  pre.format  { font-family:inherit }
-  pre.smalldisplay { font-family:inherit; font-size:smaller }
-  pre.smallformat  { font-family:inherit; font-size:smaller }
-  pre.smallexample { font-size:smaller }
-  pre.smalllisp    { font-size:smaller }
-  span.sc { font-variant:small-caps }
-  span.roman { font-family: serif; font-weight: normal; } 
---></style>
+
 </head>
-<body>
-<div class="node">
-<p>
-<a name="Assembler-Directives"></a>Next:&nbsp;<a rel="next" accesskey="n" href="Linker-Script-Commands.html#Linker-Script-Commands">Linker Script Commands</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="Known-Bugs-and-Limitations.html#Known-Bugs-and-Limitations">Known Bugs and Limitations</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="index.html#Top">Top</a>
-<hr><br>
-</div>
 
-<h2 class="appendix">Appendix B Assembler Directives</h2>
+<body lang="en">
+<div class="appendix-level-extent" id="Assembler-Directives">
+<div class="nav-panel">
+<p>
+Next: <a href="Linker-Script-Commands.html" accesskey="n" rel="next">Linker Script Commands</a>, Previous: <a href="Implementation-Details.html" accesskey="p" rel="prev">Implementation Details</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
+</div>
+<h2 class="appendix" id="Assembler-Directives-1"><span>Appendix B Assembler Directives<a class="copiable-link" href="#Assembler-Directives-1"> &para;</a></span></h2>
 
 <p>It is considered good practice to prepend a period to a directive when invoking it (to differentiate it from identifiers), but this is not a strict requirement.
-
-   <p>The following is an alphabetical listing of the directives supported by the assembler and the arguments they may take. Arguments enclosed in square brackets [ ] are optional.
-
-     <dl>
-<dt><code>align </code><var>identifier</var> <em>[, </em><var>identifier-2</var><em>, ...]</em> <var>boundary</var><dd>Specifies alignment constraints for a list of data variables.
-
-     <br><dt><code>asc (</code><em>Alias for</em><code> char)</code>
-<br><dt><code>byte (</code><em>Alias for</em><code> db)</code>
-<br><dt><code>char </code><var>expression</var> <em>[, </em><var>expression</var><em>, ...]</em><dd>Define (array of) character transformed by custom character map
-
-     <br><dt><code>charmap "</code><var>filename</var><code>"</code><dd>Set custom character map
-
-     <br><dt><code>codeseg, code</code><dd>Switch to code segment
-
-     <br><dt><code>dataseg, data </code><em>[zeropage]</em><dd>Switch to data segment
-
-     <br><dt><code>db </code><var>expression</var> <em>[, </em><var>expression</var><em>, ...]</em><dd>Define (array of) byte
-
-     <br><dt><code>dd </code><var>expression</var> <em>[, </em><var>expression</var><em>, ...]</em><dd>Define (array of) doubleword
-
-     <br><dt><code>define </code><var>identifier</var> <em>[</em><var>expression</var><em>]</em><dd>See <code>equ</code> directive
-
-     <br><dt><code>dsb </code><var>expression</var><dd>Define storage of bytes
-
-     <br><dt><code>dsd </code><var>expression</var><dd>Define storage of doublewords
-
-     <br><dt><code>dsw </code><var>expression</var><dd>Define storage of words
-
-     <br><dt><code>dw </code><var>expression</var> <em>[, </em><var>expression</var><em>, ...]</em><dd>Define (array of) word
-
-     <br><dt><code>dword (</code><em>Alias for</em><code> dd)</code>
-<br><dt><code>elif</code><dd>Used in conjunction with if
-
-     <br><dt><code>else</code><dd>Used in conjunction with if, ifdef or ifndef
-
-     <br><dt><code>endif</code><dd>Ends a statement block preceded by an if
-
-     <br><dt><code>end</code><dd>Ends the assembly unit
-
-     <br><dt><code>ende</code><dd>Ends an enum definition
-
-     <br><dt><code>endm</code><dd>Ends a macro definition
-
-     <br><dt><code>endp</code><dd>Ends a procedure definition
-
-     <br><dt><code>ends</code><dd>Ends a structure or union definition
-
-     <br><dt><code>enum </code><var>identifier</var><dd>Begins an enum definition
-
-     <br><dt><code>error </code><var>expression</var><dd>Prints an error
-
-     <br><dt><code>extrn </code><var>identifier</var> <em>[, </em><var>identifier</var><em>, ...]</em><code> : </code><var>type</var><dd>Flag identifier(s) as external (imported) of type <var>type</var>
-
-     <br><dt><var>identifier</var><code> equ </code><var>expression</var><dd>Define equate
-
-     <br><dt><code>if </code><var>expression</var><dd>Assemble the following statement block only if <var>expression</var> evaluates to non-zero
-
-     <br><dt><code>ifdef </code><var>identifier</var><dd>Assemble the following statement block only if <var>identifier</var> is defined
-
-     <br><dt><code>ifndef </code><var>identifier</var><dd>Assemble the following statement block only if <var>identifier</var> is not defined
-
-     <br><dt><code>incbin "</code><var>filename</var><code>"</code><dd>Include contents of <var>filename</var> as binary data
-
-     <br><dt><code>include (</code><em>Alias for</em><code> incsrc)</code>
-<br><dt><code>incsrc "</code><var>filename</var><code>"</code><dd>Include contents of <var>filename</var> as assembler statements
-
-     <br><dt><code>label </code><var>identifier</var> <em>[= </em><var>address</var><em>]</em> <em>[ : </em><var>type</var><em>]</em><dd>Defines a global label
-
-     <br><dt><code>macro </code><var>identifier</var> <em>[</em><var>identifier</var><em>, ...]</em><dd>Begins a macro definition
-
-     <br><dt><code>message </code><var>expression</var><dd>Prints a message to stdout during assembly
-
-     <br><dt><code>org </code><var>expression</var><dd>Sets the origin address
-
-     <br><dt><code>pad </code><var>expression</var><code>  (</code><em>Alias for</em><code> dsb)</code>
-<br><dt><code>proc </code><var>identifier</var><dd>Begins a procedure definition
-
-     <br><dt><code>public </code><var>identifier</var> <em>[, </em><var>identifier</var><em>, ...]</em><dd>Flag identifier(s) as public (exported)
-
-     <br><dt><code>record </code><var>identifier</var> <var>identifier</var><code>:</code><var>width</var> <em>[, </em><var>identifier</var><em>:</em><var>width</var><em>, ...]</em><dd>Defines a record consisting of bitfields.
-
-     <br><dt><code>rept </code><var>count</var><dd>Begins an anonymous macro to be repeated <var>count</var> times
-
-     <br><dt><code>struc </code><var>identifier</var><dd>Begins a structure definition
-
-     <br><dt><code>type </code><var>identifier</var> <em>[</em><var>expression</var><em>, ...]</em><dd>Define data of user-defined type <var>identifier</var>
-
-     <br><dt><code>union </code><var>identifier</var><dd>Begins a union definition
-
-     <br><dt><code>warning </code><var>expression</var><dd>Prints a warning
-
-     <br><dt><code>while </code><var>expression</var><dd>Begins an anonymous macro to be repeated while <var>expression</var> is true (non-zero)
-
-     <br><dt><code>word (</code><em>Alias for</em><code> dw)</code><dd>
+</p>
+<p>The following is an alphabetical listing of the directives supported by the assembler and the arguments they may take. Arguments enclosed in square brackets [ ] are optional.
+</p>
+<dl class="table">
+<dt><code class="code">align <var class="var">identifier</var> <em class="emph">[, <var class="var">identifier-2</var>, ...]</em> <var class="var">boundary</var></code></dt>
+<dd><p>Specifies alignment constraints for a list of data variables.
+</p>
+</dd>
+<dt><code class="code">asc (<em class="emph">Alias for</em> char)</code></dt>
+<dt><code class="code">byte (<em class="emph">Alias for</em> db)</code></dt>
+<dt><code class="code">char <var class="var">expression</var> <em class="emph">[, <var class="var">expression</var>, ...]</em></code></dt>
+<dd><p>Define (array of) character transformed by custom character map
+</p>
+</dd>
+<dt><code class="code">charmap &quot;<var class="var">filename</var>&quot;</code></dt>
+<dd><p>Set custom character map
+</p>
+</dd>
+<dt><code class="code">codeseg, code</code></dt>
+<dd><p>Switch to code segment
+</p>
+</dd>
+<dt><code class="code">dataseg, data <em class="emph">[zeropage]</em></code></dt>
+<dd><p>Switch to data segment
+</p>
+</dd>
+<dt><code class="code">db <var class="var">expression</var> <em class="emph">[, <var class="var">expression</var>, ...]</em></code></dt>
+<dd><p>Define (array of) byte
+</p>
+</dd>
+<dt><code class="code">dd <var class="var">expression</var> <em class="emph">[, <var class="var">expression</var>, ...]</em></code></dt>
+<dd><p>Define (array of) doubleword
+</p>
+</dd>
+<dt><code class="code">define <var class="var">identifier</var> <em class="emph">[<var class="var">expression</var>]</em></code></dt>
+<dd><p>See <code class="code">equ</code> directive
+</p>
+</dd>
+<dt><code class="code">dsb <var class="var">expression</var></code></dt>
+<dd><p>Define storage of bytes
+</p>
+</dd>
+<dt><code class="code">dsd <var class="var">expression</var></code></dt>
+<dd><p>Define storage of doublewords
+</p>
+</dd>
+<dt><code class="code">dsw <var class="var">expression</var></code></dt>
+<dd><p>Define storage of words
+</p>
+</dd>
+<dt><code class="code">dw <var class="var">expression</var> <em class="emph">[, <var class="var">expression</var>, ...]</em></code></dt>
+<dd><p>Define (array of) word
+</p>
+</dd>
+<dt><code class="code">dword (<em class="emph">Alias for</em> dd)</code></dt>
+<dt><code class="code">elif</code></dt>
+<dd><p>Used in conjunction with if
+</p>
+</dd>
+<dt><code class="code">else</code></dt>
+<dd><p>Used in conjunction with if, ifdef or ifndef
+</p>
+</dd>
+<dt><code class="code">endif</code></dt>
+<dd><p>Ends a statement block preceded by an if
+</p>
+</dd>
+<dt><code class="code">end</code></dt>
+<dd><p>Ends the assembly unit
+</p>
+</dd>
+<dt><code class="code">ende</code></dt>
+<dd><p>Ends an enum definition
+</p>
+</dd>
+<dt><code class="code">endm</code></dt>
+<dd><p>Ends a macro definition
+</p>
+</dd>
+<dt><code class="code">endp</code></dt>
+<dd><p>Ends a procedure definition
+</p>
+</dd>
+<dt><code class="code">ends</code></dt>
+<dd><p>Ends a structure or union definition
+</p>
+</dd>
+<dt><code class="code">enum <var class="var">identifier</var></code></dt>
+<dd><p>Begins an enum definition
+</p>
+</dd>
+<dt><code class="code">error <var class="var">expression</var></code></dt>
+<dd><p>Prints an error
+</p>
+</dd>
+<dt><code class="code">extrn <var class="var">identifier</var> <em class="emph">[, <var class="var">identifier</var>, ...]</em> : <var class="var">type</var></code></dt>
+<dd><p>Flag identifier(s) as external (imported) of type <var class="var">type</var>
+</p>
+</dd>
+<dt><code class="code"><var class="var">identifier</var> equ <var class="var">expression</var></code></dt>
+<dd><p>Define equate
+</p>
+</dd>
+<dt><code class="code">if <var class="var">expression</var></code></dt>
+<dd><p>Assemble the following statement block only if <var class="var">expression</var> evaluates to non-zero
+</p>
+</dd>
+<dt><code class="code">ifdef <var class="var">identifier</var></code></dt>
+<dd><p>Assemble the following statement block only if <var class="var">identifier</var> is defined
+</p>
+</dd>
+<dt><code class="code">ifndef <var class="var">identifier</var></code></dt>
+<dd><p>Assemble the following statement block only if <var class="var">identifier</var> is not defined
+</p>
+</dd>
+<dt><code class="code">incbin &quot;<var class="var">filename</var>&quot;</code></dt>
+<dd><p>Include contents of <var class="var">filename</var> as binary data
+</p>
+</dd>
+<dt><code class="code">include (<em class="emph">Alias for</em> incsrc)</code></dt>
+<dt><code class="code">incsrc &quot;<var class="var">filename</var>&quot;</code></dt>
+<dd><p>Include contents of <var class="var">filename</var> as assembler statements
+</p>
+</dd>
+<dt><code class="code">label <var class="var">identifier</var> <em class="emph">[= <var class="var">address</var>]</em> <em class="emph">[ : <var class="var">type</var>]</em></code></dt>
+<dd><p>Defines a global label
+</p>
+</dd>
+<dt><code class="code">macro <var class="var">identifier</var> <em class="emph">[<var class="var">identifier</var>, ...]</em></code></dt>
+<dd><p>Begins a macro definition
+</p>
+</dd>
+<dt><code class="code">message <var class="var">expression</var></code></dt>
+<dd><p>Prints a message to stdout during assembly
+</p>
+</dd>
+<dt><code class="code">org <var class="var">expression</var></code></dt>
+<dd><p>Sets the origin address
+</p>
+</dd>
+<dt><code class="code">pad <var class="var">expression</var>  (<em class="emph">Alias for</em> dsb)</code></dt>
+<dt><code class="code">proc <var class="var">identifier</var></code></dt>
+<dd><p>Begins a procedure definition
+</p>
+</dd>
+<dt><code class="code">public <var class="var">identifier</var> <em class="emph">[, <var class="var">identifier</var>, ...]</em></code></dt>
+<dd><p>Flag identifier(s) as public (exported)
+</p>
+</dd>
+<dt><code class="code">record <var class="var">identifier</var> <var class="var">identifier</var>:<var class="var">width</var> <em class="emph">[, <var class="var">identifier</var>:<var class="var">width</var>, ...]</em></code></dt>
+<dd><p>Defines a record consisting of bitfields.
+</p>
+</dd>
+<dt><code class="code">rept <var class="var">count</var></code></dt>
+<dd><p>Begins an anonymous macro to be repeated <var class="var">count</var> times
+</p>
+</dd>
+<dt><code class="code">struc <var class="var">identifier</var></code></dt>
+<dd><p>Begins a structure definition
+</p>
+</dd>
+<dt><code class="code">type <var class="var">identifier</var> <em class="emph">[<var class="var">expression</var>, ...]</em></code></dt>
+<dd><p>Define data of user-defined type <var class="var">identifier</var>
+</p>
+</dd>
+<dt><code class="code">union <var class="var">identifier</var></code></dt>
+<dd><p>Begins a union definition
+</p>
+</dd>
+<dt><code class="code">warning <var class="var">expression</var></code></dt>
+<dd><p>Prints a warning
+</p>
+</dd>
+<dt><code class="code">while <var class="var">expression</var></code></dt>
+<dd><p>Begins an anonymous macro to be repeated while <var class="var">expression</var> is true (non-zero)
+</p>
+</dd>
+<dt><code class="code">word (<em class="emph">Alias for</em> dw)</code></dt>
 </dl>
 
-   </body></html>
+</div>
+<hr>
+<div class="nav-panel">
+<p>
+Next: <a href="Linker-Script-Commands.html" accesskey="n" rel="next">Linker Script Commands</a>, Previous: <a href="Implementation-Details.html" accesskey="p" rel="prev">Implementation Details</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
+</div>
 
+
+
+</body>
+</html>

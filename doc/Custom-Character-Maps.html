@@ -1,57 +1,76 @@
-<html lang="en">
+<!DOCTYPE html>
+<html>
+<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
 <head>
-<title>Custom Character Maps - The XORcyst Manual</title>
-<meta http-equiv="Content-Type" content="text/html">
-<meta name="description" content="The XORcyst Manual">
-<meta name="generator" content="makeinfo 4.7">
-<link title="Top" rel="start" href="index.html#Top">
-<link rel="prev" href="Object-Code-Format.html#Object-Code-Format" title="Object Code Format">
-<link rel="next" href="Error-and-Warning-Messages.html#Error-and-Warning-Messages" title="Error and Warning Messages">
-<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
-<!--
-This is the manual for The XORcyst version 1.6.1.
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!-- This is the manual for The XORcyst version 1.7.0.
 
-Copyright (C) 2004, 2005, 2007, 2008, 2009 Kent Hansen.-->
-<meta http-equiv="Content-Style-Type" content="text/css">
-<style type="text/css"><!--
-  pre.display { font-family:inherit }
-  pre.format  { font-family:inherit }
-  pre.smalldisplay { font-family:inherit; font-size:smaller }
-  pre.smallformat  { font-family:inherit; font-size:smaller }
-  pre.smallexample { font-size:smaller }
-  pre.smalllisp    { font-size:smaller }
-  span.sc { font-variant:small-caps }
-  span.roman { font-family: serif; font-weight: normal; } 
---></style>
+Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
+<title>Custom Character Maps (The XORcyst Manual)</title>
+
+<meta name="description" content="Custom Character Maps (The XORcyst Manual)">
+<meta name="keywords" content="Custom Character Maps (The XORcyst Manual)">
+<meta name="resource-type" content="document">
+<meta name="distribution" content="global">
+<meta name="Generator" content="texi2any">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<link href="index.html" rel="start" title="Top">
+<link href="index.html#SEC_Contents" rel="contents" title="Table of Contents">
+<link href="index.html" rel="up" title="Top">
+<link href="Error-and-Warning-Messages.html" rel="next" title="Error and Warning Messages">
+<link href="Object-Code-Format.html" rel="prev" title="Object Code Format">
+<style type="text/css">
+<!--
+a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
+div.example {margin-left: 3.2em}
+span:hover a.copiable-link {visibility: visible}
+-->
+</style>
+
+
 </head>
-<body>
-<div class="node">
+
+<body lang="en">
+<div class="appendix-level-extent" id="Custom-Character-Maps">
+<div class="nav-panel">
 <p>
-<a name="Custom-Character-Maps"></a>Next:&nbsp;<a rel="next" accesskey="n" href="Error-and-Warning-Messages.html#Error-and-Warning-Messages">Error and Warning Messages</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="Object-Code-Format.html#Object-Code-Format">Object Code Format</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="index.html#Top">Top</a>
-<hr><br>
+Next: <a href="Error-and-Warning-Messages.html" accesskey="n" rel="next">Error and Warning Messages</a>, Previous: <a href="Object-Code-Format.html" accesskey="p" rel="prev">Object Code Format</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
+</div>
+<h2 class="appendix" id="Custom-Character-Maps-1"><span>Appendix E Custom Character Maps<a class="copiable-link" href="#Custom-Character-Maps-1"> &para;</a></span></h2>
+
+<p>A custom character map is a plaintext file containing statements of the form
+</p><div class="example">
+<pre class="example-preformatted"><var class="var">key</var> = <var class="var">value</var>
+</pre></div>
+
+<p>where <var class="var">key</var> is a character or escape sequence and <var class="var">value</var> is the integer literal instances of this character should be mapped to when occuring as argument to the <code class="code">.char</code> assembler directive.
+</p>
+<p>There is a also a shorthand form for mapping a range of characters at once:
+</p><div class="example">
+<pre class="example-preformatted"><var class="var">low_key</var>-<var class="var">high_key</var> = <var class="var">value</var>
+</pre></div>
+
+<p>This is most useful when mapping the decimal digits and the alphabet. Instead of typing monotonic statements like
+</p><div class="example">
+<pre class="example-preformatted">0=0x10
+1=0x11
+...
+9=0x19
+</pre></div>
+<p>you can achieve the same result from the statement
+</p><div class="example">
+<pre class="example-preformatted">0-9=0x10
+</pre></div>
+
+</div>
+<hr>
+<div class="nav-panel">
+<p>
+Next: <a href="Error-and-Warning-Messages.html" accesskey="n" rel="next">Error and Warning Messages</a>, Previous: <a href="Object-Code-Format.html" accesskey="p" rel="prev">Object Code Format</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
 </div>
 
-<h2 class="appendix">Appendix E Custom Character Maps</h2>
 
-<!-- Using custom character maps is a convenient way of mapping ASCII characters to a different encoding. -->
-<p>A custom character map is a plaintext file containing statements of the form
-<pre class="example">     <var>key</var> = <var>value</var>
-</pre>
-   <p>where <var>key</var> is a character or escape sequence and <var>value</var> is the integer literal instances of this character should be mapped to when occuring as argument to the <code>.char</code> assembler directive.
 
-   <p>There is a also a shorthand form for mapping a range of characters at once:
-<pre class="example">     <var>low_key</var>-<var>high_key</var> = <var>value</var>
-</pre>
-   <p>This is most useful when mapping the decimal digits and the alphabet. Instead of typing monotonic statements like
-<pre class="example">     0=0x10
-     1=0x11
-     ...
-     9=0x19
-</pre>
-   <p>you can achieve the same result from the statement
-<pre class="example">     0-9=0x10
-</pre>
-   </body></html>
-
+</body>
+</html>

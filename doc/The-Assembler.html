@@ -1,631 +1,940 @@
-<html lang="en">
+<!DOCTYPE html>
+<html>
+<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
 <head>
-<title>The Assembler - The XORcyst Manual</title>
-<meta http-equiv="Content-Type" content="text/html">
-<meta name="description" content="The XORcyst Manual">
-<meta name="generator" content="makeinfo 4.7">
-<link title="Top" rel="start" href="index.html#Top">
-<link rel="prev" href="Overview.html#Overview" title="Overview">
-<link rel="next" href="The-Linker.html#The-Linker" title="The Linker">
-<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!-- This is the manual for The XORcyst version 1.7.0.
+
+Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
+<title>The Assembler (The XORcyst Manual)</title>
+
+<meta name="description" content="The Assembler (The XORcyst Manual)">
+<meta name="keywords" content="The Assembler (The XORcyst Manual)">
+<meta name="resource-type" content="document">
+<meta name="distribution" content="global">
+<meta name="Generator" content="texi2any">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<link href="index.html" rel="start" title="Top">
+<link href="index.html#SEC_Contents" rel="contents" title="Table of Contents">
+<link href="index.html" rel="up" title="Top">
+<link href="The-Linker.html" rel="next" title="The Linker">
+<link href="Overview.html" rel="prev" title="Overview">
+<style type="text/css">
 <!--
-This is the manual for The XORcyst version 1.6.1.
+a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
+div.example {margin-left: 3.2em}
+span:hover a.copiable-link {visibility: visible}
+ul.mark-bullet {list-style-type: disc}
+-->
+</style>
 
-Copyright (C) 2004, 2005, 2007, 2008, 2009 Kent Hansen.-->
-<meta http-equiv="Content-Style-Type" content="text/css">
-<style type="text/css"><!--
-  pre.display { font-family:inherit }
-  pre.format  { font-family:inherit }
-  pre.smalldisplay { font-family:inherit; font-size:smaller }
-  pre.smallformat  { font-family:inherit; font-size:smaller }
-  pre.smallexample { font-size:smaller }
-  pre.smalllisp    { font-size:smaller }
-  span.sc { font-variant:small-caps }
-  span.roman { font-family: serif; font-weight: normal; } 
---></style>
+
 </head>
-<body>
-<div class="node">
+
+<body lang="en">
+<div class="chapter-level-extent" id="The-Assembler">
+<div class="nav-panel">
 <p>
-<a name="The-Assembler"></a>Next:&nbsp;<a rel="next" accesskey="n" href="The-Linker.html#The-Linker">The Linker</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="Overview.html#Overview">Overview</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="index.html#Top">Top</a>
-<hr><br>
+Next: <a href="The-Linker.html" accesskey="n" rel="next">The Linker</a>, Previous: <a href="Overview.html" accesskey="p" rel="prev">Overview</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
 </div>
+<h2 class="chapter" id="The-Assembler-1"><span>3 The Assembler<a class="copiable-link" href="#The-Assembler-1"> &para;</a></span></h2>
 
-<h2 class="chapter">3 The Assembler</h2>
-
-<p>The XORcyst assembler takes a <dfn>plaintext file</dfn> containing a sequence of 6502 instructions and assembler
-directives (collectively referred to as assembler statements), and produces from this an <dfn>object file</dfn> (usually referred to as a <dfn>unit</dfn>) that can be fed on to the XORcyst linker.
-
-<h3 class="section">3.1 Invoking the assembler (<span class="command">xasm</span>)</h3>
+<p>The XORcyst assembler takes a <em class="dfn">plaintext file</em> containing a sequence of 6502 instructions and assembler
+directives (collectively referred to as assembler statements), and produces from this an <em class="dfn">object file</em> (usually referred to as a <em class="dfn">unit</em>) that can be fed on to the XORcyst linker.
+</p>
+<ul class="mini-toc">
+<li><a href="#Invoking-the-assembler-_0028xasm_0029" accesskey="1">Invoking the assembler (<code class="command">xasm</code>)</a></li>
+<li><a href="#Assembler-statements" accesskey="2">Assembler statements</a></li>
+</ul>
+<div class="section-level-extent" id="Invoking-the-assembler-_0028xasm_0029">
+<h3 class="section"><span>3.1 Invoking the assembler (<code class="command">xasm</code>)<a class="copiable-link" href="#Invoking-the-assembler-_0028xasm_0029"> &para;</a></span></h3>
 
 <p>The basic usage is
+</p>
+<p>&lsquo;<samp class="samp"><code class="command">xasm</code> <var class="var">assembler-file</var></samp>&rsquo;
+</p>
+<p>where <var class="var">assembler-file</var> is the (top-level) file of assembler statements.
+If all goes well, this will produce a similarly named file of extension <samp class="file">.o</samp>.
+</p>
+<p>For example,
+</p><div class="example">
+<pre class="example-preformatted">xasm driver.asm
+</pre></div>
+<p>produces the object file <samp class="file">driver.o</samp> if no errors are encountered by the assembler.
+</p>
+<ul class="mini-toc">
+<li><a href="#Switches" accesskey="1">Switches</a></li>
+</ul>
+<div class="subsection-level-extent" id="Switches">
+<h4 class="subsection"><span>3.1.1 Switches<a class="copiable-link" href="#Switches"> &para;</a></span></h4>
 
-   <p><span class="samp">xasm </span><var>assembler-file</var>
-
-   <p>where <var>assembler-file</var> is the (top-level) file of assembler statements. 
-If all goes well, this will produce a similarly named file of extension <span class="file">.o</span>.
-
-   <p>For example,
-<pre class="example">     xasm driver.asm
-</pre>
-   <p>produces the object file <span class="file">driver.o</span> if no errors are encountered by the assembler.
-
-<h4 class="subsection">3.1.1 Switches</h4>
-
-     <dl>
-<dt><code>--define IDENT[=VALUE]</code><dd>Enters the identifier <code>IDENT</code> into the global symbol table, optionally assigning it the value <code>VALUE</code>. The default value is integer <code>0</code>. To assign a string, escape sequences must be used, i.e. <code>--define my_string=\"Have a nice day\"</code>.
-
-     <br><dt><code>--output FILE</code><dd>Directs output to the file <code>FILE</code> rather than the default file.
-
-     <br><dt><code>--pure-binary</code><dd>Specifies that the output should be in the form of pure 6502 code. This will only succeed if the input has no external dependencies.
-
-     <br><dt><code>--swap-parens</code><dd>Changes the operators used to specify indirection from <code>[ ]</code> to <code>( )</code>. <code>[ ]</code> takes over <code>( )</code>'s role in arithmetic expressions.
-
-     <br><dt><code>--include-path DIR</code><dd>Adds <code>DIR</code> to the set of paths that are searched when a file is included.
-
-     <br><dt><code>--case-insensitive</code><dd>Ignores case of identifiers.
-
-     <br><dt><code>--no-warn</code><dd>Suppresses assembler warning messages.
-
-     <br><dt><code>--verbose</code><dd>Instructs the assembler to print some messages about what it is doing.
-
-     <br><dt><code>--debug</code><dd>Retains file and line information, so that the linker can produce more descriptive warning and error messages.
-
+<dl class="table">
+<dt><code class="code">--define IDENT[=VALUE]</code></dt>
+<dd><p>Enters the identifier <code class="code">IDENT</code> into the global symbol table, optionally assigning it the value <code class="code">VALUE</code>. The default value is integer <code class="code">0</code>. To assign a string, escape sequences must be used, i.e. <code class="code">--define my_string=\&quot;Have a nice day\&quot;</code>.
+</p>
+</dd>
+<dt><code class="code">--output FILE</code></dt>
+<dd><p>Directs output to the file <code class="code">FILE</code> rather than the default file.
+</p>
+</dd>
+<dt><code class="code">--pure-binary</code></dt>
+<dd><p>Specifies that the output should be in the form of pure 6502 code. This will only succeed if the input has no external dependencies.
+</p>
+</dd>
+<dt><code class="code">--listing FILE</code></dt>
+<dd><p>Writes a source listing. <code class="code">--listing-format=text|json|ndjson</code> selects the
+format; the default is text. A diagnostic listing may also be produced after
+an assembly error. Listing write and close failures produce a nonzero exit.
+</p>
+</dd>
+<dt><code class="code">--xref FILE</code></dt>
+<dd><p>Writes symbol definitions and reference sites.
+<code class="code">--xref-format=json|text|csv</code> selects the format; the default is JSON.
+CSV uses <samp class="file">FILE.symbols.csv</samp> and <samp class="file">FILE.refs.csv</samp>.
+<code class="code">--xref-include-locals=true</code> and <code class="code">--xref-include-anon=true</code> include
+symbols normally excluded from the xref view.
+</p>
+</dd>
+<dt><code class="code">--xref-data=true</code></dt>
+<dd><p>Adds data references and pointer-use facts to JSON xref.
+<code class="code">--xref-include-owner=true</code> adds lexical routine owners. Lexical ownership
+does not establish control-flow reachability.
+</p>
+</dd>
+<dt><code class="code">--xref-instructions=true</code></dt>
+<dd><p>Adds a separately versioned instruction-record section to JSON xref. Requires
+<code class="code">--pure-binary</code>. Records include source spans, pre-fold expression trees,
+and final instruction bytes, independently of xref symbol filters.
+</p>
+</dd>
+<dt><code class="code">--instruction-records-output FILE</code></dt>
+<dd><p>Writes the instruction records as a standalone JSON document. Version 1
+requires <code class="code">--dependency-manifest</code> and <code class="code">--pure-binary</code>. An ordinary JSON
+xref may be requested in the same invocation. See
+<samp class="file">XASM_INSTRUCTION_RECORDS_SPEC.md</samp> for the record contract.
+</p>
+</dd>
+<dt><code class="code">--dependency-manifest FILE</code></dt>
+<dd><p>Records consumed-input hashes, failed lookup paths, invocation arguments,
+and producer identity. Requires <code class="code">--pure-binary</code> and JSON format for any
+requested xref. The manifest is published after all requested production work
+succeeds and the inputs are revalidated. See
+<samp class="file">XASM_DEPENDENCY_MANIFEST_SPEC.md</samp> for reuse and freshness requirements.
+</p>
+</dd>
+<dt><code class="code">--xref-summary</code></dt>
+<dd><p>Summarizes callable labels, jump targets, and data labels.
+<code class="code">--xref-summary-output=FILE</code> selects a file instead of stdout;
+<code class="code">--xref-summary-format=json|ndjson|text</code> selects its format.
+</p>
+</dd>
+<dt><code class="code">--analyze-index-patterns</code></dt>
+<dd><p>Reports indexed-access patterns and bounds supported by local instruction
+evidence. Use <code class="code">--index-patterns-output=FILE</code> and
+<code class="code">--index-patterns-format=json|ndjson|text</code>. See
+<samp class="file">XASM_INDEX_BOUND_ANALYSIS_SPEC.md</samp> for inference limits.
+</p>
+</dd>
+<dt><code class="code">--data-consumers</code></dt>
+<dd><p>Aggregates access sites and observed offsets for eligible data spans. Use
+<code class="code">--data-consumers-output=FILE</code> and
+<code class="code">--data-consumers-format=json|ndjson|text</code>.
+</p>
+</dd>
+<dt><code class="code">--analyze-data-coverage</code></dt>
+<dd><p>Reports byte-exact covered and uncovered ranges for eligible data spans. Use
+<code class="code">--data-coverage-output=FILE</code> and
+<code class="code">--data-coverage-format=json|ndjson|text</code>. An access with an unresolved
+runtime index does not establish exact coverage.
+</p>
+</dd>
+<dt><code class="code">--warn-unused-equ</code></dt>
+<dd><p>Enables unused <code class="code">EQU</code> diagnostics. <code class="code">--Werror=unused-equ</code> makes them
+errors; <code class="code">--Wno-unused-equ</code> suppresses them.
+</p>
+</dd>
+<dt><code class="code">--audit-raw-addresses</code></dt>
+<dd><p>Audits literal addresses in instruction operands. Use
+<code class="code">--audit-level=warn|error</code>, <code class="code">--audit-rom-range=LO-HI</code>, and
+<code class="code">--audit-output-format=text|json</code> to select severity, range, and format.
+</p>
+</dd>
+<dt><code class="code">--compare FILE</code></dt>
+<dd><p>Compares assembled binary bytes with a reference. <code class="code">--compare-offset=N</code>
+and <code class="code">--compare-length=N</code> select the reference region;
+<code class="code">--compare-format=text|json</code> selects the report format.
+<code class="code">--compare-max-mismatches=N</code> limits displayed mismatches.
+<code class="code">--compare-cpu-base=ADDR</code> supplies a fallback CPU base for mismatches
+without a mapped CPU address.
+</p>
+</dd>
+<dt><code class="code">--fceux-nl-rom-prefix PREFIX</code></dt>
+<dd><p>Writes FCEUX debugger name files as <samp class="file">PREFIX&lt;bank&gt;.nl</samp>. Bank numbers are
+uppercase hexadecimal physical 16KB PRG page numbers. Requires
+<code class="code">--pure-binary</code> output containing the complete raw PRG payload, without
+an iNES header or CHR data. Local labels are included independently of xref
+scope options. Unlabeled pages produce empty files.
+</p>
+</dd>
+<dt><code class="code">--fceux-nl-ram-output FILE</code></dt>
+<dd><p>Writes FCEUX names for dataseg labels and named direct memory operands below
+<code class="code">$8000</code>. Requires <code class="code">--pure-binary</code>. Constants used only as immediate
+values and literal-only addresses are excluded. Aliases at one address appear
+in the comment field.
+</p>
+</dd>
+<dt><code class="code">--fceux-nl-mirror-16k</code></dt>
+<dd><p>Names both CPU windows of a 16KB NROM image. Requires
+<code class="code">--fceux-nl-rom-prefix</code> and exactly 16384 emitted PRG bytes. Existing
+higher-numbered name files are not removed automatically.
+</p>
+</dd>
+<dt><code class="code">--swap-parens</code></dt>
+<dd><p>Changes the operators used to specify indirection from <code class="code">[ ]</code> to <code class="code">( )</code>. <code class="code">[ ]</code> takes over <code class="code">( )</code>&rsquo;s role in arithmetic expressions.
+</p>
+</dd>
+<dt><code class="code">--include-path DIR</code></dt>
+<dd><p>Adds <code class="code">DIR</code> to the set of paths that are searched when a file is included.
+</p>
+</dd>
+<dt><code class="code">--case-insensitive</code></dt>
+<dd><p>Ignores case of identifiers.
+</p>
+</dd>
+<dt><code class="code">--no-warn</code></dt>
+<dd><p>Suppresses assembler warning messages.
+</p>
+</dd>
+<dt><code class="code">--verbose</code></dt>
+<dd><p>Instructs the assembler to print some messages about what it is doing.
+</p>
+</dd>
+<dt><code class="code">--debug</code></dt>
+<dd><p>Retains file and line information, so that the linker can produce more descriptive warning and error messages.
+</p>
+</dd>
 </dl>
 
-   <p>For the full list of switches, run <code>xasm --help</code>.
-
-<h3 class="section">3.2 Assembler statements</h3>
-
-<p>(<strong>Note:</strong> This is not meant to be an introductory guide to 6502 assembly. Only the XORcyst-specific features and quirks will be explained. (For readers new to the 6502 and assemblers, <a href="http://www.google.com/search?q=6502+tutorial">http://www.google.com/search?q=6502+tutorial</a> may be a good starting point.)
-
-   <p>Because the assembler aims to enforce completely position-independent code, it does not allow the <code>.org </code><var>address</var> or <code>.base </code><var>address</var> directives commonly employed by 6502 assemblers. But most other constructs familiar to some people are in place. These and additional features will be explained subsequently. (For a complete list of directives, see <a href="Assembler-Directives.html#Assembler-Directives">Assembler Directives</a>.)
-
-   <p>In the code templates given in this section, any arguments enclosed in italic square brackets <em>[ ... ]</em> are optional.
-
-<h4 class="subsection">3.2.1 A simple assembler example</h4>
+<p>For the full list of switches, run <code class="code">xasm --help</code>.
+</p>
+</div>
+</div>
+<div class="section-level-extent" id="Assembler-statements">
+<h3 class="section"><span>3.2 Assembler statements<a class="copiable-link" href="#Assembler-statements"> &para;</a></span></h3>
+<p>(<strong class="strong">Note:</strong> This is not meant to be an introductory guide to 6502 assembly. Only the XORcyst-specific features and quirks will be explained. (For readers new to the 6502 and assemblers, <a class="uref" href="http://www.google.com/search?q=6502+tutorial">http://www.google.com/search?q=6502+tutorial</a> may be a good starting point.)
+</p>
+<p>Because the assembler aims to enforce completely position-independent code, it does not allow the <code class="code">.org <var class="var">address</var></code> or <code class="code">.base <var class="var">address</var></code> directives commonly employed by 6502 assemblers. But most other constructs familiar to some people are in place. These and additional features will be explained subsequently. (For a complete list of directives, see <a class="ref" href="Assembler-Directives.html">Assembler Directives</a>.)
+</p>
+<p>In the code templates given in this section, any arguments enclosed in italic square brackets <em class="emph">[ ... ]</em> are optional.
+</p>
+<ul class="mini-toc">
+<li><a href="#A-simple-assembler-example" accesskey="1">A simple assembler example</a></li>
+<li><a href="#Literals" accesskey="2">Literals</a></li>
+<li><a href="#Identifiers" accesskey="3">Identifiers</a></li>
+<li><a href="#Expressions" accesskey="4">Expressions</a></li>
+<li><a href="#Global-labels" accesskey="5">Global labels</a></li>
+<li><a href="#Local-labels" accesskey="6">Local labels</a></li>
+<li><a href="#Forward_002fbackward-branches" accesskey="7">Forward/backward branches</a></li>
+<li><a href="#Equates" accesskey="8">Equates</a></li>
+<li><a href="#Conditional-assembly" accesskey="9">Conditional assembly</a></li>
+<li><a href="#Macros">Macros</a></li>
+<li><a href="#Anonymous-macros">Anonymous macros</a></li>
+<li><a href="#Including-files">Including files</a></li>
+<li><a href="#Defining-native-data">Defining native data</a></li>
+<li><a href="#User_002ddefined-types">User-defined types</a></li>
+<li><a href="#Defining-data-of-user_002ddefined-types">Defining data of user-defined types</a></li>
+<li><a href="#Indexing-symbols-statically">Indexing symbols statically</a></li>
+<li><a href="#Procedures">Procedures</a></li>
+<li><a href="#Importing-and-exporting-symbols">Importing and exporting symbols</a></li>
+<li><a href="#Controlling-data-mapping">Controlling data mapping</a></li>
+<li><a href="#An-important-note-on-indirect-addressing">An important note on indirect addressing</a></li>
+</ul>
+<div class="subsection-level-extent" id="A-simple-assembler-example">
+<h4 class="subsection"><span>3.2.1 A simple assembler example<a class="copiable-link" href="#A-simple-assembler-example"> &para;</a></span></h4>
 
 <p>Here is a short assembler file which demonstrates basic functionality:
+</p>
+<div class="example">
+<pre class="example-preformatted">.dataseg                   ; begin data segment
 
-<pre class="example">     .dataseg                   ; begin data segment
-     
-       my_variable .byte          ; define a byte variable
-     
-       my_array .word[16]         ; define an array of 16 words
-     
-     .codeseg                   ; begin code segment
-     
-     .include "config.h"        ; include another source file
-     
-     ; conditional definition of constant my_priority
-     .ifdef HAVE_CONFIG_H
-       my_priority = 10
-     .else
-       my_priority = 0
-     .endif
-     
-     ; declare a macro named store_const with parameters value and addr
-     .macro store_const value, addr
-       lda #value
-       sta addr
-     .endm                      ; end macro
-     
-     ; a subroutine entrypoint is here
-     .proc my_subroutine
-       store_const $10, my_array+10           ; macro invocation
-       store_const my_priority, my_variable   ; macro invocation
-     
-       lda [$0A], y               ; NOTE: [ ] used for indirection, not ( ), unless --swap-parens switch used
-       beq +
-       jsr some_function          ; call external function
-     
-     ; produce a short delay
-     + ldx #60
-       @@delay:
-       dex
-       bne @@delay
-     
-     ; exit with my_priority in accumulator
-       lda #my_priority
-       rts
-     .endp                      ; end of procedure definition
-     
-     .public my_subroutine      ; make my_subroutine visible to other units
-     .extrn some_function:proc  ; some_function is located in another unit
-     
-     .end                       ; end of assembler input
-</pre>
-   <p>While the example itself doesn't do anything useful, it shows how you can.
+  my_variable .byte          ; define a byte variable
 
-<h4 class="subsection">3.2.2 Literals</h4>
+  my_array .word[16]         ; define an array of 16 words
+
+.codeseg                   ; begin code segment
+
+.include &quot;config.h&quot;        ; include another source file
+
+; conditional definition of constant my_priority
+.ifdef HAVE_CONFIG_H
+  my_priority = 10
+.else
+  my_priority = 0
+.endif
+
+; declare a macro named store_const with parameters value and addr
+.macro store_const value, addr
+  lda #value
+  sta addr
+.endm                      ; end macro
+
+; a subroutine entrypoint is here
+.proc my_subroutine
+  store_const $10, my_array+10           ; macro invocation
+  store_const my_priority, my_variable   ; macro invocation
+
+  lda [$0A], y               ; NOTE: [ ] used for indirection, not ( ), unless --swap-parens switch used
+  beq +
+  jsr some_function          ; call external function
+
+; produce a short delay
++ ldx #60
+  @@delay:
+  dex
+  bne @@delay
+
+; exit with my_priority in accumulator
+  lda #my_priority
+  rts
+.endp                      ; end of procedure definition
+
+.public my_subroutine      ; make my_subroutine visible to other units
+.extrn some_function:proc  ; some_function is located in another unit
+
+.end                       ; end of assembler input
+</pre></div>
+
+<p>While the example itself doesn&rsquo;t do anything useful, it shows how you can.
+</p>
+</div>
+<div class="subsection-level-extent" id="Literals">
+<h4 class="subsection"><span>3.2.2 Literals<a class="copiable-link" href="#Literals"> &para;</a></span></h4>
 
 <p>The following kinds of integer literal are understood by the assembler (examples given in parentheses):
+</p>
+<ul class="itemize mark-bullet">
+<li><strong class="strong">Decimal:</strong> Non-zero decimal digit followed by zero or more decimal digits (<code class="code">1234</code>)
 
-     <ul>
-<li><strong>Decimal:</strong> Non-zero decimal digit followed by zero or more decimal digits (<code>1234</code>)
+</li><li><strong class="strong">Hexadecimal:</strong> <code class="code">0x</code> or <code class="code">$</code> followed by one or more hexadecimal digits (<code class="code">0xFACE, $BEEF</code>); one or more hexadecimal digits followed by <code class="code">h</code> (<code class="code">95Ah</code>). In the latter case numbers beginning with A through F must be preceded by a 0 (otherwise, say, <code class="code">BABEh</code> would be interpreted as an identifier).
 
-     <li><strong>Hexadecimal:</strong> <code>0x</code> or <code>$</code> followed by one or more hexadecimal digits (<code>0xFACE, $BEEF</code>); one or more hexadecimal digits followed by <code>h</code> (<code>95Ah</code>). In the latter case numbers beginning with A through F must be preceded by a 0 (otherwise, say, <code>BABEh</code> would be interpreted as an identifier).
+</li><li><strong class="strong">Binary:</strong> String of binary digits either preceded by <code class="code">%</code> or succeeded by <code class="code">b</code> (<code class="code">%010110, 11001100b</code>).
 
-     <li><strong>Binary:</strong> String of binary digits either preceded by <code>%</code> or succeeded by <code>b</code> (<code>%010110, 11001100b</code>).
+</li><li><strong class="strong">Octal:</strong> A string of octal digits preceded by a 0 (<code class="code">0755</code>).
 
-     <li><strong>Octal:</strong> A string of octal digits preceded by a 0 (<code>0755</code>).
+</li></ul>
 
-   </ul>
+<p>String literals must be enclosed inbetween a pair of <code class="code">&quot;</code> (as in <code class="code">&quot;You are a dweeb&quot;</code>).
+</p>
+<p>Character literals must be of the form <code class="code">'A'</code>.
+</p>
+</div>
+<div class="subsection-level-extent" id="Identifiers">
+<h4 class="subsection"><span>3.2.3 Identifiers<a class="copiable-link" href="#Identifiers"> &para;</a></span></h4>
 
-   <p>String literals must be enclosed inbetween a pair of <code>"</code> (as in <code>"You are a dweeb"</code>).
-
-   <p>Character literals must be of the form <code>'A'</code>.
-
-<h4 class="subsection">3.2.3 Identifiers</h4>
-
-<p>Identifiers must conform to the regular expression <code>[[:alpha:]_][[:alnum:]_]*</code>. They are case sensitive. 
+<p>Identifiers must conform to the regular expression <code class="code">[[:alpha:]_][[:alnum:]_]*</code>. They are case sensitive.
 Examples of valid identifiers are
-<pre class="example">     no_brainer, schools_out, my_2nd_home, catch22, FunkyMama
-</pre>
-   <p>Examples of invalid identifiers are
-<pre class="example">     3stooges, i-was-here, f00li$h
-</pre>
-   <h4 class="subsection">3.2.4 Expressions</h4>
+</p><div class="example">
+<pre class="example-preformatted">no_brainer, schools_out, my_2nd_home, catch22, FunkyMama
+</pre></div>
+<p>Examples of invalid identifiers are
+</p><div class="example">
+<pre class="example-preformatted">3stooges, i-was-here, f00li$h
+</pre></div>
+
+</div>
+<div class="subsection-level-extent" id="Expressions">
+<h4 class="subsection"><span>3.2.4 Expressions<a class="copiable-link" href="#Expressions"> &para;</a></span></h4>
 
 <p>Operands to assembler statements are expressions. An expression can contain any number of operators, identifiers and literals, and parentheses to group terms. The operators are the familiar arithmetic, binary, shift and relational ones (same as in C, pretty much), plus a few more which are useful when writing code for a machine which has a 16-bit address space but only 8-bit registers:
+</p>
+<ul class="itemize mark-bullet">
+<li><code class="code">&lt; <var class="var">expression</var></code> : Get low 8 bits of <var class="var">expression</var>
 
-     <ul>
-<li><code>&lt; </code><var>expression</var> : Get low 8 bits of <var>expression</var>
+</li><li><code class="code">&gt; <var class="var">expression</var></code> : Get high 8 bits of <var class="var">expression</var>
 
-     <li><code>&gt; </code><var>expression</var> : Get high 8 bits of <var>expression</var>
+</li></ul>
 
-   </ul>
-
-   <p><code>$</code> can be used in an expression to refer to the address where the current instruction is assembled.
-
-   <p><code>^</code><var>symbol</var> gets the bank number in which <var>symbol</var> is located (determined at link time).
-
-   <p><code>sizeof(</code><var>symbol</var><code>)</code> gets the size of <var>symbol</var> in bytes.
-
-   <p>When both operands to an operator are strings, the semantics are as follows: <var>str1</var> + <var>str2</var> concatenates; the relational operators perform string comparison; and all other operators are invalid. When one operand is a string and the other is an integer, the integer is implicitly converted to a string and concatenated with the string operand to produce a string as result.
-
-<h4 class="subsection">3.2.5 Global labels</h4>
+<p><code class="code">$</code> can be used in an expression to refer to the address where the current instruction is assembled.
+</p>
+<p><code class="code">^<var class="var">symbol</var></code> gets the bank number in which <var class="var">symbol</var> is located (determined at link time).
+</p>
+<p><code class="code">sizeof(<var class="var">symbol</var>)</code> gets the size of <var class="var">symbol</var> in bytes.
+</p>
+<p>When both operands to an operator are strings, the semantics are as follows: <var class="var">str1</var> + <var class="var">str2</var> concatenates; the relational operators perform string comparison; and all other operators are invalid. When one operand is a string and the other is an integer, the integer is implicitly converted to a string and concatenated with the string operand to produce a string as result.
+</p>
+</div>
+<div class="subsection-level-extent" id="Global-labels">
+<h4 class="subsection"><span>3.2.5 Global labels<a class="copiable-link" href="#Global-labels"> &para;</a></span></h4>
 
 <p>There are two ways to define a global label.
+</p>
+<ul class="itemize mark-bullet">
+<li><code class="code"><var class="var">identifier</var><strong class="strong">:</strong></code> at the beginning of a source line defines the label <var class="var">identifier</var> and assigns it the address of the current Program Counter. The colon is mandatory.
 
-     <ul>
-<li><var>identifier</var><strong>:</strong> at the beginning of a source line defines the label <var>identifier</var> and assigns it the address of the current Program Counter. The colon is mandatory.
+</li><li>Using the <code class="code">.label</code> directive. It is of the form
 
-     <li>Using the <code>.label</code> directive. It is of the form
+<div class="example">
+<pre class="example-preformatted">.label <var class="var">identifier</var> <em class="emph">[= <var class="var">address</var>]</em> <em class="emph">[ : <var class="var">type</var>]</em>
+</pre></div>
 
-     <pre class="example">          .label <var>identifier</var> <em>[= </em><var>address</var><em>]</em> <em>[ : </em><var>type</var><em>]</em>
-     </pre>
-     <p>The absolute address of the label can be specified. If no address is given, the address is the current Program Counter.
+<p>The absolute address of the label can be specified. If no address is given, the address is the current Program Counter.
+</p>
+<p>The type of data that the label addresses can also be specified. The valid type specifiers are <code class="code">byte</code>, <code class="code">word</code>, <code class="code">dword</code>, or an identifier, which must be the name of a user-defined type.
+</p>
+</li></ul>
 
-     <p>The type of data that the label addresses can also be specified. The valid type specifiers are <code>byte</code>, <code>word</code>, <code>dword</code>, or an identifier, which must be the name of a user-defined type.
+</div>
+<div class="subsection-level-extent" id="Local-labels">
+<h4 class="subsection"><span>3.2.6 Local labels<a class="copiable-link" href="#Local-labels"> &para;</a></span></h4>
 
-   </ul>
-
-<h4 class="subsection">3.2.6 Local labels</h4>
-
-<p>A <dfn>local label</dfn> is only visible in the scope consisting of the statements between two regular labels; or, for macros, only in the body of the macro. Just as a regular label must be unique in the whole program scope, a local label must be unique in the scope in which it is defined. The big advantage here is that the name of the local label can be reused as long as the definitions exist in different local scopes. Local labels are prefixed by <code>@@</code>. Unlike regular labels the local name itself can start with a digit, so for instance <code>@@10</code> is valid. 
+<p>A <em class="dfn">local label</em> is only visible in the scope consisting of the statements between two regular labels; or, for macros, only in the body of the macro. Just as a regular label must be unique in the whole program scope, a local label must be unique in the scope in which it is defined. The big advantage here is that the name of the local label can be reused as long as the definitions exist in different local scopes. Local labels are prefixed by <code class="code">@@</code>. Unlike regular labels the local name itself can start with a digit, so for instance <code class="code">@@10</code> is valid.
 The following example shows how a local label can exist unambigiously in two scopes.
-<pre class="example">     my_first_delay:        ; new local scope begins here
-     ldx #100
-     @@loop:                ; this label exists in my_first_delay's namespace
-     dex
-     bne @@loop
-     rts
-     
-     my_second_delay:        ; new local scope begins here
-     ldy #200
-     @@loop:                 ; this label exists in my_second_delay's namespace
-     dey
-     bne @@loop
-     rts
-</pre>
-   <p>As mentioned, the same local cannot be redefined within a scope. So having, say, two labels called <code>@@loop</code> in the same scope would produce an assembler error. Also, something like the following would produce an error:
-<pre class="example">     adc #10
-     bvs @@handle_overflow
-     barrier:
-     rts
-     @@handle_overflow:
-     ; ...
-</pre>
-   <p>since the branch instruction refers to a local label defined in a different scope (because of the strategic placement of the label <code>barrier</code>).
+</p><div class="example">
+<pre class="example-preformatted">my_first_delay:        ; new local scope begins here
+ldx #100
+@@loop:                ; this label exists in my_first_delay's namespace
+dex
+bne @@loop
+rts
 
-<h4 class="subsection">3.2.7 Forward/backward branches</h4>
+my_second_delay:        ; new local scope begins here
+ldy #200
+@@loop:                 ; this label exists in my_second_delay's namespace
+dey
+bne @@loop
+rts
+</pre></div>
+
+<p>As mentioned, the same local cannot be redefined within a scope. So having, say, two labels called <code class="code">@@loop</code> in the same scope would produce an assembler error. Also, something like the following would produce an error:
+</p><div class="example">
+<pre class="example-preformatted">adc #10
+bvs @@handle_overflow
+barrier:
+rts
+@@handle_overflow:
+; ...
+</pre></div>
+<p>since the branch instruction refers to a local label defined in a different scope (because of the strategic placement of the label <code class="code">barrier</code>).
+</p>
+</div>
+<div class="subsection-level-extent" id="Forward_002fbackward-branches">
+<h4 class="subsection"><span>3.2.7 Forward/backward branches<a class="copiable-link" href="#Forward_002fbackward-branches"> &para;</a></span></h4>
 
 <p>These are &ldquo;anonymous&rdquo; labels that can be redefined as many times as you want. A reference to a forward/backward label is resolved to the closest matching definition in the succeeding assembly statements (forward branches) or preceding assembly statements (backward branches).
+</p>
+<p>A forward branch consists of one or more (up to eight) consecutive <code class="code">+</code> (plus) symbols. A backward branch consists of one or more (up to eight) consecutive <code class="code">-</code> (minus) symbols. The following examples illustrate use of forward and backward branches.
+</p>
+<div class="example">
+<pre class="example-preformatted">   lda $50
+   bmi ++
+   lda $40
+   bne +         ; branches to first forward label
+   ; do something ...
++  dex           ; first forward label
+   beq +         ; branches to second forward label
+   ; do something more ...
++  sta $40       ; second forward label
+++ rts
 
-   <p>A forward branch consists of one or more (up to eight) consecutive <code>+</code> (plus) symbols. A backward branch consists of one or more (up to eight) consecutive <code>-</code> (minus) symbols. The following examples illustrate use of forward and backward branches.
+</pre></div>
 
-<pre class="example">        lda $50
-        bmi ++
-        lda $40
-        bne +         ; branches to first forward label
-        ; do something ...
-     +  dex           ; first forward label
-        beq +         ; branches to second forward label
-        ; do something more ...
-     +  sta $40       ; second forward label
-     ++ rts
-     
-</pre>
-   <pre class="example">        lda $60
-        bmi +
-      - lda $2002      ; first backward label
-        bne -          ; branches to first backward label
-      - lda $2002      ; second backward label
-        bne -          ; branches to second backward label
-      + rts
-</pre>
-   <h4 class="subsection">3.2.8 Equates</h4>
+<div class="example">
+<pre class="example-preformatted">   lda $60
+   bmi +
+ - lda $2002      ; first backward label
+   bne -          ; branches to first backward label
+ - lda $2002      ; second backward label
+   bne -          ; branches to second backward label
+ + rts
+</pre></div>
+
+</div>
+<div class="subsection-level-extent" id="Equates">
+<h4 class="subsection"><span>3.2.8 Equates<a class="copiable-link" href="#Equates"> &para;</a></span></h4>
 
 <p>There are three ways to define equates.
-     <ul>
-<li>With the <code>=</code> operator. An equate defined this way can be redefined, and it obeys program order.
+</p><ul class="itemize mark-bullet">
+<li>With the <code class="code">=</code> operator. An equate defined this way can be redefined, and it obeys program order.
 
-     <pre class="example">          i = 10
-          ldx #i
-          i = i + 1
-          ldy #i
-     </pre>
-     <p>In the example above, the assembler will substitute <code>10</code> for the first occurence of <code>i</code> and <code>11</code> for the last.
+<div class="example">
+<pre class="example-preformatted">i = 10
+ldx #i
+i = i + 1
+ldy #i
+</pre></div>
 
-     <li>With the <code>.equ</code> directive. An equate defined this way can only be defined once, and it does not obey program order (that is, it can be defined at a later point from where it is used). An equate of this type can be exported, so that it may be accessed by other units (more on exporting symbols later).
+<p>In the example above, the assembler will substitute <code class="code">10</code> for the first occurence of <code class="code">i</code> and <code class="code">11</code> for the last.
+</p>
+</li><li>With the <code class="code">.equ</code> directive. An equate defined this way can only be defined once, and it does not obey program order (that is, it can be defined at a later point from where it is used). An equate of this type can be exported, so that it may be accessed by other units (more on exporting symbols later).
 
-     <pre class="example">          lib_version .equ $10
-          lib_author .equ "The Godfather"
-     </pre>
-     <li>With the <code>.define</code> directive. This directive is semantically equal to <code>.equ</code>, but the value is optional, so you can write CPP-like defines, which is more compact. When no value is given, the symbol is defined as integer 0.
+<div class="example">
+<pre class="example-preformatted">lib_version .equ $10
+lib_author .equ &quot;The Godfather&quot;
+</pre></div>
 
-     <pre class="example">          .ifndef MYHEADER_H
-          .define MYHEADER_H
-          ; ...
-          .endif     ; !MYHEADER_H
-     </pre>
-     </ul>
+</li><li>With the <code class="code">.define</code> directive. This directive is semantically equal to <code class="code">.equ</code>, but the value is optional, so you can write CPP-like defines, which is more compact. When no value is given, the symbol is defined as integer 0.
 
-<h4 class="subsection">3.2.9 Conditional assembly</h4>
+<div class="example">
+<pre class="example-preformatted">.ifndef MYHEADER_H
+.define MYHEADER_H
+; ...
+.endif     ; !MYHEADER_H
+</pre></div>
 
-<p>There are two ways to go about doing conditional assembly. One way is to test if a certain identifier has been defined (that is, equated) using the <code>.ifdef</code> directive, as shown in the next two templates.
+</li></ul>
 
-<pre class="example">     .ifdef <var>identifier</var>
-     <var>statements</var>
-     .endif
-</pre>
-   <pre class="example">     .ifdef <var>identifier</var>
-     <var>true-statements</var>
-     .else
-     <var>false-statements</var>
-     .endif
-</pre>
-   <p>The other way is to test a full-fledged expression, as shown in the next template.
+</div>
+<div class="subsection-level-extent" id="Conditional-assembly">
+<h4 class="subsection"><span>3.2.9 Conditional assembly<a class="copiable-link" href="#Conditional-assembly"> &para;</a></span></h4>
 
-<pre class="example">     .if <var>expression</var>
-     <var>statements</var>
-     .elif <var>expression-II</var>
-     <var>statements-II</var>
-     .else
-     <var>other-statements</var>
-     .endif
-</pre>
-   <h4 class="subsection">3.2.10 Macros</h4>
+<p>There are two ways to go about doing conditional assembly. One way is to test if a certain identifier has been defined (that is, equated) using the <code class="code">.ifdef</code> directive, as shown in the next two templates.
+</p>
+<div class="example">
+<pre class="example-preformatted">.ifdef <var class="var">identifier</var>
+<var class="var">statements</var>
+.endif
+</pre></div>
+
+<div class="example">
+<pre class="example-preformatted">.ifdef <var class="var">identifier</var>
+<var class="var">true-statements</var>
+.else
+<var class="var">false-statements</var>
+.endif
+</pre></div>
+
+<p>The other way is to test a full-fledged expression, as shown in the next template.
+</p>
+<div class="example">
+<pre class="example-preformatted">.if <var class="var">expression</var>
+<var class="var">statements</var>
+.elif <var class="var">expression-II</var>
+<var class="var">statements-II</var>
+.else
+<var class="var">other-statements</var>
+.endif
+</pre></div>
+
+</div>
+<div class="subsection-level-extent" id="Macros">
+<h4 class="subsection"><span>3.2.10 Macros<a class="copiable-link" href="#Macros"> &para;</a></span></h4>
 
 <p>Macro definitions are of the form
-
-<pre class="example">     .macro <var>name</var> <em>[</em><var>parameter1</var><em>, </em><var>parameter2</var><em>, ...]</em>
-     <var>statements</var>
-     .endm
-</pre>
-   <p>The parameters must be legal identifiers.
-
-   <p>To invoke (expand) the statements (body) of a macro in your program, issue the assembler statement <var>name</var>, where <var>name</var> is the macro name, followed by a comma-separated list of actual arguments, if the macro has any. The arguments will be substituted for the respective parameter names in the resulting statements.
-
-   <p>You can use local labels in the body of a macro. These labels will be completely local and unique to each expanded macro instance; any local labels defined outside the expanded body are not &ldquo;seen&rdquo;. For example, if you have the following macro definition
-<pre class="example">     .macro my_macro
-     @@loop:
-     dey
-     bne @@loop
-     .endm
-</pre>
-   <p>and then use the macro as shown in the following
-<pre class="example">     @@loop:
-     my_macro
-     my_macro
-     dex
-     bne @@loop
-</pre>
-   <p>each expansion of <code>my_macro</code> will have its own local label <code>@@loop</code>, neither of which interfere with the local label <code>@@loop</code> in the scope where the macro is invoked.
-
-   <p>Macros can be nested to arbitrary depth.
-
-<h4 class="subsection">3.2.11 Anonymous macros</h4>
+</p>
+<div class="example">
+<pre class="example-preformatted">.macro <var class="var">name</var> <em class="emph">[<var class="var">parameter1</var>, <var class="var">parameter2</var>, ...]</em>
+<var class="var">statements</var>
+.endm
+</pre></div>
+<p>The parameters must be legal identifiers.
+</p>
+<p>To invoke (expand) the statements (body) of a macro in your program, issue the assembler statement <code class="code"><var class="var">name</var></code>, where <var class="var">name</var> is the macro name, followed by a comma-separated list of actual arguments, if the macro has any. The arguments will be substituted for the respective parameter names in the resulting statements.
+</p>
+<p>You can use local labels in the body of a macro. These labels will be completely local and unique to each expanded macro instance; any local labels defined outside the expanded body are not &ldquo;seen&rdquo;. For example, if you have the following macro definition
+</p><div class="example">
+<pre class="example-preformatted">.macro my_macro
+@@loop:
+dey
+bne @@loop
+.endm
+</pre></div>
+<p>and then use the macro as shown in the following
+</p><div class="example">
+<pre class="example-preformatted">@@loop:
+my_macro
+my_macro
+dex
+bne @@loop
+</pre></div>
+<p>each expansion of <code class="code">my_macro</code> will have its own local label <code class="code">@@loop</code>, neither of which interfere with the local label <code class="code">@@loop</code> in the scope where the macro is invoked.
+</p>
+<p>Macros can be nested to arbitrary depth.
+</p>
+</div>
+<div class="subsection-level-extent" id="Anonymous-macros">
+<h4 class="subsection"><span>3.2.11 Anonymous macros<a class="copiable-link" href="#Anonymous-macros"> &para;</a></span></h4>
 
 <p>An anonymous REPT (REPeaT) macro is of the form
+</p>
+<div class="example">
+<pre class="example-preformatted">i = 1
+<strong class="strong">.rept 8</strong>
+.db i
+i = i*2
+<strong class="strong">.endm</strong>
+</pre></div>
 
-<pre class="example">     i = 1
-     <strong>.rept 8</strong>
-     .db i
-     i = i*2
-     <strong>.endm</strong>
-</pre>
-   <p>The statements between <code>rept</code> and <code>endm</code> will be repeated as many times as specified by the argument to <code>rept</code>. In the preceding example, the resulting expansion is equivalent to
+<p>The statements between <code class="code">rept</code> and <code class="code">endm</code> will be repeated as many times as specified by the argument to <code class="code">rept</code>. In the preceding example, the resulting expansion is equivalent to
+</p>
+<div class="example">
+<pre class="example-preformatted">.db 1, 2, 4, 8, 16, 32, 64, 128
+</pre></div>
 
-<pre class="example">     .db 1, 2, 4, 8, 16, 32, 64, 128
-</pre>
-   <p>Similarly, an anonymous WHILE macro is of the form
+<p>Similarly, an anonymous WHILE macro is of the form
+</p>
+<div class="example">
+<pre class="example-preformatted">i = 1
+<strong class="strong">.while i &lt;= 128</strong>
+.db i
+i = i*2
+<strong class="strong">.endm</strong>
+</pre></div>
 
-<pre class="example">     i = 1
-     <strong>.while i &lt;= 128</strong>
-     .db i
-     i = i*2
-     <strong>.endm</strong>
-</pre>
-   <p>The statements between <code>while</code> and <code>endm</code> will be repeated while the expression given as argument to <code>while</code> is true (non-zero). The code inside the macro body is responsible for updating the variables involved in the expression, so that it will eventually become false. In the preceding example, the resulting expansion is equivalent to
+<p>The statements between <code class="code">while</code> and <code class="code">endm</code> will be repeated while the expression given as argument to <code class="code">while</code> is true (non-zero). The code inside the macro body is responsible for updating the variables involved in the expression, so that it will eventually become false. In the preceding example, the resulting expansion is equivalent to
+</p>
+<div class="example">
+<pre class="example-preformatted">.db 1, 2, 4, 8, 16, 32, 64, 128
+</pre></div>
 
-<pre class="example">     .db 1, 2, 4, 8, 16, 32, 64, 128
-</pre>
-   <h4 class="subsection">3.2.12 Including files</h4>
+</div>
+<div class="subsection-level-extent" id="Including-files">
+<h4 class="subsection"><span>3.2.12 Including files<a class="copiable-link" href="#Including-files"> &para;</a></span></h4>
 
 <p>There are two directives for including files.
+</p>
+<ul class="itemize mark-bullet">
+<li><code class="code">.incsrc &quot;<var class="var">src-file</var>&quot;</code> (can also be written <code class="code">.include</code>) interprets the specified file as textual assembler statements.
 
-     <ul>
-<li><code>.incsrc "</code><var>src-file</var><code>"</code> (can also be written <code>.include</code>) interprets the specified file as textual assembler statements.
+</li><li><code class="code">.incbin &quot;<var class="var">bin-file</var>&quot;</code> interprets the specified file as a binary buffer.
 
-     <li><code>.incbin "</code><var>bin-file</var><code>"</code> interprets the specified file as a binary buffer.
+</li></ul>
 
-   </ul>
-
-<h4 class="subsection">3.2.13 Defining native data</h4>
+</div>
+<div class="subsection-level-extent" id="Defining-native-data">
+<h4 class="subsection"><span>3.2.13 Defining native data<a class="copiable-link" href="#Defining-native-data"> &para;</a></span></h4>
 
 <p>There is a class of directives for defining data storage and values.
+</p>
+<ul class="itemize mark-bullet">
+<li><code class="code">.db</code> <em class="emph">[<var class="var">expression</var>, ...]</em> : Defines a string of bytes
+</li><li><code class="code">.dw</code> <em class="emph">[<var class="var">expression</var>, ...]</em> : Defines a string of words
+</li><li><code class="code">.dd</code> <em class="emph">[<var class="var">expression</var>, ...]</em> : Defines a string of doublewords
+</li><li><code class="code">.char</code> <em class="emph">[<var class="var">expression</var>, ...]</em> : Defines a string of characters (explained later)
+</li><li><code class="code">.dsb</code> <em class="emph">[<var class="var">expression</var>]</em> : Defines a storage of size <var class="var">expression</var> bytes
+</li><li><code class="code">.dsw</code> <em class="emph">[<var class="var">expression</var>]</em> : Defines a storage of size <var class="var">expression</var> words
+</li><li><code class="code">.dsd</code> <em class="emph">[<var class="var">expression</var>]</em> : Defines a storage of size <var class="var">expression</var> doublewords
 
-     <ul>
-<li><code>.db</code> <em>[</em><var>expression</var><em>, ...]</em> : Defines a string of bytes
-<li><code>.dw</code> <em>[</em><var>expression</var><em>, ...]</em> : Defines a string of words
-<li><code>.dd</code> <em>[</em><var>expression</var><em>, ...]</em> : Defines a string of doublewords
-<li><code>.char</code> <em>[</em><var>expression</var><em>, ...]</em> : Defines a string of characters (explained later)
-<li><code>.dsb</code> <em>[</em><var>expression</var><em>]</em> : Defines a storage of size <var>expression</var> bytes
-<li><code>.dsw</code> <em>[</em><var>expression</var><em>]</em> : Defines a storage of size <var>expression</var> words
-<li><code>.dsd</code> <em>[</em><var>expression</var><em>]</em> : Defines a storage of size <var>expression</var> doublewords
+</li></ul>
 
-   </ul>
+<p>If no argument is given to the directive, a single item of the respective datatype is allocated, i.e.
+</p><div class="example">
+<pre class="example-preformatted">.db
+</pre></div>
+<p>is equivalent to
+</p><div class="example">
+<pre class="example-preformatted">.dsb 1
+</pre></div>
 
-   <p>If no argument is given to the directive, a single item of the respective datatype is allocated, i.e.
-<pre class="example">     .db
-</pre>
-   <p>is equivalent to
-<pre class="example">     .dsb 1
-</pre>
-   <p>Alternatively, data arrays can be allocated using square brackets [ ] like in C:
+<p>Alternatively, data arrays can be allocated using square brackets [ ] like in C:
+</p>
+<div class="example">
+<pre class="example-preformatted">.db[100]
+</pre></div>
+<p>which is equivalent to
+</p><div class="example">
+<pre class="example-preformatted">.dsb 100
+</pre></div>
 
-<pre class="example">     .db[100]
-</pre>
-   <p>which is equivalent to
-<pre class="example">     .dsb 100
-</pre>
-   <p><code>.byte</code>, <code>.word</code> and <code>.dword</code> are more verbose aliases for <code>.db</code>, <code>.dw</code> and <code>.dd</code>, respectively.
+<p><code class="code">.byte</code>, <code class="code">.word</code> and <code class="code">.dword</code> are more verbose aliases for <code class="code">.db</code>, <code class="code">.dw</code> and <code class="code">.dd</code>, respectively.
+</p>
+<p>Note that data cannot be initialized in a data segment; only storage for the data can be allocated there.
+</p>
+<h3 class="heading" id="Defining-non_002dASCII-text-data"><span>Defining non-ASCII text data<a class="copiable-link" href="#Defining-non_002dASCII-text-data"> &para;</a></span></h3>
 
-   <p>Note that data cannot be initialized in a data segment; only storage for the data can be allocated there.
+<p>Use the <code class="code">.charmap</code> directive to specify a map file describing the mapping from regular ASCII-coded characters to your custom set. See <a class="ref" href="Custom-Character-Maps.html">Custom Character Maps</a> for a description of the format of such a custom character map file. Once the character map has been set, you can define your textual data by using the <code class="code">.char</code>-directive. The information in the character map is applied to the given data by the assembler in order to transform it to a regular <code class="code">.db</code> directive internally. The <code class="code">.charmap</code> directive obeys program order, meaning you can use different character maps at different points in your code. If no character map has been set, <code class="code">.char</code> is equivalent to <code class="code">.db</code>. A simple example of the use of <code class="code">.charmap</code> and <code class="code">.char</code> follows.
+</p>
+<div class="example">
+<pre class="example-preformatted">.charmap &quot;my_map.tbl&quot;          ; set the custom character map to the one defined in my_map.tbl
+.char &quot;It is a delight for me to be encoded in non-ASCII form&quot;, 0
+</pre></div>
 
-<h3 class="heading">Defining non-ASCII text data</h3>
-
-<p>Use the <code>.charmap</code> directive to specify a map file describing the mapping from regular ASCII-coded characters to your custom set. See <a href="Custom-Character-Maps.html#Custom-Character-Maps">Custom Character Maps</a> for a description of the format of such a custom character map file. Once the character map has been set, you can define your textual data by using the <code>.char</code>-directive. The information in the character map is applied to the given data by the assembler in order to transform it to a regular <code>.db</code> directive internally. The <code>.charmap</code> directive obeys program order, meaning you can use different character maps at different points in your code. If no character map has been set, <code>.char</code> is equivalent to <code>.db</code>. A simple example of the use of <code>.charmap</code> and <code>.char</code> follows.
-
-<pre class="example">     .charmap "my_map.tbl"          ; set the custom character map to the one defined in my_map.tbl
-     .char "It is a delight for me to be encoded in non-ASCII form", 0
-</pre>
-   <h4 class="subsection">3.2.14 User-defined types</h4>
+</div>
+<div class="subsection-level-extent" id="User_002ddefined-types">
+<h4 class="subsection"><span>3.2.14 User-defined types<a class="copiable-link" href="#User_002ddefined-types"> &para;</a></span></h4>
 
 <p>There are currently four kinds of types that can be defined by the user. For further information on the concepts of their use, consult a C manual.
+</p>
+<ul class="itemize mark-bullet">
+<li><strong class="strong">Structures</strong>.
 
-     <ul>
-<li><strong>Structures</strong>.
+<div class="example">
+<pre class="example-preformatted">.struc my_struc
+my_1st_field .db
+my_2nd_field .dw
+my_3rd_field .type my_other_struc
+.ends
+</pre></div>
 
-     <pre class="example">          .struc my_struc
-          my_1st_field .db
-          my_2nd_field .dw
-          my_3rd_field .type my_other_struc
-          .ends
-     </pre>
-     <p>Using &ldquo;flat&rdquo; addressing, structure members are accessed just like in C.
+<p>Using &ldquo;flat&rdquo; addressing, structure members are accessed just like in C.
+</p>
+<div class="example">
+<pre class="example-preformatted">lda the_player.inventory.sword
+</pre></div>
 
-     <pre class="example">          lda the_player.inventory.sword
-     </pre>
-     <p>For indirect addressing, the scope operator can be used to get the offset of the field.
+<p>For indirect addressing, the scope operator can be used to get the offset of the field.
+</p>
+<div class="example">
+<pre class="example-preformatted">ldy #(player_struct::inventory + inventory_struct::sword)
+lda [$00],y     ; load ($00).inventory.sword
+</pre></div>
 
-     <pre class="example">          ldy #(player_struct::inventory + inventory_struct::sword)
-          lda [$00],y     ; load ($00).inventory.sword
-     </pre>
-     <li><strong>Unions</strong>.
+</li><li><strong class="strong">Unions</strong>.
 
-     <pre class="example">          .union my_union
-          byte_value .db
-          word_value .dw
-          string_value .char[32]
-          .ends
-     </pre>
-     <p>In a union, the fields are &ldquo;overlaid&rdquo;; that is, they share the same storage, and in general only one of the fields is used (at a time) for a particular instance of the union. A typical usage is to define a structure with two members: An enumerated type that selects one of the union fields, and the actual union containing the fields.
+<div class="example">
+<pre class="example-preformatted">.union my_union
+byte_value .db
+word_value .dw
+string_value .char[32]
+.ends
+</pre></div>
 
-     <p>Anonymous unions can be defined &ldquo;inline&rdquo; as part of a structure, as shown in the following example:
+<p>In a union, the fields are &ldquo;overlaid&rdquo;; that is, they share the same storage, and in general only one of the fields is used (at a time) for a particular instance of the union. A typical usage is to define a structure with two members: An enumerated type that selects one of the union fields, and the actual union containing the fields.
+</p>
+<p>Anonymous unions can be defined &ldquo;inline&rdquo; as part of a structure, as shown in the following example:
+</p>
+<div class="example">
+<pre class="example-preformatted">.struc my_struc
+type	.byte
+<strong class="strong">    .union</strong>
+<strong class="strong">    byte_value .byte[4]</strong>
+<strong class="strong">    word_value .word[2]</strong>
+<strong class="strong">    dword_value .dword</strong>
+<strong class="strong">    .ends</strong>
+.ends
+</pre></div>
 
-     <pre class="example">          .struc my_struc
-          type	.byte
-          <strong>    .union</strong>
-          <strong>    byte_value .byte[4]</strong>
-          <strong>    word_value .word[2]</strong>
-          <strong>    dword_value .dword</strong>
-          <strong>    .ends</strong>
-          .ends
-     </pre>
-     <p><code>byte_value</code>, <code>word_value</code> and <code>dword_value</code> may then be accessed as top-level members of the structure, but do in fact share storage.
+<p><code class="code">byte_value</code>, <code class="code">word_value</code> and <code class="code">dword_value</code> may then be accessed as top-level members of the structure, but do in fact share storage.
+</p>
+</li><li><strong class="strong">Records</strong> (bitfields).
 
-     <li><strong>Records</strong> (bitfields).
+<div class="example">
+<pre class="example-preformatted">.record my_record top_bits:3, middle_bits:2, bottom_bits:3
+</pre></div>
 
-     <pre class="example">          .record my_record top_bits:3, middle_bits:2, bottom_bits:3
-     </pre>
-     <p>A record can be maximum 8 bits (1 byte) wide. The bitfields are arranged from high to low; for example, in the record shown above, <code>top_bits</code> would occupy bits 7:5, <code>middle_bits</code> 4:3 and <code>bottom_bits</code> 2:0. Lower bits are padded if necessary to fill the byte.
+<p>A record can be maximum 8 bits (1 byte) wide. The bitfields are arranged from high to low; for example, in the record shown above, <code class="code">top_bits</code> would occupy bits 7:5, <code class="code">middle_bits</code> 4:3 and <code class="code">bottom_bits</code> 2:0. Lower bits are padded if necessary to fill the byte.
+</p>
+<p>The scope operator (<code class="code">::</code>) returns the number of right shifts necessary to bring the LSb of a bitfield into the LSb of the accumulator. The <code class="code">MASK</code> operator returns a bitfield&rsquo;s logical AND mask. For example, using the record definition shown above,
+</p>
+<div class="example">
+<pre class="example-preformatted">my_record::middle_bits
+</pre></div>
+<p>returns <code class="code">3</code>, and
+</p><div class="example">
+<pre class="example-preformatted">MASK my_record::middle_bits
+</pre></div>
+<p>returns <code class="code">%00011000</code>. These are the two basic operations necessary to manipulate bitfields. The following macro shows how a field can be extracted:
+</p>
+<div class="example">
+<pre class="example-preformatted">; IN:  ACC = instance of record `rec'
+;      rec = record type identifier
+;      fld = bitfield identifier
+; OUT: ACC = field `fld' of `rec' in lower bits; upper bits zero
+.macro get_field rec, fld
+    and #(mask rec::fld)       ; ditch other fields
+    .rept rec::fld             ; shift down to bit 0
+    lsr
+    .endm
+.endm
+</pre></div>
 
-     <p>The scope operator (<code>::</code>) returns the number of right shifts necessary to bring the LSb of a bitfield into the LSb of the accumulator. The <code>MASK</code> operator returns a bitfield's logical AND mask. For example, using the record definition shown above,
+</li><li><strong class="strong">Enumerations</strong>.
 
-     <pre class="example">          my_record::middle_bits
-     </pre>
-     <p>returns <code>3</code>, and
-     <pre class="example">          MASK my_record::middle_bits
-     </pre>
-     <p>returns <code>%00011000</code>. These are the two basic operations necessary to manipulate bitfields. The following macro shows how a field can be extracted:
+<div class="example">
+<pre class="example-preformatted">.enum my_enum
+option_1 = 1
+option_2
+option_3
+option_4
+.ende
+</pre></div>
 
-     <pre class="example">          ; IN:  ACC = instance of record `rec'
-          ;      rec = record type identifier
-          ;      fld = bitfield identifier
-          ; OUT: ACC = field `fld' of `rec' in lower bits; upper bits zero
-          .macro get_field rec, fld
-              and #(mask rec::fld)       ; ditch other fields
-              .rept rec::fld             ; shift down to bit 0
-              lsr
-              .endm
-          .endm
-     </pre>
-     <li><strong>Enumerations</strong>.
+<p>Note that an enumerated value is encoded as a <code class="code">byte</code>.
+</p>
+</li></ul>
 
-     <pre class="example">          .enum my_enum
-          option_1 = 1
-          option_2
-          option_3
-          option_4
-          .ende
-     </pre>
-     <p>Note that an enumerated value is encoded as a <code>byte</code>.
-
-   </ul>
-
-<h4 class="subsection">3.2.15 Defining data of user-defined types</h4>
+</div>
+<div class="subsection-level-extent" id="Defining-data-of-user_002ddefined-types">
+<h4 class="subsection"><span>3.2.15 Defining data of user-defined types<a class="copiable-link" href="#Defining-data-of-user_002ddefined-types"> &para;</a></span></h4>
 
 <p>The general syntax is
+</p>
+<div class="example">
+<pre class="example-preformatted">.type <var class="var">identifier</var>
+</pre></div>
 
-<pre class="example">     .type <var>identifier</var>
-</pre>
-   <p>or just
+<p>or just
+</p>
+<div class="example">
+<pre class="example-preformatted">.<var class="var">identifier</var>
+</pre></div>
 
-<pre class="example">     .<var>identifier</var>
-</pre>
-   <p>Where <var>identifier</var> is the name of a user-defined type. This allocates <code>sizeof(</code><var>identifier</var><code>)</code> bytes of storage. Optionally, a value initializer can be specified (only in code segments). The form of this initializer depends on the type of data.
+<p>Where <var class="var">identifier</var> is the name of a user-defined type. This allocates <code class="code">sizeof(<var class="var">identifier</var>)</code> bytes of storage. Optionally, a value initializer can be specified (only in code segments). The form of this initializer depends on the type of data.
+</p>
+<ul class="itemize mark-bullet">
+<li><strong class="strong">Structure</strong>. The initializer is of the form
 
-     <ul>
-<li><strong>Structure</strong>. The initializer is of the form
+<div class="example">
+<pre class="example-preformatted">{ <var class="var">field1-value</var>, <em class="emph">[<var class="var">field2-value</var>, ..., ]</em> }
+</pre></div>
 
-     <pre class="example">          { <var>field1-value</var>, <em>[</em><var>field2-value</var><em>, ..., ]</em> }
-     </pre>
-     <p>The field initializers must match the order of the fields in the type definition. To leave a field blank, leave its initializer empty. For example
+<p>The field initializers must match the order of the fields in the type definition. To leave a field blank, leave its initializer empty. For example
+</p>
+<div class="example">
+<pre class="example-preformatted">my_array .type my_struc { 10, , &quot;hello&quot; }, { , , &quot;cool!&quot; }, { 45 }
+</pre></div>
 
-     <pre class="example">          my_array .type my_struc { 10, , "hello" }, { , , "cool!" }, { 45 }
-     </pre>
-     <p>defines three instances of type <code>my_struc</code>, with various fields explicitly initialized and others implicitly padded by the assembler.
+<p>defines three instances of type <code class="code">my_struc</code>, with various fields explicitly initialized and others implicitly padded by the assembler.
+</p>
+<p>Since structures can contain sub-structures, so can a structure initializer. To initialize a sub-structure, simply start a new pair of { } and specify field values, recursively.
+</p>
+</li><li><strong class="strong">Union</strong>. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
 
-     <p>Since structures can contain sub-structures, so can a structure initializer. To initialize a sub-structure, simply start a new pair of { } and specify field values, recursively.
+</li><li><strong class="strong">Record</strong>. The initializer is of the same form as a structure initializer, but cannot contain sub-structure initializers (each bitfield is a &ldquo;simple&rdquo; value).
 
-     <li><strong>Union</strong>. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
+</li><li><strong class="strong">Enum</strong>. The initializer is simply an identifier that must be one of the identifiers appearing in the type definition.
 
-     <li><strong>Record</strong>. The initializer is of the same form as a structure initializer, but cannot contain sub-structure initializers (each bitfield is a &ldquo;simple&rdquo; value).
+</li></ul>
 
-     <li><strong>Enum</strong>. The initializer is simply an identifier that must be one of the identifiers appearing in the type definition.
+<p>To define an array of (uninitialized) values of a user-defined type, use the C-style method, for example:
+</p>
+<div class="example">
+<pre class="example-preformatted">my_array .my_struc<strong class="strong">[100]</strong>        ; array of 100 values of type my_struc
+</pre></div>
 
-   </ul>
-
-   <p>To define an array of (uninitialized) values of a user-defined type, use the C-style method, for example:
-
-<pre class="example">     my_array .my_struc<strong>[100]</strong>        ; array of 100 values of type my_struc
-</pre>
-   <h4 class="subsection">3.2.16 Indexing symbols statically</h4>
+</div>
+<div class="subsection-level-extent" id="Indexing-symbols-statically">
+<h4 class="subsection"><span>3.2.16 Indexing symbols statically<a class="copiable-link" href="#Indexing-symbols-statically"> &para;</a></span></h4>
 
 <p>A symbol can be indexed statically using the C-style syntax
+</p>
+<div class="example">
+<pre class="example-preformatted"><var class="var">identifier</var><strong class="strong">[</strong><var class="var">expression</var><strong class="strong">]</strong>
+</pre></div>
 
-<pre class="example">     <var>identifier</var><strong>[</strong><var>expression</var><strong>]</strong>
-</pre>
-   <p>For byte arrays, this is simply equivalent to the expression
+<p>For byte arrays, this is simply equivalent to the expression
+</p>
+<div class="example">
+<pre class="example-preformatted"><var class="var">identifier</var> + <var class="var">expression</var>
+</pre></div>
 
-<pre class="example">     <var>identifier</var> + <var>expression</var>
-</pre>
-   <p>In general, it is equivalent to
+<p>In general, it is equivalent to
+</p>
+<div class="example">
+<pre class="example-preformatted"><var class="var">identifier</var> + <var class="var">expression</var> * sizeof <var class="var">identifier-type</var>
+</pre></div>
 
-<pre class="example">     <var>identifier</var> + <var>expression</var> * sizeof <var>identifier-type</var>
-</pre>
-   <p>where <var>identifier-type</var> is the type of <var>identifier</var>.
+<p>where <var class="var">identifier-type</var> is the type of <var class="var">identifier</var>.
+</p>
+<p>An example:
+</p>
+<div class="example">
+<pre class="example-preformatted">my_array .my_struc[10]        ; array of 10 values of type my_struc
+lda #1
+i = 0
+.while i &lt; 10
+sta my_array[i].my_field               ; initialize my_field to 1
+i = i + 1
+.endm
 
-   <p>An example:
+</pre></div>
 
-<pre class="example">     my_array .my_struc[10]        ; array of 10 values of type my_struc
-     lda #1
-     i = 0
-     .while i &lt; 10
-     sta my_array[i].my_field               ; initialize my_field to 1
-     i = i + 1
-     .endm
-     
-</pre>
-   <h4 class="subsection">3.2.17 Procedures</h4>
+</div>
+<div class="subsection-level-extent" id="Procedures">
+<h4 class="subsection"><span>3.2.17 Procedures<a class="copiable-link" href="#Procedures"> &para;</a></span></h4>
 
 <p>A procedure is of the form
+</p>
+<div class="example">
+<pre class="example-preformatted">.proc <var class="var">name</var>
+<var class="var">statements</var>
+.endp
+</pre></div>
 
-<pre class="example">     .proc <var>name</var>
-     <var>statements</var>
-     .endp
-</pre>
-   <p>Currently, there is no internal differentiation between a procedure and a label, but <code>.proc</code> is more specific than a label, so it improves the semantics.
+<p>Currently, there is no internal differentiation between a procedure and a label, but <code class="code">.proc</code> is more specific than a label, so it improves the semantics.
+</p>
+</div>
+<div class="subsection-level-extent" id="Importing-and-exporting-symbols">
+<h4 class="subsection"><span>3.2.18 Importing and exporting symbols<a class="copiable-link" href="#Importing-and-exporting-symbols"> &para;</a></span></h4>
 
-<h4 class="subsection">3.2.18 Importing and exporting symbols</h4>
+<p>To specify that a symbol used in your code is defined in a different unit, use the <code class="code">.extrn</code> directive. This way you can call procedures or access constants exported by that unit. When you use the linker to create a final executable you also have to link in the unit(s) where the external symbols you use are defined.
+</p>
+<p>The <code class="code">extrn</code> directive takes as arguments a comma-separated list of identifiers, followed by a colon (:), followed by a <var class="var">symbol type</var>. The symbol type must be one of <code class="code">BYTE</code>, <code class="code">WORD</code>, <code class="code">DWORD</code>, <code class="code">LABEL</code>, <code class="code">PROC</code>, or the name of a user-defined type, such as a structure or union.
+</p>
+<p>To export a symbol defined in your own code, thereby making it accessible to other units, use the <code class="code">.public</code> directive. The next example shows how both directives may be used.
+</p>
+<div class="example">
+<pre class="example-preformatted">.extrn proc1, proc2, proc3 : proc  ; these are defined somewhere else
+my_proc:
+jsr proc1
+jsr proc2
+jsr proc3
+rts
+.public my_proc                ; make my_proc accessible to the outside world
 
-<p>To specify that a symbol used in your code is defined in a different unit, use the <code>.extrn</code> directive. This way you can call procedures or access constants exported by that unit. When you use the linker to create a final executable you also have to link in the unit(s) where the external symbols you use are defined.
+</pre></div>
 
-   <p>The <code>extrn</code> directive takes as arguments a comma-separated list of identifiers, followed by a colon (:), followed by a <var>symbol type</var>. The symbol type must be one of <code>BYTE</code>, <code>WORD</code>, <code>DWORD</code>, <code>LABEL</code>, <code>PROC</code>, or the name of a user-defined type, such as a structure or union.
+<p>You can also specify the <code class="code">.public</code> keyword directly when defining a variable, so you don&rsquo;t need a separate directive to make it public:
+</p>
+<div class="example">
+<pre class="example-preformatted">.public my_public_variable .word
+</pre></div>
 
-   <p>To export a symbol defined in your own code, thereby making it accessible to other units, use the <code>.public</code> directive. The next example shows how both directives may be used.
+</div>
+<div class="subsection-level-extent" id="Controlling-data-mapping">
+<h4 class="subsection"><span>3.2.19 Controlling data mapping<a class="copiable-link" href="#Controlling-data-mapping"> &para;</a></span></h4>
+<p>By default, the linker takes the members of data segments and maps them to the best free RAM locations it finds. However, there are times when you want to specify some constraints on the mapping. For example, you want the variable to always be mapped to the 6502&rsquo;s zero page. Or, you have a large array and want it to be aligned to a proper boundary so you don&rsquo;t risk suffering page cross penalties on indexed accesses.
+</p>
+<p>The XORcyst assembler provides the following ways to communicate mapping constraints to the linker.
+</p>
+<ul class="itemize mark-bullet">
+<li>To specify that a data segment variable should always be mapped to zero page, precede its definition by the <code class="code">.zeropage</code> keyword:
 
-<pre class="example">     .extrn proc1, proc2, proc3 : proc  ; these are defined somewhere else
-     my_proc:
-     jsr proc1
-     jsr proc2
-     jsr proc3
-     rts
-     .public my_proc                ; make my_proc accessible to the outside world
-     
-</pre>
-   <p>You can also specify the <code>.public</code> keyword directly when defining a variable, so you don't need a separate directive to make it public:
+<div class="example">
+<pre class="example-preformatted">.zeropage my_zeropage_variable .byte
+</pre></div>
 
-<pre class="example">     .public my_public_variable .word
-</pre>
-   <h4 class="subsection">3.2.19 Controlling data mapping</h4>
+<p>Alternatively, specify the <code class="code">.zeropage</code> keyword as argument to the <code class="code">.dataseg</code> directive:
+</p>
+<div class="example">
+<pre class="example-preformatted">.dataseg .zeropage       ; turn on .zeropage constraint
+my_1st_var .byte         ; .zeropage constraint will be set automatically
+my_2nd_var .word         ; ditto
+.dataseg                 ; turn off .zeropage constraint
+</pre></div>
 
-<p>By default, the linker takes the members of data segments and maps them to the best free RAM locations it finds. However, there are times when you want to specify some constraints on the mapping. For example, you want the variable to always be mapped to the 6502's zero page. Or, you have a large array and want it to be aligned to a proper boundary so you don't risk suffering page cross penalties on indexed accesses.
+</li><li>To specify that one or more data variables should be aligned, use the <code class="code">.align</code> directive. It takes a list of identifiers followed by the alignment boundary, for example
 
-   <p>The XORcyst assembler provides the following ways to communicate mapping constraints to the linker.
+<div class="example">
+<pre class="example-preformatted">.dataseg
+my_array .byte[64]
+.align my_array 64       ; my_array should be aligned on a 64-byte boundary
+</pre></div>
 
-     <ul>
-<li>To specify that a data segment variable should always be mapped to zero page, precede its definition by the <code>.zeropage</code> keyword:
+</li></ul>
 
-     <pre class="example">          .zeropage my_zeropage_variable .byte
-     </pre>
-     <p>Alternatively, specify the <code>.zeropage</code> keyword as argument to the <code>.dataseg</code> directive:
+</div>
+<div class="subsection-level-extent" id="An-important-note-on-indirect-addressing">
+<h4 class="subsection"><span>3.2.20 An important note on indirect addressing<a class="copiable-link" href="#An-important-note-on-indirect-addressing"> &para;</a></span></h4>
 
-     <pre class="example">          .dataseg .zeropage       ; turn on .zeropage constraint
-          my_1st_var .byte         ; .zeropage constraint will be set automatically
-          my_2nd_var .word         ; ditto
-          .dataseg                 ; turn off .zeropage constraint
-     </pre>
-     <li>To specify that one or more data variables should be aligned, use the <code>.align</code> directive. It takes a list of identifiers followed by the alignment boundary, for example
+<p>If you&rsquo;re familiar with 6502 assembly, you know that parentheses ( ) are normally used to indicate indirect addressing modes. Unfortunately, this clashes with the use of parentheses in operand expressions. I couldn&rsquo;t get Bison (the parser generator) to deal with this context dependency. As I&rsquo;m used to coding Intel X86 assembly, which uses brackets for indirection, I opted for [ ] as the default indirection operators. This could be a source of bugs, since if you type it the &ldquo;old&rdquo; way, <code class="code">LDA ($FA),Y</code> is equivalent to <code class="code">LDA $FA,Y</code> &ndash; which probably isn&rsquo;t what you wanted. However, by specifying the switch
+</p>
+<div class="example">
+<pre class="example-preformatted">--swap-parens
+</pre></div>
 
-     <pre class="example">          .dataseg
-          my_array .byte[64]
-          .align my_array 64       ; my_array should be aligned on a 64-byte boundary
-     </pre>
-     </ul>
+<p>upon invoking the assembler, the behaviour of [ ] and ( ) will be reversed. That is, the &ldquo;normal&rdquo; way of specifying indirection, i.e. <code class="code">LDA ($00),Y</code> is used, while expression operands are grouped with [ ], i.e. <code class="code">A/[B+C]</code>.
+</p>
+</div>
+</div>
+</div>
+<hr>
+<div class="nav-panel">
+<p>
+Next: <a href="The-Linker.html" accesskey="n" rel="next">The Linker</a>, Previous: <a href="Overview.html" accesskey="p" rel="prev">Overview</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
+</div>
 
-<h4 class="subsection">3.2.20 An important note on indirect addressing</h4>
 
-<p>If you're familiar with 6502 assembly, you know that parentheses ( ) are normally used to indicate indirect addressing modes. Unfortunately, this clashes with the use of parentheses in operand expressions. I couldn't get Bison (the parser generator) to deal with this context dependency. As I'm used to coding Intel X86 assembly, which uses brackets for indirection, I opted for [ ] as the default indirection operators. This could be a source of bugs, since if you type it the &ldquo;old&rdquo; way, <code>LDA ($FA),Y</code> is equivalent to <code>LDA $FA,Y</code> &ndash; which probably isn't what you wanted. However, by specifying the switch
 
-<pre class="example">     --swap-parens
-</pre>
-   <p>upon invoking the assembler, the behaviour of [ ] and ( ) will be reversed. That is, the &ldquo;normal&rdquo; way of specifying indirection, i.e. <code>LDA ($00),Y</code> is used, while expression operands are grouped with [ ], i.e. <code>A/[B+C]</code>.
-
-   </body></html>
-
+</body>
+</html>

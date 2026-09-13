@@ -30,6 +30,15 @@ class Installation(unittest.TestCase):
             with self.subTest(document=name):
                 self.assertEqual((DOCDIR / name).read_bytes(), (SOURCE / name).read_bytes())
 
+    def test_release_manual_versions_match_the_installed_tools(self):
+        version_line = f'This is the manual for The XORcyst version {VERSION}.'
+        self.assertIn(version_line, (DOCDIR / 'xorcyst.texinfo').read_text())
+        pages = list((SOURCE / 'doc').glob('*.html'))
+        self.assertTrue(pages, 'HTML manual is missing from the source distribution')
+        for page in pages:
+            with self.subTest(page=page.name):
+                self.assertIn(version_line, page.read_text())
+
     def test_installed_assembler_and_linker(self):
         with tempfile.TemporaryDirectory(prefix='xorcyst-installed-') as temporary:
             root = Path(temporary)

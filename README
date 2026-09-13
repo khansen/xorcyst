@@ -135,7 +135,12 @@ Maintainer builds
 it, regenerate configure with Autoconf 2.72; regenerate Makefile.in with
 Automake 1.18.1 after Makefile.am changes. Keep those generated files in commits.
 Use Bison 3.8.2 and Flex 2.6.4 for parser/lexer regeneration. Ordinary builds
-should leave maintainer mode disabled.
+should leave maintainer mode disabled. Regenerate the HTML manual with
+Texinfo 7.2 after editing xorcyst.texinfo:
+
+    makeinfo --html --split=chapter --output=doc xorcyst.texinfo
+
+The manual version must match `version.h`; installation checks enforce this.
 
 Real-project compatibility checks are opt-in and keep project inputs read-only:
 

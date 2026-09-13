@@ -38,7 +38,7 @@
 @c %**end of header
 
 @copying
-This is the manual for The XORcyst version 1.4.5.
+This is the manual for The XORcyst version 1.7.0.
 
 Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @end copying
@@ -87,6 +87,16 @@ More bug fixes.
 
 Added some stuff, fixed some bugs.
 
+@heading Version 1.7.0
+
+@itemize
+@item Adds structured listings, cross-references, instruction records, dependency manifests, and binary comparison.
+@item Exports FCEUX ROM and RAM debugger names, including banked programs and optional 16 KiB NROM mirroring.
+@item Improves parser, symbol-table, AST, and analysis performance.
+@item Checks assembler and linker output failures, symbol allocation failures, and malformed inputs.
+@item Ships the regression suite and feature specifications, with archive and installation validation on Linux and macOS.
+@end itemize
+
 @heading Version 1.4.5
 
 @strong{Assembler}
@@ -131,7 +141,7 @@ Added some stuff, fixed some bugs.
 
 @item Support for anonymous unions.
 
-@item Fixed bug in result of @code{sizeof} operator when applied to an initialized structure variable. 
+@item Fixed bug in result of @code{sizeof} operator when applied to an initialized structure variable.
 
 @item Returns error code so that i.e. Make stops after the first erroneous invocation.
 
@@ -212,7 +222,7 @@ This is a bugfix release.
 @item Fixed a bug in code generation of exported string constants.
 
 @end itemize
- 
+
 @strong{Linker}
 
 @itemize
@@ -232,7 +242,7 @@ This is a bugfix release.
 @strong{Assembler}
 
 @itemize
- 
+
 @item Added ability to declare storage for array of user-defined types, C-style (works for native types too).
 
 @item Added ability to specify the type of data that a label addresses.
@@ -922,7 +932,7 @@ type	.byte
 A record can be maximum 8 bits (1 byte) wide. The bitfields are arranged from high to low; for example, in the record shown above, @code{top_bits} would occupy bits 7:5, @code{middle_bits} 4:3 and @code{bottom_bits} 2:0. Lower bits are padded if necessary to fill the byte.
 
 The scope operator (@code{::}) returns the number of right shifts necessary to bring the LSb of a bitfield into the LSb of the accumulator. The @code{MASK} operator returns a bitfield's logical AND mask. For example, using the record definition shown above,
- 
+
 @example
 my_record::middle_bits
 @end example
@@ -1466,7 +1476,7 @@ Each of these will be described in the sequel.
 
 @section Magic number and assembler version
 
-The magic number is a 16-bit constant (@code{0xCAFE}, if you must know), used to validate the object file. It is followed by 1 byte which denotes the version of the assembler that was used to build the file; the major version in the upper nibble and minor version in the lower nibble (should be @code{0x10}).
+The magic number is the 16-bit constant @code{0xFACE}. It is followed by the one-byte object-format version, currently @code{0x14}. This identifies the file format, independently of the software release version.
 
 @section Definitions of exported constants
 

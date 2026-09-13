@@ -1,178 +1,324 @@
-<html lang="en">
+<!DOCTYPE html>
+<html>
+<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
 <head>
-<title>Error and Warning Messages - The XORcyst Manual</title>
-<meta http-equiv="Content-Type" content="text/html">
-<meta name="description" content="The XORcyst Manual">
-<meta name="generator" content="makeinfo 4.7">
-<link title="Top" rel="start" href="index.html#Top">
-<link rel="prev" href="Custom-Character-Maps.html#Custom-Character-Maps" title="Custom Character Maps">
-<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
-<!--
-This is the manual for The XORcyst version 1.6.1.
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!-- This is the manual for The XORcyst version 1.7.0.
 
-Copyright (C) 2004, 2005, 2007, 2008, 2009 Kent Hansen.-->
-<meta http-equiv="Content-Style-Type" content="text/css">
-<style type="text/css"><!--
-  pre.display { font-family:inherit }
-  pre.format  { font-family:inherit }
-  pre.smalldisplay { font-family:inherit; font-size:smaller }
-  pre.smallformat  { font-family:inherit; font-size:smaller }
-  pre.smallexample { font-size:smaller }
-  pre.smalllisp    { font-size:smaller }
-  span.sc { font-variant:small-caps }
-  span.roman { font-family: serif; font-weight: normal; } 
---></style>
+Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
+<title>Error and Warning Messages (The XORcyst Manual)</title>
+
+<meta name="description" content="Error and Warning Messages (The XORcyst Manual)">
+<meta name="keywords" content="Error and Warning Messages (The XORcyst Manual)">
+<meta name="resource-type" content="document">
+<meta name="distribution" content="global">
+<meta name="Generator" content="texi2any">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<link href="index.html" rel="start" title="Top">
+<link href="index.html#SEC_Contents" rel="contents" title="Table of Contents">
+<link href="index.html" rel="up" title="Top">
+<link href="Custom-Character-Maps.html" rel="prev" title="Custom Character Maps">
+<style type="text/css">
+<!--
+a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
+span:hover a.copiable-link {visibility: visible}
+-->
+</style>
+
+
 </head>
-<body>
-<div class="node">
+
+<body lang="en">
+<div class="appendix-level-extent" id="Error-and-Warning-Messages">
+<div class="nav-panel">
 <p>
-<a name="Error-and-Warning-Messages"></a>Previous:&nbsp;<a rel="previous" accesskey="p" href="Custom-Character-Maps.html#Custom-Character-Maps">Custom Character Maps</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="index.html#Top">Top</a>
-<hr><br>
+Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom Character Maps</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
+</div>
+<h2 class="appendix" id="Error-and-Warning-Messages-1"><span>Appendix F Error and Warning Messages<a class="copiable-link" href="#Error-and-Warning-Messages-1"> &para;</a></span></h2>
+
+<ul class="mini-toc">
+<li><a href="#Assembler-Error-Messages" accesskey="1">Assembler Error Messages</a></li>
+<li><a href="#Assembler-Warning-Messages" accesskey="2">Assembler Warning Messages</a></li>
+<li><a href="#Linker-Error-Messages" accesskey="3">Linker Error Messages</a></li>
+<li><a href="#Linker-Warning-Messages" accesskey="4">Linker Warning Messages</a></li>
+</ul>
+<div class="section-level-extent" id="Assembler-Error-Messages">
+<h3 class="section"><span>F.1 Assembler Error Messages<a class="copiable-link" href="#Assembler-Error-Messages"> &para;</a></span></h3>
+
+<dl class="table">
+<dt>&lsquo;<samp class="samp">cannot expand `<var class="var">identifier</var>'; not a macro</samp>&rsquo;</dt>
+<dd><p>Make sure <var class="var">identifier</var> is a macro and not a label, constant or other type of symbol.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">conditional expression does not evaluate to literal</samp>&rsquo;</dt>
+<dd><p>Conditional assembly with the <code class="code">.if</code>-directive requires that the expression tested can be evaluated immediately, so it can&rsquo;t contain references to labels and such (since these aren&rsquo;t computed by the assembler, that&rsquo;s the linker&rsquo;s job).
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">could not open `<var class="var">filename</var>' for reading</samp>&rsquo;</dt>
+<dd><p>Check that the file exists and that you have read privileges.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">duplicate symbol `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>You tried to define the same symbol more than once. Global labels must be unique across the entire program. Local labels must be unique within the relevant local scope.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">field declaration expected</samp>&rsquo;</dt>
+<dd><p>A structure or union field must be of the form <code class="code"><var class="var">identifier</var> <var class="var">datatype</var> <var class="var">[count]</var></code>; for example, <code class="code">my_field .db</code>, <code class="code">my_2nd_field .dsw 10</code>, <code class="code">my_3rd_field .type other_struc</code>.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">data initialization not allowed here</samp>&rsquo;</dt>
+<dd><p>A structure or union declaration cannot contain initialization of its fields.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">initializer does not evaluate to integer literal</samp>&rsquo;</dt>
+<dd><p>A member of an enumerated datatype must be assigned a constant value.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">initializer for field `<var class="var">identifier</var>' exceeds field size</samp>&rsquo;</dt>
+<dd><p>When defining the value of a structure or union field, the value must not exceed the number of bytes of storage allocated for that field. For example, if the field definition is <code class="code">a_string .dsb 4</code>, then the value <code class="code">&quot;too long&quot;</code> won&rsquo;t fit since it is 8 bytes long.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">instructions not allowed in data segment</samp>&rsquo;</dt>
+<dd><p>Instructions can only be contained in a code segment (after a <code class="code">codeseg</code> directive).
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">invalid addressing mode</samp>&rsquo;</dt>
+<dd><p>The combination of mnemonic and addressing mode for the 6502 instruction is invalid. For example, <code class="code">LDX $00,X</code> is invalid since the <code class="code">LDX</code> instruction does not have a ZeroPage,X-mode version. Consult a 6502 manual to see what modes are valid for each instruction.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">invalid dataseg statement</samp>&rsquo;</dt>
+<dd><p>A data segment only supports a subset of the statements allowed in code segments. You can&rsquo;t put instructions or initialized data in a data segment.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">invalid operand</samp>&rsquo;</dt>
+<dd><p>You supplied an invalid operand to a statement, for example a string as operand to the <code class="code">LDA</code> instruction.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">macro `<var class="var">identifier</var>' does not take <var class="var">count</var> argument(s)</samp>&rsquo;</dt>
+<dd><p>You supplied the wrong amount of arguments to the macro. Check the macro definition if you&rsquo;re unsure how many arguments it takes, and try again.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">member `<var class="var">sub-struct-identifier</var>' of `<var class="var">struct-identifier</var>' is not a structure</samp>&rsquo;</dt>
+<dd><p>The expression <code class="code"><var class="var">struct-identifier</var>.<var class="var">sub-struct-identifier</var>.<var class="var">some-member</var></code> did not resolve because <var class="var">sub-struct-identifier</var> is not a structure.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">member '<var class="var">field-identifier</var>' of '<var class="var">struct-identifier</var>' is of unknown type (`<var class="var">type-identifier</var>')</samp>&rsquo;</dt>
+<dd><p><var class="var">type-identifier</var> is an undefined type.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">only one field of union can be initialized</samp>&rsquo;</dt>
+<dd><p>When defining an instance of a union, only one of the possible fields can be given a value between the pair of enclosing braces { }.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">operand out of range</samp>&rsquo;</dt>
+<dd><p>A 6502 instruction has either an 8-bit or 16-bit operand, so its value has to fit in that many bits. However, the value you supplied was too large to fit.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">procedures not allowed in data segment</samp>&rsquo;</dt>
+<dd><p>A procedure contains code. Code cannot be contained in a data segment.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">repeat count does not evaluate to literal</samp>&rsquo;</dt>
+<dd><p>Anonymous macros are expanded as soon as they are encountered. Thus, the argument of a <code class="code">rept</code> directive must be an immediate expression.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">size of `<var class="var">identifier</var>' is unknown</samp>&rsquo;</dt>
+<dd><p>The operand to the <code class="code">sizeof</code> operator must be one of <code class="code">BYTE</code>, <code class="code">WORD</code>, <code class="code">DWORD</code>, or the name of a structure definition.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">string or integer argument expected</samp>&rsquo;</dt>
+<dd><p>The <code class="code">message</code> directive takes a string or integer as its argument.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">structure initializer expected</samp>&rsquo;</dt>
+<dd><p>When defining data that is an instance of a structure or union, the field value(s) must be enclosed in a pair of braces { }.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">too many field initializers</samp>&rsquo;</dt>
+<dd><p>There are too many values given compared to the actual number of fields in the structure or union.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">union member must be of constant size</samp>&rsquo;</dt>
+<dd><p>The size of a union member must be known at assembly time. This restriction does not apply to structs.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">unknown macro or directive `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>You attempted to invoke a macro or directive that the assembler doesn&rsquo;t recognize. Check your spelling (remember that identifiers are case sensitive) and/or your macro definitions.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">unknown namespace `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>The expression <code class="code"><var class="var">identifier</var>::<var class="var">symbol</var></code> did not resolve because <var class="var">identifier</var> is not a namespace.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">unknown symbol `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>Your code refers to a symbol which hasn&rsquo;t been defined locally nor has it been declared to be external.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">value not allowed in data segment</samp>&rsquo;</dt>
+<dd><p>Data cannot be initialized in a data segment; the data segment can only specify how many bytes of storage will be needed at runtime.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">`<var class="var">identifier</var>' declared as extrn but is defined locally</samp>&rsquo;</dt>
+<dd><p>Defining a label in your own code and then declaring it as an external symbol doesn&rsquo;t make much sense.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">`<var class="var">identifier</var>' already declared extrn</samp>&rsquo;</dt>
+<dd><p>An identifier already specified in a <code class="code">public</code> directive cannot at the same time be external.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">`<var class="var">identifier</var>' is of non-exportable type</samp>&rsquo;</dt>
+<dd><p>Macros and other volatile symbols cannot be exported.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">`<var class="var">field-identifier</var>' is not a member of `<var class="var">struct-identifier</var>'</samp>&rsquo;</dt>
+<dd><p>The expression <code class="code"><var class="var">struct-identifier</var>.<var class="var">field-identifier</var></code> did not resolve.
+</p>
+</dd>
+</dl>
+
+</div>
+<div class="section-level-extent" id="Assembler-Warning-Messages">
+<h3 class="section"><span>F.2 Assembler Warning Messages<a class="copiable-link" href="#Assembler-Warning-Messages"> &para;</a></span></h3>
+
+<dl class="table">
+<dt>&lsquo;<samp class="samp">`<var class="var">identifier</var>' declared as public but is not defined</samp>&rsquo;</dt>
+<dd><p>You cannot export a symbol that isn&rsquo;t defined in your code.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">`<var class="var">identifier</var>' defined but not used</samp>&rsquo;</dt>
+<dd><p>Usually there is a reason for defining a symbol, so the assembler will warn you if there are no references to it in the code.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">operand out of range; truncated</samp>&rsquo;</dt>
+<dd><p>Operand exceeds 8 or 16 bits, so the upper bits are chopped off.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">redefinition of `<var class="var">identifier</var>' is not identical; ignored</samp>&rsquo;</dt>
+<dd><p>When using the <var class="var">.equ</var>-directive you can only define each identifier once. (Use the = operator instead if appropriate.)
+</p>
+</dd>
+</dl>
+
+</div>
+<div class="section-level-extent" id="Linker-Error-Messages">
+<h3 class="section"><span>F.3 Linker Error Messages<a class="copiable-link" href="#Linker-Error-Messages"> &para;</a></span></h3>
+
+<dl class="table">
+<dt>&lsquo;<samp class="samp">branch out of range</samp>&rsquo;</dt>
+<dd><p>A relative branch instruction went too far. Trim your code or do an inverse-branch-followed-by-jump combo instead.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">duplicate symbol `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>A symbol with the same name is exported from two or more of the units being linked. When linking, exported names must be unique across all units.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">incompatible operand(s) to `<var class="var">operator</var>' in expression</samp>&rsquo;</dt>
+<dt>&lsquo;<samp class="samp">instruction operand doesn't fit in 1 byte</samp>&rsquo;</dt>
+<dd><p>A rather fatal error. A zeropage instruction&rsquo;s operand address won&rsquo;t fit.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">instruction operand doesn't fit in 2 bytes</samp>&rsquo;</dt>
+<dd><p>A rather fatal error which shouldn&rsquo;t even occur.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">invalid instruction operand (string)</samp>&rsquo;</dt>
+<dd><p>6502 instructions only take integer operands.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">negative count</samp>&rsquo;</dt>
+<dd><p>A storage directive must have a positive integer operand.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">out of 6502 RAM while allocating unit `<var class="var">unit</var>'</samp>&rsquo;</dt>
+<dd><p>The linker couldn&rsquo;t map the data segments to 6502 RAM because there was too little of it available. Check your <code class="code">ram</code>-commands in the script or reduce your program&rsquo;s memory requirements.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">PC went beyond 64K when linking `<var class="var">unit</var>'</samp>&rsquo;</dt>
+<dt>&lsquo;<samp class="samp">unexpected string operand (`<var class="var">string</var>') to storage directive</samp>&rsquo;</dt>
+<dd><p>Storage directives only take integer operands.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">unknown symbol `<var class="var">identifier</var>' referenced from <var class="var">unit</var></samp>&rsquo;</dt>
+<dd><p>The external symbol couldn&rsquo;t be resolved. You need to link the unit containing the symbol.
+</p>
+</dd>
+</dl>
+
+<ul class="mini-toc">
+<li><a href="#Linker-Script-Error-Messages" accesskey="1">Linker Script Error Messages</a></li>
+</ul>
+<div class="subsection-level-extent" id="Linker-Script-Error-Messages">
+<h4 class="subsection"><span>F.3.1 Linker Script Error Messages<a class="copiable-link" href="#Linker-Script-Error-Messages"> &para;</a></span></h4>
+
+<dl class="table">
+<dt>&lsquo;<samp class="samp">bank size (<var class="var">size</var>) exceeded by <var class="var">count</var> bytes</samp>&rsquo;</dt>
+<dd><p>The bank output exceeded the size of the current bank. The bank size is wrong, your code is too large or the files you are copying to the bank are.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">cannot pad backwards</samp>&rsquo;</dt>
+<dd><p>If you start a bank and copy a, say, 2K file to it, then attempt to pad to offset 1K you will get this error. Padding can only be done from a smaller offset to a larger or equal offset. Your pad offset is wrong or the data preceding it is too large.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">could not open `<var class="var">filename</var>' for reading</samp>&rsquo;</dt>
+<dd><p>I&rsquo;m sure you know what this means by now.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">could not open `<var class="var">filename</var>' for writing</samp>&rsquo;</dt>
+<dd><p>The specified output file could not be created.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">`end' is smaller than `start'</samp>&rsquo;</dt>
+<dd><p>The end address should be larger or equal to the start address, not the other way around.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">failed to load `<var class="var">unit</var>'</samp>&rsquo;</dt>
+<dd><p>The object file could not be loaded from storage. The file is missing, you don&rsquo;t have access to it or it is corrupted.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">invalid size</samp>&rsquo;</dt>
+<dd><p>The size must be a positive (larger than zero) quantity.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">missing argument `<var class="var">name</var>'</samp>&rsquo;</dt>
+<dd><p>The script command requires an argument which you did not supply.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">no bank size set</samp>&rsquo;</dt>
+<dd><p>At a minimum, the first <code class="code">bank</code>-command in the script must supply a bank size.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">no output open</samp>&rsquo;</dt>
+<dd><p>When executing a script command which writes to the linker&rsquo;s output, an output file must have been specified first. Make sure that all <code class="code">link</code>-, <code class="code">copy</code>-, <code class="code">pad</code>-commands etc. are preceded by the proper <code class="code">output</code>-command.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">value of argument `<var class="var">name</var>' is out of range</samp>&rsquo;</dt>
+<dd><p>The script command argument&rsquo;s value is outside the expected range. For example, an argument which specifies a 6502 address should be between 0 and 64K.
+</p>
+</dd>
+</dl>
+
+</div>
+</div>
+<div class="section-level-extent" id="Linker-Warning-Messages">
+<h3 class="section"><span>F.4 Linker Warning Messages<a class="copiable-link" href="#Linker-Warning-Messages"> &para;</a></span></h3>
+
+<dl class="table">
+<dt>&lsquo;<samp class="samp">`.D(B|W)' operand <var class="var">integer</var> out of range; truncated</samp>&rsquo;</dt>
+<dd><p>Operand exceeds 8 or 16 bits, so the upper bits are chopped off.
+</p>
+</dd>
+</dl>
+
+</div>
+</div>
+<hr>
+<div class="nav-panel">
+<p>
+Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom Character Maps</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
 </div>
 
-<h2 class="appendix">Appendix F Error and Warning Messages</h2>
 
-<h3 class="section">F.1 Assembler Error Messages</h3>
 
-     <dl>
-<dt><span class="samp">cannot expand `</span><var>identifier</var><span class="samp">'; not a macro</span><dd>Make sure <var>identifier</var> is a macro and not a label, constant or other type of symbol.
-
-     <br><dt><span class="samp">conditional expression does not evaluate to literal</span><dd>Conditional assembly with the <code>.if</code>-directive requires that the expression tested can be evaluated immediately, so it can't contain references to labels and such (since these aren't computed by the assembler, that's the linker's job).
-
-     <br><dt><span class="samp">could not open `</span><var>filename</var><span class="samp">' for reading</span><dd>Check that the file exists and that you have read privileges.
-
-     <br><dt><span class="samp">duplicate symbol `</span><var>identifier</var><span class="samp">'</span><dd>You tried to define the same symbol more than once. Global labels must be unique across the entire program. Local labels must be unique within the relevant local scope.
-
-     <br><dt><span class="samp">field declaration expected</span><dd>A structure or union field must be of the form <var>identifier</var> <var>datatype</var> <var>[count]</var>; for example, <code>my_field .db</code>, <code>my_2nd_field .dsw 10</code>, <code>my_3rd_field .type other_struc</code>.
-
-     <br><dt><span class="samp">data initialization not allowed here</span><dd>A structure or union declaration cannot contain initialization of its fields.
-
-     <br><dt><span class="samp">initializer does not evaluate to integer literal</span><dd>A member of an enumerated datatype must be assigned a constant value.
-
-     <br><dt><span class="samp">initializer for field `</span><var>identifier</var><span class="samp">' exceeds field size</span><dd>When defining the value of a structure or union field, the value must not exceed the number of bytes of storage allocated for that field. For example, if the field definition is <code>a_string .dsb 4</code>, then the value <code>"too long"</code> won't fit since it is 8 bytes long.
-
-     <br><dt><span class="samp">instructions not allowed in data segment</span><dd>Instructions can only be contained in a code segment (after a <code>codeseg</code> directive).
-
-     <br><dt><span class="samp">invalid addressing mode</span><dd>The combination of mnemonic and addressing mode for the 6502 instruction is invalid. For example, <code>LDX $00,X</code> is invalid since the <code>LDX</code> instruction does not have a ZeroPage,X-mode version. Consult a 6502 manual to see what modes are valid for each instruction.
-
-     <br><dt><span class="samp">invalid dataseg statement</span><dd>A data segment only supports a subset of the statements allowed in code segments. You can't put instructions or initialized data in a data segment.
-
-     <br><dt><span class="samp">invalid operand</span><dd>You supplied an invalid operand to a statement, for example a string as operand to the <code>LDA</code> instruction.
-
-     <br><dt><span class="samp">macro `</span><var>identifier</var><span class="samp">' does not take </span><var>count</var><span class="samp"> argument(s)</span><dd>You supplied the wrong amount of arguments to the macro. Check the macro definition if you're unsure how many arguments it takes, and try again.
-
-     <br><dt><span class="samp">member `</span><var>sub-struct-identifier</var><span class="samp">' of `</span><var>struct-identifier</var><span class="samp">' is not a structure</span><dd>The expression <var>struct-identifier</var><code>.</code><var>sub-struct-identifier</var><code>.</code><var>some-member</var> did not resolve because <var>sub-struct-identifier</var> is not a structure.
-
-     <br><dt><span class="samp">member '</span><var>field-identifier</var><span class="samp">' of '</span><var>struct-identifier</var><span class="samp">' is of unknown type (`</span><var>type-identifier</var><span class="samp">')</span><dd><var>type-identifier</var> is an undefined type.
-
-     <br><dt><span class="samp">only one field of union can be initialized</span><dd>When defining an instance of a union, only one of the possible fields can be given a value between the pair of enclosing braces { }.
-
-     <br><dt><span class="samp">operand out of range</span><dd>A 6502 instruction has either an 8-bit or 16-bit operand, so its value has to fit in that many bits. However, the value you supplied was too large to fit.
-
-     <br><dt><span class="samp">procedures not allowed in data segment</span><dd>A procedure contains code. Code cannot be contained in a data segment.
-
-     <br><dt><span class="samp">repeat count does not evaluate to literal</span><dd>Anonymous macros are expanded as soon as they are encountered. Thus, the argument of a <code>rept</code> directive must be an immediate expression.
-
-     <br><dt><span class="samp">size of `</span><var>identifier</var><span class="samp">' is unknown</span><dd>The operand to the <code>sizeof</code> operator must be one of <code>BYTE</code>, <code>WORD</code>, <code>DWORD</code>, or the name of a structure definition.
-
-     <br><dt><span class="samp">string or integer argument expected</span><dd>The <code>message</code> directive takes a string or integer as its argument.
-
-     <br><dt><span class="samp">structure initializer expected</span><dd>When defining data that is an instance of a structure or union, the field value(s) must be enclosed in a pair of braces { }.
-
-     <br><dt><span class="samp">too many field initializers</span><dd>There are too many values given compared to the actual number of fields in the structure or union.
-
-     <br><dt><span class="samp">union member must be of constant size</span><dd>The size of a union member must be known at assembly time. This restriction does not apply to structs.
-
-     <br><dt><span class="samp">unknown macro or directive `</span><var>identifier</var><span class="samp">'</span><dd>You attempted to invoke a macro or directive that the assembler doesn't recognize. Check your spelling (remember that identifiers are case sensitive) and/or your macro definitions.
-
-     <br><dt><span class="samp">unknown namespace `</span><var>identifier</var><span class="samp">'</span><dd>The expression <var>identifier</var><code>::</code><var>symbol</var> did not resolve because <var>identifier</var> is not a namespace.
-
-     <br><dt><span class="samp">unknown symbol `</span><var>identifier</var><span class="samp">'</span><dd>Your code refers to a symbol which hasn't been defined locally nor has it been declared to be external.
-
-     <br><dt><span class="samp">value not allowed in data segment</span><dd>Data cannot be initialized in a data segment; the data segment can only specify how many bytes of storage will be needed at runtime.
-
-     <br><dt><span class="samp">`</span><var>identifier</var><span class="samp">' declared as extrn but is defined locally</span><dd>Defining a label in your own code and then declaring it as an external symbol doesn't make much sense.
-
-     <br><dt><span class="samp">`</span><var>identifier</var><span class="samp">' already declared extrn</span><dd>An identifier already specified in a <code>public</code> directive cannot at the same time be external.
-
-     <br><dt><span class="samp">`</span><var>identifier</var><span class="samp">' is of non-exportable type</span><dd>Macros and other volatile symbols cannot be exported.
-
-     <br><dt><span class="samp">`</span><var>field-identifier</var><span class="samp">' is not a member of `</span><var>struct-identifier</var><span class="samp">'</span><dd>The expression <var>struct-identifier</var><code>.</code><var>field-identifier</var> did not resolve.
-
-</dl>
-
-<h3 class="section">F.2 Assembler Warning Messages</h3>
-
-     <dl>
-<dt><span class="samp">`</span><var>identifier</var><span class="samp">' declared as public but is not defined</span><dd>You cannot export a symbol that isn't defined in your code.
-
-     <br><dt><span class="samp">`</span><var>identifier</var><span class="samp">' defined but not used</span><dd>Usually there is a reason for defining a symbol, so the assembler will warn you if there are no references to it in the code.
-
-     <br><dt><span class="samp">operand out of range; truncated</span><dd>Operand exceeds 8 or 16 bits, so the upper bits are chopped off.
-
-     <br><dt><span class="samp">redefinition of `</span><var>identifier</var><span class="samp">' is not identical; ignored</span><dd>When using the <var>.equ</var>-directive you can only define each identifier once. (Use the = operator instead if appropriate.)
-
-</dl>
-
-<h3 class="section">F.3 Linker Error Messages</h3>
-
-     <dl>
-<dt><span class="samp">branch out of range</span><dd>A relative branch instruction went too far. Trim your code or do an inverse-branch-followed-by-jump combo instead.
-
-     <br><dt><span class="samp">duplicate symbol `</span><var>identifier</var><span class="samp">'</span><dd>A symbol with the same name is exported from two or more of the units being linked. When linking, exported names must be unique across all units.
-
-     <br><dt><span class="samp">incompatible operand(s) to `</span><var>operator</var><span class="samp">' in expression</span>
-<br><dt><span class="samp">instruction operand doesn't fit in 1 byte</span><dd>A rather fatal error. A zeropage instruction's operand address won't fit.
-
-     <br><dt><span class="samp">instruction operand doesn't fit in 2 bytes</span><dd>A rather fatal error which shouldn't even occur.
-
-     <br><dt><span class="samp">invalid instruction operand (string)</span><dd>6502 instructions only take integer operands.
-
-     <br><dt><span class="samp">negative count</span><dd>A storage directive must have a positive integer operand.
-
-     <br><dt><span class="samp">out of 6502 RAM while allocating unit `</span><var>unit</var><span class="samp">'</span><dd>The linker couldn't map the data segments to 6502 RAM because there was too little of it available. Check your <code>ram</code>-commands in the script or reduce your program's memory requirements.
-
-     <br><dt><span class="samp">PC went beyond 64K when linking `</span><var>unit</var><span class="samp">'</span>
-<br><dt><span class="samp">unexpected string operand (`</span><var>string</var><span class="samp">') to storage directive</span><dd>Storage directives only take integer operands.
-
-     <br><dt><span class="samp">unknown symbol `</span><var>identifier</var><span class="samp">' referenced from </span><var>unit</var><dd>The external symbol couldn't be resolved. You need to link the unit containing the symbol.
-
-</dl>
-
-<h4 class="subsection">F.3.1 Linker Script Error Messages</h4>
-
-     <dl>
-<dt><span class="samp">bank size (</span><var>size</var><span class="samp">) exceeded by </span><var>count</var><span class="samp"> bytes</span><dd>The bank output exceeded the size of the current bank. The bank size is wrong, your code is too large or the files you are copying to the bank are.
-
-     <br><dt><span class="samp">cannot pad backwards</span><dd>If you start a bank and copy a, say, 2K file to it, then attempt to pad to offset 1K you will get this error. Padding can only be done from a smaller offset to a larger or equal offset. Your pad offset is wrong or the data preceding it is too large.
-
-     <br><dt><span class="samp">could not open `</span><var>filename</var><span class="samp">' for reading</span><dd>I'm sure you know what this means by now.
-
-     <br><dt><span class="samp">could not open `</span><var>filename</var><span class="samp">' for writing</span><dd>The specified output file could not be created.
-
-     <br><dt><span class="samp">`end' is smaller than `start'</span><dd>The end address should be larger or equal to the start address, not the other way around.
-
-     <br><dt><span class="samp">failed to load `</span><var>unit</var><span class="samp">'</span><dd>The object file could not be loaded from storage. The file is missing, you don't have access to it or it is corrupted.
-
-     <br><dt><span class="samp">invalid size</span><dd>The size must be a positive (larger than zero) quantity.
-
-     <br><dt><span class="samp">missing argument `</span><var>name</var><span class="samp">'</span><dd>The script command requires an argument which you did not supply.
-
-     <br><dt><span class="samp">no bank size set</span><dd>At a minimum, the first <code>bank</code>-command in the script must supply a bank size.
-
-     <br><dt><span class="samp">no output open</span><dd>When executing a script command which writes to the linker's output, an output file must have been specified first. Make sure that all <code>link</code>-, <code>copy</code>-, <code>pad</code>-commands etc. are preceded by the proper <code>output</code>-command.
-
-     <br><dt><span class="samp">value of argument `</span><var>name</var><span class="samp">' is out of range</span><dd>The script command argument's value is outside the expected range. For example, an argument which specifies a 6502 address should be between 0 and 64K.
-
-</dl>
-
-<h3 class="section">F.4 Linker Warning Messages</h3>
-
-     <dl>
-<dt><span class="samp">`.D(B|W)' operand </span><var>integer</var><span class="samp"> out of range; truncated</span><dd>Operand exceeds 8 or 16 bits, so the upper bits are chopped off.
-
-</dl>
-
-</body></html>
-
+</body>
+</html>
