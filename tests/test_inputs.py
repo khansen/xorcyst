@@ -44,6 +44,8 @@ class InputHandling(unittest.TestCase):
     def test_malformed_source_is_rejected_without_crashes_or_leaks(self):
         cases = ('LDA #(', 'PROC Incomplete\nNOP\n', 'MACRO Incomplete\nNOP\n',
                  'IF 1\nLDA #1\n', '.DB 1,\n', 'Value .EQU 1\nLDA Value::Missing\n',
+                 'RECORD Broken field:0\n', 'RECORD Broken field:Missing\n',
+                 'RECORD Broken field:1,field:2\n',
                  '.ORG $8000\n.DSB -1\n', 'LDA #(' + '(' * 11000 + '1\n')
         for source in cases:
             with self.subTest(source=source[:60]):

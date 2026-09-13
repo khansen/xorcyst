@@ -3293,7 +3293,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
         for (c = record_id->next_sibling; c != NULL; c = c->next_sibling) {
             /* c has two children: field identifier and its width */
             field_id = LHS(c);
-            field_width = astnode_clone(reduce_expression(RHS(c), FOLD_PC_NO), RHS(c)->loc);
+            field_width = reduce_expression(RHS(c), FOLD_PC_NO);
             /* Validate the width -- must be positive integer literal */
             if (!astnode_is_type(field_width, INTEGER_NODE)) {
                 err(c->loc, "record member `%s' is not of constant size", field_id->ident);
@@ -3318,7 +3318,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
             offset = offset - field_width->integer;
             fe->field.offset = astnode_create_integer(offset, c->loc);
             /* Set field size (width) */
-            fe->field.size = field_width;
+            fe->field.size = astnode_clone(field_width, field_width->loc);
         }
         size = 8 - offset;
         if (size > 8) {
