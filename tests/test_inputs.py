@@ -274,6 +274,50 @@ class InputHandling(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
                 self.assertEqual((self.root / 'output').read_bytes(), b'\0' * count)
 
+    def test_forward_storage_counts_are_rejected_before_any_output(self):
+        # DSB target+5; target: The first layout pass cannot
+        # determine the storage size without using a yet-unresolved address.
+        for segment in ('code', 'data'):
+            data = object_file(**{segment: bytes.fromhex('fd0000f600f3')},
+                               expressions=[bytes.fromhex('100800000105')])
+            (self.root / 'unit.o').write_bytes(data)
+            (self.root / 'second').write_bytes(b'previous second')
+            result = self.run_tool('xlnk', 'pad{size=1}\noutput{file=second}\n'
+                                   'link{file=unit.o,origin=0}\n')
+            self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+            self.assertIn(b'storage size', result.stderr)
+            self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
+
+    def test_storage_counts_using_resolved_labels_remain_valid(self):
+        # target: DSB target+5; DW target, linked at address 1.
+        data = object_file(code=bytes.fromhex('f600fd0000f90001f3'),
+                           expressions=[bytes.fromhex('100800000105'), bytes.fromhex('080000')])
+        (self.root / 'unit.o').write_bytes(data)
+        result = self.run_tool('xlnk', 'link{file=unit.o,origin=1}\n')
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), b'\0' * 6 + b'\x01\0')
+
+    def test_immediate_storage_count_boundaries(self):
+        for segment in ('code', 'data'):
+            (self.root / 'unit.o').write_bytes(object_file(**{segment: bytes.fromhex('fcfffff3')}))
+            (self.root / 'second').write_bytes(b'previous second')
+            result = self.run_tool('xlnk', 'pad{size=1}\noutput{file=second}\n'
+                                   'link{file=unit.o,origin=0}\n', limited=True)
+            self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+            self.assertIn(b'storage size', result.stderr)
+            self.assertEqual((self.root / 'second').read_bytes(), b'previous second')
+        for command, count in (('fb00', 1), ('fbff', 256), ('fc0000', 1), ('fcfffe', 65535)):
+            (self.root / 'unit.o').write_bytes(object_file(code=bytes.fromhex(command + 'f3')))
+            result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n', limited=True)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual((self.root / 'output').read_bytes(), b'\0' * count)
+
+    def test_empty_command_line_string_definitions(self):
+        for argument in ('-DValue=""', '-DValue='):
+            result = self.run_tool('xasm', '.DB "[",Value,"]"\n', arguments=[argument])
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual((self.root / 'output').read_bytes(), b'[]')
+
     def test_rejected_command_line_definitions_release_their_values(self):
         cases = [(['-DValue=1', '-DValue=2'], '.DB Value\n', b'\x01', b'already defined'),
                  (['-DValue=1', '-DValue'], '.DB Value\n', b'\x01', b'already defined'),

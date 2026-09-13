@@ -474,22 +474,31 @@ static void maybe_print_debug_tip()
     }
 }
 
-/**
- * Issues an error.
- * @param fmt format string for printf
- */
+static void report_error(const char *fmt, va_list ap)
+{
+    maybe_print_location();
+    fprintf(stderr, "error: ");
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    maybe_print_debug_tip();
+    err_count++;
+}
+
+/* Errors that cannot be deferred to a later relocation pass. */
+static void err_always(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    report_error(fmt, ap);
+    va_end(ap);
+}
+
+/* First-pass relocation may defer errors for forward instruction operands. */
 static void err(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    if (!suppress) {
-        maybe_print_location();
-        fprintf(stderr, "error: ");
-        vfprintf(stderr, fmt, ap);
-        fprintf(stderr, "\n");
-        maybe_print_debug_tip();
-        err_count++;
-    }
+    if (!suppress) report_error(fmt, ap);
     va_end(ap);
 }
 
@@ -1126,16 +1135,23 @@ static int eval_instruction_operand(xunit *u, int exid, xasm_constant *result)
     return 0;
 }
 
+static int valid_storage_count(long count)
+{
+    if (count > 0 && count < 0x10000) return 1;
+    err_always("storage size out of range (must be 1..65535 bytes)");
+    return 0;
+}
+
 static int eval_storage_count(xunit *u, int exid, int *count)
 {
     xasm_constant result;
     int valid = 0;
     eval_expression(u, exid, &result);
     if (result.type != XASM_INTEGER_CONSTANT) {
-        err("storage size must evaluate to an integer");
-    } else if (result.integer <= 0 || result.integer >= 0x10000) {
-        err("storage size out of range (must be 1..65535 bytes)");
-    } else {
+        /* Unlike instruction operands, an unresolved storage size prevents
+           this pass from assigning correct addresses to subsequent labels. */
+        err_always("storage size must evaluate to an integer during layout");
+    } else if (valid_storage_count(result.integer)) {
         *count = (int)result.integer;
         valid = 1;
     }
@@ -2485,6 +2501,14 @@ static void validate_object_operand(const unsigned char *bytes, void *arg)
     if (index >= u->_unit_.expr_count) err("invalid expression index in object bytecode");
 }
 
+static void validate_object_storage(const unsigned char *bytes, void *arg)
+{
+    int offset = 1;
+    (void)arg;
+    valid_storage_count((bytes[0] == XASM_CMD_DSI8
+                         ? get_1(bytes, &offset) : get_2(bytes, &offset)) + 1);
+}
+
 static void validate_object(xunit *u)
 {
     int i;
@@ -2493,6 +2517,8 @@ static void validate_object(xunit *u)
                            XASM_CMD_DW, XASM_CMD_DD, XASM_CMD_DSB};
     for (i = 0; i < (int)(sizeof(operands) / sizeof(*operands)); i++)
         handlers[operands[i] - XASM_CMD_END] = validate_object_operand;
+    handlers[XASM_CMD_DSI8 - XASM_CMD_END] = validate_object_storage;
+    handlers[XASM_CMD_DSI16 - XASM_CMD_END] = validate_object_storage;
     bytecode_walk(u->_unit_.dataseg.bytes, u->_unit_.dataseg.size, handlers, u);
     bytecode_walk(u->_unit_.codeseg.bytes, u->_unit_.codeseg.size, handlers, u);
     for (i = 0; i < u->_unit_.expr_count; i++) validate_object_expression(u, u->_unit_.expressions[i]);
@@ -3243,7 +3269,7 @@ int main(int argc, char **argv)
             suppress = 1;
             relocate_units(&sc);
             suppress = 0;
-            relocate_units(&sc);
+            if (err_count == 0) relocate_units(&sc);
 
             if (err_count == 0) {
                 verbose(1, "generating output...");

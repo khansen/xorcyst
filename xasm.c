@@ -755,7 +755,7 @@ parse_arguments (int argc, char **argv)
                         if (str[0] == '\"') {
                             /* Assume string */
                             str = strtok(&str[1], "\"");
-                            val = astnode_create_string(str, loc);
+                            val = astnode_create_string(str ? str : "", loc);
                         } else {
                             /* Assume integer */
                             val = astnode_create_integer(strtol(str, NULL, 0), loc);
