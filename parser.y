@@ -117,7 +117,6 @@ static void discard_parsed_nodes(astnode *node)
 %type <node> identifier identifier_opt local_id assembly_unit statement labelable_statement statement_list_opt if_statement elif_statement elif_statement_list elif_statement_list_opt ifdef_statement ifndef_statement macro_decl_statement macro_statement exitm_statement instruction_statement data_statement storage_statement null_statement incsrc_statement incbin_statement equ_statement undef_statement assign_statement public_statement extrn_statement dataseg_statement codeseg_statement charmap_statement struc_decl_statement union_decl_statement enum_decl_statement record_decl_statement instruction expression extended_expression expression_opt arithmetic_expression comparison_expression literal label label_decl identifier_list expression_list file_specifier param_list_opt arg_list_opt else_part_opt scope_access struc_access struc_initializer field_initializer_list field_initializer_list_opt field_initializer datatype storage named_data_statement unnamed_data_statement named_storage_statement unnamed_storage_statement proc_statement rept_statement do_statement label_statement message_statement warning_statement error_statement while_statement define_statement align_statement org_statement symbol_type enum_item_list enum_item record_field_list record_field sizeof_arg label_addr_part_opt label_type_part_opt from_part_opt indexed_identifier
 
 %type <node_list> statement_list
-%type <node> instruction_body
 
 %token _LABEL_ BYTE CHAR WORD DWORD DSB DSW DSD DATASEG CODESEG IF IFDEF IFNDEF ELSE ELIF ENDIF INCSRC INCBIN MACRO REPT WHILE DO UNTIL ENDM EXITM ALIGN EQU UNDEF DEFINE END PUBLIC EXTRN CHARMAP STRUC UNION ENDS RECORD ENUM ENDE PROC ENDP SIZEOF MASK TAG MESSAGE WARNING ERROR ZEROPAGE ORG
 
@@ -346,14 +345,10 @@ newline:
     ;
 
 instruction_statement:
-    instruction line_tail { $$ = $1; }
+    instruction line_tail { $$ = $1; if ($$ == NULL) YYNOMEM; }
     ;
 
 instruction:
-    instruction_body { $$ = $1; if ($$ == NULL) YYNOMEM; }
-    ;
-
-instruction_body:
     MNEMONIC { $$ = astnode_create_instruction($1, IMPLIED_MODE, NULL, @$); }
     | MNEMONIC 'A' { $$ = parsed_instruction($1, ACCUMULATOR_MODE, NULL, @$, @2); }
     | MNEMONIC '#' expression { $$ = parsed_instruction($1, IMMEDIATE_MODE, $3, @$, @2); }
