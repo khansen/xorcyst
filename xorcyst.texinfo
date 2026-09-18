@@ -1689,6 +1689,57 @@ Operand exceeds 8 or 16 bits, so the upper bits are chopped off.
 @item redefinition of `@var{identifier}' is not identical; ignored
 When using the @var{.equ}-directive you can only define each identifier once. (Use the = operator instead if appropriate.)
 
+@item W0017: --listing-format is ignored because --listing is not set
+Printed when @code{--listing-format} is given without @code{--listing=@var{FILE}}; there is no listing for the requested format to apply to. Unlike the other messages in this table, it carries no source-file/line prefix, since it is not tied to a line in your program. Suppressed by @code{--no-warn} like any other warning.
+
+@item W0201: symbol `@var{identifier}' defined by .EQU is never used
+Opt-in: silent unless @code{--warn-unused-equ} is given. @code{--Werror=unused-equ} promotes it to a fatal @samp{error W0201} and is @emph{not} silenced by @code{--no-warn}; @code{--Wno-unused-equ} turns the check back off entirely. To suppress one definition without disabling the check everywhere, add a same-line @code{; xasm:ignore unused-equ} comment on the @code{.EQU} statement, or bracket a region with @code{; xasm:disable unused-equ} and @code{; xasm:enable unused-equ} comments.
+
+@end table
+
+@section Raw-Address Audit Diagnostics
+
+@code{--audit-raw-addresses} reports raw numeric operands and data bytes that
+happen to equal the address of a known label, or the value of a known
+@code{.EQU} constant, and so could be written symbolically instead. Findings
+print as @samp{warning @var{CODE}} by default; @code{--audit-level=error}
+reclassifies every finding as @samp{error @var{CODE}} and makes the exit
+status nonzero. Unlike the warnings in the previous section, audit findings
+are @emph{not} silenced by @code{--no-warn}. @code{--audit-output-format=json}
+emits the same findings as a structured document instead of text lines.
+
+Suppress one finding with a same-line @code{; xasm:audit-ignore
+@var{CODE}[,@var{CODE}...]} comment, or bracket a reviewed region with
+@code{; xasm:audit-disable} and @code{; xasm:audit-enable} comments; every
+finding between the two is dropped regardless of code.
+
+@table @samp
+
+@item A100: raw control-flow target `@var{value}' can use symbol `@var{name}'
+A @code{JSR} or @code{JMP} operand is a raw hex literal equal to a defined
+label's address.
+
+@item A110: raw pointer immediate split `@var{value}' can use symbol `@var{name}'
+An immediate operand built with @code{<} or @code{>} against a raw hex
+literal (e.g. @code{#<$C007}) equals the low or high byte of a defined
+label's address.
+
+@item A120: raw low-address operand `@var{value}' can use symbol `@var{name}'
+A non-immediate, non-branch instruction operand is a raw literal in
+@code{$00}-@code{$FF} equal to the value of a defined @code{.EQU} constant.
+
+@item A130: raw .DW target `@var{value}' can use symbol `@var{name}'
+A @code{.DW} word literal equals a defined label's address.
+
+@item A131: raw .DB pointer pair `@var{value}' can use symbol `@var{name}'
+Two adjacent @code{.DB} byte literals, read as a little-endian pair, equal a
+defined label's address. This is the only one of the five checks scoped by
+@code{--audit-rom-range=@var{LO}-@var{HI}}: a candidate value outside that
+range is never checked against known labels, which keeps two
+coincidentally address-shaped bytes in an unrelated data table from
+producing a false positive. The other four codes fire the same whether or
+not @code{--audit-rom-range} is given.
+
 @end table
 
 @section Linker Error Messages

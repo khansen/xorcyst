@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
+<!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <!-- This is the manual for The XORcyst version 1.7.0.
@@ -12,7 +12,7 @@ Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <meta name="keywords" content="The Linker (The XORcyst Manual)">
 <meta name="resource-type" content="document">
 <meta name="distribution" content="global">
-<meta name="Generator" content="texi2any">
+<meta name="Generator" content="makeinfo">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <link href="index.html" rel="start" title="Top">
@@ -21,23 +21,19 @@ Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <link href="Known-Bugs-and-Limitations.html" rel="next" title="Known Bugs and Limitations">
 <link href="The-Assembler.html" rel="prev" title="The Assembler">
 <style type="text/css">
-<!--
 a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
 div.example {margin-left: 3.2em}
 span:hover a.copiable-link {visibility: visible}
 ul.mark-bullet {list-style-type: disc}
--->
 </style>
 
 
 </head>
 
-<body lang="en">
+<body>
 <div class="chapter-level-extent" id="The-Linker">
-<div class="nav-panel">
-<p>
-Next: <a href="Known-Bugs-and-Limitations.html" accesskey="n" rel="next">Known Bugs and Limitations</a>, Previous: <a href="The-Assembler.html" accesskey="p" rel="prev">The Assembler</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
-</div>
+<p class="nav-panel">
+<span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Known-Bugs-and-Limitations.html" rel="next">Known Bugs and Limitations</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="The-Assembler.html" rel="prev">The Assembler</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="The-Linker-1"><span>4 The Linker<a class="copiable-link" href="#The-Linker-1"> &para;</a></span></h2>
 
 <p>The main job of the linker is to take object code files (units) created by the assembler, resolve any dependencies among them and reduce them to pure 6502 binaries.
@@ -45,13 +41,13 @@ Next: <a href="Known-Bugs-and-Limitations.html" accesskey="n" rel="next">Known B
 <p>The XORcyst linker takes as input a linker script. The linker script is a plaintext file containing a sequence of commands which describe the layout and contents of the linker output. (For a complete list and description of script commands, see <a class="ref" href="Linker-Script-Commands.html">Linker Script Commands</a>.) The final output of the linker process is a single binary file containing all the 6502 code properly relocated and resolved, plus any other data specified in the linker script.
 </p>
 <ul class="mini-toc">
-<li><a href="#Invoking-the-linker-_0028xlnk_0029" accesskey="1">Invoking the linker (<code class="command">xlnk</code>)</a></li>
-<li><a href="#A-simple-linker-script-example" accesskey="2">A simple linker script example</a></li>
-<li><a href="#Linking-multiple-units" accesskey="3">Linking multiple units</a></li>
-<li><a href="#Separating-units-into-banks" accesskey="4">Separating units into banks</a></li>
-<li><a href="#Partitioning-6502-RAM" accesskey="5">Partitioning 6502 RAM</a></li>
-<li><a href="#Copying-files-to-linker-output" accesskey="6">Copying files to linker output</a></li>
-<li><a href="#Padding-the-output" accesskey="7">Padding the output</a></li>
+<li><a href="#Invoking-the-linker-_0028xlnk_0029">Invoking the linker (<code class="command">xlnk</code>)</a></li>
+<li><a href="#A-simple-linker-script-example">A simple linker script example</a></li>
+<li><a href="#Linking-multiple-units">Linking multiple units</a></li>
+<li><a href="#Separating-units-into-banks">Separating units into banks</a></li>
+<li><a href="#Partitioning-6502-RAM">Partitioning 6502 RAM</a></li>
+<li><a href="#Copying-files-to-linker-output">Copying files to linker output</a></li>
+<li><a href="#Padding-the-output">Padding the output</a></li>
 </ul>
 <div class="section-level-extent" id="Invoking-the-linker-_0028xlnk_0029">
 <h3 class="section"><span>4.1 Invoking the linker (<code class="command">xlnk</code>)<a class="copiable-link" href="#Invoking-the-linker-_0028xlnk_0029"> &para;</a></span></h3>
@@ -193,10 +189,8 @@ published by earlier output commands remain in place.
 </div>
 </div>
 <hr>
-<div class="nav-panel">
-<p>
-Next: <a href="Known-Bugs-and-Limitations.html" accesskey="n" rel="next">Known Bugs and Limitations</a>, Previous: <a href="The-Assembler.html" accesskey="p" rel="prev">The Assembler</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
-</div>
+<p class="nav-panel">
+<span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Known-Bugs-and-Limitations.html" rel="next">Known Bugs and Limitations</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="The-Assembler.html" rel="prev">The Assembler</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 
 
 

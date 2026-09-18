@@ -1,5 +1,16 @@
 # xasm Index-Bound Analysis Spec
 
+## Status
+
+Implemented and shipped: `--analyze-index-patterns` emits `index_upper_bound`
+and `index_bound_kind` exactly as described below, for both the mask and
+compare idioms, including symbolic-immediate resolution. `tests/regression.sh`
+has a dedicated `run_expect_index_bounds` covering every scenario listed under
+Testing, plus a register-mismatch and an unrelated-mask negative case. The
+rest of this document is still phrased as a proposal ("Proposed Solution",
+"Acceptance Criteria"); read those sections as a description of what shipped,
+not a pending design.
+
 ## Purpose
 
 Extend `--analyze-index-patterns` to emit the *resolved upper bound* of an
