@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
+<!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <!-- This is the manual for The XORcyst version 1.7.0.
@@ -12,7 +12,7 @@ Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <meta name="keywords" content="The Assembler (The XORcyst Manual)">
 <meta name="resource-type" content="document">
 <meta name="distribution" content="global">
-<meta name="Generator" content="texi2any">
+<meta name="Generator" content="makeinfo">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <link href="index.html" rel="start" title="Top">
@@ -21,31 +21,27 @@ Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <link href="The-Linker.html" rel="next" title="The Linker">
 <link href="Overview.html" rel="prev" title="Overview">
 <style type="text/css">
-<!--
 a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
 div.example {margin-left: 3.2em}
 span:hover a.copiable-link {visibility: visible}
 ul.mark-bullet {list-style-type: disc}
--->
 </style>
 
 
 </head>
 
-<body lang="en">
+<body>
 <div class="chapter-level-extent" id="The-Assembler">
-<div class="nav-panel">
-<p>
-Next: <a href="The-Linker.html" accesskey="n" rel="next">The Linker</a>, Previous: <a href="Overview.html" accesskey="p" rel="prev">Overview</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
-</div>
+<p class="nav-panel">
+<span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="The-Linker.html" rel="next">The Linker</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="Overview.html" rel="prev">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="The-Assembler-1"><span>3 The Assembler<a class="copiable-link" href="#The-Assembler-1"> &para;</a></span></h2>
 
 <p>The XORcyst assembler takes a <em class="dfn">plaintext file</em> containing a sequence of 6502 instructions and assembler
 directives (collectively referred to as assembler statements), and produces from this an <em class="dfn">object file</em> (usually referred to as a <em class="dfn">unit</em>) that can be fed on to the XORcyst linker.
 </p>
 <ul class="mini-toc">
-<li><a href="#Invoking-the-assembler-_0028xasm_0029" accesskey="1">Invoking the assembler (<code class="command">xasm</code>)</a></li>
-<li><a href="#Assembler-statements" accesskey="2">Assembler statements</a></li>
+<li><a href="#Invoking-the-assembler-_0028xasm_0029">Invoking the assembler (<code class="command">xasm</code>)</a></li>
+<li><a href="#Assembler-statements">Assembler statements</a></li>
 </ul>
 <div class="section-level-extent" id="Invoking-the-assembler-_0028xasm_0029">
 <h3 class="section"><span>3.1 Invoking the assembler (<code class="command">xasm</code>)<a class="copiable-link" href="#Invoking-the-assembler-_0028xasm_0029"> &para;</a></span></h3>
@@ -64,7 +60,7 @@ If all goes well, this will produce a similarly named file of extension <samp cl
 <p>produces the object file <samp class="file">driver.o</samp> if no errors are encountered by the assembler.
 </p>
 <ul class="mini-toc">
-<li><a href="#Switches" accesskey="1">Switches</a></li>
+<li><a href="#Switches">Switches</a></li>
 </ul>
 <div class="subsection-level-extent" id="Switches">
 <h4 class="subsection"><span>3.1.1 Switches<a class="copiable-link" href="#Switches"> &para;</a></span></h4>
@@ -229,15 +225,15 @@ higher-numbered name files are not removed automatically.
 <p>In the code templates given in this section, any arguments enclosed in italic square brackets <em class="emph">[ ... ]</em> are optional.
 </p>
 <ul class="mini-toc">
-<li><a href="#A-simple-assembler-example" accesskey="1">A simple assembler example</a></li>
-<li><a href="#Literals" accesskey="2">Literals</a></li>
-<li><a href="#Identifiers" accesskey="3">Identifiers</a></li>
-<li><a href="#Expressions" accesskey="4">Expressions</a></li>
-<li><a href="#Global-labels" accesskey="5">Global labels</a></li>
-<li><a href="#Local-labels" accesskey="6">Local labels</a></li>
-<li><a href="#Forward_002fbackward-branches" accesskey="7">Forward/backward branches</a></li>
-<li><a href="#Equates" accesskey="8">Equates</a></li>
-<li><a href="#Conditional-assembly" accesskey="9">Conditional assembly</a></li>
+<li><a href="#A-simple-assembler-example">A simple assembler example</a></li>
+<li><a href="#Literals">Literals</a></li>
+<li><a href="#Identifiers">Identifiers</a></li>
+<li><a href="#Expressions">Expressions</a></li>
+<li><a href="#Global-labels">Global labels</a></li>
+<li><a href="#Local-labels">Local labels</a></li>
+<li><a href="#Forward_002fbackward-branches">Forward/backward branches</a></li>
+<li><a href="#Equates">Equates</a></li>
+<li><a href="#Conditional-assembly">Conditional assembly</a></li>
 <li><a href="#Macros">Macros</a></li>
 <li><a href="#Anonymous-macros">Anonymous macros</a></li>
 <li><a href="#Including-files">Including files</a></li>
@@ -929,10 +925,8 @@ my_array .byte[64]
 </div>
 </div>
 <hr>
-<div class="nav-panel">
-<p>
-Next: <a href="The-Linker.html" accesskey="n" rel="next">The Linker</a>, Previous: <a href="Overview.html" accesskey="p" rel="prev">Overview</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
-</div>
+<p class="nav-panel">
+<span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="The-Linker.html" rel="next">The Linker</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="Overview.html" rel="prev">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 
 
 

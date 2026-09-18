@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<!-- Created by GNU Texinfo 7.2, https://www.gnu.org/software/texinfo/ -->
+<!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <!-- This is the manual for The XORcyst version 1.7.0.
@@ -12,7 +12,7 @@ Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <meta name="keywords" content="Error and Warning Messages (The XORcyst Manual)">
 <meta name="resource-type" content="document">
 <meta name="distribution" content="global">
-<meta name="Generator" content="texi2any">
+<meta name="Generator" content="makeinfo">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <link href="index.html" rel="start" title="Top">
@@ -20,28 +20,25 @@ Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <link href="index.html" rel="up" title="Top">
 <link href="Custom-Character-Maps.html" rel="prev" title="Custom Character Maps">
 <style type="text/css">
-<!--
 a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
 span:hover a.copiable-link {visibility: visible}
--->
 </style>
 
 
 </head>
 
-<body lang="en">
+<body>
 <div class="appendix-level-extent" id="Error-and-Warning-Messages">
-<div class="nav-panel">
-<p>
-Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom Character Maps</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
-</div>
+<p class="nav-panel">
+<span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="Custom-Character-Maps.html" rel="prev">Custom Character Maps</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="appendix" id="Error-and-Warning-Messages-1"><span>Appendix F Error and Warning Messages<a class="copiable-link" href="#Error-and-Warning-Messages-1"> &para;</a></span></h2>
 
 <ul class="mini-toc">
-<li><a href="#Assembler-Error-Messages" accesskey="1">Assembler Error Messages</a></li>
-<li><a href="#Assembler-Warning-Messages" accesskey="2">Assembler Warning Messages</a></li>
-<li><a href="#Linker-Error-Messages" accesskey="3">Linker Error Messages</a></li>
-<li><a href="#Linker-Warning-Messages" accesskey="4">Linker Warning Messages</a></li>
+<li><a href="#Assembler-Error-Messages">Assembler Error Messages</a></li>
+<li><a href="#Assembler-Warning-Messages">Assembler Warning Messages</a></li>
+<li><a href="#Raw_002dAddress-Audit-Diagnostics">Raw-Address Audit Diagnostics</a></li>
+<li><a href="#Linker-Error-Messages">Linker Error Messages</a></li>
+<li><a href="#Linker-Warning-Messages">Linker Warning Messages</a></li>
 </ul>
 <div class="section-level-extent" id="Assembler-Error-Messages">
 <h3 class="section"><span>F.1 Assembler Error Messages<a class="copiable-link" href="#Assembler-Error-Messages"> &para;</a></span></h3>
@@ -198,11 +195,70 @@ Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom C
 <dd><p>When using the <var class="var">.equ</var>-directive you can only define each identifier once. (Use the = operator instead if appropriate.)
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">W0017: --listing-format is ignored because --listing is not set</samp>&rsquo;</dt>
+<dd><p>Printed when <code class="code">--listing-format</code> is given without <code class="code">--listing=<var class="var">FILE</var></code>; there is no listing for the requested format to apply to. Unlike the other messages in this table, it carries no source-file/line prefix, since it is not tied to a line in your program. Suppressed by <code class="code">--no-warn</code> like any other warning.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">W0201: symbol `<var class="var">identifier</var>' defined by .EQU is never used</samp>&rsquo;</dt>
+<dd><p>Opt-in: silent unless <code class="code">--warn-unused-equ</code> is given. <code class="code">--Werror=unused-equ</code> promotes it to a fatal &lsquo;<samp class="samp">error W0201</samp>&rsquo; and is <em class="emph">not</em> silenced by <code class="code">--no-warn</code>; <code class="code">--Wno-unused-equ</code> turns the check back off entirely. To suppress one definition without disabling the check everywhere, add a same-line <code class="code">; xasm:ignore unused-equ</code> comment on the <code class="code">.EQU</code> statement, or bracket a region with <code class="code">; xasm:disable unused-equ</code> and <code class="code">; xasm:enable unused-equ</code> comments.
+</p>
+</dd>
+</dl>
+
+</div>
+<div class="section-level-extent" id="Raw_002dAddress-Audit-Diagnostics">
+<h3 class="section"><span>F.3 Raw-Address Audit Diagnostics<a class="copiable-link" href="#Raw_002dAddress-Audit-Diagnostics"> &para;</a></span></h3>
+
+<p><code class="code">--audit-raw-addresses</code> reports raw numeric operands and data bytes that
+happen to equal the address of a known label, or the value of a known
+<code class="code">.EQU</code> constant, and so could be written symbolically instead. Findings
+print as &lsquo;<samp class="samp">warning <var class="var">CODE</var></samp>&rsquo; by default; <code class="code">--audit-level=error</code>
+reclassifies every finding as &lsquo;<samp class="samp">error <var class="var">CODE</var></samp>&rsquo; and makes the exit
+status nonzero. Unlike the warnings in the previous section, audit findings
+are <em class="emph">not</em> silenced by <code class="code">--no-warn</code>. <code class="code">--audit-output-format=json</code>
+emits the same findings as a structured document instead of text lines.
+</p>
+<p>Suppress one finding with a same-line <code class="code">; xasm:audit-ignore
+<var class="var">CODE</var>[,<var class="var">CODE</var>...]</code> comment, or bracket a reviewed region with
+<code class="code">; xasm:audit-disable</code> and <code class="code">; xasm:audit-enable</code> comments; every
+finding between the two is dropped regardless of code.
+</p>
+<dl class="table">
+<dt>&lsquo;<samp class="samp">A100: raw control-flow target `<var class="var">value</var>' can use symbol `<var class="var">name</var>'</samp>&rsquo;</dt>
+<dd><p>A <code class="code">JSR</code> or <code class="code">JMP</code> operand is a raw hex literal equal to a defined
+label&rsquo;s address.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">A110: raw pointer immediate split `<var class="var">value</var>' can use symbol `<var class="var">name</var>'</samp>&rsquo;</dt>
+<dd><p>An immediate operand built with <code class="code">&lt;</code> or <code class="code">&gt;</code> against a raw hex
+literal (e.g. <code class="code">#&lt;$C007</code>) equals the low or high byte of a defined
+label&rsquo;s address.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">A120: raw low-address operand `<var class="var">value</var>' can use symbol `<var class="var">name</var>'</samp>&rsquo;</dt>
+<dd><p>A non-immediate, non-branch instruction operand is a raw literal in
+<code class="code">$00</code>-<code class="code">$FF</code> equal to the value of a defined <code class="code">.EQU</code> constant.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">A130: raw .DW target `<var class="var">value</var>' can use symbol `<var class="var">name</var>'</samp>&rsquo;</dt>
+<dd><p>A <code class="code">.DW</code> word literal equals a defined label&rsquo;s address.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">A131: raw .DB pointer pair `<var class="var">value</var>' can use symbol `<var class="var">name</var>'</samp>&rsquo;</dt>
+<dd><p>Two adjacent <code class="code">.DB</code> byte literals, read as a little-endian pair, equal a
+defined label&rsquo;s address. This is the only one of the five checks scoped by
+<code class="code">--audit-rom-range=<var class="var">LO</var>-<var class="var">HI</var></code>: a candidate value outside that
+range is never checked against known labels, which keeps two
+coincidentally address-shaped bytes in an unrelated data table from
+producing a false positive. The other four codes fire the same whether or
+not <code class="code">--audit-rom-range</code> is given.
+</p>
+</dd>
 </dl>
 
 </div>
 <div class="section-level-extent" id="Linker-Error-Messages">
-<h3 class="section"><span>F.3 Linker Error Messages<a class="copiable-link" href="#Linker-Error-Messages"> &para;</a></span></h3>
+<h3 class="section"><span>F.4 Linker Error Messages<a class="copiable-link" href="#Linker-Error-Messages"> &para;</a></span></h3>
 
 <dl class="table">
 <dt>&lsquo;<samp class="samp">branch out of range</samp>&rsquo;</dt>
@@ -246,10 +302,10 @@ Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom C
 </dl>
 
 <ul class="mini-toc">
-<li><a href="#Linker-Script-Error-Messages" accesskey="1">Linker Script Error Messages</a></li>
+<li><a href="#Linker-Script-Error-Messages">Linker Script Error Messages</a></li>
 </ul>
 <div class="subsection-level-extent" id="Linker-Script-Error-Messages">
-<h4 class="subsection"><span>F.3.1 Linker Script Error Messages<a class="copiable-link" href="#Linker-Script-Error-Messages"> &para;</a></span></h4>
+<h4 class="subsection"><span>F.4.1 Linker Script Error Messages<a class="copiable-link" href="#Linker-Script-Error-Messages"> &para;</a></span></h4>
 
 <dl class="table">
 <dt>&lsquo;<samp class="samp">bank size (<var class="var">size</var>) exceeded by <var class="var">count</var> bytes</samp>&rsquo;</dt>
@@ -301,7 +357,7 @@ Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom C
 </div>
 </div>
 <div class="section-level-extent" id="Linker-Warning-Messages">
-<h3 class="section"><span>F.4 Linker Warning Messages<a class="copiable-link" href="#Linker-Warning-Messages"> &para;</a></span></h3>
+<h3 class="section"><span>F.5 Linker Warning Messages<a class="copiable-link" href="#Linker-Warning-Messages"> &para;</a></span></h3>
 
 <dl class="table">
 <dt>&lsquo;<samp class="samp">`.D(B|W)' operand <var class="var">integer</var> out of range; truncated</samp>&rsquo;</dt>
@@ -313,10 +369,8 @@ Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom C
 </div>
 </div>
 <hr>
-<div class="nav-panel">
-<p>
-Previous: <a href="Custom-Character-Maps.html" accesskey="p" rel="prev">Custom Character Maps</a>, Up: <a href="index.html" accesskey="u" rel="up">The XORcyst Manual</a> &nbsp; [<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</p>
-</div>
+<p class="nav-panel">
+<span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="Custom-Character-Maps.html" rel="prev">Custom Character Maps</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 
 
 

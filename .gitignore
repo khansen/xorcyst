@@ -1,5 +1,6 @@
 .DS_Store
 .deps
+__pycache__/
 autom4te.cache
 cov
 *.o

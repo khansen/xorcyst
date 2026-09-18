@@ -130,6 +130,22 @@ END
         self.assertIsNone(records[12]["expression"])
         self.assertIsNone(records[12]["operand_value"])
 
+    def test_operand_form_classification(self):
+        records = self.assemble(""".ORG $C000
+Target:
+    LDA #$0F
+    JSR Target
+    LDA Target+1
+    RTS
+END
+""")
+        self.assertEqual([r["operand_form"] for r in records],
+                          ["integer_literal", "symbol", "expression", "none"])
+        self.assertEqual(records[0]["referenced_symbols"], [])
+        self.assertEqual(records[1]["referenced_symbols"], ["Target"])
+        self.assertEqual(records[2]["referenced_symbols"], ["Target"])
+        self.assertEqual(records[3]["referenced_symbols"], [])
+
     def test_equates_before_folding_and_final_zero_page_mode(self):
         records = self.assemble(""".ORG 0
 COUNT .EQU 3

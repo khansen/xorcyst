@@ -223,6 +223,85 @@ run_expect_compare_mismatch() {
     fi
 }
 
+run_expect_compare_cpu_base_fallback() {
+    # Object-mode output has no ORG, so a mismatch has no assembler-known
+    # source-mapped CPU address; --compare-cpu-base is the only way to get one.
+    asm_file="$TMPDIR/compare-cpu-base.asm"
+    out_file="$TMPDIR/compare-cpu-base.o"
+    ref_file="$TMPDIR/compare-cpu-base-ref.o"
+    log_file="$TMPDIR/compare-cpu-base.log"
+    json_log_file="$TMPDIR/compare-cpu-base.json"
+
+    cat > "$asm_file" <<'ASM'
+Start:
+  DB 1,2,3,4
+END
+ASM
+
+    if ! "$XASM" "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+        cat "$log_file" >&2
+        fail "failed to build compare-cpu-base fixture"
+    fi
+    cp "$out_file" "$ref_file"
+    printf '\377' | dd of="$ref_file" bs=1 seek=0 conv=notrunc >/dev/null 2>&1
+
+    set +e
+    "$XASM" --compare="$ref_file" --compare-max-mismatches=1 "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 5 ]; then
+        cat "$log_file" >&2
+        fail "expected compare-cpu-base mismatch exit code 5"
+    fi
+    if ! grep -q 'mismatch #1 at output+0x0000: expected' "$log_file"; then
+        cat "$log_file" >&2
+        fail "expected compare mismatch without a CPU address when --compare-cpu-base is not given"
+    fi
+    if grep -q 'CPU \$' "$log_file"; then
+        cat "$log_file" >&2
+        fail "did not expect a CPU address without --compare-cpu-base"
+    fi
+
+    set +e
+    "$XASM" --compare="$ref_file" --compare-max-mismatches=1 --compare-format=json "$asm_file" -o "$out_file" >"$json_log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 5 ]; then
+        cat "$json_log_file" >&2
+        fail "expected JSON compare-cpu-base mismatch exit code 5"
+    fi
+    if ! grep -Fq '"cpu_address": null' "$json_log_file"; then
+        cat "$json_log_file" >&2
+        fail "expected null cpu_address in JSON without --compare-cpu-base"
+    fi
+
+    set +e
+    "$XASM" --compare="$ref_file" --compare-max-mismatches=1 --compare-cpu-base='$8000' "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 5 ]; then
+        cat "$log_file" >&2
+        fail "expected compare-cpu-base mismatch exit code 5 with fallback base"
+    fi
+    if ! grep -q 'mismatch #1 at output+0x0000 (CPU \$8000): expected' "$log_file"; then
+        cat "$log_file" >&2
+        fail "expected --compare-cpu-base=\$8000 fallback CPU address in mismatch output"
+    fi
+
+    set +e
+    "$XASM" --compare="$ref_file" --compare-max-mismatches=1 --compare-format=json --compare-cpu-base='$8000' "$asm_file" -o "$out_file" >"$json_log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 5 ]; then
+        cat "$json_log_file" >&2
+        fail "expected JSON compare-cpu-base mismatch exit code 5 with fallback base"
+    fi
+    if ! grep -Fq '"cpu_address": "0x8000"' "$json_log_file"; then
+        cat "$json_log_file" >&2
+        fail "expected fallback cpu_address 0x8000 in JSON with --compare-cpu-base"
+    fi
+}
+
 run_expect_xref_outputs() {
     asm_file="$TMPDIR/xref-fixture.asm"
     out_file="$TMPDIR/xref-fixture.bin"
@@ -1437,6 +1516,7 @@ run_expect_success_pure_binary_with_listing_json "$ROOT_DIR/tests/coverage_org_p
 run_expect_success_pure_binary_with_listing_ndjson "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_compare_match "$ROOT_DIR/tests/coverage_org_pure.asm"
 run_expect_compare_mismatch "$ROOT_DIR/tests/coverage_org_pure.asm"
+run_expect_compare_cpu_base_fallback
 run_expect_xref_outputs
 run_expect_xref_data
 run_expect_data_directive_references
