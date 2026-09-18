@@ -5,8 +5,9 @@ Run `xasm --version` or `xlnk --version` to identify an installed build.
 Build and test
 --------------
 
-Normal builds use the checked-in parser, scanner, and configure script. A C
-compiler, make, and a POSIX shell are required; Bison and Flex are not required.
+Normal builds use the checked-in parser, scanner, man pages, and configure
+script. A C compiler, make, and a POSIX shell are required; Bison, Flex, and
+help2man are not required.
 On macOS, the command-line developer tools provide the CoreFoundation framework
 used for filesystem path comparison. The test suite also requires Python 3.
 
@@ -23,7 +24,8 @@ ASan/UBSan on Linux. Tests use generated
 fixtures and do not require game ROMs or a NESrev checkout.
 
 See xorcyst.texinfo and the doc/ directory for the assembly language and linker
-script reference. `xasm --help` lists all current command-line options.
+script reference. `xasm --help` lists all current command-line options, as do
+the installed `man xasm` / `man xlnk` pages.
 
 Assembly and verification
 -------------------------
@@ -139,13 +141,20 @@ Maintainer builds
 -----------------
 
 `version.h` is the version source for both tools and configure. After changing
-it, regenerate configure with Autoconf 2.72; regenerate Makefile.in with
-Automake 1.18.1 after Makefile.am changes. Keep those generated files in commits.
+it, regenerate configure with Autoconf 2.73; regenerate Makefile.in with
+Automake 1.19 after Makefile.am changes. Keep those generated files in commits.
 Use Bison 3.8.2 and Flex 2.6.4 for parser/lexer regeneration. Ordinary builds
 should leave maintainer mode disabled. Regenerate the HTML manual with
 Texinfo 7.3 after editing xorcyst.texinfo:
 
     makeinfo --html --split=chapter --output=doc xorcyst.texinfo
+
+Regenerate `man1/xasm.1` and `man1/xlnk.1` with help2man 1.49.3 after changing
+either tool's `--help`/`--version` output or the `man1/*.h2m` include files
+(SEE ALSO/COPYRIGHT material not derivable from `--help`). This happens
+automatically as part of an `--enable-maintainer-mode` build; both man pages
+are also checked in, so ordinary builds and `make distcheck` (which forces
+`HELP2MAN=:`) never require help2man to be installed.
 
 The manual version must match `version.h`; installation checks enforce this.
 

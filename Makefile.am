@@ -28,8 +28,12 @@ xlnk_SOURCES = \
   opcode.c opcode.h \
   my_getopt.c my_getopt.h getopt.h
 
+# Install the generated (but checked-in) man pages alongside the tools.
+dist_man1_MANS = man1/xasm.1 man1/xlnk.1
+
 # Distribute the grammar/lexer sources, but don’t use them by default to build
 EXTRA_DIST = parser.y scanner.l parser.h \
+  man1/xasm.h2m man1/xlnk.h2m \
   tests/coverage_directives_control.asm \
   tests/coverage_directives_layout.asm \
   tests/coverage_directives_macros_io.asm \
@@ -98,9 +102,9 @@ check-local:
 	  $(SHELL) "$(srcdir)/tests/regression.sh"
 
 installcheck-local:
-	python3 "$(srcdir)/tests/test_installation.py" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(docdir)"
+	python3 "$(srcdir)/tests/test_installation.py" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(docdir)" "$(DESTDIR)$(mandir)/man1"
 
-DISTCHECK_CONFIGURE_FLAGS = --disable-maintainer-mode YACC=: LEX=:
+DISTCHECK_CONFIGURE_FLAGS = --disable-maintainer-mode YACC=: LEX=: HELP2MAN=:
 
 
 AM_CFLAGS = -Wall
@@ -126,5 +130,29 @@ scanner.c: scanner.l
 	  exit 1; \
 	fi
 	$(AM_V_LEX)$(LEX) $(AM_LFLAGS) -o $@ $<
+
+# Regenerate the man pages from --help/--version output of the just-built
+# tools, plus the SEE ALSO/COPYRIGHT material in man1/*.h2m.
+man1/xasm.1: xasm$(EXEEXT) $(srcdir)/man1/xasm.h2m
+	@if test "x$(HELP2MAN)" = "x:"; then \
+	  echo "Cannot regenerate man1/xasm.1: no help2man found (HELP2MAN is ':')"; \
+	  exit 1; \
+	fi
+	$(AM_V_GEN)$(MKDIR_P) man1 && \
+	  $(HELP2MAN) --no-info --section=1 --manual="XORcyst Manual" \
+	    --name="assembler for 6502 machine code" \
+	    --include=$(srcdir)/man1/xasm.h2m \
+	    --output=$@ ./xasm$(EXEEXT)
+
+man1/xlnk.1: xlnk$(EXEEXT) $(srcdir)/man1/xlnk.h2m
+	@if test "x$(HELP2MAN)" = "x:"; then \
+	  echo "Cannot regenerate man1/xlnk.1: no help2man found (HELP2MAN is ':')"; \
+	  exit 1; \
+	fi
+	$(AM_V_GEN)$(MKDIR_P) man1 && \
+	  $(HELP2MAN) --no-info --section=1 --manual="XORcyst Manual" \
+	    --name="linker for xasm object files" \
+	    --include=$(srcdir)/man1/xlnk.h2m \
+	    --output=$@ ./xlnk$(EXEEXT)
 
 endif
