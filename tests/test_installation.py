@@ -10,6 +10,7 @@ import unittest
 SOURCE = Path(__file__).resolve().parents[1]
 BINDIR = Path(sys.argv.pop(1)).resolve()
 DOCDIR = Path(sys.argv.pop(1)).resolve()
+MANDIR = Path(sys.argv.pop(1)).resolve()
 VERSION = re.search(r'^#define XORCYST_VERSION "([^"]+)"',
                     (SOURCE / 'version.h').read_text(), re.M)[1]
 
@@ -29,6 +30,16 @@ class Installation(unittest.TestCase):
         for name in documents:
             with self.subTest(document=name):
                 self.assertEqual((DOCDIR / name).read_bytes(), (SOURCE / name).read_bytes())
+
+    def test_installed_man_pages(self):
+        for name in ('xasm', 'xlnk'):
+            with self.subTest(tool=name):
+                installed = MANDIR / f'{name}.1'
+                self.assertEqual(installed.read_bytes(),
+                                  (SOURCE / 'man1' / f'{name}.1').read_bytes())
+                self.assertIn(f'{name} {VERSION}"'.encode(), installed.read_bytes(),
+                              'man page .TH version does not match the installed tool')
+                self.assertIn(b'.SH "SEE ALSO"', installed.read_bytes())
 
     def test_release_manual_versions_match_the_installed_tools(self):
         version_line = f'This is the manual for The XORcyst version {VERSION}.'

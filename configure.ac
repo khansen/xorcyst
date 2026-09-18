@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ([2.71])
-AC_INIT([xorcyst], m4_esyscmd_s([sed -n 's/^#define XORCYST_VERSION "\(.*\)"/\1/p' version.h]))
+AC_INIT([xorcyst], m4_esyscmd_s([sed -n 's/^#define XORCYST_VERSION "\(.*\)"/\1/p' version.h]), [kentmhan@gmail.com])
 
 AC_CONFIG_SRCDIR([astnode.c])
 AC_CONFIG_HEADERS([config.h])
@@ -39,6 +39,14 @@ fi
 
 if test "x$LEX" = "x:"; then
   AC_MSG_WARN([No lex/flex found; scanner.c will not be regenerated from scanner.l])
+fi
+
+dnl Optional man-page generator for maintainers
+dnl If not found, we just won't regenerate man1/xasm.1 / man1/xlnk.1
+AC_CHECK_PROGS([HELP2MAN], [help2man], [:])
+
+if test "x$HELP2MAN" = "x:"; then
+  AC_MSG_WARN([No help2man found; man1/xasm.1 and man1/xlnk.1 will not be regenerated])
 fi
 
 dnl Checks for libraries.
