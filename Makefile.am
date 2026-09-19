@@ -90,11 +90,13 @@ EXTRA_DIST = parser.y scanner.l parser.h \
 
 # Install the current feature documentation alongside the tools.
 dist_doc_DATA = README NEWS xorcyst.texinfo \
+  XASM_ANALYSIS_FEATURES_GUIDE.md \
   XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md \
   XASM_DEPENDENCY_MANIFEST_SPEC.md \
   XASM_FCEUX_NL_EXPORT_SPEC.md \
   XASM_INDEX_BOUND_ANALYSIS_SPEC.md \
-  XASM_INSTRUCTION_RECORDS_SPEC.md
+  XASM_INSTRUCTION_RECORDS_SPEC.md \
+  XASM_REVERSE_ENGINEERING_FEATURES_SPEC.md
 
 # Use the build-tree tools even when distcheck builds outside the source tree.
 check-local:

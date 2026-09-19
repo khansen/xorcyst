@@ -24,9 +24,11 @@ class Installation(unittest.TestCase):
 
     def test_installed_documentation(self):
         documents = ['README', 'NEWS', 'xorcyst.texinfo',
+                     'XASM_ANALYSIS_FEATURES_GUIDE.md',
                      'XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md', 'XASM_DEPENDENCY_MANIFEST_SPEC.md',
                      'XASM_FCEUX_NL_EXPORT_SPEC.md', 'XASM_INDEX_BOUND_ANALYSIS_SPEC.md',
-                     'XASM_INSTRUCTION_RECORDS_SPEC.md']
+                     'XASM_INSTRUCTION_RECORDS_SPEC.md',
+                     'XASM_REVERSE_ENGINEERING_FEATURES_SPEC.md']
         for name in documents:
             with self.subTest(document=name):
                 self.assertEqual((DOCDIR / name).read_bytes(), (SOURCE / name).read_bytes())
