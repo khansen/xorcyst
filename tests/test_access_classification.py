@@ -27,7 +27,10 @@ Start:
     LDA [Ptr,X]
     BIT Flags
     INC Counters,X
+    CMP Flags
+    CMP Counters,X
     LDX #Zp
+    CMP #Zp
     JMP [Vec]
     JSR Sub
     JMP Start
@@ -101,7 +104,10 @@ class AccessClassification(unittest.TestCase):
              ("Ptr", "LDA", "preindexed_indirect", "read"),
              ("Flags", "BIT", "absolute", "read"),
              ("Counters", "INC", "absolute_x", "read_modify_write"),
+             ("Flags", "CMP", "absolute", "read"),
+             ("Counters", "CMP", "absolute_x", "read"),
              ("Zp", "LDX", "immediate", "immediate"),
+             ("Zp", "CMP", "immediate", "immediate"),
              ("Vec", "JMP", "indirect", "read"),
              ("Sub", "JSR", "absolute", "call"),
              ("Start", "JMP", "absolute", "jump"),
@@ -116,7 +122,8 @@ class AccessClassification(unittest.TestCase):
         pointer_step = self.site("INC Ptr+1")
         counters = self.site("INC Counters,X")
         self.assertEqual(self.edges("data_reads"), sorted([
-            ("Ptr", pointer_step, 1), ("Flags", self.site("BIT Flags"), 0), ("Counters", counters, 0)]))
+            ("Ptr", pointer_step, 1), ("Flags", self.site("BIT Flags"), 0), ("Counters", counters, 0),
+            ("Flags", self.site("CMP Flags"), 0), ("Counters", self.site("CMP Counters,X"), 0)]))
         self.assertEqual(self.edges("data_writes"), sorted([
             ("Ptr", self.site("STA Ptr"), 0), ("Ptr", self.site("STA Ptr+1"), 1),
             ("Ptr", pointer_step, 1), ("Counters", counters, 0)]))
@@ -134,7 +141,7 @@ class AccessClassification(unittest.TestCase):
         summary = self.outputs["summary"]
         data = {entry["label"]: (entry["read_count"], entry["write_count"], entry["total_ref_count"])
                 for entry in summary["top_data_labels"]}
-        self.assertEqual(data, {"Ptr": (4, 3, 6), "Flags": (1, 0, 1), "Counters": (1, 1, 1),
+        self.assertEqual(data, {"Ptr": (4, 3, 6), "Flags": (2, 0, 2), "Counters": (2, 1, 2),
                                 "Vec": (1, 0, 1)})
         self.assertEqual([entry["label"] for entry in summary["top_jump_targets"]], ["Start"])
         self.assertEqual([entry["label"] for entry in summary["top_callables"]], ["Sub"])
@@ -143,17 +150,20 @@ class AccessClassification(unittest.TestCase):
         records = [(r["table_label"], int(r["site_addr"], 16), r["access_kind"], r["access_pattern"],
                     r.get("evidence_flags", [])) for r in self.outputs["index"]]
         self.assertEqual(records, [("Counters", self.site("INC Counters,X"), "read_modify_write",
-                                    "base", ["write_access"])])
+                                    "base", ["write_access"]),
+                                   ("Counters", self.site("CMP Counters,X"), "read", "base", [])])
 
     def test_data_consumer_sites(self):
         consumers = {entry["label"]: entry for entry in self.outputs["consumers"]}
         counters = consumers["Counters"]
         site = self.site("INC Counters,X")
-        self.assertEqual([int(s["site_addr"], 16) for s in counters["read_sites"]], [site])
+        self.assertEqual([int(s["site_addr"], 16) for s in counters["read_sites"]],
+                         [site, self.site("CMP Counters,X")])
         self.assertEqual([int(s["site_addr"], 16) for s in counters["write_sites"]], [site])
-        self.assertEqual((counters["read_site_count"], counters["write_site_count"]), (1, 1))
+        self.assertEqual((counters["read_site_count"], counters["write_site_count"]), (2, 1))
         flags = consumers["Flags"]
-        self.assertEqual([int(s["site_addr"], 16) for s in flags["read_sites"]], [self.site("BIT Flags")])
+        self.assertEqual([int(s["site_addr"], 16) for s in flags["read_sites"]],
+                         [self.site("BIT Flags"), self.site("CMP Flags")])
         self.assertEqual(flags["write_sites"], [])
 
 

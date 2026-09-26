@@ -22,6 +22,9 @@ downstream analyses need are still left to each consumer:
      memory read, as a branch, so a label read only by `BIT` is summarised as a
      jump target (`BRK` also matches, but takes no operand, so it never
      produces a reference);
+   - the read test for compares checks the prefix `CP`, which `CPX` and `CPY`
+     match but `CMP` does not, so every `CMP` operand is `other` and produces
+     no data edge, index-pattern site or data-consumer site;
    - `JMP [addr]` is a `jump`, so its pointer is summarised as a jump target,
      and `STA [zp],Y` counts as a write to a pointer the instruction only reads.
 2. **Which named value an operand is built from.** `structural_base` is
@@ -136,8 +139,8 @@ and a single term, `PTR_LO`.
 | `JMP [addr]` | `read` | was `jump`; the operand names the pointer, which is read |
 | Relative branch | `branch` | none |
 | Immediate with a `low_byte` / `high_byte` root after substitution | `pointer_lo` / `pointer_hi` | none |
-| Any other immediate | `immediate` | new value; was `read`, though no memory is read and the symbol's value is used as a number |
-| Direct or indexed memory mode | `data.kind` | `read_modify_write` is new (was `other`); `BIT` was `branch` |
+| Any other immediate | `immediate` | new value; was `read` (`other` for `CMP`), though no memory is read and the symbol's value is used as a number |
+| Direct or indexed memory mode | `data.kind` | `read_modify_write` is new (was `other`); `BIT` was `branch`; `CMP` was `other` |
 | `[zp,X]`, `[zp],Y` | `read` | was the kind of the access through the pointer, so `STA [zp],Y` was a `write` of the pointer |
 
 `address_compute` keeps its single existing meaning: a symbol used in a data
@@ -151,8 +154,9 @@ references.
 
 - **xref data edges.** `data_reads` and `data_writes` cover direct and indexed
   modes only, as today. A `read_modify_write` access to a data label emits both
-  a `data_reads` and a `data_writes` edge with the same site, and a `BIT` access
-  now emits a `data_reads` edge. Pointer modes still emit no data edge.
+  a `data_reads` and a `data_writes` edge with the same site, and a `BIT` or
+  `CMP` access now emits a `data_reads` edge. Pointer modes still emit no data
+  edge.
 - **Pointer-pair tracking and `indirect_data_flows`.** Only a `write` sets a
   pointer byte; `read_modify_write` never updates the pointer-pair state.
   `INC ptr+1` advances a pointer that is already set up, as in the page step of
@@ -164,21 +168,22 @@ references.
   reference adds one to both `read_count` and `write_count` and marks the label
   a data label; `total_ref_count` counts it once. `BIT` and `JMP [addr]`
   references now count as reads, so a label referenced only by them moves from
-  `top_jump_targets` to `top_data_labels`. A pointer used by `STA [zp],Y` gains
-  a read and loses a write. `immediate` references, like `address_compute`,
-  count only toward `total_ref_count`, so a label used only as an immediate
-  value no longer ranks as a data label.
+  `top_jump_targets` to `top_data_labels`. `CMP` references count as reads too.
+  A pointer used by `STA [zp],Y` gains a read and loses a write. `immediate`
+  references, like `address_compute`, count only toward `total_ref_count`, so a
+  label used only as an immediate value no longer ranks as a data label.
 - **Index patterns.** A `read_modify_write` access, such as `INC Table,X`,
   becomes a supported site with `access_kind` `read_modify_write`; today it
   produces no record. Pattern selection treats it like a write: the paired-byte
   and split low/high patterns still anchor and match only on `read` sites, and
   the scaled-stride and base rules apply unchanged. The record carries the
   `write_access` evidence flag, because the instruction writes the table. Index
-  bounds are resolved for it as for any other site.
+  bounds are resolved for it as for any other site. A `CMP` access is now a
+  `read` site like any other load.
 - **Data consumers.** A `read_modify_write` site is listed in both
   `read_sites` and `write_sites`, and counted in both `read_site_count` and
-  `write_site_count`, matching the data edges. A `BIT` site is listed in
-  `read_sites`.
+  `write_site_count`, matching the data edges. A `BIT` or `CMP` site is listed
+  in `read_sites`.
 
 ## `additive_terms`
 
@@ -431,7 +436,8 @@ outputs:
   that forms no paired or split pattern; and the site in both data-consumer
   lists.
 - A label read only by `BIT` and a pointer read only by `JMP [addr]` appearing
-  in `top_data_labels`, not `top_jump_targets`.
+  in `top_data_labels`, not `top_jump_targets`, and `CMP` direct, indexed and
+  immediate operands in every legacy output.
 - Pointer-pair tracking: stores to `ptr` and `ptr+1`, a `[ptr],Y` access,
   `INC ptr+1`, then a second `[ptr],Y` access. Both accesses have flows from
   the original stores.
