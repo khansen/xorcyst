@@ -3353,8 +3353,8 @@ static int truncate_translated_operand(int value, addressing_mode mode)
 
 static void report_instruction_term_error(const instruction_provenance *p, const char *message)
 {
-    fprintf(stderr, "error: %s:%d:%d: %s\n", p->use_loc.file != NULL ? p->use_loc.file : "",
-            p->use_loc.first_line, p->use_loc.first_column, message);
+    fprintf(stderr, "error: %s: %s:%d:%d\n", message, p->use_loc.file != NULL ? p->use_loc.file : "",
+            p->use_loc.first_line, p->use_loc.first_column);
 }
 
 /* Evaluates the shadow terms in the same evaluation, at the same PC, as the

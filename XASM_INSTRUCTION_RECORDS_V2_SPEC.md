@@ -331,7 +331,8 @@ The producer therefore uses a shadow reduction:
    sum, never as a stale reference.
 
 Shadow terms exist only while instruction records are being captured and are
-freed once the record is built, so builds without records do no extra work.
+freed with the rest of the instruction provenance, so builds without records do
+no extra work.
 
 Redefinitions:
 
