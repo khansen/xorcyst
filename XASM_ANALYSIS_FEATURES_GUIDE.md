@@ -394,6 +394,14 @@ xasm --pure-binary re_example.asm -o re_example.o \
   anonymous label, and every feature in this guide hides those by default.
   Section 4 covers why, and how to turn that off.
 
+**How references are counted.** Each reference's `access` decides which count
+it adds to. `JSR` is a call, absolute `JMP` a jump and a relative branch a
+branch. A memory operand is a read or a write, and a read-modify-write such as
+`INC Counter` counts as both. `BIT Flags` and `JMP [Vector]` are reads, so
+`Flags` and `Vector` rank as data labels, not jump targets. A pointer used by
+`LDA [ptr],Y` or `STA [ptr],Y` is read either way. An immediate such as
+`LDX #Buffer` reads no memory and adds to `total_ref_count` only.
+
 **Narrowing the summary with `--xref-summary-include`/`--xref-summary-exclude`.**
 On a large disassembly, `top_data_labels` can run long; both take a regex
 matched against the label name. `--xref-summary-limit`,
@@ -657,6 +665,11 @@ record.)
   the read instruction is lexically inside `@@scan`. Local labels never own
   records — see Section 4.
 
+`access_kind` is `read`, `write` or, for an instruction such as `INC Table,X`
+that does both, `read_modify_write`. A read-modify-write site carries the
+`write_access` flag and never forms a paired or split pattern; those describe
+tables being read.
+
 **Why `CommandLoTable`/`CommandHiTable` didn't come back as `split_lo_hi_tables`.**
 That pattern exists specifically for this shape and takes precedence over
 every other pattern when it matches — but matching is suffix-based, and `Lo`/
@@ -766,6 +779,9 @@ a shared scratch pointer written by two unrelated-looking routines
 easy to miss reading source top-to-bottom and immediate to see aggregated
 here — and it's a strong signal *not* to treat this byte as private state of
 either routine.
+
+A site that reads and writes the table in one instruction, such as
+`INC Counters,X`, is listed in both `read_sites` and `write_sites`.
 
 **`--include-overlaps` — when two names point at the same bytes.** Nothing in
 this file has an overlap, so here's a minimal one: two labels declared back to
@@ -1092,8 +1108,36 @@ xasm --pure-binary re_example.asm -o re_example.o \
   --dependency-manifest=re_example.dependencies.json
 ```
 
+Each record also says what memory the instruction touches and what its
+operand is built from. Here is the indirect read through the pointer that
+Section 3 followed:
+
+```json
+{
+  "origin_id": 32,
+  "mnemonic": "LDA",
+  "addressing_mode": "postindexed_indirect",
+  "memory_access": {
+    "data": {"kind": "read", "address": null, "index_register": "Y", "via_pointer": true},
+    "pointer": {"address": 16, "high_byte_address": 17, "index_register": null}
+  },
+  "additive_terms": {"projection": "none", "terms": [
+    {"sign": 1, "kind": "symbol", "name": "ZP_PTR_LO", "value": 16,
+     "binding": {"kind": "label", "definition": {"file": "re_example.asm", "line": 3, "column": 1, "end_line": 3, "end_column": 11}},
+     "source": {"span": {"file": "re_example.asm", "line": 56, "column": 14, "end_line": 56, "end_column": 23}, "text": "ZP_PTR_LO"}}
+  ]}
+}
+```
+
+`memory_access` gives the access kind and the pointer bytes read, with the
+6502's page wrap already applied, so an analysis never keeps its own mnemonic
+table. `additive_terms` splits the operand into signed terms, each with its
+value and the definition xasm used for it at this instruction, even when a
+constant is reassigned later in the file.
+
 Full field contract, versioning, and the manifest's schema:
-`XASM_INSTRUCTION_RECORDS_SPEC.md` and `XASM_DEPENDENCY_MANIFEST_SPEC.md`.
+`XASM_INSTRUCTION_RECORDS_V2_SPEC.md` (with `XASM_INSTRUCTION_RECORDS_SPEC.md`
+for the fields it keeps) and `XASM_DEPENDENCY_MANIFEST_SPEC.md`.
 
 ---
 
@@ -1181,7 +1225,7 @@ per-feature costs roughly the same as `--xref-data=true` alone run *N* times.
 | `data_directive_references` (part of `--xref-data=true`) | `XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md` |
 | `index_upper_bound` / `index_bound_kind` (part of `--analyze-index-patterns`) | `XASM_INDEX_BOUND_ANALYSIS_SPEC.md` |
 | `--audit-raw-addresses`, `--audit-level`, `--audit-rom-range`, `--audit-output-format` (finding codes `A100`-`A131`) | `README` ("Analysis and diagnostics") and `xasm --help` |
-| Structured per-instruction records (`--xref-instructions`, `--instruction-records-output`) | `XASM_INSTRUCTION_RECORDS_SPEC.md` |
+| Structured per-instruction records (`--xref-instructions`, `--instruction-records-output`) | `XASM_INSTRUCTION_RECORDS_V2_SPEC.md` and `XASM_INSTRUCTION_RECORDS_SPEC.md` |
 | `--dependency-manifest` | `XASM_DEPENDENCY_MANIFEST_SPEC.md` |
 | `--fceux-nl-rom-prefix`/`--fceux-nl-ram-output`/`--fceux-nl-mirror-16k` | `XASM_FCEUX_NL_EXPORT_SPEC.md` |
 | Performance characteristics on large/banked inputs | `XASM_XREF_PERFORMANCE_SPEC.md` |

@@ -1341,3 +1341,34 @@ addressing_mode opcode_addressing_mode(unsigned char op)
     /* */
     return amode_lookup[op];
 }
+
+/**
+ * Gets the mnemonic of a 6502 opcode.
+ * Derived from the opcode_get() table, so encoding and decoding cannot drift.
+ * @param op Opcode
+ * @param mnc Receives the mnemonic
+ * @return 1 if op is an official opcode, otherwise 0
+ */
+int opcode_mnemonic(unsigned char op, instr_mnemonic *mnc)
+{
+    static int built = 0;
+    static int known[256];
+    static instr_mnemonic lookup[256];
+    if (!built) {
+        int m;
+        int mode;
+        for (m = ADC_MNEMONIC; m <= TYA_MNEMONIC; m++) {
+            for (mode = IMPLIED_MODE; mode < INVALID_MODE; mode++) {
+                unsigned char code = opcode_get((instr_mnemonic)m, (addressing_mode)mode);
+                if (code != 0xFF) {
+                    known[code] = 1;
+                    lookup[code] = (instr_mnemonic)m;
+                }
+            }
+        }
+        built = 1;
+    }
+    if (!known[op]) return 0;
+    *mnc = lookup[op];
+    return 1;
+}

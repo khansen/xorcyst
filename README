@@ -62,7 +62,9 @@ lexical owners, and structured instruction records:
 
 The optional instruction stream includes every emitted instruction, independent
 of xref symbol filters. It preserves source spans, pre-fold expression trees,
-and final instruction bytes. Lexical owners do not prove control flow.
+and final instruction bytes, and gives each instruction's memory access and the
+signed terms its operand is built from. Lexical owners do not prove control
+flow.
 
 To write instruction records separately:
 
@@ -70,12 +72,13 @@ To write instruction records separately:
       --instruction-records-output=game.instructions.json \
       --dependency-manifest=game.dependencies.json
 
-The standalone instruction output requires a dependency manifest in version 1.
+The standalone instruction output requires a dependency manifest.
 A manifest records consumed-input hashes, lookup misses, invocation arguments,
 and producer identity. It is published last, after input revalidation. Consumers
 must still validate their own configuration and output identity when reusing
-artifacts. See XASM_INSTRUCTION_RECORDS_SPEC.md,
-XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md, and XASM_DEPENDENCY_MANIFEST_SPEC.md.
+artifacts. See XASM_INSTRUCTION_RECORDS_V2_SPEC.md,
+XASM_INSTRUCTION_RECORDS_SPEC.md, XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md, and
+XASM_DEPENDENCY_MANIFEST_SPEC.md.
 
 FCEUX debugger names
 -------------------

@@ -351,6 +351,7 @@ symtab_entry *symtab_enter(const char *id, symbol_type type, astnode *def, int f
         e->type = type;
         e->flags = flags;
         e->ref_count = 0;
+        e->has_assignment_loc = 0;
         e->def = def;
         /* Zap! */
         e->struc.size = NULL;

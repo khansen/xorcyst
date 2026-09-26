@@ -1,7 +1,10 @@
 # Structured instruction records
 
-Status: version 1 producer implementation. This is a general assembler-fact
-interface, not a policy-specific raw-address or branch-literal audit.
+Status: superseded by [version 2](XASM_INSTRUCTION_RECORDS_V2_SPEC.md), which
+keeps every field and rule below and adds `memory_access` and `additive_terms`.
+xasm now produces only `"version":"2"` records. This is a general
+assembler-fact interface, not a policy-specific raw-address or branch-literal
+audit.
 
 ## Invocation and compatibility
 

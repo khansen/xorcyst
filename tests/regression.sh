@@ -1024,6 +1024,8 @@ Buf:
 ZP EQU $80
 Target:
   RTS
+  INC Buf
+  LDX #Buf
 END
 ASM
 
@@ -1052,7 +1054,7 @@ ASM
     fi
 
     refs_order=$(awk -F'"symbol":"' '/"symbol":"/ {split($2,a,"\""); print a[1]}' "$xref_json" | paste -sd' ' -)
-    if [ "$refs_order" != "Target Target Target Target Buf Buf Alpha Beta" ]; then
+    if [ "$refs_order" != "Target Target Target Target Buf Buf Alpha Beta Buf Buf" ]; then
         fail "phase1 parity xref reference ordering mismatch ($refs_order)"
     fi
 
@@ -1062,7 +1064,7 @@ ASM
     fi
 
     # Access classifications present in default output.
-    for access in pointer_lo pointer_hi call jump write read address_compute; do
+    for access in pointer_lo pointer_hi call jump write read read_modify_write immediate address_compute; do
         if ! grep -q "\"access\":\"$access\"" "$xref_json"; then
             fail "phase1 parity xref missing access classification: $access"
         fi
@@ -4784,6 +4786,7 @@ ASM
 run_expect_data_coverage
 
 python3 "$ROOT_DIR/tests/test_instruction_records.py" "$XASM"
+python3 "$ROOT_DIR/tests/test_access_classification.py" "$XASM"
 python3 "$ROOT_DIR/tests/test_analysis_symbols.py" "$XASM"
 python3 "$ROOT_DIR/tests/test_frontend_performance.py"
 python3 "$ROOT_DIR/tests/test_backend_performance.py"

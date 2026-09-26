@@ -63,6 +63,15 @@ struct tag_astnodeprocmap {
 typedef struct tag_astnodeprocmap astnodeprocmap;
 typedef int (*astproc_data_analysis_hook)(astnode *);
 
+/* Instruction-record analysis: stages at which a real operand has just been
+ * reduced, and a sink for the definition a shadow term was bound to. */
+enum {
+    ASTPROC_INSTRUCTION_PROCESSED = 0,
+    ASTPROC_INSTRUCTION_TRANSLATED = 1
+};
+typedef int (*astproc_instruction_stage_hook)(astnode *, int);
+typedef void (*astproc_binding_sink)(void *, const char *, const location *, const char *);
+
 extern int err_count;
 extern int warn_count;
 
@@ -75,6 +84,9 @@ void astproc_fifth_pass(astnode *, FILE *);
 int astproc_truncate_data_value(datatype, int, int *);
 void astproc_set_data_analysis_hook(astproc_data_analysis_hook);
 void astproc_set_instruction_analysis_hook(astproc_data_analysis_hook);
+void astproc_set_instruction_stage_hook(astproc_instruction_stage_hook);
+void astproc_analysis_prepare(astnode *);
+astnode *astproc_analysis_reduce(astnode *, int, astproc_binding_sink, void *);
 void astproc_walk(astnode *, void *, const astnodeprocmap *);
 
 #endif  /* !ASTPROC_H */

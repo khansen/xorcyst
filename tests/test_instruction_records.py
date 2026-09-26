@@ -12,6 +12,97 @@ import unittest
 
 XASM = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "xasm"
 XLNK = Path(os.environ.get("XLNK", Path(__file__).resolve().parents[1] / "xlnk")).resolve()
+TESTS = Path(__file__).resolve().parent
+
+# The 151 official 6502 opcodes, written out independently of xasm's tables.
+EIGHT_MODES = ("immediate", "zeropage", "zeropage_x", "absolute", "absolute_x",
+               "absolute_y", "preindexed_indirect", "postindexed_indirect")
+OPCODES = {}
+for mnemonic, codes in {
+        "ADC": (0x69, 0x65, 0x75, 0x6D, 0x7D, 0x79, 0x61, 0x71),
+        "AND": (0x29, 0x25, 0x35, 0x2D, 0x3D, 0x39, 0x21, 0x31),
+        "CMP": (0xC9, 0xC5, 0xD5, 0xCD, 0xDD, 0xD9, 0xC1, 0xD1),
+        "EOR": (0x49, 0x45, 0x55, 0x4D, 0x5D, 0x59, 0x41, 0x51),
+        "LDA": (0xA9, 0xA5, 0xB5, 0xAD, 0xBD, 0xB9, 0xA1, 0xB1),
+        "ORA": (0x09, 0x05, 0x15, 0x0D, 0x1D, 0x19, 0x01, 0x11),
+        "SBC": (0xE9, 0xE5, 0xF5, 0xED, 0xFD, 0xF9, 0xE1, 0xF1)}.items():
+    OPCODES.update({code: (mnemonic, mode) for code, mode in zip(codes, EIGHT_MODES)})
+for mnemonic, base in {"ASL": 0x00, "ROL": 0x20, "LSR": 0x40, "ROR": 0x60}.items():
+    OPCODES.update({base + 0x0A: (mnemonic, "accumulator"), base + 0x06: (mnemonic, "zeropage"),
+                    base + 0x16: (mnemonic, "zeropage_x"), base + 0x0E: (mnemonic, "absolute"),
+                    base + 0x1E: (mnemonic, "absolute_x")})
+for mnemonic, codes in {
+        "BIT": {0x24: "zeropage", 0x2C: "absolute"},
+        "CPX": {0xE0: "immediate", 0xE4: "zeropage", 0xEC: "absolute"},
+        "CPY": {0xC0: "immediate", 0xC4: "zeropage", 0xCC: "absolute"},
+        "DEC": {0xC6: "zeropage", 0xD6: "zeropage_x", 0xCE: "absolute", 0xDE: "absolute_x"},
+        "INC": {0xE6: "zeropage", 0xF6: "zeropage_x", 0xEE: "absolute", 0xFE: "absolute_x"},
+        "JMP": {0x4C: "absolute", 0x6C: "indirect"},
+        "JSR": {0x20: "absolute"},
+        "LDX": {0xA2: "immediate", 0xA6: "zeropage", 0xB6: "zeropage_y", 0xAE: "absolute", 0xBE: "absolute_y"},
+        "LDY": {0xA0: "immediate", 0xA4: "zeropage", 0xB4: "zeropage_x", 0xAC: "absolute", 0xBC: "absolute_x"},
+        "STA": {0x85: "zeropage", 0x95: "zeropage_x", 0x8D: "absolute", 0x9D: "absolute_x",
+                0x99: "absolute_y", 0x81: "preindexed_indirect", 0x91: "postindexed_indirect"},
+        "STX": {0x86: "zeropage", 0x96: "zeropage_y", 0x8E: "absolute"},
+        "STY": {0x84: "zeropage", 0x94: "zeropage_x", 0x8C: "absolute"}}.items():
+    OPCODES.update({code: (mnemonic, mode) for code, mode in codes.items()})
+OPCODES.update({code: (mnemonic, "relative") for mnemonic, code in {
+    "BPL": 0x10, "BMI": 0x30, "BVC": 0x50, "BVS": 0x70,
+    "BCC": 0x90, "BCS": 0xB0, "BNE": 0xD0, "BEQ": 0xF0}.items()})
+OPCODES.update({code: (mnemonic, "implied") for mnemonic, code in {
+    "BRK": 0x00, "PHP": 0x08, "CLC": 0x18, "PLP": 0x28, "SEC": 0x38, "RTI": 0x40,
+    "PHA": 0x48, "CLI": 0x58, "RTS": 0x60, "PLA": 0x68, "SEI": 0x78, "DEY": 0x88,
+    "TXA": 0x8A, "TYA": 0x98, "TXS": 0x9A, "TAY": 0xA8, "TAX": 0xAA, "CLV": 0xB8,
+    "TSX": 0xBA, "INY": 0xC8, "DEX": 0xCA, "CLD": 0xD8, "INX": 0xE8, "NOP": 0xEA,
+    "SED": 0xF8}.items()})
+assert len(OPCODES) == 151
+
+DATA_KINDS = dict.fromkeys(("LDA", "LDX", "LDY", "ADC", "SBC", "AND", "ORA", "EOR",
+                            "CMP", "CPX", "CPY", "BIT"), "read")
+DATA_KINDS.update(dict.fromkeys(("STA", "STX", "STY"), "write"))
+DATA_KINDS.update(dict.fromkeys(("ASL", "LSR", "ROL", "ROR", "INC", "DEC"), "read_modify_write"))
+MEMORY_MODES = ("zeropage", "zeropage_x", "zeropage_y", "absolute", "absolute_x", "absolute_y",
+                "preindexed_indirect", "postindexed_indirect")
+DATA_INDEX = {"zeropage_x": "X", "absolute_x": "X", "zeropage_y": "Y", "absolute_y": "Y",
+              "postindexed_indirect": "Y"}
+
+
+def expected_memory_access(record):
+    mnemonic, mode = OPCODES[record["opcode"]]
+    value = record["operand_value"]
+    kind = DATA_KINDS.get(mnemonic) if mode in MEMORY_MODES else None
+    pointer = mode in ("preindexed_indirect", "postindexed_indirect") or mode == "indirect"
+    if kind is None and not pointer:
+        return None
+    return {
+        "data": None if kind is None else {
+            "kind": kind, "address": None if pointer else value,
+            "index_register": DATA_INDEX.get(mode), "via_pointer": pointer},
+        "pointer": None if not pointer else {
+            "address": value,
+            "high_byte_address": (value & 0xFF00) | ((value + 1) & 0xFF) if mode == "indirect"
+                else (value + 1) & 0xFF,
+            "index_register": "X" if mode == "preindexed_indirect" else None},
+    }
+
+
+def operand_from_terms(record):
+    terms = record["additive_terms"]
+    value = sum(term["sign"] * term["value"] for term in terms["terms"])
+    if terms["projection"] == "low":
+        value &= 0xFF
+    elif terms["projection"] == "high":
+        value = (value >> 8) & 0xFF
+    return value
+
+
+def truncated_operand(value, mode):
+    if mode in ("immediate", "zeropage", "zeropage_x", "zeropage_y",
+                "preindexed_indirect", "postindexed_indirect"):
+        return value if -128 <= value <= 255 else value & 0xFF
+    if mode in ("absolute", "absolute_x", "absolute_y", "indirect"):
+        return value & 0xFFFF if value < 0 or value >= 0x10000 else value
+    return value
 
 
 class InstructionRecords(unittest.TestCase):
@@ -40,7 +131,7 @@ class InstructionRecords(unittest.TestCase):
         self.assertEqual(output.read_bytes(), plain_bytes)
         data = json.loads(xref.read_text())
         records = data.pop("instruction_records")
-        self.assertEqual(records["version"], "1")
+        self.assertEqual(records["version"], "2")
         data["build"].pop("timestamp_utc")
         old_xref["build"].pop("timestamp_utc")
         self.assertEqual(data, old_xref, "opt-in must not alter legacy xref sections")
@@ -51,6 +142,7 @@ class InstructionRecords(unittest.TestCase):
             self.assertEqual(record["size"], len(record["bytes"]))
             self.assertEqual(bytes(record["bytes"]), plain_bytes[start:start + record["size"]])
             self.assertEqual(record["opcode"], record["bytes"][0])
+            self.assert_version_2_fields(record)
         self.assert_source_spans(records["records"])
         sidecar = self.root / "instructions.json"
         manifest = self.root / "dependencies.json"
@@ -76,6 +168,27 @@ class InstructionRecords(unittest.TestCase):
                     actual["build"].pop("timestamp_utc")
                     self.assertEqual(actual, old_xref)
         return records["records"]
+
+    def assert_version_2_fields(self, record):
+        self.assertEqual(record["memory_access"], expected_memory_access(record), record["source"]["text"])
+        if record["size"] == 1:
+            self.assertIsNone(record["additive_terms"])
+            return
+        value = operand_from_terms(record)
+        # translate_instruction() truncates a constant operand; the sum is taken before that.
+        self.assertIn(record["operand_value"], (value, truncated_operand(value, record["addressing_mode"])),
+                      record["source"]["text"])
+
+    def terms(self, record):
+        return [(term["sign"], term["kind"], term.get("name"), term["value"])
+                for term in record["additive_terms"]["terms"]]
+
+    def binding(self, term):
+        binding = term["binding"]
+        if binding is None:
+            return None
+        line = binding["definition"]["line"] if binding["definition"] is not None else None
+        return (binding["kind"], line, binding.get("enum"))
 
     def assert_source_spans(self, value):
         if isinstance(value, dict):
@@ -521,6 +634,197 @@ END
         self.assertNotEqual(run.returncode, 0)
         self.assertFalse(manifest.exists())
         self.assertEqual(sidecar.read_bytes(), original)
+
+
+    def test_memory_access_for_every_official_opcode(self):
+        syntax = {
+            "implied": "{m}", "accumulator": "{m} A", "immediate": "{m} #$12",
+            "zeropage": "{m} $12", "zeropage_x": "{m} $12,X", "zeropage_y": "{m} $12,Y",
+            "absolute": "{m} $1234", "absolute_x": "{m} $1234,X", "absolute_y": "{m} $1234,Y",
+            "preindexed_indirect": "{m} [$12,X]", "postindexed_indirect": "{m} [$12],Y",
+            "indirect": "{m} [$1234]", "relative": "{m} $+2",
+        }
+        codes = sorted(OPCODES)
+        lines = [syntax[OPCODES[code][1]].format(m=OPCODES[code][0]) for code in codes]
+        records = self.assemble(".ORG $C000\n" + "".join(f"    {line}\n" for line in lines) + "END\n")
+        self.assertEqual([r["opcode"] for r in records], codes)
+        kinds = {OPCODES[r["opcode"]]: (r["memory_access"] or {}).get("data") for r in records}
+        self.assertEqual(kinds[("BIT", "zeropage")]["kind"], "read")
+        self.assertEqual(kinds[("INC", "absolute_x")]["kind"], "read_modify_write")
+        self.assertIsNone(kinds[("JSR", "absolute")])
+        self.assertIsNone(kinds[("BRK", "implied")])
+        jump = next(r for r in records if r["opcode"] == 0x6C)["memory_access"]
+        self.assertIsNone(jump["data"])
+        self.assertEqual(jump["pointer"], {"address": 0x1234, "high_byte_address": 0x1235,
+                                           "index_register": None})
+
+    def test_pointer_high_bytes_stay_in_page(self):
+        records = self.assemble(".ORG $C000\n    LDA [$FF],Y\n    LDA [$FF,X]\n    JMP [$12FF]\nEND\n")
+        self.assertEqual([r["memory_access"]["pointer"]["high_byte_address"] for r in records],
+                         [0x00, 0x00, 0x1200])
+        self.assertEqual([r["memory_access"]["pointer"]["index_register"] for r in records],
+                         [None, "X", None])
+        self.assertEqual([r["memory_access"]["data"]["index_register"] for r in records[:2]], ["Y", None])
+
+    def test_additive_terms_decomposition(self):
+        records = self.assemble(""".ORG $C000
+Base .EQU $0300
+FIELD .EQU 1
+SLOT_SIZE .EQU 4
+.ENUM Color
+  RED
+  GREEN
+.ENDE
+MACRO TWICE value
+    LDA #value + value
+ENDM
+Start:
+    LDA Base + Base
+    LDA Base - (FIELD + FIELD)
+    LDA #-(FIELD - 2)
+    LDA Base + (SLOT_SIZE * 2) + FIELD,X
+    LDA #<Start
+    LDA #>Start + 1
+    LDA #Color::GREEN
+    LDA #GREEN + 1
+    LDA #defined[LATER]
+    LDA #defined[NOPE]
+    TWICE $03
+    TWICE FIELD
+    JMP $
+LATER .EQU 1
+END
+""")
+        by_text = {r["source"]["text"]: r for r in records}
+        self.assertEqual(self.terms(by_text["LDA Base + Base"]),
+                         [(1, "symbol", "Base", 0x300), (1, "symbol", "Base", 0x300)])
+        self.assertEqual(self.terms(by_text["LDA Base - (FIELD + FIELD)"]),
+                         [(1, "symbol", "Base", 0x300), (-1, "symbol", "FIELD", 1), (-1, "symbol", "FIELD", 1)])
+        self.assertEqual(self.terms(by_text["LDA #-(FIELD - 2)"]),
+                         [(-1, "symbol", "FIELD", 1), (1, "integer", None, 2)])
+        slot = by_text["LDA Base + (SLOT_SIZE * 2) + FIELD,X"]["additive_terms"]["terms"]
+        self.assertEqual([(t["kind"], t["value"], t.get("referenced_symbols")) for t in slot],
+                         [("symbol", 0x300, None), ("expression", 8, ["SLOT_SIZE"]), ("symbol", 1, None)])
+        self.assertEqual(slot[1]["source"]["text"], "SLOT_SIZE * 2")
+        self.assertEqual(by_text["LDA #<Start"]["additive_terms"]["projection"], "low")
+        high = by_text["LDA #>Start + 1"]["additive_terms"]
+        self.assertEqual(high["projection"], "high")
+        self.assertEqual([t["kind"] for t in high["terms"]], ["symbol", "integer"])
+        scoped = by_text["LDA #Color::GREEN"]["additive_terms"]["terms"]
+        self.assertEqual([(t["kind"], t["value"], "binding" in t) for t in scoped], [("expression", 1, False)])
+        member = by_text["LDA #GREEN + 1"]["additive_terms"]["terms"][0]
+        self.assertEqual(self.binding(member), ("enum_member", 7, "Color"))
+        self.assertEqual([self.terms(by_text[f"LDA #defined[{name}]"]) for name in ("LATER", "NOPE")],
+                         [[(1, "expression", None, 1)], [(1, "expression", None, 0)]])
+        literal_twice, symbol_twice = [r for r in records if r["source"]["text"] == "LDA #value + value"]
+        self.assertEqual(self.terms(literal_twice), [(1, "integer", None, 3), (1, "integer", None, 3)])
+        self.assertEqual([t["source"]["text"] for t in literal_twice["additive_terms"]["terms"]], ["$03", "$03"])
+        self.assertEqual([self.binding(t) for t in symbol_twice["additive_terms"]["terms"]],
+                         [("constant", 3, None), ("constant", 3, None)])
+        jump = records[-1]
+        self.assertEqual(self.terms(jump), [(1, "current_pc", None, jump["cpu_address"])])
+
+    def test_local_and_anonymous_label_terms(self):
+        records = self.assemble(""".ORG $C000
+MACRO SKIP
+    BNE +
+    NOP
++   RTS
+ENDM
+Start:
+@@loop:
+    BNE @@loop
+-   BNE -
+--  BNE --
+    BEQ +
+    BEQ ++
++   NOP
+++  NOP
+    SKIP
+    SKIP
+    REPT 2
+        BNE +
++       NOP
+    ENDM
+END
+""")
+        address = {r["cpu_address"]: r for r in records}
+        loop = records[0]["additive_terms"]["terms"][0]
+        self.assertEqual((loop["kind"], loop["value"]), ("local_symbol", 0xC000))
+        self.assertEqual(self.binding(loop), ("label", 8, None))
+        for record in records:
+            term = record["additive_terms"]["terms"][0] if record["additive_terms"] else None
+            if term is None or term["kind"] not in ("forward_label", "backward_label"):
+                continue
+            self.assertIsNone(term["binding"])
+            self.assertEqual(term["value"], record["operand_value"])
+            self.assertIn(term["value"], address)
+        forward = [r for r in records if r["source"]["text"] in ("BNE +", "BEQ +", "BEQ ++")]
+        self.assertEqual(len(forward), 6)
+        targets = [address[r["operand_value"]]["source"]["text"] for r in forward]
+        self.assertEqual(targets, ["NOP", "NOP", "RTS", "RTS", "NOP", "NOP"])
+        self.assertEqual(len({r["operand_value"] for r in forward}), 6)
+
+    def test_constant_bindings_follow_assembly_order(self):
+        records = self.assemble(""".ORG $C000
+    LDA #LATER
+LATER = 5
+    LDA #LATER
+LATER = 6
+    LDA #LATER
+AVAL = BVAL + 1
+    LDA #AVAL
+BVAL = 7
+ONCE .EQU 1
+ONCE .EQU 2
+    LDA #ONCE
+    LDA #CLI_VALUE
+ALIAS .EQU ORIGINAL
+LABEL_ALIAS .EQU Here
+NEXT .EQU Here + 1
+Here:
+    LDA #ALIAS
+    LDA LABEL_ALIAS
+    LDA NEXT
+ORIGINAL .EQU 4
+    RTS
+END
+""", options=("-DCLI_VALUE=9",))
+        here = records[6]["cpu_address"]
+        terms = [r["additive_terms"]["terms"][0] for r in records[:9]]
+        self.assertEqual([t["value"] for t in terms], [6, 5, 6, 8, 1, 9, 4, here, here + 1])
+        # A definition that is itself a symbol does not rebind the term.
+        self.assertEqual([self.binding(t) for t in terms], [
+            ("constant", 5, None), ("constant", 3, None), ("constant", 5, None),
+            ("constant", 7, None), ("constant", 10, None), ("constant", None, None),
+            ("constant", 14, None), ("constant", 15, None), ("constant", 16, None)])
+        self.assertIsNone(terms[5]["binding"]["definition"])
+
+    def test_coverage_fixtures_keep_version_2_invariants(self):
+        for fixture in sorted(TESTS.glob("coverage_*.asm")):
+            if fixture.name == "coverage_error_directive.asm":
+                continue
+            with self.subTest(fixture=fixture.name):
+                output = self.root / "coverage.bin"
+                xref = self.root / "coverage.json"
+                run = subprocess.run([str(XASM), "--pure-binary", str(fixture), "-o", str(output),
+                                      f"--xref={xref}", "--xref-instructions=true"],
+                                     capture_output=True, cwd=TESTS.parent)
+                self.assertEqual(run.returncode, 0, run.stderr.decode())
+                for record in json.loads(xref.read_text())["instruction_records"]["records"]:
+                    self.assert_version_2_fields(record)
+
+    def test_shadow_reductions_print_no_diagnostics(self):
+        source = self.root / "input.asm"
+        source.write_text(".ORG $C000\n    LDA #sizeof(Nope)\n    LDA #1/0\n    RTS\nEND\n")
+        base = [str(XASM), "--pure-binary", str(source), "-o", str(self.root / "out.bin")]
+        plain = subprocess.run(base, capture_output=True)
+        records = subprocess.run([*base, f"--xref={self.root / 'xref.json'}", "--xref-instructions=true"],
+                                 capture_output=True)
+        self.assertNotEqual(plain.returncode, 0)
+        self.assertEqual((records.returncode, records.stderr), (plain.returncode, plain.stderr))
+        self.assertEqual(plain.stderr.count(b"Nope"), 1, plain.stderr.decode())
+        self.assertEqual(plain.stderr.count(b"division by zero"), 1, plain.stderr.decode())
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Instruction records version 2: memory access and additive operand terms
 
-Status: proposed, not implemented. Extends
+Status: implemented. Extends
 [instruction records version 1](XASM_INSTRUCTION_RECORDS_SPEC.md). Everything
 not stated here keeps its version 1 meaning.
 
@@ -151,8 +151,8 @@ references.
 
 - **xref data edges.** `data_reads` and `data_writes` cover direct and indexed
   modes only, as today. A `read_modify_write` access to a data label emits both
-  a `data_reads` and a `data_writes` edge with the same site. Pointer modes
-  still emit no data edge.
+  a `data_reads` and a `data_writes` edge with the same site, and a `BIT` access
+  now emits a `data_reads` edge. Pointer modes still emit no data edge.
 - **Pointer-pair tracking and `indirect_data_flows`.** Only a `write` sets a
   pointer byte; `read_modify_write` never updates the pointer-pair state.
   `INC ptr+1` advances a pointer that is already set up, as in the page step of
@@ -177,7 +177,8 @@ references.
   bounds are resolved for it as for any other site.
 - **Data consumers.** A `read_modify_write` site is listed in both
   `read_sites` and `write_sites`, and counted in both `read_site_count` and
-  `write_site_count`, matching the data edges.
+  `write_site_count`, matching the data edges. A `BIT` site is listed in
+  `read_sites`.
 
 ## `additive_terms`
 
@@ -207,7 +208,8 @@ expression into signed terms:
 1. If the expression root is a `low_byte` or `high_byte` operator, record
    `projection` as `low` or `high` and decompose its operand; otherwise
    `projection` is `none`. Only one outer projection is stripped. `bank` is not
-   a projection: a `bank` root is one `expression` term.
+   a projection. It takes only a symbol, and pure-binary assembly, which records
+   require, cannot resolve a symbol's bank, so it never reaches a record.
 2. Flatten binary `+` and `-` and unary `negate` into terms, propagating signs
    through nested groups: `A - (B + C)` yields `+A`, `-B`, `-C`, and
    `-(A - 2)` yields `-A`, `+2`.
@@ -228,8 +230,8 @@ access or a scoped name, is one term of kind `expression`.
 | `name` | The written name for symbol-like kinds, else absent. Not a stable cross-build ID. |
 | `value` | The term's value, before projection and truncation; see [Capture points](#capture-points). |
 | `referenced_symbols` | For kind `expression`: ordered, unique symbol spellings inside the term. Absent otherwise. |
-| `binding` | For `symbol` and `local_symbol`: `kind` (`label`, `constant`, `procedure`, `variable` or `enum_member`) and `definition`, the span of the definition this use assembled, or null when xasm has no source location (for example a command-line define). An `enum_member` binding also has `enum`, the enumeration's name. Null for anonymous labels. |
-| `source` | The term's parsed span and text. |
+| `binding` | Present for symbol-like kinds, else absent. For `symbol` and `local_symbol`: `kind` (`label`, `constant`, `procedure`, `variable` or `enum_member`) and `definition`, the span of the definition this use assembled (for a procedure, its `.PROC` statement), or null when xasm has no source location (for example a command-line define). An `enum_member` binding also has `enum`, the enumeration's name. Null for anonymous labels. |
+| `source` | The term's parsed span and text. Like version 1 expression spans, it excludes grouping parentheses. |
 
 Those five binding kinds are the only ones a bare symbol term can have. xasm
 accepts a bare enum member (`LDA #GREEN`) and rewrites it to `Color::GREEN`
@@ -250,8 +252,10 @@ term values and `operand_value`:
 1. Version 1 copies the operand before folding.
 2. `process_instruction` substitutes constants (`substitute_defines`) and folds
    what it can.
-3. `translate_instruction` resolves labels and completes the reduction.
-4. The xref builder evaluates the completed operand for `operand_value`.
+3. `translate_instruction` completes the reduction. Labels stay symbolic:
+   their addresses are assigned in a later pass.
+4. The xref builder evaluates the completed operand, with label addresses and
+   at the instruction's PC, for `operand_value`.
 
 Structure and spans come from the pre-fold copy, so decomposition sees the
 written tree. Bindings and values cannot be read off the live operand:
@@ -300,24 +304,26 @@ The producer therefore uses a shadow reduction:
    pure-binary assembly fail.
 4. **Translate stage.** In `translate_instruction`, after those rewrites, each
    shadow term is reduced with `reduce_expression_complete` and the same PC
-   folding as the real operand, then evaluated at the instruction's PC. The
-   result is the term's `value`.
-5. **Bindings.** A hook in `substitute_ident` records the binding when it
+   folding as the real operand.
+5. **Values.** Where the xref builder evaluates `operand_value`, it evaluates
+   each shadow term with the same evaluator, at the same PC. The result is the
+   term's `value`.
+6. **Bindings.** A hook in `substitute_ident` records the binding when it
    replaces a shadow term's own identifier, at whichever stage does so: step 2
    for a constant already assigned, step 4 for a forward reference. That is
    the definition xasm assembles, recorded per use and never looked up later.
    Substitutions inside the substituted definition belong to that definition
    and do not rebind the term: with `A = B + 1` and `B` assigned later, the
-   term `A` still binds to `A`. Labels, procedures and variables are never
+   term `A` still binds to `A`, and `ALIAS .EQU ORIGINAL` binds to `ALIAS`. Labels, procedures and variables are never
    substituted; their binding comes from the symbol that the resolved name
    refers to at step 4. An enum member's binding is recorded by its step 3
    rewrite.
-6. **No side effects.** Shadow work prints no diagnostics and leaves the error
+7. **No side effects.** Shadow work prints no diagnostics and leaves the error
    and warning counts, symbol use counts (`ref_count`), the symbol table and
    branch registration unchanged. Without that, `sizeof`, `mask` and scope
    errors would print twice and break warning parity. A producer flag checked
    by `err`, `warn` and `substitute_ident` is enough.
-7. **Cross-check.** A shadow term that does not evaluate to an integer, or a
+8. **Cross-check.** A shadow term that does not evaluate to an integer, or a
    record whose values fail the sum invariant, is an analysis error (exit 3),
    like other provenance failures in version 1. Shadow terms hold no pointers
    into the live operand, so a future rewrite of the live operand that the
@@ -353,9 +359,13 @@ Redefinitions:
 
 ### Invariants
 
-- Applying `projection` to `Σ sign × value`, then the same operand-width
-  reduction xasm applies to `operand_value`, yields `operand_value`. Relative
-  branches compare against the target before branch encoding.
+- Applying `projection` to `Σ sign × value`, then the operand-width reduction
+  xasm applies to `operand_value`, yields `operand_value`. That reduction is
+  `translate_instruction`'s truncation of an operand that is a constant after
+  the translate stage: to a byte for immediate, zero-page and pointer modes
+  when the value is outside -128 to 255, and to a word for absolute and
+  indirect modes when it is outside 0 to $FFFF. Relative branches compare
+  against the target before branch encoding.
 - Term values never come from a number-to-label match; a term is only what was
   written.
 - Decomposition is purely structural. It does not say which term is a base and
@@ -399,12 +409,15 @@ fields.
 
 ## Verification
 
-Extend `tests/test_instruction_records.py` for the records and
-`tests/regression.sh` for the legacy outputs:
+`tests/test_instruction_records.py` covers the records and
+`tests/test_access_classification.py`, run by `tests/regression.sh`, the legacy
+outputs:
 
-- Every official opcode and mode against an independent expected table for
-  `memory_access`, including `BIT` as a read and `JMP [addr]` with a pointer
-  and no data.
+- Every record of every fixture, including the coverage fixtures, checked
+  against an independent table of the 151 official opcodes for
+  `memory_access`, and for the sum invariant.
+- Every official opcode and mode, including `BIT` as a read and `JMP [addr]`
+  with a pointer and no data.
 - Every row of the reference access table, including `JMP [addr]` and
   `STA [zp],Y` as reads of the pointer, an immediate label without a projection
   as `immediate`, `.DW Handler` still as `address_compute` with a null `opcode`,
@@ -412,10 +425,10 @@ Extend `tests/test_instruction_records.py` for the records and
   default-output check of access values in `tests/regression.sh` gains
   `read_modify_write` and `immediate`.
 - Read-modify-write in every output: one site in both `data_reads` and
-  `data_writes`; summary read and write counts each one higher with the total
-  one higher; an `INC Table,X` index-pattern record with `access_kind`
-  `read_modify_write` and the `write_access` flag that never forms a paired or
-  split pattern; and the site in both data-consumer lists.
+  `data_writes`; summary read and write counts; an `INC Table,X` index-pattern
+  record with `access_kind` `read_modify_write` and the `write_access` flag
+  that forms no paired or split pattern; and the site in both data-consumer
+  lists.
 - A label read only by `BIT` and a pointer read only by `JMP [addr]` appearing
   in `top_data_labels`, not `top_jump_targets`.
 - Pointer-pair tracking: stores to `ptr` and `ptr+1`, a `[ptr],Y` access,
@@ -424,25 +437,27 @@ Extend `tests/test_instruction_records.py` for the records and
 - Pointer high bytes for `[zp],Y` and `[zp,X]` at `$FF`, and `JMP [$12FF]`
   reading its high byte from `$1200`.
 - Additive terms for `sym + sym`, `sym - (a + b)`, `-(a - 2)`,
-  `sym + (A * 2) + B`, a low/high projection, a `bank` root, `Enum::Member`,
-  a bare enum member (`enum_member` binding), `defined[X]` for a symbol
-  defined later (1) and one never defined (0), local labels, backward and
-  forward anonymous labels at two levels (`+`, `++`) including forward
-  references inside a macro expansion and a `.REPT` block, a macro argument
-  used twice in one operand,
-  `current_pc`, a constant defined as `Fwd + 1`, `A = B + 1` with `B` assigned
-  after the use (the term binds to `A`), a
-  constant reassigned with `=` between two instructions (different values and
-  definition spans), a use before a reassigned constant's first assignment
-  (binds to the last assignment, the value assembled), and a non-identical
-  `.equ` redefinition (binding stays the first definition).
-- The sum invariant over every record of the existing coverage fixtures.
-- Shadow side effects: identical stderr, exit status and unused-symbol warnings
-  with records captured and not captured, including a source whose `sizeof`
-  error must print once.
+  `sym + (A * 2) + B`, low and high projections, `Enum::Member`, a bare enum
+  member (`enum_member` binding), `defined[X]` for a symbol defined later (1)
+  and one never defined (0), local labels, backward and forward anonymous
+  labels at two levels (`+`, `++`) including forward references inside a macro
+  expansion and a `.REPT` block, a macro argument used twice in one operand,
+  and `current_pc`.
+- Bindings for a constant defined as `Label + 1` before the label, `A = B + 1`
+  with `B` assigned after the use (the term binds to `A`), aliases of a later
+  constant and of a label (the term binds to the alias), a constant reassigned
+  with `=` between two instructions (different values and definition spans), a
+  use before a reassigned constant's first assignment (binds to the last
+  assignment, the value assembled), a non-identical `.equ` redefinition
+  (binding stays the first definition), and a command-line define (null
+  definition).
+- Shadow side effects: identical stderr, exit status, binary and legacy xref
+  with records captured and not captured for every fixture, including a source
+  whose `sizeof` and division errors must each print once.
 - Cost: the existing performance tests, and a large real disassembly kept
   outside the repository, timed with records captured and not captured.
-- Binary and warning parity with version 1 output. Legacy xref, summary,
-  index-pattern and data-consumer output differ from version 1 by exactly the
-  classification changes under [Shared classifier](#shared-classifier), shown
-  on a fixture that exercises each change.
+- Binary and warning parity with version 1 output, and legacy xref, summary,
+  index-pattern and data-consumer output that differs from a version 1 build
+  only by the classification changes under
+  [Shared classifier](#shared-classifier), on a fixture that exercises each
+  change.

@@ -125,6 +125,42 @@
 
 static astproc_data_analysis_hook data_analysis_hook = NULL;
 static astproc_data_analysis_hook instruction_analysis_hook = NULL;
+static astproc_instruction_stage_hook instruction_stage_hook = NULL;
+
+/* Instruction-record analysis reduces detached copies ("shadows") of operand
+ * terms beside each real operand. Shadow work must be invisible: it prints no
+ * diagnostics and leaves error, warning and symbol use counts alone. */
+static int analysis_shadow_active = 0;
+static astnode *analysis_shadow_root = NULL;
+static astproc_binding_sink analysis_binding_sink = NULL;
+static void *analysis_binding_arg = NULL;
+
+/* Reports the definition a shadow term's own identifier resolved to. */
+static void analysis_bind_symbol(const symtab_entry *e)
+{
+    const char *kind;
+    const astnode *def = e->def;
+    const location *loc = NULL;
+    if (analysis_binding_sink == NULL) return;
+    switch (e->type) {
+        case CONSTANT_SYMBOL: kind = "constant"; break;
+        case LABEL_SYMBOL: kind = "label"; break;
+        case PROC_SYMBOL: kind = "procedure"; break;
+        case VAR_SYMBOL: kind = "variable"; break;
+        default: return;
+    }
+    /* A procedure's definition is its statement list; report the PROC. */
+    if (e->type == PROC_SYMBOL && def != NULL && astnode_is_type(astnode_get_parent(def), PROC_NODE)) {
+        def = astnode_get_parent(def);
+    }
+    if (e->has_assignment_loc) {
+        loc = &e->assignment_loc;
+    } else if (def != NULL) {
+        loc = &def->loc;
+    }
+    if (loc != NULL && loc->file == NULL) loc = NULL;
+    analysis_binding_sink(analysis_binding_arg, kind, loc, NULL);
+}
 
 void astproc_set_data_analysis_hook(astproc_data_analysis_hook hook)
 {
@@ -134,6 +170,11 @@ void astproc_set_data_analysis_hook(astproc_data_analysis_hook hook)
 void astproc_set_instruction_analysis_hook(astproc_data_analysis_hook hook)
 {
     instruction_analysis_hook = hook;
+}
+
+void astproc_set_instruction_stage_hook(astproc_instruction_stage_hook hook)
+{
+    instruction_stage_hook = hook;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -330,6 +371,7 @@ static int branch_level(astnode *n, char marker, const char *kind, int *level_ou
 static void err(location loc, const char *fmt, ...)
 {
     va_list ap;
+    if (analysis_shadow_active) return;
     va_start(ap, fmt);
 
     fprintf(stderr, "%s:", loc.file);
@@ -367,6 +409,7 @@ static symtab_entry *enter_owned_symbol(const char *name, symbol_type type, astn
 static void warn(location loc, const char *fmt, ...)
 {
     va_list ap;
+    if (analysis_shadow_active) return;
     if (!xasm_args.no_warn) {
         va_start(ap, fmt);
         fprintf(stderr, "%s:", loc.file);
@@ -998,7 +1041,11 @@ static astnode *substitute_ident(astnode *expr)
     e = symtab_lookup(expr->ident);
     if (e != NULL) {
         if (e->type == CONSTANT_SYMBOL) {
-            e->ref_count++;
+            if (!analysis_shadow_active) {
+                e->ref_count++;
+            } else if (expr == analysis_shadow_root) {
+                analysis_bind_symbol(e);
+            }
             /* This is a defined symbol that should be
             replaced by the expression it stands for */
             c = astnode_clone((astnode *)e->def, expr->loc);
@@ -2184,6 +2231,11 @@ static int process_instruction(astnode *instr, void *arg, astnode **next)
         }
         expr = astnode_get_child(instr, 0);
         reduce_expression(expr, FOLD_PC_NO);
+        if (instruction_stage_hook != NULL
+            && !instruction_stage_hook(instr, ASTPROC_INSTRUCTION_PROCESSED)) {
+            err(instr->loc, "could not preserve instruction analysis provenance");
+            return 0;
+        }
         op = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
         if (op != 0xFF) {
             codeseg_pc += opcode_length(op);
@@ -2419,7 +2471,11 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
     e = symtab_lookup(id->ident);
     if (e == NULL) {
         // TODO: Check that expression is a constant?
-        enter_owned_symbol(id->ident, CONSTANT_SYMBOL, expr, EQU_FLAG);
+        e = enter_owned_symbol(id->ident, CONSTANT_SYMBOL, expr, EQU_FLAG);
+        if (e != NULL) {
+            e->assignment_loc = equ->loc;
+            e->has_assignment_loc = 1;
+        }
     } else {
         /* Symbol is being redefined */
         /* This is not allowed for EQU equate! */
@@ -2457,13 +2513,18 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
     if (e == NULL) {
         /* Symbol is being defined for the first time */
         /* Note that the VOLATILE_FLAG is set */
-        enter_owned_symbol(id->ident, CONSTANT_SYMBOL, expr, VOLATILE_FLAG);
+        e = enter_owned_symbol(id->ident, CONSTANT_SYMBOL, expr, VOLATILE_FLAG);
     } else {
         /* Symbol is being redefined */
         /* This is OK for ASSIGN equate, simply replace definition */
         // ### store a list of definitions, otherwise we leak
         expr->loc = e->def->loc;
         e->def = expr;
+    }
+    /* The definition keeps the first location; bindings need this one. */
+    if (e != NULL) {
+        e->assignment_loc = assign->loc;
+        e->has_assignment_loc = 1;
     }
     astnode_remove(assign);
     astnode_finalize(assign);
@@ -3212,6 +3273,7 @@ static int enter_union(astnode *union_def, void *arg, astnode **next)
  */
 static int enter_enum(astnode *enum_def, void *arg, astnode **next)
 {
+    symtab_entry *member;
     astnode *c;
     astnode *id;
     astnode *val;
@@ -3247,12 +3309,15 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
                     val = astnode_create_integer(0, c->loc);
                 }
             }
-            if (symtab_enter(id->ident, CONSTANT_SYMBOL, val, 0) == NULL) {
+            member = symtab_enter(id->ident, CONSTANT_SYMBOL, val, 0);
+            if (member == NULL) {
                 if (!symtab_failed()) err(c->loc, "duplicate symbol `%s' in enumeration `%s'", id->ident, enum_id->ident);
                 astnode_finalize(val);
                 val = NULL;
                 continue;
             }
+            member->assignment_loc = c->loc;
+            member->has_assignment_loc = 1;
         }
         symtab_pop();
     }
@@ -4354,6 +4419,10 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
     unsigned char c;
     /* Put the operand in final form */
     reduce_expression_complete( LHS(instr), FOLD_PC_NO );
+    if (instruction_stage_hook != NULL
+        && !instruction_stage_hook(instr, ASTPROC_INSTRUCTION_TRANSLATED)) {
+        err(instr->loc, "could not preserve instruction analysis provenance");
+    }
     /* Convert (mnemonic, addressing mode) pair to opcode */
     instr->instr.opcode = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
     if (instr->instr.opcode == 0xFF) {
@@ -5120,4 +5189,142 @@ void astproc_fifth_pass(astnode *root, FILE *fp)
     codeseg_pc = 0;
     /* Do the walk. */
     astproc_walk(root, fp, map);
+}
+
+/*---------------------------------------------------------------------------*/
+/* Instruction-record analysis shadows (XASM_INSTRUCTION_RECORDS_V2_SPEC.md) */
+
+static void analysis_set_ident(astnode *n, const char *prefix, const char *suffix)
+{
+    char *name = (char *)malloc(strlen(prefix) + strlen(suffix) + 1);
+    if (name == NULL) return;   /* The term then fails to evaluate. */
+    strcpy(name, prefix);
+    strcat(name, suffix);
+    free(n->ident);
+    n->ident = name;
+}
+
+/* Applies the renames that the first pass makes to the real operand's
+ * references right after process_instruction(), from the same state. */
+static void analysis_prepare_names(astnode *n)
+{
+    astnode *c;
+    char str[32];
+    int level;
+    if (n == NULL) return;
+    switch (astnode_get_type(n)) {
+        case LOCAL_ID_NODE:
+        /* globalize_local() */
+        snprintf(str, sizeof (str), "#%d", label_count);
+        analysis_set_ident(n, n->ident, str);
+        n->type = IDENTIFIER_NODE;
+        break;
+
+        case BACKWARD_BRANCH_NODE:
+        /* process_backward_branch() */
+        if (branch_level(n, '-', "backward", &level)) {
+            backward_branch_info *bwd = &branch_scope_stack->backward[level];
+            if (bwd->decl != NULL) analysis_set_ident(n, bwd->decl->label, "");
+            n->type = IDENTIFIER_NODE;
+        }
+        break;
+
+        case FORWARD_BRANCH_NODE:
+        /* process_forward_branch() registers the reference; the declaration
+           reached later gives it this name. */
+        if (branch_level(n, '+', "forward", &level)) {
+            snprintf(str, sizeof (str), "#%d#%d", branch_scope_stack->id,
+                     branch_scope_stack->forward[level].counter);
+            analysis_set_ident(n, n->ident, str);
+            n->type = IDENTIFIER_NODE;
+        }
+        break;
+
+        default:
+        break;
+    }
+    for (c = astnode_get_first_child(n); c != NULL; c = astnode_get_next_sibling(c)) {
+        analysis_prepare_names(c);
+    }
+}
+
+void astproc_analysis_prepare(astnode *expr)
+{
+    analysis_shadow_active = 1;
+    analysis_prepare_names(expr);
+    analysis_shadow_active = 0;
+}
+
+/* Applies validate_ref()'s rewrite of bare enumeration members, visiting the
+ * identifiers that the second pass visits. */
+static astnode *analysis_resolve_enum_members(astnode *n, int is_root)
+{
+    astnode *c;
+    astnode *next;
+    if (n == NULL || astnode_is_type(n, SCOPE_NODE)) return n;
+    if (astnode_is_type(n, INDEX_NODE) && astnode_is_type(LHS(n), IDENTIFIER_NODE)
+        && strcasecmp(LHS(n)->ident, "defined") == 0) {
+        return n;
+    }
+    if (astnode_is_type(n, IDENTIFIER_NODE)) {
+        symbol_ident_list list;
+        int i;
+        if (is_field_ref(n) || symtab_lookup(n->ident) != NULL) return n;
+        if (symtab_list_type(ENUM_SYMBOL, &list) < 0) return n;
+        for (i = 0; i < list.size; i++) {
+            symtab_entry *enum_def = symtab_lookup(list.idents[i]);
+            symtab_entry *member;
+            astnode *scope;
+            if (!push_symbol_scope(enum_def->symtab, n->loc)) break;
+            member = symtab_lookup(n->ident);
+            symtab_pop();
+            if (member == NULL) continue;
+            scope = astnode_create_scope(astnode_create_identifier(enum_def->id, n->loc),
+                                         astnode_clone(n, n->loc), n->loc);
+            if (is_root && analysis_binding_sink != NULL) {
+                const location *loc = member->has_assignment_loc ? &member->assignment_loc : NULL;
+                analysis_binding_sink(analysis_binding_arg, "enum_member",
+                                      loc != NULL && loc->file != NULL ? loc : NULL, enum_def->id);
+            }
+            astnode_replace(n, scope);
+            astnode_finalize(n);
+            n = scope;
+            break;
+        }
+        symtab_list_finalize(&list);
+        return n;
+    }
+    for (c = astnode_get_first_child(n); c != NULL; c = next) {
+        next = astnode_get_next_sibling(c);
+        analysis_resolve_enum_members(c, 0);
+    }
+    return n;
+}
+
+/* Reduces a shadow term with the calls the real operand gets at the same
+ * stage, reporting the definition its own identifier is bound to. */
+astnode *astproc_analysis_reduce(astnode *expr, int stage, astproc_binding_sink sink, void *arg)
+{
+    analysis_shadow_active = 1;
+    analysis_binding_sink = sink;
+    analysis_binding_arg = arg;
+    if (stage == ASTPROC_INSTRUCTION_TRANSLATED) {
+        expr = analysis_resolve_enum_members(expr, 1);
+        /* Labels, procedures and variables are never substituted. */
+        if (astnode_is_type(expr, IDENTIFIER_NODE)) {
+            symtab_entry *e = symtab_lookup(expr->ident);
+            if (e != NULL && e->type != CONSTANT_SYMBOL) analysis_bind_symbol(e);
+        }
+    }
+    analysis_shadow_root = expr;
+    if (stage == ASTPROC_INSTRUCTION_PROCESSED) {
+        expr = reduce_expression(expr, FOLD_PC_NO);
+    } else {
+        expr = reduce_expression_complete(expr, FOLD_PC_NO);
+    }
+    analysis_shadow_root = NULL;
+    analysis_binding_sink = NULL;
+    analysis_binding_arg = NULL;
+    analysis_shadow_active = 0;
+    return expr;
 }
