@@ -1567,7 +1567,9 @@ int main(int argc, char *argv[]) {
         goto cleanup;
     }
 
-    if (needs_instruction_provenance && !prepare_xref_instruction_provenance()) {
+    if (needs_instruction_provenance
+        && !prepare_xref_instruction_provenance(
+            xasm_args.xref_instructions || xasm_args.instruction_records_file != NULL)) {
         fprintf(stderr, "error: could not initialize instruction provenance\n");
         err_count++;
     }

@@ -1971,12 +1971,30 @@ static const xref_data_provenance *find_xref_data_provenance(unsigned long origi
     return &xref_data_provenance_records[origin_id - 1];
 }
 
+/* One signed additive term of an operand, and the shadow copy of it that is
+ * reduced beside the real operand to capture its binding and value. */
+typedef struct tag_instruction_term {
+    int sign;
+    astnode *node;              /* Written term inside the pre-fold copy. */
+    astnode *shadow;            /* Owned. */
+    const char *binding_kind;   /* Static string; NULL while unbound. */
+    location binding_loc;
+    int has_binding_loc;
+    char *binding_enum;
+    int failed;
+} instruction_term;
+
 typedef struct tag_instruction_provenance {
     xref_data_provenance operand;
     location source_loc;
     location use_loc;
     location operand_loc;
     addressing_mode parsed_mode;
+    const char *projection;
+    instruction_term *terms;
+    int term_count;
+    int term_capacity;
+    int operand_integer_after_translate;
 } instruction_provenance;
 
 typedef struct tag_instruction_source {
@@ -1991,6 +2009,7 @@ typedef struct tag_instruction_source {
 static instruction_provenance *instruction_provenance_records;
 static size_t instruction_provenance_count;
 static size_t instruction_provenance_capacity;
+static int instruction_terms_enabled;
 static instruction_source *instruction_sources;
 
 /* Locations come from the parser. Index source bytes once, without imposing
@@ -2081,6 +2100,115 @@ static char *instruction_source_span(location loc, size_t *length)
     return text;
 }
 
+static void free_instruction_terms(instruction_provenance *p)
+{
+    int i;
+    for (i = 0; i < p->term_count; i++) {
+        astnode_finalize(p->terms[i].shadow);
+        free(p->terms[i].binding_enum);
+    }
+    free(p->terms);
+    p->terms = NULL;
+    p->term_count = p->term_capacity = 0;
+}
+
+static int append_instruction_term(instruction_provenance *p, int sign, astnode *node)
+{
+    instruction_term *term;
+    if (p->term_count == p->term_capacity) {
+        int capacity = p->term_capacity == 0 ? 4 : p->term_capacity * 2;
+        instruction_term *tmp = (instruction_term *)realloc(p->terms, (size_t)capacity * sizeof(*tmp));
+        if (tmp == NULL) return 0;
+        p->terms = tmp;
+        p->term_capacity = capacity;
+    }
+    term = &p->terms[p->term_count++];
+    memset(term, 0, sizeof(*term));
+    term->sign = sign;
+    term->node = node;
+    return 1;
+}
+
+/* Flattens binary + and - and unary negation into signed terms, in source
+ * order. Every other node is one term. */
+static int decompose_instruction_terms(instruction_provenance *p, astnode *expr, int sign)
+{
+    if (astnode_is_type(expr, ARITHMETIC_NODE)) {
+        switch (expr->oper) {
+            case PLUS_OPERATOR:
+                return decompose_instruction_terms(p, LHS(expr), sign)
+                    && decompose_instruction_terms(p, RHS(expr), sign);
+            case MINUS_OPERATOR:
+                return decompose_instruction_terms(p, LHS(expr), sign)
+                    && decompose_instruction_terms(p, RHS(expr), -sign);
+            case UMINUS_OPERATOR:
+                return decompose_instruction_terms(p, LHS(expr), -sign);
+            default:
+                break;
+        }
+    }
+    return append_instruction_term(p, sign, expr);
+}
+
+/* Runs in the instruction-analysis hook, before the real operand is reduced:
+ * the pre-fold copy and the live operand are still identical here. */
+static int capture_instruction_terms(instruction_provenance *p)
+{
+    astnode *root = p->operand.original_expression;
+    int i;
+    p->projection = "none";
+    if (root == NULL) return 1;
+    if (astnode_is_type(root, ARITHMETIC_NODE)
+        && (root->oper == LO_OPERATOR || root->oper == HI_OPERATOR)) {
+        p->projection = root->oper == LO_OPERATOR ? "low" : "high";
+        root = LHS(root);
+    }
+    if (!decompose_instruction_terms(p, root, 1)) return 0;
+    for (i = 0; i < p->term_count; i++) {
+        p->terms[i].shadow = astnode_clone(p->terms[i].node, loc_preserve);
+        if (p->terms[i].shadow == NULL) return 0;
+        astproc_analysis_prepare(p->terms[i].shadow);
+    }
+    return 1;
+}
+
+static void record_instruction_term_binding(void *arg, const char *kind,
+                                            const location *definition,
+                                            const char *enum_name)
+{
+    instruction_term *term = (instruction_term *)arg;
+    if (term->binding_kind != NULL) return;
+    term->binding_kind = kind;
+    if (definition != NULL) {
+        term->binding_loc = *definition;
+        if (definition->source_file != NULL) term->binding_loc.file = definition->source_file;
+        term->has_binding_loc = 1;
+    }
+    if (enum_name != NULL && (term->binding_enum = xstrdup(enum_name)) == NULL) {
+        term->failed = 1;
+    }
+}
+
+/* Reduces each shadow term right after the real operand, at the same stage. */
+static int instruction_term_stage(astnode *instr, int stage)
+{
+    unsigned long id = instr->analysis_origin_id;
+    instruction_provenance *p;
+    int i;
+    if (id == 0 || id > instruction_provenance_count) return 1;
+    p = &instruction_provenance_records[id - 1];
+    if (stage == ASTPROC_INSTRUCTION_TRANSLATED) {
+        p->operand_integer_after_translate = LHS(instr) != NULL
+            && astnode_is_type(LHS(instr), INTEGER_NODE);
+    }
+    for (i = 0; i < p->term_count; i++) {
+        p->terms[i].shadow = astproc_analysis_reduce(p->terms[i].shadow, stage,
+                                                     record_instruction_term_binding,
+                                                     &p->terms[i]);
+    }
+    return 1;
+}
+
 static int capture_instruction_provenance(astnode *instr)
 {
     instruction_provenance candidate, *tmp;
@@ -2096,6 +2224,7 @@ static int capture_instruction_provenance(astnode *instr)
             || !collect_provenance_symbols(candidate.operand.original_expression,
                                             &candidate.operand)) goto fail;
     }
+    if (instruction_terms_enabled && !capture_instruction_terms(&candidate)) goto fail;
     if (instruction_provenance_count == instruction_provenance_capacity) {
         size_t capacity = instruction_provenance_capacity == 0
             ? 256 : instruction_provenance_capacity * 2;
@@ -2110,6 +2239,7 @@ static int capture_instruction_provenance(astnode *instr)
     instruction_provenance_records[instruction_provenance_count++] = candidate;
     return 1;
 fail:
+    free_instruction_terms(&candidate);
     free_xref_data_provenance_record(&candidate.operand);
     return 0;
 }
@@ -2118,7 +2248,10 @@ void clear_xref_instruction_provenance(void)
 {
     size_t i;
     astproc_set_instruction_analysis_hook(NULL);
+    astproc_set_instruction_stage_hook(NULL);
+    instruction_terms_enabled = 0;
     for (i = 0; i < instruction_provenance_count; i++) {
+        free_instruction_terms(&instruction_provenance_records[i]);
         free_xref_data_provenance_record(&instruction_provenance_records[i].operand);
     }
     free(instruction_provenance_records);
@@ -2134,10 +2267,14 @@ void clear_xref_instruction_provenance(void)
     }
 }
 
-int prepare_xref_instruction_provenance(void)
+int prepare_xref_instruction_provenance(int capture_terms)
 {
     clear_xref_instruction_provenance();
     astproc_set_instruction_analysis_hook(capture_instruction_provenance);
+    if (capture_terms) {
+        instruction_terms_enabled = 1;
+        astproc_set_instruction_stage_hook(instruction_term_stage);
+    }
     return 1;
 }
 
@@ -2336,12 +2473,22 @@ typedef struct tag_xref_build_context {
     fceux_nl_table nl;
 } xref_build_context;
 
+/* How an instruction's mnemonic touches a memory operand. Keyed by the
+ * mnemonic decoded from the opcode byte, never by mnemonic spelling. */
+typedef enum tag_memory_access_kind {
+    MEMORY_ACCESS_NONE = 0,
+    MEMORY_ACCESS_READ = 1,
+    MEMORY_ACCESS_WRITE = 2,
+    MEMORY_ACCESS_READ_MODIFY_WRITE = 3
+} memory_access_kind;
+
 typedef struct tag_xref_instr {
     astnode *node;
     const instruction_provenance *provenance;
     char *lexical_owner;
     long output_offset;
     int operand_value;
+    int *term_values;
     int cpu_address;
     int is_dataseg;
     int segment_id;
@@ -2349,12 +2496,12 @@ typedef struct tag_xref_instr {
     addressing_mode mode;
     char *direct_symbol;
     int direct_displacement;
-    int direct_access_kind; /* 1=read, 2=write */
+    memory_access_kind direct_access_kind;
     int zp_write_addr_known;
     int zp_write_addr;
     int indirect_ptr_addr_known;
     int indirect_ptr_addr;
-    int indirect_access_kind; /* 1=read, 2=write */
+    memory_access_kind indirect_access_kind;
 } xref_instr;
 
 typedef struct tag_xref_data_edge {
@@ -2401,16 +2548,6 @@ typedef struct tag_xref_owner_index {
 } xref_owner_index;
 
 static int extract_symbol_and_displacement(astnode *expr, const char **symbol, int *displacement);
-
-static int starts_with(const char *s, const char *prefix)
-{
-    size_t n;
-    if (s == NULL || prefix == NULL) {
-        return 0;
-    }
-    n = strlen(prefix);
-    return strncmp(s, prefix, n) == 0;
-}
 
 static int count_char_occurrences(const char *s, char ch)
 {
@@ -2923,53 +3060,89 @@ static void extract_operand_from_line(location loc, char *dst, int dst_size)
     trim_line_copy(dst, dst_size, p);
 }
 
-static const char *classify_instruction_access(const char *opcode, astnode *operand, addressing_mode mode)
+static memory_access_kind mnemonic_memory_access(instr_mnemonic mnemonic)
 {
-    if (opcode == NULL || *opcode == '\0') {
-        return "other";
+    switch (mnemonic) {
+        case LDA_MNEMONIC: case LDX_MNEMONIC: case LDY_MNEMONIC:
+        case ADC_MNEMONIC: case SBC_MNEMONIC: case AND_MNEMONIC:
+        case ORA_MNEMONIC: case EOR_MNEMONIC: case CMP_MNEMONIC:
+        case CPX_MNEMONIC: case CPY_MNEMONIC: case BIT_MNEMONIC:
+            return MEMORY_ACCESS_READ;
+        case STA_MNEMONIC: case STX_MNEMONIC: case STY_MNEMONIC:
+            return MEMORY_ACCESS_WRITE;
+        case ASL_MNEMONIC: case LSR_MNEMONIC: case ROL_MNEMONIC:
+        case ROR_MNEMONIC: case INC_MNEMONIC: case DEC_MNEMONIC:
+            return MEMORY_ACCESS_READ_MODIFY_WRITE;
+        default:
+            return MEMORY_ACCESS_NONE;
     }
-    if (strcmp(opcode, "JSR") == 0) {
-        return "call";
-    }
-    if (strcmp(opcode, "JMP") == 0) {
-        return "jump";
-    }
-    if ((strlen(opcode) == 3) && opcode[0] == 'B') {
-        return "branch";
-    }
-    if (mode == IMMEDIATE_MODE && operand != NULL && astnode_is_type(operand, ARITHMETIC_NODE)) {
-        if (operand->oper == LO_OPERATOR) {
-            return "pointer_lo";
-        }
-        if (operand->oper == HI_OPERATOR) {
-            return "pointer_hi";
-        }
-    }
-    if (starts_with(opcode, "ST")) {
-        return "write";
-    }
-    if (starts_with(opcode, "LD")
-        || starts_with(opcode, "CP")
-        || strcmp(opcode, "BIT") == 0
-        || strcmp(opcode, "ADC") == 0
-        || strcmp(opcode, "SBC") == 0
-        || strcmp(opcode, "AND") == 0
-        || strcmp(opcode, "ORA") == 0
-        || strcmp(opcode, "EOR") == 0) {
-        return "read";
-    }
-    return "other";
 }
 
-static int xref_data_access_kind_from_string(const char *access)
+static int is_memory_data_mode(addressing_mode mode)
 {
-    if (strcmp(access, "read") == 0) {
-        return 1;
+    switch (mode) {
+        case ZEROPAGE_MODE: case ZEROPAGE_X_MODE: case ZEROPAGE_Y_MODE:
+        case ABSOLUTE_MODE: case ABSOLUTE_X_MODE: case ABSOLUTE_Y_MODE:
+        case PREINDEXED_INDIRECT_MODE: case POSTINDEXED_INDIRECT_MODE:
+            return 1;
+        default:
+            return 0;
     }
-    if (strcmp(access, "write") == 0) {
-        return 2;
+}
+
+/* The data access an opcode makes through its operand: none for control
+ * transfers, implied, accumulator, immediate and relative forms. */
+static memory_access_kind instruction_data_access(unsigned char opcode)
+{
+    instr_mnemonic mnemonic;
+    if (!opcode_mnemonic(opcode, &mnemonic)) return MEMORY_ACCESS_NONE;
+    if (!is_memory_data_mode(opcode_addressing_mode(opcode))) return MEMORY_ACCESS_NONE;
+    return mnemonic_memory_access(mnemonic);
+}
+
+static const char *memory_access_kind_name(memory_access_kind kind)
+{
+    switch (kind) {
+        case MEMORY_ACCESS_READ: return "read";
+        case MEMORY_ACCESS_WRITE: return "write";
+        case MEMORY_ACCESS_READ_MODIFY_WRITE: return "read_modify_write";
+        default: return NULL;
     }
-    return 0;
+}
+
+/* Legacy reference access: what the instruction does to the location its
+ * operand names. The only operand rule is the pointer-byte load, decided on
+ * the operand after constant substitution. */
+static const char *classify_instruction_access(unsigned char opcode, astnode *operand)
+{
+    instr_mnemonic mnemonic;
+    addressing_mode mode;
+    const char *data;
+    if (!opcode_mnemonic(opcode, &mnemonic)) {
+        return "other";
+    }
+    mode = opcode_addressing_mode(opcode);
+    if (mnemonic == JSR_MNEMONIC) {
+        return "call";
+    }
+    if (mnemonic == JMP_MNEMONIC) {
+        return mode == INDIRECT_MODE ? "read" : "jump";
+    }
+    if (mode == RELATIVE_MODE) {
+        return "branch";
+    }
+    if (mode == IMMEDIATE_MODE) {
+        if (operand != NULL && astnode_is_type(operand, ARITHMETIC_NODE)) {
+            if (operand->oper == LO_OPERATOR) return "pointer_lo";
+            if (operand->oper == HI_OPERATOR) return "pointer_hi";
+        }
+        return "immediate";
+    }
+    if (mode == PREINDEXED_INDIRECT_MODE || mode == POSTINDEXED_INDIRECT_MODE) {
+        return "read";
+    }
+    data = memory_access_kind_name(instruction_data_access(opcode));
+    return data != NULL ? data : "other";
 }
 
 static int is_supported_xref_data_direct_mode(addressing_mode mode)
@@ -3157,6 +3330,68 @@ static void advance_xref_position(xref_build_context *ctx, int size)
     add_current_pc(size);
 }
 
+/* translate_instruction() truncates an operand that is a constant by then. */
+static int truncate_translated_operand(int value, addressing_mode mode)
+{
+    switch (mode) {
+        case IMMEDIATE_MODE:
+        case ZEROPAGE_MODE:
+        case ZEROPAGE_X_MODE:
+        case ZEROPAGE_Y_MODE:
+        case PREINDEXED_INDIRECT_MODE:
+        case POSTINDEXED_INDIRECT_MODE:
+            return (value >= -128 && value <= 255) ? value : (value & 0xFF);
+        case ABSOLUTE_MODE:
+        case ABSOLUTE_X_MODE:
+        case ABSOLUTE_Y_MODE:
+        case INDIRECT_MODE:
+            return ((unsigned long)value >= 0x10000) ? (value & 0xFFFF) : value;
+        default:
+            return value;
+    }
+}
+
+static void report_instruction_term_error(const instruction_provenance *p, const char *message)
+{
+    fprintf(stderr, "error: %s: %s:%d:%d\n", message, p->use_loc.file != NULL ? p->use_loc.file : "",
+            p->use_loc.first_line, p->use_loc.first_column);
+}
+
+/* Evaluates the shadow terms in the same evaluation, at the same PC, as the
+ * operand value, and checks that they add up to it. */
+static int evaluate_instruction_terms(xref_instr *out)
+{
+    const instruction_provenance *p = out->provenance;
+    long sum = 0;
+    int value;
+    int i;
+    if (p->term_count == 0) return 1;
+    out->term_values = (int *)malloc((size_t)p->term_count * sizeof(int));
+    if (out->term_values == NULL) return 0;
+    for (i = 0; i < p->term_count; i++) {
+        const instruction_term *term = &p->terms[i];
+        if (term->failed || !eval_expression_int(term->shadow, &out->term_values[i], 0)) {
+            report_instruction_term_error(p, "operand term does not evaluate to an integer");
+            return 0;
+        }
+        sum += (long)term->sign * out->term_values[i];
+    }
+    value = (int)sum;
+    if (strcmp(p->projection, "low") == 0) {
+        value &= 0xFF;
+    } else if (strcmp(p->projection, "high") == 0) {
+        value = (value >> 8) & 0xFF;
+    }
+    if (p->operand_integer_after_translate) {
+        value = truncate_translated_operand(value, opcode_addressing_mode(out->node->instr.opcode));
+    }
+    if (value != out->operand_value) {
+        report_instruction_term_error(p, "operand terms do not add up to the operand value");
+        return 0;
+    }
+    return 1;
+}
+
 static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
 {
     xref_build_context *ctx = (xref_build_context *)arg;
@@ -3169,6 +3404,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     int resolved_displacement = 0;
     int resolved_value = 0;
     int record_instruction = 0;
+    memory_access_kind data_access;
     (void)next;
 
     classify_pending_labels(ctx, 1);
@@ -3205,6 +3441,10 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
                 ctx->failed = 1;
                 goto finish;
             }
+            if (len > 1 && !evaluate_instruction_terms(out)) {
+                ctx->failed = 1;
+                goto finish;
+            }
         }
     }
 
@@ -3215,11 +3455,12 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     meta.output_offset = ctx->output_offset;
     meta.opcode = opcode_to_string(instr->instr.opcode);
     meta.addressing_mode = addressing_mode_name(instr->instr.mode);
-    meta.access = classify_instruction_access(meta.opcode, LHS(instr), instr->instr.mode);
+    meta.access = classify_instruction_access(instr->instr.opcode, LHS(instr));
     extract_operand_from_line(instr->loc, expr_buf, sizeof(expr_buf));
     meta.expression = expr_buf;
     meta.is_dataseg = in_dataseg;
     meta.segment_id = ctx->current_segment_id;
+    data_access = instruction_data_access(instr->instr.opcode);
 
     if (ctx->include_data) {
         if (LHS(instr) != NULL
@@ -3227,7 +3468,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
             && extract_symbol_and_displacement(LHS(instr), &resolved_symbol, &resolved_displacement)) {
             out->direct_symbol = xstrdup(resolved_symbol);
             out->direct_displacement = resolved_displacement;
-            out->direct_access_kind = xref_data_access_kind_from_string(meta.access);
+            out->direct_access_kind = data_access;
             if (out->direct_symbol == NULL) {
                 ctx->failed = 1;
                 goto finish;
@@ -3235,7 +3476,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         }
 
         if (LHS(instr) != NULL
-            && xref_data_access_kind_from_string(meta.access) == 2
+            && data_access == MEMORY_ACCESS_WRITE
             && (instr->instr.mode == ABSOLUTE_MODE || instr->instr.mode == ZEROPAGE_MODE)
             && eval_expression_int(LHS(instr), &resolved_value, 0)
             && resolved_value >= 0 && resolved_value <= 0xFF) {
@@ -3244,14 +3485,14 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         }
 
         if (LHS(instr) != NULL
-            && xref_data_access_kind_from_string(meta.access) != 0
+            && data_access != MEMORY_ACCESS_NONE
             && (instr->instr.mode == PREINDEXED_INDIRECT_MODE
                 || instr->instr.mode == POSTINDEXED_INDIRECT_MODE)
             && eval_expression_int(LHS(instr), &resolved_value, 0)
             && resolved_value >= 0 && resolved_value <= 0xFF) {
             out->indirect_ptr_addr_known = 1;
             out->indirect_ptr_addr = resolved_value;
-            out->indirect_access_kind = xref_data_access_kind_from_string(meta.access);
+            out->indirect_access_kind = data_access;
         }
     }
 
@@ -3423,6 +3664,7 @@ static void free_xref_context(xref_build_context *ctx)
     for (i = 0; i < ctx->instr_count; ++i) {
         free(ctx->instrs[i].direct_symbol);
         free(ctx->instrs[i].lexical_owner);
+        free(ctx->instrs[i].term_values);
     }
     free(ctx->instrs);
     ctx->instrs = NULL;
@@ -4127,7 +4369,7 @@ static int build_xref_data_edges(const xref_build_context *ctx,
         const char *kind;
         const char *scope;
         xref_owner_info owner;
-        if (instr->direct_symbol == NULL || instr->direct_access_kind == 0) {
+        if (instr->direct_symbol == NULL || instr->direct_access_kind == MEMORY_ACCESS_NONE) {
             continue;
         }
         classify_symbol_name(instr->direct_symbol, &kind, &scope);
@@ -4135,7 +4377,8 @@ static int build_xref_data_edges(const xref_build_context *ctx,
             continue;
         }
         lookup_xref_routine_owner(ctx, owner_index, instr->cpu_address, instr->is_dataseg, instr->segment_id, &owner);
-        if (instr->direct_access_kind == 1) {
+        /* A read-modify-write site is both a read and a write edge. */
+        if (instr->direct_access_kind != MEMORY_ACCESS_WRITE) {
             if (!append_xref_data_edge(&reads,
                                        &read_count,
                                        &read_capacity,
@@ -4150,7 +4393,8 @@ static int build_xref_data_edges(const xref_build_context *ctx,
                                        addressing_mode_name(instr->mode))) {
                 goto fail;
             }
-        } else if (instr->direct_access_kind == 2) {
+        }
+        if (instr->direct_access_kind != MEMORY_ACCESS_READ) {
             if (!append_xref_data_edge(&writes,
                                        &write_count,
                                        &write_capacity,
@@ -4276,7 +4520,7 @@ static int build_xref_indirect_flows(const xref_build_context *ctx,
                                                        : pair->last_high_write,
                                                    instr->cpu_address,
                                                    instr->segment_id,
-                                                   instr->indirect_access_kind == 1 ? "read" : "write",
+                                                   memory_access_kind_name(instr->indirect_access_kind),
                                                    owner.name,
                                                    ctx->include_owner ? owner.name : NULL,
                                                    owner.addr,
@@ -4633,10 +4877,137 @@ static const char *instruction_index_register(addressing_mode mode)
     }
 }
 
+static void emit_memory_access(FILE *fp, unsigned char opcode, int operand_value)
+{
+    addressing_mode mode = opcode_addressing_mode(opcode);
+    memory_access_kind kind = instruction_data_access(opcode);
+    instr_mnemonic mnemonic;
+    int pointer = mode == PREINDEXED_INDIRECT_MODE || mode == POSTINDEXED_INDIRECT_MODE
+        || (mode == INDIRECT_MODE && opcode_mnemonic(opcode, &mnemonic) && mnemonic == JMP_MNEMONIC);
+    const char *data_index = NULL;
+    if (kind == MEMORY_ACCESS_NONE && !pointer) {
+        fprintf(fp, "null");
+        return;
+    }
+    fprintf(fp, "{\"data\":");
+    if (kind == MEMORY_ACCESS_NONE) {
+        fprintf(fp, "null");
+    } else {
+        switch (mode) {
+            case ZEROPAGE_X_MODE: case ABSOLUTE_X_MODE: data_index = "X"; break;
+            case ZEROPAGE_Y_MODE: case ABSOLUTE_Y_MODE: case POSTINDEXED_INDIRECT_MODE: data_index = "Y"; break;
+            default: break;
+        }
+        fprintf(fp, "{\"kind\":");
+        print_json_string(fp, memory_access_kind_name(kind));
+        fprintf(fp, ",\"address\":");
+        if (pointer) fprintf(fp, "null");
+        else fprintf(fp, "%d", operand_value);
+        fprintf(fp, ",\"index_register\":");
+        if (data_index != NULL) print_json_string(fp, data_index);
+        else fprintf(fp, "null");
+        fprintf(fp, ",\"via_pointer\":%s}", pointer ? "true" : "false");
+    }
+    fprintf(fp, ",\"pointer\":");
+    if (!pointer) {
+        fprintf(fp, "null");
+    } else {
+        /* 6502 pointer high-byte fetches stay in the pointer's page. */
+        int high = mode == INDIRECT_MODE
+            ? (operand_value & 0xFF00) | ((operand_value + 1) & 0xFF)
+            : (operand_value + 1) & 0xFF;
+        fprintf(fp, "{\"address\":%d,\"high_byte_address\":%d,\"index_register\":%s}",
+                operand_value, high, mode == PREINDEXED_INDIRECT_MODE ? "\"X\"" : "null");
+    }
+    fprintf(fp, "}");
+}
+
+static const char *instruction_term_kind(const astnode *node)
+{
+    switch (astnode_get_type(node)) {
+        case INTEGER_NODE: return "integer";
+        case STRING_NODE: return "string";
+        case IDENTIFIER_NODE: return "symbol";
+        case LOCAL_ID_NODE: return "local_symbol";
+        case FORWARD_BRANCH_NODE: return "forward_label";
+        case BACKWARD_BRANCH_NODE: return "backward_label";
+        case CURRENT_PC_NODE: return "current_pc";
+        default: return "expression";
+    }
+}
+
+static int emit_additive_terms(FILE *fp, const xref_instr *record)
+{
+    const instruction_provenance *p = record->provenance;
+    int i, j;
+    if (p->term_count == 0 || record->term_values == NULL) {
+        fprintf(fp, "null");
+        return 1;
+    }
+    fprintf(fp, "{\"projection\":");
+    print_json_string(fp, p->projection);
+    fprintf(fp, ",\"terms\":[");
+    for (i = 0; i < p->term_count; i++) {
+        const instruction_term *term = &p->terms[i];
+        const char *kind = instruction_term_kind(term->node);
+        int named = astnode_is_type(term->node, IDENTIFIER_NODE)
+            || astnode_is_type(term->node, LOCAL_ID_NODE)
+            || astnode_is_type(term->node, FORWARD_BRANCH_NODE)
+            || astnode_is_type(term->node, BACKWARD_BRANCH_NODE);
+        fprintf(fp, "%s{\"sign\":%d,\"kind\":", i == 0 ? "" : ",", term->sign);
+        print_json_string(fp, kind);
+        if (named) {
+            fprintf(fp, ",\"name\":");
+            print_json_string(fp, term->node->string);
+        }
+        fprintf(fp, ",\"value\":%d", record->term_values[i]);
+        if (strcmp(kind, "expression") == 0) {
+            xref_data_provenance symbols;
+            int ok;
+            memset(&symbols, 0, sizeof(symbols));
+            ok = collect_provenance_symbols(term->node, &symbols);
+            if (ok) {
+                fprintf(fp, ",\"referenced_symbols\":[");
+                for (j = 0; j < symbols.referenced_symbol_count; j++) {
+                    if (j != 0) fprintf(fp, ",");
+                    print_json_string(fp, symbols.referenced_symbols[j]);
+                }
+                fprintf(fp, "]");
+            }
+            free_xref_data_provenance_record(&symbols);
+            if (!ok) return 0;
+        }
+        if (named) {
+            fprintf(fp, ",\"binding\":");
+            if (term->binding_kind == NULL
+                || !(astnode_is_type(term->node, IDENTIFIER_NODE)
+                     || astnode_is_type(term->node, LOCAL_ID_NODE))) {
+                fprintf(fp, "null");
+            } else {
+                fprintf(fp, "{\"kind\":");
+                print_json_string(fp, term->binding_kind);
+                fprintf(fp, ",\"definition\":");
+                if (term->has_binding_loc) emit_instruction_location(fp, term->binding_loc);
+                else fprintf(fp, "null");
+                if (term->binding_enum != NULL) {
+                    fprintf(fp, ",\"enum\":");
+                    print_json_string(fp, term->binding_enum);
+                }
+                fprintf(fp, "}");
+            }
+        }
+        fprintf(fp, ",\"source\":");
+        if (!emit_instruction_source(fp, term->node->source_loc)) return 0;
+        fprintf(fp, "}");
+    }
+    fprintf(fp, "]}");
+    return 1;
+}
+
 static int emit_instruction_records(FILE *fp, const xref_build_context *ctx)
 {
     int i, j;
-    fprintf(fp, "{\"version\":\"1\",\"records\":[");
+    fprintf(fp, "{\"version\":\"2\",\"records\":[");
     for (i = 0; i < ctx->instr_count; i++) {
         const xref_instr *record = &ctx->instrs[i];
         const instruction_provenance *provenance = record->provenance;
@@ -4691,7 +5062,11 @@ static int emit_instruction_records(FILE *fp, const xref_build_context *ctx)
         fprintf(fp, ",\"bytes\":[%u", (unsigned int)opcode);
         if (length > 1) fprintf(fp, ",%u", (unsigned int)encoded & 0xff);
         if (length > 2) fprintf(fp, ",%u", ((unsigned int)encoded >> 8) & 0xff);
-        fprintf(fp, "]}");
+        fprintf(fp, "],\"memory_access\":");
+        emit_memory_access(fp, opcode, record->operand_value);
+        fprintf(fp, ",\"additive_terms\":");
+        if (!emit_additive_terms(fp, record)) return 0;
+        fprintf(fp, "}");
     }
     fprintf(fp, "\n  ]}");
     return 1;
@@ -5202,7 +5577,7 @@ static int summary_visit_instruction(astnode *instr, void *arg, astnode **next)
     meta.output_offset = ctx->output_offset;
     meta.opcode = opcode_to_string(instr->instr.opcode);
     meta.addressing_mode = addressing_mode_name(instr->instr.mode);
-    meta.access = classify_instruction_access(meta.opcode, LHS(instr), instr->instr.mode);
+    meta.access = classify_instruction_access(instr->instr.opcode, LHS(instr));
     extract_operand_from_line(instr->loc, expr_buf, sizeof(expr_buf));
     meta.expression = expr_buf;
 
@@ -5901,6 +6276,9 @@ int generate_xref_summary(astnode *root,
             else if (strcmp(r->access, "branch") == 0) { branch_c++; is_jump_target = 1; }
             else if (strcmp(r->access, "read") == 0) { read_c++; is_data_label = 1; }
             else if (strcmp(r->access, "write") == 0) { write_c++; is_data_label = 1; }
+            else if (strcmp(r->access, "read_modify_write") == 0) {
+                read_c++; write_c++; is_data_label = 1;
+            }
 
             /* Aggregate referrer */
             routine = r->has_cpu_address ? find_routine_owner(&ctx, r->cpu_address) : NULL;
@@ -6195,7 +6573,8 @@ typedef enum tag_index_event_kind {
 typedef enum tag_index_access_kind {
     INDEX_ACCESS_NONE = 0,
     INDEX_ACCESS_READ,
-    INDEX_ACCESS_WRITE
+    INDEX_ACCESS_WRITE,
+    INDEX_ACCESS_READ_MODIFY_WRITE
 } index_access_kind;
 
 typedef enum tag_index_value_source_kind {
@@ -6640,6 +7019,7 @@ static const char *index_access_kind_name(int access_kind)
     switch (access_kind) {
         case INDEX_ACCESS_READ: return "read";
         case INDEX_ACCESS_WRITE: return "write";
+        case INDEX_ACCESS_READ_MODIFY_WRITE: return "read_modify_write";
         default: return "unknown";
     }
 }
@@ -6799,11 +7179,13 @@ static int index_visit_instruction(astnode *instr, void *arg, astnode **next)
     out->event_index = ctx->event_count;
     out->segment_id = ctx->current_segment_id;
 
-    access = classify_instruction_access(opcode_to_string(instr->instr.opcode), LHS(instr), instr->instr.mode);
+    access = classify_instruction_access(instr->instr.opcode, LHS(instr));
     if (strcmp(access, "read") == 0) {
         out->access_kind = INDEX_ACCESS_READ;
     } else if (strcmp(access, "write") == 0) {
         out->access_kind = INDEX_ACCESS_WRITE;
+    } else if (strcmp(access, "read_modify_write") == 0) {
+        out->access_kind = INDEX_ACCESS_READ_MODIFY_WRITE;
     } else {
         out->access_kind = INDEX_ACCESS_NONE;
     }
@@ -7985,7 +8367,8 @@ int generate_index_patterns(astnode *root,
         record->scaled_index = (access_pattern == INDEX_PATTERN_SCALED_INDEX_STRIDE_2
                              || access_pattern == INDEX_PATTERN_SCALED_INDEX_STRIDE_4);
         record->split_named_lo_hi = (access_pattern == INDEX_PATTERN_SPLIT_LO_HI_TABLES);
-        record->write_access = (instr->access_kind == INDEX_ACCESS_WRITE);
+        record->write_access = (instr->access_kind == INDEX_ACCESS_WRITE
+                                || instr->access_kind == INDEX_ACCESS_READ_MODIFY_WRITE);
         if (record->table_label == NULL
             || (routine_name != NULL && record->routine == NULL)
             || (split_lo != NULL && record->table_label_lo == NULL)
@@ -8746,12 +9129,15 @@ static int build_data_consumer_records(astnode *root,
                                                 instr->cpu_address,
                                                 instr->is_dataseg,
                                                 instr->segment_id);
-        if (!add_data_consumer_site(&records[record_index],
-                                    instr->access_kind == INDEX_ACCESS_WRITE,
-                                    routine_name,
-                                    instr->cpu_address,
-                                    aggregate_displacement,
-                                    addressing_mode_name(instr->mode))) {
+        /* A read-modify-write site both reads and writes the table. */
+        if ((instr->access_kind != INDEX_ACCESS_WRITE
+             && !add_data_consumer_site(&records[record_index], 0, routine_name,
+                                        instr->cpu_address, aggregate_displacement,
+                                        addressing_mode_name(instr->mode)))
+            || (instr->access_kind != INDEX_ACCESS_READ
+                && !add_data_consumer_site(&records[record_index], 1, routine_name,
+                                           instr->cpu_address, aggregate_displacement,
+                                           addressing_mode_name(instr->mode)))) {
             ok = 0;
             goto cleanup;
         }

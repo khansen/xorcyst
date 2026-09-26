@@ -40,5 +40,6 @@ int opcode_length(unsigned char);
 unsigned char opcode_zp_equiv(unsigned char, addressing_mode);
 const char *opcode_to_string(unsigned char);
 addressing_mode opcode_addressing_mode(unsigned char);
+int opcode_mnemonic(unsigned char, instr_mnemonic *);
 
 #endif  /* !OPCODE_H */

@@ -117,6 +117,8 @@ struct tag_symtab_entry {
     int flags;
     int tag;
     int ref_count;
+    location assignment_loc;    /* Statement that gave a constant its current value */
+    int has_assignment_loc;
     int align;  /* 2^align = boundary */
     int address;
     struct tag_symtab *symtab;  /* Child symbols (STRUC|UNION|ENUM_SYMBOL) */

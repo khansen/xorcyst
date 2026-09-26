@@ -245,6 +245,13 @@ Behavior:
 - Produces a compact symbol-summary view derived from the direct reference model.
 - Summarizes code-entry, jump-target, and data-symbol reference counts without
   requiring full span analysis.
+- Counts follow the reference `access` values of Section 5.2: `call` counts
+  toward `jsr_count`, `jump` toward `jmp_count`, `branch` toward
+  `branch_count`, `read` toward `read_count` and `write` toward `write_count`.
+  A `read_modify_write` reference counts toward both `read_count` and
+  `write_count`. Every reference counts once toward `total_ref_count`,
+  including `pointer_lo`, `pointer_hi`, `immediate`, `address_compute` and
+  `other`, which count toward nothing else.
 
 Defaults:
 - `--xref-summary-format=json`
@@ -437,6 +444,25 @@ Defaults:
   `(symbol, site_addr, owner_routine, displacement, addressing_mode)`
 - initial implementation requires `--xref-format=json`
 
+Reference access values:
+- every `references` record has an `access` value; for instructions it comes
+  from the opcode-keyed classifier specified in
+  `XASM_INSTRUCTION_RECORDS_V2_SPEC.md`
+- `call`: `JSR`
+- `jump`: absolute `JMP`
+- `branch`: relative branches
+- `read`, `write`, `read_modify_write`: the data access of a direct or indexed
+  memory operand; `BIT` is a read. `JMP [addr]` and the pointer modes
+  `[zp,X]` and `[zp],Y` are `read`: the operand names the pointer, which is
+  read
+- `pointer_lo`, `pointer_hi`: an immediate operand whose root, after constant
+  substitution, is a low-byte or high-byte operator
+- `immediate`: any other immediate operand; the symbol's value is used as a
+  number and no memory is read
+- `address_compute`: a symbol used in a data directive's expression, such as
+  `.DW Handler`; these records have null `opcode` and `addressing_mode`
+- `other`: anything else
+
 Format compatibility:
 - `--xref-data=true` with `--xref-format=json` is valid
 - `--xref-data=true` with `--xref-format=text` or `csv` must fail with CLI
@@ -470,6 +496,8 @@ Base `references` extension when `--xref-include-owner=true`:
 Scope limits:
 - `data_reads` and `data_writes` include only direct references resolved at
   assembly time
+- a `read_modify_write` access emits both a `data_reads` and a `data_writes`
+  record for the same site
 - supported direct addressing forms:
   - `absolute`
   - `absolute_x`
@@ -481,7 +509,8 @@ Scope limits:
   - a zero-page pointer pair is written in one routine
   - an indirect read/write through that same pair occurs later in the same routine
   - no intervening write to either byte of that same pointer pair invalidates
-    the match
+    the match; read-modify-write instructions such as `INC ptr+1` advance an
+    existing pointer and neither set nor invalidate the pair
 - indirect-indexed consumer forms allowed:
   - `[ptr],Y`
   - `[ptr,X]` if supported by the target CPU mode
@@ -517,7 +546,7 @@ New keys:
 - `ptr_symbol`
 - `producer_site`
 - `consumer_site`
-- `access_kind` (`read|write`)
+- `access_kind` (`read|write`): the access made through the pointer
 - `routine` (optional)
 - `owner_routine` (optional)
 - `owner_routine_addr` (optional)
@@ -723,6 +752,8 @@ Field semantics:
 - `access_kind`:
   - `read` when the anchoring instruction reads from the table symbol
   - `write` when the anchoring instruction writes to the table symbol
+  - `read_modify_write` when it does both, as `INC Table,X` does; such a site
+    never anchors or joins a paired or split pattern
   - for paired read patterns, `access_kind` is `read`
 - `routine`:
   - follows the shared routine-ownership rule in Section 3.3
@@ -733,7 +764,7 @@ Field semantics:
     - `adjacent_read_pair`
     - `scaled_index`
     - `split_named_lo_hi`
-    - `write_access`
+    - `write_access` (for `write` and `read_modify_write` sites)
 
 Record:
 - `table_label`
@@ -818,6 +849,7 @@ Defaults:
   shared rule defined in Section 3.2
 - output ordering: ascending by symbol address
 - `read_sites` and `write_sites` are ordered by `site_addr` ascending
+- a `read_modify_write` site appears in both `read_sites` and `write_sites`
 - duplicate site records are coalesced by
   `(routine, site_addr, displacement, addressing_mode)`
 
