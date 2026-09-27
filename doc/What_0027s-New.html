@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.7.0.
+<!-- This is the manual for The XORcyst version 1.8.0.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>What's New (The XORcyst Manual)</title>
@@ -35,14 +35,21 @@ ul.mark-bullet {list-style-type: disc}
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
 
-<h3 class="heading" id="Version-1_002e5_002e2"><span>Version 1.5.2<a class="copiable-link" href="#Version-1_002e5_002e2"> &para;</a></span></h3>
+<h3 class="heading" id="Version-1_002e8_002e0"><span>Version 1.8.0<a class="copiable-link" href="#Version-1_002e8_002e0"> &para;</a></span></h3>
 
-<p>More bug fixes.
+<p><strong class="strong">Analysis consumer migration required:</strong> instruction records now use
+schema version 3. Every span&rsquo;s <code class="code">file</code> is an integer index into a shared
+<code class="code">files</code> table; older schemas are no longer emitted. See
+<samp class="file">XASM_INSTRUCTION_RECORDS_V3_SPEC.md</samp> and
+<samp class="file">XASM_INSTRUCTION_RECORDS_V2_SPEC.md</samp> for the migration contract.
 </p>
-<h3 class="heading" id="Version-1_002e5_002e0"><span>Version 1.5.0<a class="copiable-link" href="#Version-1_002e5_002e0"> &para;</a></span></h3>
+<ul class="itemize mark-bullet">
+<li>Adds explicit memory-access facts and signed additive operand terms with per-use symbol bindings.
+</li><li>Corrects read-modify-write, <code class="code">BIT</code>/<code class="code">CMP</code>, pointer, and immediate access classifications across cross-references and analyses.
+</li><li>Reduces instruction-record size and serialization cost, and enforces a performance limit in the real-project comparison tool.
+</li><li>Installs generated <code class="code">xasm</code>/<code class="code">xlnk</code> man pages and a worked analysis-feature guide.
+</li></ul>
 
-<p>Added some stuff, fixed some bugs.
-</p>
 <h3 class="heading" id="Version-1_002e7_002e0"><span>Version 1.7.0<a class="copiable-link" href="#Version-1_002e7_002e0"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">
@@ -53,6 +60,14 @@ ul.mark-bullet {list-style-type: disc}
 </li><li>Ships the regression suite and feature specifications, with archive and installation validation on Linux and macOS.
 </li></ul>
 
+<h3 class="heading" id="Version-1_002e5_002e2"><span>Version 1.5.2<a class="copiable-link" href="#Version-1_002e5_002e2"> &para;</a></span></h3>
+
+<p>More bug fixes.
+</p>
+<h3 class="heading" id="Version-1_002e5_002e0"><span>Version 1.5.0<a class="copiable-link" href="#Version-1_002e5_002e0"> &para;</a></span></h3>
+
+<p>Added some stuff, fixed some bugs.
+</p>
 <h3 class="heading" id="Version-1_002e4_002e5"><span>Version 1.4.5<a class="copiable-link" href="#Version-1_002e4_002e5"> &para;</a></span></h3>
 
 <p><strong class="strong">Assembler</strong>

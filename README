@@ -1,5 +1,5 @@
 The XORcyst is a set of tools for 6502 software development: the `xasm`
-assembler and `xlnk` linker. This release is version 1.7.0.
+assembler and `xlnk` linker. This release is version 1.8.0.
 Run `xasm --version` or `xlnk --version` to identify an installed build.
 
 Build and test
@@ -79,6 +79,13 @@ must still validate their own configuration and output identity when reusing
 artifacts. See XASM_INSTRUCTION_RECORDS_V3_SPEC.md,
 XASM_INSTRUCTION_RECORDS_V2_SPEC.md, XASM_INSTRUCTION_RECORDS_SPEC.md,
 XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md, and XASM_DEPENDENCY_MANIFEST_SPEC.md.
+
+Upgrading from 1.7.0: instruction records now use schema version 3. Consumers
+must resolve each span's integer `file` through the document's `files` table
+and handle the memory-access and additive-term facts introduced in version 2.
+There is no switch to emit an older records schema. Access classifications in
+xrefs, summaries, index patterns, and data consumers also change; see the
+version 2 specification for corrected reads, writes, and immediate references.
 
 FCEUX debugger names
 -------------------
@@ -193,6 +200,6 @@ To prepare and validate a source archive (including tests and feature specs):
     ./configure --disable-maintainer-mode
     make distcheck
 
-This produces `xorcyst-1.7.0.tar.gz`. No parser or scanner regeneration is
+This produces `xorcyst-1.8.0.tar.gz`. No parser or scanner regeneration is
 needed to build the archive. The installation checks use a temporary prefix;
 they do not replace the system installation.
