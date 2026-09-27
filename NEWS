@@ -1,3 +1,19 @@
+Version 1.8.0:
+- Incompatible analysis-format change: instruction records now use schema
+  version 3, with a shared files table and integer file indices in every span.
+  Older records schemas are no longer emitted; consumers must update.
+- Add explicit memory-access facts and signed additive operand terms with
+  per-use symbol bindings, including reassigned constants.
+- Correct access classification across cross-references and analyses: model
+  read-modify-write sites as both reads and writes, BIT/CMP as reads, pointer
+  operands as pointer reads, and immediate operands as immediate references.
+  See XASM_INSTRUCTION_RECORDS_V2_SPEC.md for the complete migration contract.
+- Reduce instruction-record size and serialization cost through shared paths,
+  faster span output, and buffering of the standalone records file. Add a
+  default performance-regression limit to the real-project comparison tool.
+- Install generated xasm/xlnk man pages and a worked analysis-feature guide;
+  include them in the tested source distribution.
+
 Version 1.7.0:
 - Add FCEUX ROM/RAM debugger name export using physical PRG page offsets,
   independent of xref filters, with optional 16 KiB NROM mirroring.

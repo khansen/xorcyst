@@ -38,7 +38,7 @@
 @c %**end of header
 
 @copying
-This is the manual for The XORcyst version 1.7.0.
+This is the manual for The XORcyst version 1.8.0.
 
 Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @end copying
@@ -79,13 +79,20 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
-@heading Version 1.5.2
+@heading Version 1.8.0
 
-More bug fixes.
+@strong{Analysis consumer migration required:} instruction records now use
+schema version 3. Every span's @code{file} is an integer index into a shared
+@code{files} table; older schemas are no longer emitted. See
+@file{XASM_INSTRUCTION_RECORDS_V3_SPEC.md} and
+@file{XASM_INSTRUCTION_RECORDS_V2_SPEC.md} for the migration contract.
 
-@heading Version 1.5.0
-
-Added some stuff, fixed some bugs.
+@itemize
+@item Adds explicit memory-access facts and signed additive operand terms with per-use symbol bindings.
+@item Corrects read-modify-write, @code{BIT}/@code{CMP}, pointer, and immediate access classifications across cross-references and analyses.
+@item Reduces instruction-record size and serialization cost, and enforces a performance limit in the real-project comparison tool.
+@item Installs generated @code{xasm}/@code{xlnk} man pages and a worked analysis-feature guide.
+@end itemize
 
 @heading Version 1.7.0
 
@@ -96,6 +103,14 @@ Added some stuff, fixed some bugs.
 @item Checks assembler and linker output failures, symbol allocation failures, and malformed inputs.
 @item Ships the regression suite and feature specifications, with archive and installation validation on Linux and macOS.
 @end itemize
+
+@heading Version 1.5.2
+
+More bug fixes.
+
+@heading Version 1.5.0
+
+Added some stuff, fixed some bugs.
 
 @heading Version 1.4.5
 
