@@ -1,8 +1,9 @@
 # Structured instruction records
 
 Status: superseded by [version 2](XASM_INSTRUCTION_RECORDS_V2_SPEC.md), which
-keeps every field and rule below and adds `memory_access` and `additive_terms`.
-xasm now produces only `"version":"2"` records. This is a general
+keeps every field and rule below and adds `memory_access` and `additive_terms`,
+and [version 3](XASM_INSTRUCTION_RECORDS_V3_SPEC.md), which names span files by
+index into a shared table. xasm now produces only `"version":"3"` records. This is a general
 assembler-fact interface, not a policy-specific raw-address or branch-literal
 audit.
 

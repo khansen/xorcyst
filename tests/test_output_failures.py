@@ -429,7 +429,8 @@ class OutputFailures(unittest.TestCase):
                      else [f'--xref={path}', '--xref-instructions=true']) + [f'--dependency-manifest={manifest}']
             baseline = self.run_xasm(*flags, faults={'XASM_TEST_ALLOC_PHASE': 'xref'})
             self.assertEqual(baseline.returncode, 0, baseline.stderr.decode())
-            sites = re.findall(rb'ALLOC_SITE xref (\d+) instruction_source_span', baseline.stderr)
+            # The file table is the one allocation made while records are written.
+            sites = re.findall(rb'ALLOC_SITE xref (\d+) register_record_file', baseline.stderr)
             self.assertTrue(sites, baseline.stderr.decode())
             for site in sites:
                 with self.subTest(standalone=standalone, allocation=site):

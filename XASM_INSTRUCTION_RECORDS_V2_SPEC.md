@@ -1,6 +1,7 @@
 # Instruction records version 2: memory access and additive operand terms
 
-Status: implemented. Extends
+Status: implemented; [version 3](XASM_INSTRUCTION_RECORDS_V3_SPEC.md) moves
+span file paths into a shared table. Extends
 [instruction records version 1](XASM_INSTRUCTION_RECORDS_SPEC.md). Everything
 not stated here keeps its version 1 meaning.
 
