@@ -76,9 +76,9 @@ The standalone instruction output requires a dependency manifest.
 A manifest records consumed-input hashes, lookup misses, invocation arguments,
 and producer identity. It is published last, after input revalidation. Consumers
 must still validate their own configuration and output identity when reusing
-artifacts. See XASM_INSTRUCTION_RECORDS_V2_SPEC.md,
-XASM_INSTRUCTION_RECORDS_SPEC.md, XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md, and
-XASM_DEPENDENCY_MANIFEST_SPEC.md.
+artifacts. See XASM_INSTRUCTION_RECORDS_V3_SPEC.md,
+XASM_INSTRUCTION_RECORDS_V2_SPEC.md, XASM_INSTRUCTION_RECORDS_SPEC.md,
+XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md, and XASM_DEPENDENCY_MANIFEST_SPEC.md.
 
 FCEUX debugger names
 -------------------
@@ -140,6 +140,23 @@ Files used by `copy` must retain their size during linking, including files
 replaced by earlier output commands. A size change fails the current output
 because it would invalidate the addresses calculated during layout.
 
+Performance
+-----------
+
+A change must not noticeably slow assembly or analysis. Before merging a change
+to the assembler or its outputs, compare it with the base branch on the largest
+available real project:
+
+    python3 tests/verify_fceux_projects.py --baseline /path/to/base/xasm \
+      --candidate ./xasm --source /path/to/largest.asm --report /tmp/xasm-check.json
+
+Add `--allow-analysis-changes` for an intended output change. The median CPU
+time of every timed mode may grow by at most 5%, plus 20 ms for timer noise.
+The report records output sizes; they may grow for new content, not for
+repetition. A larger regression needs explicit approval, recorded with its
+reason. Specs for new or changed outputs state their expected cost and the
+measurements that confirm it.
+
 Maintainer builds
 -----------------
 
@@ -168,7 +185,8 @@ Real-project compatibility checks are opt-in and keep project inputs read-only:
       --source /path/to/project/asm/project.asm --report /tmp/xasm-check.json
 
 The report compares binary bytes, diagnostics, and analysis outputs across
-seven modes with NL disabled/enabled, and records paired timing samples.
+eight modes with NL disabled/enabled, and records output sizes and paired
+timing samples.
 
 To prepare and validate a source archive (including tests and feature specs):
 

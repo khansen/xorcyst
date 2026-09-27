@@ -1123,8 +1123,8 @@ Section 3 followed:
   },
   "additive_terms": {"projection": "none", "terms": [
     {"sign": 1, "kind": "symbol", "name": "ZP_PTR_LO", "value": 16,
-     "binding": {"kind": "label", "definition": {"file": "re_example.asm", "line": 3, "column": 1, "end_line": 3, "end_column": 11}},
-     "source": {"span": {"file": "re_example.asm", "line": 56, "column": 14, "end_line": 56, "end_column": 23}, "text": "ZP_PTR_LO"}}
+     "binding": {"kind": "label", "definition": {"file": 0, "line": 3, "column": 1, "end_line": 3, "end_column": 11}},
+     "source": {"span": {"file": 0, "line": 56, "column": 14, "end_line": 56, "end_column": 23}, "text": "ZP_PTR_LO"}}
   ]}
 }
 ```
@@ -1133,11 +1133,12 @@ Section 3 followed:
 6502's page wrap already applied, so an analysis never keeps its own mnemonic
 table. `additive_terms` splits the operand into signed terms, each with its
 value and the definition xasm used for it at this instruction, even when a
-constant is reassigned later in the file.
+constant is reassigned later in the file. Spans name their file by index into
+the document's `files` table (`0` is `re_example.asm` here).
 
 Full field contract, versioning, and the manifest's schema:
-`XASM_INSTRUCTION_RECORDS_V2_SPEC.md` (with `XASM_INSTRUCTION_RECORDS_SPEC.md`
-for the fields it keeps) and `XASM_DEPENDENCY_MANIFEST_SPEC.md`.
+`XASM_INSTRUCTION_RECORDS_V3_SPEC.md` and `XASM_INSTRUCTION_RECORDS_V2_SPEC.md`
+(with `XASM_INSTRUCTION_RECORDS_SPEC.md` for the fields they keep) and `XASM_DEPENDENCY_MANIFEST_SPEC.md`.
 
 ---
 
@@ -1225,7 +1226,7 @@ per-feature costs roughly the same as `--xref-data=true` alone run *N* times.
 | `data_directive_references` (part of `--xref-data=true`) | `XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md` |
 | `index_upper_bound` / `index_bound_kind` (part of `--analyze-index-patterns`) | `XASM_INDEX_BOUND_ANALYSIS_SPEC.md` |
 | `--audit-raw-addresses`, `--audit-level`, `--audit-rom-range`, `--audit-output-format` (finding codes `A100`-`A131`) | `README` ("Analysis and diagnostics") and `xasm --help` |
-| Structured per-instruction records (`--xref-instructions`, `--instruction-records-output`) | `XASM_INSTRUCTION_RECORDS_V2_SPEC.md` and `XASM_INSTRUCTION_RECORDS_SPEC.md` |
+| Structured per-instruction records (`--xref-instructions`, `--instruction-records-output`) | `XASM_INSTRUCTION_RECORDS_V3_SPEC.md`, `XASM_INSTRUCTION_RECORDS_V2_SPEC.md` and `XASM_INSTRUCTION_RECORDS_SPEC.md` |
 | `--dependency-manifest` | `XASM_DEPENDENCY_MANIFEST_SPEC.md` |
 | `--fceux-nl-rom-prefix`/`--fceux-nl-ram-output`/`--fceux-nl-mirror-16k` | `XASM_FCEUX_NL_EXPORT_SPEC.md` |
 | Performance characteristics on large/banked inputs | `XASM_XREF_PERFORMANCE_SPEC.md` |

@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Opt-in compatibility and NL-disabled timing checks against a baseline xasm.
+"""Opt-in compatibility and timing checks of a candidate xasm against a baseline.
 
 Project sources and reference ROMs are read only. All outputs use a temporary
 folder. Build both executables with the same compiler/options before invoking.
 Example:
   python3 tests/verify_fceux_projects.py --baseline /tmp/xasm-base --candidate ./xasm \
-      --source /path/to/donkey_kong.asm --source /path/to/kid_icarus.asm \
-      --report /tmp/fceux-acceptance.json
+      --source /path/to/first.asm --source /path/to/largest.asm \
+      --report /tmp/xasm-acceptance.json
+
+Binaries and diagnostics must match in every mode. Analysis artifacts must match
+too, unless --allow-analysis-changes is given for an intended output change;
+the report then lists the changed artifacts. It always records artifact sizes
+and paired timings; the candidate fails if its median CPU time in any timed mode
+exceeds the baseline's by more than --max-cpu-ratio (default 5%).
 """
 import argparse
 import hashlib
@@ -44,6 +50,8 @@ def modes(root):
                        '--xref-data=true', '--xref-include-owner=true', '--xref-instructions=true'], [file('xref')]),
         'listing': ([f'--listing={file("listing")}', '--listing-format=json'], [file('listing')]),
         'summary': (['--xref-summary', f'--xref-summary-output={file("summary")}', '--xref-summary-format=json'], [file('summary')]),
+        'records': ([f'--instruction-records-output={file("records")}',
+                     f'--dependency-manifest={root / "dependencies.manifest"}'], [file('records')]),
         'analyses': (['--analyze-index-patterns', f'--index-patterns-output={file("index")}',
                      '--data-consumers', f'--data-consumers-output={file("consumers")}',
                      '--analyze-data-coverage', f'--data-coverage-output={file("coverage")}'],
@@ -76,7 +84,11 @@ def clear_outputs(root, paths):
         path.unlink(missing_ok=True)
 
 
-def verify_project(baseline, candidate, source, root):
+def artifact_sizes(paths):
+    return {path.name: path.stat().st_size for path in paths}
+
+
+def verify_project(baseline, candidate, source, root, allow_analysis_changes=False):
     available = modes(root)
     result, _ = run(baseline, source, root, [])
     binary = (root / 'output.prg').read_bytes()
@@ -104,10 +116,13 @@ def verify_project(baseline, candidate, source, root):
             require((address < 0x8000) == path.endswith('.ram.nl'), f'{path}: incorrect address range')
             addresses.add(address)
     checks = []
+    sizes = {}
+    changed = {}
     for name, (flags, paths) in available.items():
         clear_outputs(root, paths)
         before, _ = run(baseline, source, root, flags)
         expected = artifacts(paths)
+        baseline_sizes = artifact_sizes(paths)
         for enabled in (False, True):
             clear_outputs(root, paths)
             after, _ = run(candidate, source, root, [*flags, *(nl if enabled else [])])
@@ -115,8 +130,14 @@ def verify_project(baseline, candidate, source, root):
             require(after.stdout == before.stdout, f'{source}: {name}, NL={enabled}: stdout changed')
             require(after.stderr == before.stderr, f'{source}: {name}, NL={enabled}: diagnostics changed')
             actual = artifacts(paths)
-            require(actual == expected, f'{source}: {name}, NL={enabled}: changed artifacts: '
-                    + str([path for path in actual if actual[path] != expected[path]]))
+            differing = [path for path in actual if actual[path] != expected[path]]
+            if differing and allow_analysis_changes:
+                changed[name] = differing
+            else:
+                require(not differing, f'{source}: {name}, NL={enabled}: changed artifacts: ' + str(differing))
+            if not enabled:
+                sizes[name] = {path: {'baseline_bytes': baseline_sizes[path], 'candidate_bytes': size}
+                               for path, size in artifact_sizes(paths).items()}
             if enabled:
                 require(nl_files(root) == expected_nl, f'{source}: {name}: NL output depends on analysis flags')
             else:
@@ -126,7 +147,7 @@ def verify_project(baseline, candidate, source, root):
     return {'source': str(source), 'bytes': len(binary), 'sha256': hashlib.sha256(binary).hexdigest(),
             'reference_prg_checked': reference.exists(), 'banks': expected_banks,
             'nl_entries': {name: len(contents.splitlines()) for name, contents in expected_nl.items()},
-            'compatibility_modes': checks}
+            'compatibility_modes': checks, 'artifact_sizes': sizes, 'changed_artifacts': changed}
 
 
 def benchmark(baseline, candidate, source, root, repeats, limit, mode_names):
@@ -201,11 +222,13 @@ def main():
     parser.add_argument('--source', type=Path, action='append', required=True)
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--repeats', type=int, default=5)
-    parser.add_argument('--max-cpu-ratio', type=float, default=1.20)
+    parser.add_argument('--max-cpu-ratio', type=float, default=1.05)
+    parser.add_argument('--allow-analysis-changes', action='store_true',
+                        help='Report, rather than refuse, analysis artifacts that differ from the baseline.')
     parser.add_argument('--hidden-locals', action='store_true',
                         help='Also compare xref-data with 1,000, 4,000 and 8,000 hidden locals/indirect reads.')
     parser.add_argument('--timing-mode', action='append', choices=tuple(modes(Path('.'))),
-                        help='Repeat for several modes; defaults to plain, xref, xref-full, listing, summary.')
+                        help='Repeat for several modes; defaults to plain, xref, xref-full, records, listing, summary.')
     args = parser.parse_args()
     require(args.repeats >= 3, 'Use at least three paired timing samples')
     baseline, candidate = args.baseline.resolve(), args.candidate.resolve()
@@ -220,14 +243,14 @@ def main():
             source = source.resolve()
             root = Path(directory) / str(index)
             root.mkdir()
-            project = verify_project(baseline, candidate, source, root)
+            project = verify_project(baseline, candidate, source, root, args.allow_analysis_changes)
             report['projects'].append(project)
             work.append((source, root, project))
         # Run timings after compatibility work; do not run benchmarks concurrently.
         for source, root, project in work:
             project['performance'] = benchmark(baseline, candidate, source, root, args.repeats,
                                                 args.max_cpu_ratio, args.timing_mode or
-                                                ['plain', 'xref', 'xref-full', 'listing', 'summary'])
+                                                ['plain', 'xref', 'xref-full', 'records', 'listing', 'summary'])
         if args.hidden_locals:
             root = Path(directory) / 'hidden-locals'
             root.mkdir()
@@ -237,7 +260,7 @@ def main():
                            for result in project['performance'].values())
     report['passed'] &= all(result['passed'] for result in report.get('hidden_locals', {}).values())
     args.report.write_text(json.dumps(report, indent=2) + '\n')
-    require(report['passed'], f'NL-disabled performance threshold exceeded; see {args.report}')
+    require(report['passed'], f'performance threshold exceeded; see {args.report}')
     print(f'All project acceptance checks passed. Report: {args.report}', flush=True)
 
 

@@ -2014,14 +2014,22 @@ static instruction_source *instruction_sources;
 
 /* Locations come from the parser. Index source bytes once, without imposing
  * the listing renderer's line-length limit or interpreting assembly syntax. */
+/* Consecutive spans almost always name the same file. */
+static instruction_source *instruction_source_last;
+
 static instruction_source *instruction_source_file(const char *filename, FILE *fp)
 {
     instruction_source *source;
     long length;
     size_t i, line;
     if (filename == NULL) return NULL;
+    if (instruction_source_last != NULL
+        && (instruction_source_last->filename == filename
+            || strcmp(instruction_source_last->filename, filename) == 0)) {
+        return instruction_source_last;
+    }
     for (source = instruction_sources; source != NULL; source = source->next) {
-        if (strcmp(source->filename, filename) == 0) return source;
+        if (strcmp(source->filename, filename) == 0) return instruction_source_last = source;
     }
     if (fp == NULL) return NULL;
     if (fseek(fp, 0, SEEK_END) != 0 || (length = ftell(fp)) < 0
@@ -2077,11 +2085,11 @@ const char *capture_xref_instruction_source(const char *filename, const char *di
     return source != NULL ? source->filename : NULL;
 }
 
-static char *instruction_source_span(location loc, size_t *length)
+/* Returns the span's bytes inside the retained source; not NUL-terminated. */
+static const char *instruction_source_span(location loc, size_t *length)
 {
     instruction_source *source = instruction_source_file(loc.file, NULL);
     size_t start, end, first_limit, last_limit;
-    char *text;
     if (source == NULL || loc.first_line < 1 || loc.last_line < loc.first_line
         || (size_t)loc.last_line > source->line_count
         || loc.first_column < 1 || loc.last_column < 1) return NULL;
@@ -2092,12 +2100,8 @@ static char *instruction_source_span(location loc, size_t *length)
     last_limit = (size_t)loc.last_line < source->line_count
         ? source->lines[loc.last_line] : source->length;
     if (start > first_limit || end > last_limit || end < start) return NULL;
-    text = (char *)malloc(end - start + 1);
-    if (text == NULL) return NULL;
-    memcpy(text, source->bytes + start, end - start);
-    text[end - start] = '\0';
     *length = end - start;
-    return text;
+    return source->bytes + start;
 }
 
 static void free_instruction_terms(instruction_provenance *p)
@@ -2257,6 +2261,7 @@ void clear_xref_instruction_provenance(void)
     free(instruction_provenance_records);
     instruction_provenance_records = NULL;
     instruction_provenance_count = instruction_provenance_capacity = 0;
+    instruction_source_last = NULL;
     while (instruction_sources != NULL) {
         instruction_source *source = instruction_sources;
         instruction_sources = source->next;
@@ -2285,18 +2290,99 @@ int finish_xref_instruction_provenance(astnode *root)
     return 1;
 }
 
-static void emit_instruction_location(FILE *fp, location loc)
+/* Records write each distinct source path once, in "files", and every span
+ * names its file by index into that table. */
+static const char **record_files;
+static int record_file_count;
+static int record_file_capacity;
+static int record_file_last = -1;
+
+static const char *record_file_name(const char *file)
 {
-    fprintf(fp, "{\"file\":");
-    print_json_string(fp, loc.file != NULL ? loc.file : "");
-    fprintf(fp, ",\"line\":%d,\"column\":%d,\"end_line\":%d,\"end_column\":%d}",
-            loc.first_line, loc.first_column, loc.last_line, loc.last_column);
+    return file != NULL ? file : "";
+}
+
+static int record_file_index(const char *file)
+{
+    int i;
+    file = record_file_name(file);
+    if (record_file_last >= 0 && strcmp(record_files[record_file_last], file) == 0) {
+        return record_file_last;
+    }
+    for (i = 0; i < record_file_count; i++) {
+        if (strcmp(record_files[i], file) == 0) return record_file_last = i;
+    }
+    return -1;
+}
+
+static int register_record_file(const char *file)
+{
+    if (record_file_index(file) >= 0) return 1;
+    if (record_file_count == record_file_capacity) {
+        int capacity = record_file_capacity == 0 ? 8 : record_file_capacity * 2;
+        const char **tmp = (const char **)realloc((void *)record_files, (size_t)capacity * sizeof(*tmp));
+        if (tmp == NULL) return 0;
+        record_files = tmp;
+        record_file_capacity = capacity;
+    }
+    record_files[record_file_count++] = record_file_name(file);
+    return 1;
+}
+
+static void clear_record_files(void)
+{
+    free((void *)record_files);
+    record_files = NULL;
+    record_file_count = record_file_capacity = 0;
+    record_file_last = -1;
+}
+
+static char *append_text(char *out, const char *text)
+{
+    while (*text != '\0') *out++ = *text++;
+    return out;
+}
+
+static char *append_int(char *out, int value)
+{
+    char digits[12];
+    int count = 0;
+    unsigned int magnitude = value < 0 ? 0u - (unsigned int)value : (unsigned int)value;
+    if (value < 0) *out++ = '-';
+    do {
+        digits[count++] = (char)('0' + magnitude % 10);
+        magnitude /= 10;
+    } while (magnitude != 0);
+    while (count > 0) *out++ = digits[--count];
+    return out;
+}
+
+/* Spans are the most frequent record object, so they are formatted without
+ * printf. */
+static int emit_instruction_location(FILE *fp, location loc)
+{
+    char buffer[128];
+    char *out = buffer;
+    int file = record_file_index(loc.file);
+    if (file < 0) {
+        fprintf(stderr, "error: instruction span file is missing from the file table: %s\n",
+                record_file_name(loc.file));
+        return 0;
+    }
+    out = append_int(append_text(out, "{\"file\":"), file);
+    out = append_int(append_text(out, ",\"line\":"), loc.first_line);
+    out = append_int(append_text(out, ",\"column\":"), loc.first_column);
+    out = append_int(append_text(out, ",\"end_line\":"), loc.last_line);
+    out = append_int(append_text(out, ",\"end_column\":"), loc.last_column);
+    *out++ = '}';
+    fwrite(buffer, 1, (size_t)(out - buffer), fp);
+    return 1;
 }
 
 static int emit_instruction_source(FILE *fp, location loc)
 {
     size_t length = 0;
-    char *text = instruction_source_span(loc, &length);
+    const char *text = instruction_source_span(loc, &length);
     if (text == NULL) {
         fprintf(stderr, "error: unavailable instruction source span %s:%d:%d-%d:%d\n",
                 loc.file != NULL ? loc.file : "", loc.first_line, loc.first_column,
@@ -2306,15 +2392,13 @@ static int emit_instruction_source(FILE *fp, location loc)
     if (!xasm_utf8_valid(text, length)) {
         fprintf(stderr, "error: instruction source span is not UTF-8: %s:%d:%d\n",
                 loc.file, loc.first_line, loc.first_column);
-        free(text);
         return 0;
     }
-    fprintf(fp, "{\"span\":");
-    emit_instruction_location(fp, loc);
-    fprintf(fp, ",\"text\":");
+    fputs("{\"span\":", fp);
+    if (!emit_instruction_location(fp, loc)) return 0;
+    fputs(",\"text\":", fp);
     print_json_string_n(fp, text, length);
-    fprintf(fp, "}");
-    free(text);
+    fputc('}', fp);
     return 1;
 }
 
@@ -4987,8 +5071,11 @@ static int emit_additive_terms(FILE *fp, const xref_instr *record)
                 fprintf(fp, "{\"kind\":");
                 print_json_string(fp, term->binding_kind);
                 fprintf(fp, ",\"definition\":");
-                if (term->has_binding_loc) emit_instruction_location(fp, term->binding_loc);
-                else fprintf(fp, "null");
+                if (term->has_binding_loc) {
+                    if (!emit_instruction_location(fp, term->binding_loc)) return 0;
+                } else {
+                    fprintf(fp, "null");
+                }
                 if (term->binding_enum != NULL) {
                     fprintf(fp, ",\"enum\":");
                     print_json_string(fp, term->binding_enum);
@@ -5004,10 +5091,66 @@ static int emit_additive_terms(FILE *fp, const xref_instr *record)
     return 1;
 }
 
-static int emit_instruction_records(FILE *fp, const xref_build_context *ctx)
+static int register_expression_files(const astnode *expr)
+{
+    const astnode *child;
+    if (expr == NULL) return 1;
+    if (!register_record_file(expr->source_loc.file)) return 0;
+    for (child = astnode_get_first_child((astnode *)expr); child != NULL;
+         child = astnode_get_next_sibling((astnode *)child)) {
+        if (!register_expression_files(child)) return 0;
+    }
+    return 1;
+}
+
+/* Collects every file a record span will name, in order of first use. Term
+ * spans are nodes of the pre-fold expression, so the tree walk covers them. */
+static int collect_record_files(const xref_build_context *ctx)
 {
     int i, j;
-    fprintf(fp, "{\"version\":\"2\",\"records\":[");
+    clear_record_files();
+    for (i = 0; i < ctx->instr_count; i++) {
+        const instruction_provenance *provenance = ctx->instrs[i].provenance;
+        if (!register_record_file(provenance->use_loc.file)
+            || !register_record_file(provenance->source_loc.file)
+            || (provenance->parsed_mode != IMPLIED_MODE
+                && !register_record_file(provenance->operand_loc.file))
+            || !register_expression_files(provenance->operand.original_expression)) {
+            return 0;
+        }
+        for (j = 0; j < provenance->term_count; j++) {
+            if (provenance->terms[j].has_binding_loc
+                && !register_record_file(provenance->terms[j].binding_loc.file)) {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+static int emit_instruction_records_body(FILE *fp, const xref_build_context *ctx);
+
+static int emit_instruction_records(FILE *fp, const xref_build_context *ctx)
+{
+    int i, ok;
+    if (!collect_record_files(ctx)) {
+        clear_record_files();
+        return 0;
+    }
+    fprintf(fp, "{\"version\":\"3\",\"files\":[");
+    for (i = 0; i < record_file_count; i++) {
+        if (i != 0) fprintf(fp, ",");
+        print_json_string(fp, record_files[i]);
+    }
+    fprintf(fp, "],\"records\":[");
+    ok = emit_instruction_records_body(fp, ctx);
+    clear_record_files();
+    return ok;
+}
+
+static int emit_instruction_records_body(FILE *fp, const xref_build_context *ctx)
+{
+    int i, j;
     for (i = 0; i < ctx->instr_count; i++) {
         const xref_instr *record = &ctx->instrs[i];
         const instruction_provenance *provenance = record->provenance;
@@ -5020,7 +5163,7 @@ static int emit_instruction_records(FILE *fp, const xref_build_context *ctx)
         if (mode == RELATIVE_MODE) encoded -= record->cpu_address + 2;
         fprintf(fp, "%s\n    {\"origin_id\":%lu,\"use\":", i == 0 ? "" : ",",
                 provenance->operand.origin_id);
-        emit_instruction_location(fp, provenance->use_loc);
+        if (!emit_instruction_location(fp, provenance->use_loc)) return 0;
         fprintf(fp, ",\"source\":");
         if (!emit_instruction_source(fp, provenance->source_loc)) return 0;
         fprintf(fp, ",\"operand_source\":");
@@ -9960,6 +10103,8 @@ int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan
         FILE *fp;
         if (!output_file_open(&output, options->instruction_records_file)) return 0;
         fp = output.stream;
+        /* Records are the largest analysis output; buffer them like the xref. */
+        (void)setvbuf(fp, NULL, _IOFBF, 65536);
         ok = emit_instruction_records(fp, ctx);
         fputc('\n', fp);
         ok = output_file_finish(&output, ok);

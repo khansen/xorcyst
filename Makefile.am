@@ -98,6 +98,7 @@ dist_doc_DATA = README NEWS xorcyst.texinfo \
   XASM_INDEX_BOUND_ANALYSIS_SPEC.md \
   XASM_INSTRUCTION_RECORDS_SPEC.md \
   XASM_INSTRUCTION_RECORDS_V2_SPEC.md \
+  XASM_INSTRUCTION_RECORDS_V3_SPEC.md \
   XASM_REVERSE_ENGINEERING_FEATURES_SPEC.md
 
 # Use the build-tree tools even when distcheck builds outside the source tree.

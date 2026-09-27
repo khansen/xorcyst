@@ -131,19 +131,20 @@ class InstructionRecords(unittest.TestCase):
         self.assertEqual(output.read_bytes(), plain_bytes)
         data = json.loads(xref.read_text())
         records = data.pop("instruction_records")
-        self.assertEqual(records["version"], "2")
+        self.assertEqual(records["version"], "3")
+        resolved = self.resolve_files(records)
         data["build"].pop("timestamp_utc")
         old_xref["build"].pop("timestamp_utc")
         self.assertEqual(data, old_xref, "opt-in must not alter legacy xref sections")
         ids = [record["origin_id"] for record in records["records"]]
         self.assertEqual(ids, sorted(set(ids)))
-        for record in records["records"]:
+        for record in resolved:
             start = record["output_offset"]
             self.assertEqual(record["size"], len(record["bytes"]))
             self.assertEqual(bytes(record["bytes"]), plain_bytes[start:start + record["size"]])
             self.assertEqual(record["opcode"], record["bytes"][0])
             self.assert_version_2_fields(record)
-        self.assert_source_spans(records["records"])
+        self.assert_source_spans(resolved)
         sidecar = self.root / "instructions.json"
         manifest = self.root / "dependencies.json"
         for mode in ("separate", "legacy-and-separate", "both"):
@@ -167,7 +168,29 @@ class InstructionRecords(unittest.TestCase):
                         self.assertNotIn("instruction_records", actual)
                     actual["build"].pop("timestamp_utc")
                     self.assertEqual(actual, old_xref)
-        return records["records"]
+        return resolved
+
+    def resolve_files(self, document):
+        """Checks the file table and returns records with each span's file resolved to its path."""
+        files = document["files"]
+        self.assertTrue(all(isinstance(name, str) and name for name in files))
+        self.assertEqual(len(files), len(set(files)), "file table entries are distinct")
+        order = []
+
+        def resolve(value):
+            if isinstance(value, dict):
+                if set(value) == {"file", "line", "column", "end_line", "end_column"}:
+                    self.assertIs(type(value["file"]), int)
+                    if value["file"] not in order:
+                        order.append(value["file"])
+                    return {**value, "file": files[value["file"]]}
+                return {key: resolve(child) for key, child in value.items()}
+            if isinstance(value, list):
+                return [resolve(child) for child in value]
+            return value
+        records = resolve(document["records"])
+        self.assertEqual(order, list(range(len(files))), "files are listed once each, in order of first use")
+        return records
 
     def assert_version_2_fields(self, record):
         self.assertEqual(record["memory_access"], expected_memory_access(record), record["source"]["text"])
