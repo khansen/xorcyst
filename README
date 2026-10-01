@@ -1,5 +1,5 @@
 The XORcyst is a set of tools for 6502 software development: the `xasm`
-assembler and `xlnk` linker. This release is version 1.8.0.
+assembler and `xlnk` linker. This release is version 1.8.1.
 Run `xasm --version` or `xlnk --version` to identify an installed build.
 
 Build and test
@@ -200,6 +200,6 @@ To prepare and validate a source archive (including tests and feature specs):
     ./configure --disable-maintainer-mode
     make distcheck
 
-This produces `xorcyst-1.8.0.tar.gz`. No parser or scanner regeneration is
+This produces `xorcyst-1.8.1.tar.gz`. No parser or scanner regeneration is
 needed to build the archive. The installation checks use a temporary prefix;
 they do not replace the system installation.

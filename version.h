@@ -1,6 +1,6 @@
 #ifndef XORCYST_VERSION_H
 #define XORCYST_VERSION_H
 
-#define XORCYST_VERSION "1.8.0"
+#define XORCYST_VERSION "1.8.1"
 
 #endif
