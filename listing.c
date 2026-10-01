@@ -721,7 +721,7 @@ static void print_listing_line(location loc,
         }
     }
 
-    if (count > 0) {
+    if (count > 0 && !in_dataseg) {
         listing_output_offset += count;
     }
 }
@@ -855,6 +855,9 @@ static int list_storage(astnode *storage, void *arg, astnode **next)
 
     print_listing_line(storage->loc, get_current_pc(), NULL, 0, ".DSB", NULL);
     if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
+        if (!in_dataseg) {
+            listing_output_offset += count;
+        }
         add_current_pc(count);
     }
     return 0;

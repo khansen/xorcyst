@@ -419,6 +419,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_inputs.py \
   tests/test_installation.py \
   tests/test_instruction_records.py \
+  tests/test_listing_offsets.py \
   tests/test_io_faults.c \
   tests/test_linker_outputs.py \
   tests/test_output_failures.py \
