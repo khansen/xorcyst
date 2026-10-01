@@ -12,3 +12,15 @@
 - a way to specify fixed-point numbers?
 - .ifdef inside struct/union
 
+Known defects outside the listing-offset correction:
+
+- Uninitialized .CHAR and .CHAR[2] storage abort at the BYTE_DATATYPE
+  assertion in astproc.c:inc_pc_by_storage(). Reproduce with .ORG $8000
+  followed by either declaration and assemble with --pure-binary.
+  process_storage() leaves one-byte CHAR storage unnormalized. Fix and test
+  datatype normalization separately; do not treat it as listing-offset coverage.
+- Listing v1 data-segment rows retain bytes_hex and numeric output offsets
+  although pure-binary output does not emit those bytes. Segment directives
+  occur in the stream, but individual rows lack segment/emission metadata.
+  Design a separate versioned contract for non-emitting rows and joins; the
+  offset correction only keeps subsequent emitting rows aligned with binary.
