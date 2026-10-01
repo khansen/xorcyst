@@ -1,3 +1,12 @@
+Version 1.8.1:
+- Correct structured-listing binary offsets after code-segment storage and
+  non-emitting data-segment initialized data or .INCBIN. CPU addresses,
+  assembled bytes and diagnostics are unchanged.
+- Add 28 regression subcases covering storage widths, empty storage records,
+  segment switches and continuations in JSON/NDJSON and debug/non-debug modes.
+- Keep listing schema version 1 and instruction-record schema version 3.
+  Non-emitting data-segment rows still lack per-row emission metadata; see TODO.
+
 Version 1.8.0:
 - Incompatible analysis-format change: instruction records now use schema
   version 3, with a shared files table and integer file indices in every span.
