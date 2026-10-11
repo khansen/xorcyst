@@ -60,6 +60,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_dependencies.py \
   tests/test_fceux_nl.py \
   tests/test_fceux_nl_alloc.c \
+  tests/test_field_initializers.py \
   tests/test_frontend_performance.py \
   tests/test_frontend_work.c \
   tests/test_inputs.py \

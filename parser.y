@@ -420,12 +420,15 @@ field_initializer_list_opt:
     ;
 
 field_initializer_list:
-    field_initializer { $$ = $1; }
+    /* Keep this list nonempty so {} only uses field_initializer_list_opt. */
+    extended_expression { $$ = $1; }
+    | ',' field_initializer { $$ = astnode_create_null(@1); astnode_add_sibling($$, $2); }
     | field_initializer_list ',' field_initializer { $$ = $1; astnode_add_sibling($$, $3); }
     ;
 
 field_initializer:
     extended_expression { $$ = $1; }
+    | { $$ = astnode_create_null(@$); }
     ;
 
 local_id:
