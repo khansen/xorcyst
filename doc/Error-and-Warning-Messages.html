@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.9.0.
+<!-- This is the manual for The XORcyst version 1.9.1.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>Error and Warning Messages (The XORcyst Manual)</title>
@@ -48,6 +48,12 @@ span:hover a.copiable-link {visibility: visible}
 <dd><p>Make sure <var class="var">identifier</var> is a macro and not a label, constant or other type of symbol.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">circular definition in field size</samp>&rsquo;</dt>
+<dd><p>A constant used to determine the size of an explicitly initialized user-type
+array field refers to itself, directly or through other constants. Break the
+cycle so the count and padding can be evaluated.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">conditional expression does not evaluate to literal</samp>&rsquo;</dt>
 <dd><p>Conditional assembly with the <code class="code">.if</code>-directive requires that the expression tested can be evaluated immediately, so it can&rsquo;t contain references to labels and such (since these aren&rsquo;t computed by the assembler, that&rsquo;s the linker&rsquo;s job).
 </p>
@@ -74,6 +80,8 @@ span:hover a.copiable-link {visibility: visible}
 </dd>
 <dt>&lsquo;<samp class="samp">initializer for field `<var class="var">identifier</var>' exceeds field size</samp>&rsquo;</dt>
 <dd><p>When defining the value of a structure or union field, the value must not exceed the number of bytes of storage allocated for that field. For example, if the field definition is <code class="code">a_string .dsb 4</code>, then the value <code class="code">&quot;too long&quot;</code> won&rsquo;t fit since it is 8 bytes long.
+An explicitly initialized user-type array field also requires a positive element
+count, including when the count is named or defined after the instance.
 </p>
 </dd>
 <dt>&lsquo;<samp class="samp">instructions not allowed in data segment</samp>&rsquo;</dt>

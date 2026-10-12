@@ -28,6 +28,3 @@ Known defects and follow-ups:
   assignment-time values and cycle detection.
 - Repeated aggregate instances still require quadratic statement-list work,
   including when counts are literal. Profile list replacement and merging.
-- Next release: document the deferred-count validation and field-specific
-  named-count diagnostics, and add "circular definition in field size" to the
-  messages appendix. The 1.9.0 release notes describe the state of that release.

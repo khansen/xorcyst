@@ -38,7 +38,7 @@
 @c %**end of header
 
 @copying
-This is the manual for The XORcyst version 1.9.0.
+This is the manual for The XORcyst version 1.9.1.
 
 Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @end copying
@@ -78,6 +78,16 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 
 @node What's New
 @chapter What's New
+
+@heading Version 1.9.1
+
+@itemize
+@item Validates deferred counts of explicitly initialized user-type array fields before storage merging and object encoding. Rejects zero and negative counts, including counts defined after an instance, without replacing existing output.
+@item Resolves aliases and unary expressions in these counts, detects circular definitions, and preserves values already known when an instance is expanded.
+@item Removes zero padding before object encoding to avoid spurious 256-byte fills. Preserves adjacent storage grouping and listing source locations for previously correct inputs, including nested arrays and omitted subfields.
+@item Reports field-specific errors for invalid named counts, matching literal-count diagnostics without cascading errors after an invalid initializer kind.
+@item Preserves listing schemas and instruction-record schema version 3. Other storage-count paths, ordinary-operand aliases and named union counts remain tracked in @file{TODO}, along with resolver and aggregate-instance performance work.
+@end itemize
 
 @heading Version 1.9.0
 
@@ -1061,6 +1071,15 @@ two byte fields, @code{@{1, 2@}} initializes @code{points} to the four bytes
 @code{1, 2, 0, 0}. The next field initializer belongs to the next field of
 the containing structure. This rule also applies to array fields in unions.
 
+An explicitly initialized user-type array field must have at least one element,
+even when the element type occupies zero bytes. For structure fields with a
+constant count, a value available when the instance is expanded is captured
+then; otherwise the count is checked in the final assembly pass. Aliases and
+unary expressions are resolved for this check, and circular definitions are
+errors. A zero or negative count reports the field whose initializer exceeds
+its declared size. Counts requiring link-time addresses retain their existing
+behavior; named counts in union declarations remain a known limitation.
+
 @item @strong{Union}. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
 
 @item @strong{Record}. The initializer is of the same form as a structure initializer, but cannot contain sub-structure initializers (each bitfield is a ``simple'' value).
@@ -1635,6 +1654,11 @@ you can achieve the same result from the statement
 @item cannot expand `@var{identifier}'; not a macro
 Make sure @var{identifier} is a macro and not a label, constant or other type of symbol.
 
+@item circular definition in field size
+A constant used to determine the size of an explicitly initialized user-type
+array field refers to itself, directly or through other constants. Break the
+cycle so the count and padding can be evaluated.
+
 @item conditional expression does not evaluate to literal
 Conditional assembly with the @code{.if}-directive requires that the expression tested can be evaluated immediately, so it can't contain references to labels and such (since these aren't computed by the assembler, that's the linker's job).
 
@@ -1655,6 +1679,8 @@ A member of an enumerated datatype must be assigned a constant value.
 
 @item initializer for field `@var{identifier}' exceeds field size
 When defining the value of a structure or union field, the value must not exceed the number of bytes of storage allocated for that field. For example, if the field definition is @code{a_string .dsb 4}, then the value @code{"too long"} won't fit since it is 8 bytes long.
+An explicitly initialized user-type array field also requires a positive element
+count, including when the count is named or defined after the instance.
 
 @item instructions not allowed in data segment
 Instructions can only be contained in a code segment (after a @code{codeseg} directive).
