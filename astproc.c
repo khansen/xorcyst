@@ -1821,6 +1821,32 @@ static void reduce_enum(symtab_entry *e, astnode *expr, astnode *list)
 
 static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *flat);
 
+/* A user-type field initializer describes the first element. Preserve the
+ * declared array extent by zero-filling the remaining elements in bytes.
+ * sizeof also handles records and enums, whose representation is one byte. */
+static void pad_user_type_field(symtab_entry *field, astnode *type,
+                                astnode *init, astnode *flat)
+{
+    astnode *padding = reduce_expression(
+        astnode_create_arithmetic(
+            MINUS_OPERATOR,
+            astnode_clone(field->field.size, init->loc),
+            astnode_create_sizeof(astnode_clone(type, type->loc), init->loc),
+            init->loc
+        ), FOLD_PC_NO
+    );
+    if (astnode_is_type(padding, INTEGER_NODE) && padding->integer == 0) {
+        astnode_finalize(padding);
+    } else {
+        astnode_add_child(flat,
+            astnode_create_storage(
+                astnode_create_datatype(BYTE_DATATYPE, NULL, init->loc),
+                padding, init->loc
+            )
+        );
+    }
+}
+
 /**
  * Flattens a union initializer to a sequence of native data values.
  * Verify similar to flattening of structure, but only single field allowed.
@@ -1934,6 +1960,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                 default:
                 break;
             }
+            pad_user_type_field(e, type, val, flat);
             break;
         }
         /* Decrease fill amount according to field size */
@@ -2113,6 +2140,7 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                         default:
                         break;
                     }
+                    pad_user_type_field(e, type, val, flat);
                 }
                 break;
             }

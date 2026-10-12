@@ -14,9 +14,6 @@
 
 Known defects:
 
-- Explicitly initialized user-type array fields emit only one element, which
-  shifts subsequent fields and addresses. Full-array initialization needs to
-  account for the declared element count.
 - Some invalid inputs abort after diagnostics: repeated excessive initializers
   for empty structures, and record initializer expressions supplied through .EQU.
 - Listing v1 data-segment rows retain bytes_hex and numeric output offsets
