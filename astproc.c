@@ -1098,8 +1098,10 @@ static astnode *sizeof_label_data(astnode *def, astnode *expr)
             }
             total_bytes += (node_size * elem_size);
             found_data = 1;
-        } else if (astnode_is_type(curr, STORAGE_NODE)) {
-            int elem_size = datatype_elem_size(LHS(curr));
+        } else if (astnode_is_type(curr, STORAGE_NODE) ||
+                   astnode_is_type(curr, FIELD_PADDING_NODE)) {
+            int elem_size = astnode_is_type(curr, FIELD_PADDING_NODE)
+                ? 1 : datatype_elem_size(LHS(curr));
             /* Reduce count expression to literal using a clone to avoid AST mutation */
             astnode *count_expr = reduce_expression_complete(astnode_clone(RHS(curr), RHS(curr)->loc), FOLD_PC_NO);
             if (astnode_is_type(count_expr, INTEGER_NODE)) {
@@ -1841,18 +1843,26 @@ static void pad_user_type_field(symtab_entry *field, astnode *type,
             init->loc
         ), FOLD_PC_NO
     );
-    if (astnode_is_type(padding, INTEGER_NODE) && padding->integer <= 0) {
+    if (astnode_is_type(padding, INTEGER_NODE)
+        && (padding->integer < 0
+            || (padding->integer == 0 && astnode_is_type(count, INTEGER_NODE)))) {
         if (padding->integer < 0) {
             err(init->loc, "initializer for field `%s' exceeds field size", field->id);
         }
         astnode_finalize(padding);
-    } else {
+    } else if (astnode_is_type(count, INTEGER_NODE)
+               && astnode_is_type(padding, INTEGER_NODE)) {
         astnode_add_child(flat,
             astnode_create_storage(
                 astnode_create_datatype(BYTE_DATATYPE, NULL, init->loc),
                 padding, init->loc
             )
         );
+    } else {
+        astnode *deferred = astnode_create(FIELD_PADDING_NODE, init->loc);
+        astnode_add_child(deferred, astnode_clone(count, init->loc));
+        astnode_add_child(deferred, padding);
+        astnode_add_child(flat, deferred);
     }
 }
 
@@ -2469,6 +2479,106 @@ static int process_data(astnode *data, void *arg, astnode **next)
             codeseg_pc += nbytes;
     }
     return 1;
+}
+
+/* Keep the element count until forward constants can be checked. Checking
+ * only byte padding loses zero-sized elements, and merging storage first can
+ * hide a negative remainder in the next field's positive padding. */
+typedef struct field_count_definition {
+    symtab_entry *symbol;
+    const struct field_count_definition *parent;
+} field_count_definition;
+
+/* A single substitution pass may leave aliases introduced by a forward
+ * definition. Resolve those too before validating, without looping on cycles.
+ * Use the current scope and capture available values on the first pass so
+ * later assignments do not change the count of an earlier instance. */
+static astnode *reduce_field_count(astnode *expr, const field_count_definition *definitions)
+{
+    if (astnode_is_type(expr, IDENTIFIER_NODE)) {
+        symtab_entry *symbol = symtab_lookup(expr->ident);
+        if (symbol != NULL && symbol->type == CONSTANT_SYMBOL) {
+            const field_count_definition *previous;
+            field_count_definition current;
+            for (previous = definitions; previous != NULL; previous = previous->parent) {
+                if (previous->symbol == symbol) {
+                    err(expr->loc, "circular definition in field size");
+                    return expr;
+                }
+            }
+            current.symbol = symbol;
+            current.parent = definitions;
+            return reduce_field_count(substitute_ident(expr), &current);
+        }
+    } else if (astnode_is_type(expr, ARITHMETIC_NODE)) {
+        reduce_field_count(LHS(expr), definitions);
+        reduce_field_count(RHS(expr), definitions);
+    } else {
+        astnode *reduced = reduce_expression_complete(expr, FOLD_PC_NO);
+        if (reduced != expr) return reduce_field_count(reduced, definitions);
+    }
+    return fold_constants(expr, FOLD_PC_NO);
+}
+
+static int resolve_field_padding(astnode *node, astnode **next, int final)
+{
+    int errors_before = err_count;
+    astnode *count = reduce_field_count(LHS(node), NULL);
+    astnode *padding;
+    if (err_count != errors_before) {
+        astnode_finalize(node);
+        return 0;
+    }
+    if (astnode_is_type(count, INTEGER_NODE) && count->integer < 1) {
+        err(node->loc, "operand out of range");
+        astnode_finalize(node);
+        return 0;
+    }
+    padding = reduce_field_count(RHS(node), NULL);
+    if (err_count != errors_before) {
+        astnode_finalize(node);
+        return 0;
+    }
+    if (astnode_is_type(padding, INTEGER_NODE)
+        && (padding->integer < 0 || padding->integer >= 0x10000)) {
+        err(node->loc, "operand out of range");
+        astnode_finalize(node);
+        return 0;
+    }
+    if (!final && (!astnode_is_type(count, INTEGER_NODE)
+                   || !astnode_is_type(padding, INTEGER_NODE))) {
+        return 1;
+    }
+    if (astnode_is_type(padding, INTEGER_NODE) && padding->integer == 0) {
+        /* Zero padding is valid, but an object-code storage count of zero
+         * encodes 256 bytes. Remove it before either output path sees it. */
+        astnode_finalize(node);
+        return 0;
+    }
+    /* Convert in place: replacing a top-level node scans the statement list
+     * for its position, making many array instances unnecessarily quadratic. */
+    astnode_finalize(LHS(node));
+    astnode_insert_child(node,
+        astnode_create_datatype(BYTE_DATATYPE, NULL, node->loc), 0);
+    node->type = STORAGE_NODE;
+    *next = node;
+    return 0;
+}
+
+static int process_field_padding(astnode *node, void *arg, astnode **next)
+{
+    return resolve_field_padding(node, next, 0);
+}
+
+static int finalize_field_padding(astnode *node, void *arg, astnode **next)
+{
+    astnode *previous = astnode_get_prev_sibling(node);
+    int descend = resolve_field_padding(node, next, 1);
+    /* The preceding storage could not merge across this validation barrier.
+     * Revisit it after conversion or removal, including a zero remainder, so
+     * adjacent storage keeps its original grouping and source location. */
+    if (astnode_is_type(previous, STORAGE_NODE)) *next = previous;
+    return descend;
 }
 
 /**
@@ -4081,6 +4191,7 @@ void astproc_first_pass(astnode *root)
         { INSTRUCTION_NODE, process_instruction },
         { DATA_NODE, process_data },
         { STORAGE_NODE, process_storage },
+        { FIELD_PADDING_NODE, process_field_padding },
         { EQU_NODE, process_equ },
         { UNDEF_NODE, process_undef },
         { ASSIGN_NODE, process_assign },
@@ -4711,6 +4822,7 @@ void astproc_third_pass(astnode *root)
         { INSTRUCTION_NODE, translate_instruction },
         { DATA_NODE, maybe_merge_data },
         { STORAGE_NODE, maybe_merge_storage },
+        { FIELD_PADDING_NODE, finalize_field_padding },
         { VAR_DECL_NODE, flatten_var_decl },
         { PROC_NODE, flatten_proc },
         { STRUC_DECL_NODE, noop },
