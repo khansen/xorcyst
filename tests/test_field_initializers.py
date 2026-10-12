@@ -227,6 +227,54 @@ larger .byte[16]
                 self.assert_bytes(f".Arrays {initializer}\n.byte $5A\n",
                                   prefix + bytes(16 - len(prefix)) + b"\x5A", declarations)
 
+    def test_invalid_user_type_array_sizes_have_field_diagnostics(self):
+        types = """.struc Empty
+.ends
+.struc Point
+px .byte
+py .byte
+.ends
+.enum Mode
+off
+on
+.ende
+"""
+        for aggregate in ("struc", "union"):
+            for field_type, initializer, wrong, diagnostic in (
+                    ("Empty", "{}", "1", b"structure initializer expected"),
+                    ("Point", "{1,2}", "1", b"structure initializer expected"),
+                    ("Choice", "{1}", "1", b"union initializer expected"),
+                    ("Flags", "{,1,0}", "1", b"record initializer expected"),
+                    ("Mode", "on", "{1}", b"identifier expected")):
+                for count in ("0", "-1", "1-1"):
+                    declarations = TYPES + types
+                    declarations += f".{aggregate} Array\nitems .{field_type}[{count}]\ntail .byte\n.ends\n"
+                    for value, expected in ((initializer, b"initializer for field `items' exceeds field size"),
+                                            (wrong, diagnostic)):
+                        for pure_binary in (False, True):
+                            with self.subTest(aggregate=aggregate, field_type=field_type, count=count,
+                                              value=value, pure_binary=pure_binary):
+                                source = declarations + f".Array {{{value}}}\n"
+                                result, _ = self.assemble(source, pure_binary=pure_binary)
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(expected, result.stderr)
+                                self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+                                self.assertNotIn(b"operand out of range", result.stderr)
+
+    def test_invalid_array_initializers_do_not_skip_later_errors(self):
+        declarations = ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
+        for field_type, initializer, diagnostic in (
+                ("Point", "1", b"structure initializer expected"),
+                ("Empty", "{}", b"initializer for field `items' exceeds field size")):
+            source = declarations + f".struc Array\nitems .{field_type}[0]\n.ends\n"
+            source += f".Array {{{initializer}}}\n" * 2
+            for pure_binary in (False, True):
+                with self.subTest(field_type=field_type, pure_binary=pure_binary):
+                    result, _ = self.assemble(source, pure_binary=pure_binary)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(diagnostic), 2, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(b"error:"), 2, result.stderr.decode())
+
     def test_nested_user_type_arrays_and_symbolic_counts(self):
         for count, definition in (("1", ""), ("2", ""), ("Count", "Count = 3\n")):
             declarations = f""".struc Point
