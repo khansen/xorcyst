@@ -48,6 +48,8 @@ static int scope_by_namespace_size = 0;
 static int scope_counter = 0;
 static char *current_scope_name = NULL;
 static listing_format current_listing_format = LISTING_FORMAT_TEXT;
+static int current_listing_version = 1;
+static int listing_binary_generated = 0;
 static const char *listing_source_file_arg = NULL;
 static const char *listing_output_file_arg = NULL;
 static long listing_output_offset = 0;
@@ -601,11 +603,16 @@ static void emit_structured_record(location loc,
                                    const char *directive_or_opcode,
                                    const char *addressing_mode,
                                    int continuation,
-                                   long row_output_offset)
+                                   long row_output_offset,
+                                   int span_count,
+                                   int zero_fill)
 {
     int i;
-    int cpu_end = addr + ((count > 0) ? (count - 1) : 0);
-    long output_end = row_output_offset + ((count > 0) ? (count - 1) : 0);
+    int version2 = current_listing_version == 2;
+    int emits_bytes = listing_binary_generated && !in_dataseg && span_count > 0;
+    int size = version2 ? span_count : count;
+    unsigned cpu_end = (unsigned)addr + (unsigned)((size > 0) ? (size - 1) : 0);
+    long output_end = row_output_offset + ((size > 0) ? (size - 1) : 0);
 
     if (current_listing_format == LISTING_FORMAT_JSON) {
         if (json_record_count > 0) {
@@ -624,13 +631,24 @@ static void emit_structured_record(location loc,
     fprintf(listing_fp, ",\"source_text\":");
     print_json_string(listing_fp, source_text != NULL ? source_text : "");
 
+    if (version2) {
+        fprintf(listing_fp, ",\"version\":\"2\",\"segment\":\"%s\"", in_dataseg ? "data" : "code");
+        fprintf(listing_fp, ",\"binary_generated\":%s", listing_binary_generated ? "true" : "false");
+        fprintf(listing_fp, ",\"byte_count\":%d,\"emits_bytes\":%s", span_count, emits_bytes ? "true" : "false");
+        fprintf(listing_fp, ",\"fill_byte\":%s", emits_bytes && zero_fill ? "\"00\"" : "null");
+    }
+
     fprintf(listing_fp, ",\"cpu_address_start\":\"0x%04X\"", addr & 0xFFFF);
     fprintf(listing_fp, ",\"cpu_address_end\":\"0x%04X\"", cpu_end & 0xFFFF);
-    fprintf(listing_fp, ",\"output_offset_start\":%ld", row_output_offset);
-    fprintf(listing_fp, ",\"output_offset_end\":%ld", output_end);
+    if (version2 && !emits_bytes) {
+        fprintf(listing_fp, ",\"output_offset_start\":null,\"output_offset_end\":null");
+    } else {
+        fprintf(listing_fp, ",\"output_offset_start\":%ld", row_output_offset);
+        fprintf(listing_fp, ",\"output_offset_end\":%ld", output_end);
+    }
 
     fprintf(listing_fp, ",\"bytes_hex\":[");
-    for (i = 0; i < count; ++i) {
+    for (i = 0; i < count && (!version2 || emits_bytes); ++i) {
         if (i > 0) {
             fprintf(listing_fp, ",");
         }
@@ -702,7 +720,7 @@ static void print_listing_line(location loc,
                                    directive_or_opcode,
                                    addressing_mode,
                                    0,
-                                   listing_output_offset);
+                                   listing_output_offset, 0, 0);
         } else {
             offset = 0;
             while (offset < count) {
@@ -715,7 +733,7 @@ static void print_listing_line(location loc,
                                        directive_or_opcode,
                                        addressing_mode,
                                        (offset > 0),
-                                       listing_output_offset + offset);
+                                       listing_output_offset + offset, row_count, 0);
                 offset += row_count;
             }
         }
@@ -820,7 +838,10 @@ static int list_data(astnode *data, void *arg, astnode **next)
             value = 0;
         }
 
-        if (type->datatype == BYTE_DATATYPE) {
+        /* V1 historically omits numeric .char data. Keep that wire format;
+         * V2 must account for every byte, including unmapped numeric chars. */
+        if (type->datatype == BYTE_DATATYPE
+            || (type->datatype == CHAR_DATATYPE && current_listing_version == 2)) {
             append_byte(&line_bytes, &line_size, &line_capacity, (unsigned char)(value & 0xFF));
             add_current_pc(1);
         } else if (type->datatype == WORD_DATATYPE) {
@@ -853,8 +874,15 @@ static int list_storage(astnode *storage, void *arg, astnode **next)
     (void)arg;
     (void)next;
 
-    print_listing_line(storage->loc, get_current_pc(), NULL, 0, ".DSB", NULL);
-    if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
+    if (!eval_expression_int(RHS(storage), &count, 0) || count < 0) count = 0;
+    if (current_listing_version == 2) {
+        emit_structured_record(storage->loc, get_current_pc(), NULL, 0,
+                               get_source_line(storage->loc.file, storage->loc.first_line),
+                               ".DSB", NULL, 0, listing_output_offset, count, 1);
+    } else {
+        print_listing_line(storage->loc, get_current_pc(), NULL, 0, ".DSB", NULL);
+    }
+    if (count > 0) {
         if (!in_dataseg) {
             listing_output_offset += count;
         }
@@ -988,6 +1016,8 @@ static int list_symbols(void)
 int generate_listing(astnode *root,
                      const char *filename,
                      listing_format format,
+                     int version,
+                     int binary_generated,
                      const char *source_file,
                      const char *output_file)
 {
@@ -1026,6 +1056,8 @@ int generate_listing(astnode *root,
     listing_fp = output.stream;
 
     current_listing_format = format;
+    current_listing_version = version;
+    listing_binary_generated = binary_generated;
     listing_source_file_arg = source_file;
     listing_output_file_arg = output_file;
     listing_output_offset = 0;
@@ -1044,7 +1076,10 @@ int generate_listing(astnode *root,
         fprintf(listing_fp, "%s\n", DIVIDER);
     } else if (current_listing_format == LISTING_FORMAT_JSON) {
         fprintf(listing_fp, "{\n");
-        fprintf(listing_fp, "  \"version\": \"1\",\n");
+        fprintf(listing_fp, "  \"version\": \"%d\",\n", version);
+        if (version == 2) {
+            fprintf(listing_fp, "  \"binary_generated\": %s,\n", binary_generated ? "true" : "false");
+        }
         fprintf(listing_fp, "  \"source_file\": ");
         print_json_string(listing_fp, listing_source_file_arg != NULL ? listing_source_file_arg : "");
         fprintf(listing_fp, ",\n");

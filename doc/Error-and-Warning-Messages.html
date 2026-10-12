@@ -199,6 +199,12 @@ span:hover a.copiable-link {visibility: visible}
 <dd><p>Printed when <code class="code">--listing-format</code> is given without <code class="code">--listing=<var class="var">FILE</var></code>; there is no listing for the requested format to apply to. Unlike the other messages in this table, it carries no source-file/line prefix, since it is not tied to a line in your program. Suppressed by <code class="code">--no-warn</code> like any other warning.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">W0017: --listing-version is ignored because --listing is not set</samp>&rsquo;</dt>
+<dd><p>Printed when <code class="code">--listing-version=1</code> is explicitly given without
+<code class="code">--listing=<var class="var">FILE</var></code>. Suppressed by <code class="code">--no-warn</code>. Version 2 requires
+a structured listing and instead reports a command-line error when it is absent.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">W0201: symbol `<var class="var">identifier</var>' defined by .EQU is never used</samp>&rsquo;</dt>
 <dd><p>Opt-in: silent unless <code class="code">--warn-unused-equ</code> is given. <code class="code">--Werror=unused-equ</code> promotes it to a fatal &lsquo;<samp class="samp">error W0201</samp>&rsquo; and is <em class="emph">not</em> silenced by <code class="code">--no-warn</code>; <code class="code">--Wno-unused-equ</code> turns the check back off entirely. To suppress one definition without disabling the check everywhere, add a same-line <code class="code">; xasm:ignore unused-equ</code> comment on the <code class="code">.EQU</code> statement, or bracket a region with <code class="code">; xasm:disable unused-equ</code> and <code class="code">; xasm:enable unused-equ</code> comments.
 </p>

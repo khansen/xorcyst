@@ -84,6 +84,15 @@ format; the default is text. A diagnostic listing may also be produced after
 an assembly error. Listing write and close failures produce a nonzero exit.
 </p>
 </dd>
+<dt><code class="code">--listing-version 1|2</code></dt>
+<dd><p>Selects the structured listing schema; the default is version 1. Version 2
+requires <code class="code">--pure-binary</code>, <code class="code">--listing</code>, and JSON or NDJSON format.
+It adds segment, byte-count, emission, and zero-fill metadata. Rows that emit
+no binary bytes have null output offsets and empty byte arrays. Diagnostic
+listings explicitly indicate when no new binary was generated. See
+<samp class="file">README</samp> for the version 2 field definitions and join rules.
+</p>
+</dd>
 <dt><code class="code">--xref FILE</code></dt>
 <dd><p>Writes symbol definitions and reference sites.
 <code class="code">--xref-format=json|text|csv</code> selects the format; the default is JSON.
