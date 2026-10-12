@@ -11,9 +11,3 @@
 - inlining function calls?
 - a way to specify fixed-point numbers?
 - .ifdef inside struct/union
-
-Known defects:
-
-- Invalid named user-type array counts get a generic range diagnostic, even
-  when defined before the structure with .equ, .define or =. Only literal and
-  folded counts currently get the field-specific size diagnostic.
