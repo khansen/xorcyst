@@ -348,6 +348,87 @@ tail .char
                                     for i, part in enumerate(parts))
                 self.assert_bytes(".Text {" + ",".join(fields) + "}\n", expected, declarations)
 
+    def test_deferred_padding_merges_with_adjacent_storage(self):
+        declarations = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        declarations += ".struc Array\npoints .Point[Count]\ntail .byte\n.ends\n"
+        cases = (("{{1,},$5A}", 1, 0x5A), ("{{},$5A}", 0, 0x5A), ("{{1,},}", 1, 0))
+        for case, (initializer, first, tail) in enumerate(cases):
+            for count in (1, 2):
+                for debug in (False, True):
+                    for pure_binary in (False, True):
+                        formats = [("text", 1), ("json", 1), ("ndjson", 1)]
+                        if pure_binary:
+                            formats += [("json", 2), ("ndjson", 2)]
+                        for fmt, version in formats:
+                            with self.subTest(initializer=initializer, count=count, debug=debug,
+                                              pure_binary=pure_binary, fmt=fmt, version=version):
+                                results = []
+                                for forward in (False, True):
+                                    # Keep instance lines and the input path identical for exact debug/object
+                                    # and listing comparisons; only the definition's position changes.
+                                    source = "\n" if forward else f"Count = {count}\n"
+                                    source += declarations + f".Array {initializer}\nAfter: .word After\n"
+                                    source += f"Count = {count}\n" if forward else "\n"
+                                    listing = self.root / f"merge-{case}-{count}-{debug}-{pure_binary}-{fmt}-{version}-{forward}"
+                                    options = [f"--listing={listing}", f"--listing-format={fmt}",
+                                               f"--listing-version={version}"]
+                                    if debug:
+                                        options.append("--debug")
+                                    result, binary = self.assemble(source, pure_binary=pure_binary, options=options)
+                                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                    results.append((binary.read_bytes(), listing.read_bytes()))
+                                self.assertEqual(results[0], results[1])
+                                if not pure_binary:
+                                    binary = self.link(binary)
+                                expected = bytes([first]) + bytes(2 * count - 1) + bytes([tail])
+                                self.assertEqual(binary.read_bytes(), expected + len(expected).to_bytes(2, "little"))
+
+    def test_nested_inner_and_outer_forward_counts(self):
+        declarations = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        declarations += ".struc Array\npoints .Point[Inner]\ntail .byte\n.ends\n"
+        declarations += ".struc Outer\narrays .Array[OuterCount]\nlast .byte\n.ends\n"
+        for inner in (1, 2):
+            for outer in (1, 2):
+                with self.subTest(inner=inner, outer=outer):
+                    element = b"\x01\x02" + bytes(2 * (inner - 1)) + b"\x5A"
+                    expected = element + bytes(len(element) * (outer - 1)) + b"\x22"
+                    # The first expansion sees forward counts; the second sees the assigned values.
+                    self.assert_bytes(".Outer {{{1,2},$5A},$22}\n"
+                                      + f"Inner = {inner}\nOuterCount = {outer}\n", expected, declarations)
+        for inner, outer in ((0, 2), (2, 0)):
+            for pure_binary in (False, True):
+                with self.subTest(inner=inner, outer=outer, pure_binary=pure_binary):
+                    source = declarations + ".Outer {{{1,2},$5A},$22}\n"
+                    source += f"Inner = {inner}\nOuterCount = {outer}\n"
+                    result, _ = self.assemble(source, pure_binary=pure_binary)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+
+    def test_unary_forward_array_counts(self):
+        declarations = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        declarations += ".struc Array\npoints .Point[Count]\ntail .byte\n.ends\n"
+        for expression, value, count in (("-Value", -2, 2), ("~Value", -3, 2),
+                                          ("<Value", 0x102, 2), ("!Value", 0, 1),
+                                          ("-Value", 0, 0)):
+            for macro in (False, True):
+                for pure_binary in (False, True):
+                    with self.subTest(expression=expression, value=value, macro=macro, pure_binary=pure_binary):
+                        body = ".Array {{1,2},$5A}\n"
+                        if macro:
+                            body = ".macro Emit\n" + body + ".endm\nEmit\nEmit\n"
+                        source = declarations + body + f"Count .equ {expression}\nValue = {value}\n"
+                        result, binary = self.assemble(source, pure_binary=pure_binary)
+                        if count == 0:
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertEqual(result.stderr.count(b"error:"), 2 if macro else 1,
+                                             result.stderr.decode())
+                        else:
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            if not pure_binary:
+                                binary = self.link(binary)
+                            expected = b"\x01\x02" + bytes(2 * (count - 1)) + b"\x5A"
+                            self.assertEqual(binary.read_bytes(), expected * (2 if macro else 1))
+
     def test_deferred_invalid_user_type_array_counts(self):
         types = TYPES + ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
         types += ".enum Mode\noff\non\n.ende\n"

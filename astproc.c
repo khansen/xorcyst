@@ -2572,7 +2572,13 @@ static int process_field_padding(astnode *node, void *arg, astnode **next)
 
 static int finalize_field_padding(astnode *node, void *arg, astnode **next)
 {
-    return resolve_field_padding(node, next, 1);
+    astnode *previous = astnode_get_prev_sibling(node);
+    int descend = resolve_field_padding(node, next, 1);
+    /* The preceding storage could not merge across this validation barrier.
+     * Revisit it after conversion or removal, including a zero remainder, so
+     * adjacent storage keeps its original grouping and source location. */
+    if (astnode_is_type(previous, STORAGE_NODE)) *next = previous;
+    return descend;
 }
 
 /**
