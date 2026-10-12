@@ -185,6 +185,118 @@ tail .byte
             with self.subTest(initializer=initializer):
                 self.assert_bytes(f".Inline {initializer}\n", bytes.fromhex(expected), declarations)
 
+    def test_initialized_user_type_array_fields(self):
+        declarations = """.enum Mode
+off
+on
+.ende
+.struc Arrays
+layouts .Layout[2]
+choices .Choice[2]
+flags .Flags[3]
+modes .Mode[3]
+tail .byte
+.ends
+"""
+        expected = (bytes.fromhex("11 22 33 00 00 00 44") + bytes(7)
+                    + bytes.fromhex("55 66 00 00") + bytes(4)
+                    + b"\x40\0\0\x01\0\0\x5A")
+        self.assert_bytes(".Arrays {{$11,$3322,,$44},{,$6655},{,1,0},on,$5A}\n",
+                          expected, declarations)
+        self.assert_bytes(".Arrays {{},{},{},off,$5A}\n", bytes(28) + b"\x5A", declarations)
+
+    def test_initialized_user_type_arrays_in_unions(self):
+        declarations = """.enum Mode
+off
+on
+.ende
+.union Arrays
+layouts .Layout[2]
+choices .Choice[2]
+flags .Flags[3]
+modes .Mode[3]
+larger .byte[16]
+.ends
+"""
+        for initializer, prefix in (("{{$11}}", b"\x11"),
+                                    ("{,{,$3322}}", b"\x22\x33"),
+                                    ("{,,{,1,0}}", b"\x40"),
+                                    ("{,,,on}", b"\x01"),
+                                    ("{{}}", b"")):
+            with self.subTest(initializer=initializer):
+                self.assert_bytes(f".Arrays {initializer}\n.byte $5A\n",
+                                  prefix + bytes(16 - len(prefix)) + b"\x5A", declarations)
+
+    def test_invalid_user_type_array_sizes_have_field_diagnostics(self):
+        types = """.struc Empty
+.ends
+.struc Point
+px .byte
+py .byte
+.ends
+.enum Mode
+off
+on
+.ende
+"""
+        for aggregate in ("struc", "union"):
+            for field_type, initializer, wrong, diagnostic in (
+                    ("Empty", "{}", "1", b"structure initializer expected"),
+                    ("Point", "{1,2}", "1", b"structure initializer expected"),
+                    ("Choice", "{1}", "1", b"union initializer expected"),
+                    ("Flags", "{,1,0}", "1", b"record initializer expected"),
+                    ("Mode", "on", "{1}", b"identifier expected")):
+                for count in ("0", "-1", "1-1"):
+                    declarations = TYPES + types
+                    declarations += f".{aggregate} Array\nitems .{field_type}[{count}]\ntail .byte\n.ends\n"
+                    for value, expected in ((initializer, b"initializer for field `items' exceeds field size"),
+                                            (wrong, diagnostic)):
+                        for pure_binary in (False, True):
+                            with self.subTest(aggregate=aggregate, field_type=field_type, count=count,
+                                              value=value, pure_binary=pure_binary):
+                                source = declarations + f".Array {{{value}}}\n"
+                                result, _ = self.assemble(source, pure_binary=pure_binary)
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(expected, result.stderr)
+                                self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+                                self.assertNotIn(b"operand out of range", result.stderr)
+
+    def test_invalid_array_initializers_do_not_skip_later_errors(self):
+        declarations = ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
+        for field_type, initializer, diagnostic in (
+                ("Point", "1", b"structure initializer expected"),
+                ("Empty", "{}", b"initializer for field `items' exceeds field size")):
+            source = declarations + f".struc Array\nitems .{field_type}[0]\n.ends\n"
+            source += f".Array {{{initializer}}}\n" * 2
+            for pure_binary in (False, True):
+                with self.subTest(field_type=field_type, pure_binary=pure_binary):
+                    result, _ = self.assemble(source, pure_binary=pure_binary)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(diagnostic), 2, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(b"error:"), 2, result.stderr.decode())
+
+    def test_nested_user_type_arrays_and_symbolic_counts(self):
+        for count, definition in (("1", ""), ("2", ""), ("Count", "Count = 3\n")):
+            declarations = f""".struc Point
+px .byte
+py .byte
+.ends
+.struc Row
+points .Point[{count}]
+tail .byte
+.ends
+.struc Grid
+rows .Row[2]
+tail .byte
+.ends
+"""
+            size = 2 * (3 if definition else int(count)) + 1
+            expected = b"\x01\x02" + bytes(size - 3) + b"\x5A" + bytes(size) + b"\x6B"
+            with self.subTest(count=count):
+                # A trailing definition exercises unresolved structure sizes too.
+                self.assert_bytes(".Grid {{{1,2},$5A},$6B}\n" + definition,
+                                  expected, declarations)
+
     def test_character_omission_positions(self):
         declarations = """.struc Text
 lead .char[2]
@@ -229,7 +341,7 @@ wide .word
         self.assert_bytes(f'.charmap "{charmap}"\n.Sample {{,,"ab"}}\n',
                           bytes(3) + b"\xC0\xC1" + bytes(4), declarations)
 
-    def test_addresses_after_omitted_fields(self):
+    def test_addresses_after_initialized_or_omitted_fields(self):
         declarations = """.struc Text
 text .char[6]
 tail .byte
@@ -242,8 +354,23 @@ wide .word
 .ends
 tail .byte
 .ends
+.struc Point
+px .byte
+py .byte
+.ends
+.struc Array
+points .Point[2]
+tail .byte
+.ends
+.union ArrayChoice
+points .Point[2]
+wide .byte[6]
+.ends
 """
         cases = (
+            (".Array {{1,2},$5A}\n", bytes.fromhex("01 02 00 00 5A")),
+            (".Array {{1,2},}\n", bytes.fromhex("01 02 00 00 00")),
+            (".ArrayChoice {{1,2}}\n", bytes.fromhex("01 02 00 00 00 00")),
             (".Text {,$5A}\n", bytes(6) + b"\x5A"),
             (".Layout {,$3322,,}\n", bytes.fromhex("00 22 33 00 00 00 00")),
             (".Nested {,,,,$9988}\n", bytes(13) + b"\x88\x99"),

@@ -1036,6 +1036,13 @@ defines three instances of type @code{my_struc}, with various fields explicitly 
 
 Since structures can contain sub-structures, so can a structure initializer. To initialize a sub-structure, simply start a new pair of @{ @} and specify field values, recursively.
 
+For an array field of a user-defined type, its field initializer initializes
+the first element; the remaining elements are padded with zero bytes. For
+example, if @code{points} is a @code{Point[2]} field and @code{Point} contains
+two byte fields, @code{@{1, 2@}} initializes @code{points} to the four bytes
+@code{1, 2, 0, 0}. The next field initializer belongs to the next field of
+the containing structure. This rule also applies to array fields in unions.
+
 @item @strong{Union}. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
 
 @item @strong{Record}. The initializer is of the same form as a structure initializer, but cannot contain sub-structure initializers (each bitfield is a ``simple'' value).

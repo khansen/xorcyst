@@ -14,9 +14,12 @@
 
 Known defects:
 
-- Explicitly initialized user-type array fields emit only one element, which
-  shifts subsequent fields and addresses. Full-array initialization needs to
-  account for the declared element count.
+- A user-type array field count defined after its instance can resolve to zero
+  without rejecting an explicit initializer, emitting more than the declared
+  structure size. Validate deferred counts before accepting the instance.
+- Invalid named user-type array counts get a generic range diagnostic, even
+  when defined before the structure with .equ, .define or =. Only literal and
+  folded counts currently get the field-specific size diagnostic.
 - Some invalid inputs abort after diagnostics: repeated excessive initializers
   for empty structures, and record initializer expressions supplied through .EQU.
 - Listing v1 data-segment rows retain bytes_hex and numeric output offsets

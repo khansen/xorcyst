@@ -1821,6 +1821,41 @@ static void reduce_enum(symtab_entry *e, astnode *expr, astnode *list)
 
 static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *flat);
 
+/* A user-type field initializer describes the first element. Preserve the
+ * declared array extent by zero-filling the remaining elements in bytes.
+ * sizeof also handles records and enums, whose representation is one byte. */
+static void pad_user_type_field(symtab_entry *field, astnode *type,
+                                astnode *init, astnode *flat)
+{
+    astnode *padding;
+    astnode *count = RHS(field->def);
+    if (astnode_is_type(count, INTEGER_NODE) && count->integer < 1) {
+        err(init->loc, "initializer for field `%s' exceeds field size", field->id);
+        return;
+    }
+    padding = reduce_expression(
+        astnode_create_arithmetic(
+            MINUS_OPERATOR,
+            astnode_clone(field->field.size, init->loc),
+            astnode_create_sizeof(astnode_clone(type, type->loc), init->loc),
+            init->loc
+        ), FOLD_PC_NO
+    );
+    if (astnode_is_type(padding, INTEGER_NODE) && padding->integer <= 0) {
+        if (padding->integer < 0) {
+            err(init->loc, "initializer for field `%s' exceeds field size", field->id);
+        }
+        astnode_finalize(padding);
+    } else {
+        astnode_add_child(flat,
+            astnode_create_storage(
+                astnode_create_datatype(BYTE_DATATYPE, NULL, init->loc),
+                padding, init->loc
+            )
+        );
+    }
+}
+
 /**
  * Flattens a union initializer to a sequence of native data values.
  * Verify similar to flattening of structure, but only single field allowed.
@@ -1840,6 +1875,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
     astnode *temp;
     ordered_field_list *list;
     int num;
+    int errors_before;
     if (!astnode_is_type(init, STRUC_NODE)) {
         err(init->loc, "union initializer expected");
         return;
@@ -1913,6 +1949,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
             break;
 
             case USER_DATATYPE:
+            errors_before = err_count;
             t = symtab_global_lookup(LHS(type)->ident);
             switch (t->type) {
                 case STRUC_SYMBOL:
@@ -1934,6 +1971,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                 default:
                 break;
             }
+            if (err_count == errors_before) pad_user_type_field(e, type, val, flat);
             break;
         }
         /* Decrease fill amount according to field size */
@@ -2093,6 +2131,7 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                         )
                     );
                 } else {
+                    int errors_before = err_count;
                     switch (t->type) {
                         case STRUC_SYMBOL:
                         flatten_struc_recursive(t, val, flat);
@@ -2113,6 +2152,7 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                         default:
                         break;
                     }
+                    if (err_count == errors_before) pad_user_type_field(e, type, val, flat);
                 }
                 break;
             }
@@ -2371,7 +2411,9 @@ static int process_data(astnode *data, void *arg, astnode **next)
             astnode_replace(data, stmts);
             astnode_finalize(data);
             astnode_finalize(list);
-            *next = stmts;
+            /* An empty expansion removes this node. Keep the walker's saved
+             * next sibling in that case, or later data remains unprocessed. */
+            if (stmts != NULL) *next = stmts;
             return 0;
         }
     }

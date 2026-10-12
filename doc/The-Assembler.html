@@ -784,6 +784,13 @@ option_4
 </p>
 <p>Since structures can contain sub-structures, so can a structure initializer. To initialize a sub-structure, simply start a new pair of { } and specify field values, recursively.
 </p>
+<p>For an array field of a user-defined type, its field initializer initializes
+the first element; the remaining elements are padded with zero bytes. For
+example, if <code class="code">points</code> is a <code class="code">Point[2]</code> field and <code class="code">Point</code> contains
+two byte fields, <code class="code">{1, 2}</code> initializes <code class="code">points</code> to the four bytes
+<code class="code">1, 2, 0, 0</code>. The next field initializer belongs to the next field of
+the containing structure. This rule also applies to array fields in unions.
+</p>
 </li><li><strong class="strong">Union</strong>. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
 
 </li><li><strong class="strong">Record</strong>. The initializer is of the same form as a structure initializer, but cannot contain sub-structure initializers (each bitfield is a &ldquo;simple&rdquo; value).
