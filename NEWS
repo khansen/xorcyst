@@ -1,3 +1,20 @@
+Version 1.9.0:
+- Preserve the declared size of explicitly initialized user-type array fields
+  in structures and unions: initialize the first element and zero-fill the rest.
+  Improve invalid-count diagnostics and avoid cascaded padding errors.
+- Continue assembly after empty initializer expansions and taken conditional
+  branches, preserving following labels and data and avoiding assertion aborts
+  after repeated initializer errors. Release unused structure fill expressions.
+- Add opt-in --listing-version=2 for pure-binary JSON/NDJSON listings, with
+  segment, byte-count and emission metadata, compressed storage fill, and
+  emitting spans that partition the binary. Diagnostic listings do not claim
+  bytes from a previous output file.
+- Account for numeric .CHAR data in listing v2 and warn when an explicit
+  listing version is supplied without a listing destination. Document offset
+  joins and CPU-address wraparound.
+- Preserve default listing v1 output and instruction-record schema version 3.
+  Named and deferred user-type array count limitations remain tracked in TODO.
+
 Version 1.8.2:
 - Restore documented omitted fields in structure, union and record initializers.
   Leading, middle, trailing and consecutive omissions retain their positions
