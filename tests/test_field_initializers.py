@@ -150,6 +150,40 @@ class FieldInitializers(unittest.TestCase):
                                         "00 22 33 00 00 00 00"
                                         "11 00 00 41 5A 00 00"))
 
+    def test_empty_structures_do_not_skip_following_statements(self):
+        declarations = ".struc Empty\n.ends\n"
+        for body in (".Empty {}\n.Flags {,1,0}\n",
+                     ".Empty {}, {}\n.Flags {,1,0}\n",
+                     ".Empty {}\n.Empty {}\n.Flags {,1,0}\n",
+                     '.Empty {}\n.char "@"\n',
+                     '.Empty {}\n.rept 2\n.Flags {,1,0}\n.endm\n'):
+            with self.subTest(body=body):
+                expected = b"\x40\x40" if ".rept" in body else b"\x40"
+                self.assert_bytes(body, expected, declarations)
+
+    def test_empty_conditionals_do_not_skip_following_statements(self):
+        declarations = ".define Defined\n"
+        cases = (".if 1\n.endif\n", ".if 0\n.else\n.endif\n",
+                 ".if 0\n.elif 1\n.endif\n", ".if 0\n.endif\n",
+                 ".ifdef Defined\n.endif\n", ".ifndef Missing\n.endif\n",
+                 ".ifdef Missing\n.else\n.endif\n", ".ifndef Defined\n.else\n.endif\n",
+                 ".ifdef Missing\n.endif\n", ".ifndef Defined\n.endif\n",
+                 ".if 1\n.ifdef Defined\n.endif\n.endif\n")
+        for conditional in cases:
+            with self.subTest(conditional=conditional):
+                self.assert_bytes(conditional + ".Flags {,1,0}\n", b"\x40", declarations)
+            for wrapper in (conditional, ".macro Empty\n" + conditional + ".endm\nEmpty\n",
+                            ".rept 2\n" + conditional + ".endm\n"):
+                for pure_binary in (False, True):
+                    with self.subTest(wrapper=wrapper, pure_binary=pure_binary):
+                        source = TYPES + declarations + (".org $8000\n" if pure_binary else "")
+                        source += wrapper + ".Flags {,1,0}\nAfter: nop\njmp After\n"
+                        result, binary = self.assemble(source, pure_binary=pure_binary)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        if not pure_binary:
+                            binary = self.link(binary, origin=0x8000)
+                        self.assertEqual(binary.read_bytes(), bytes.fromhex("40 EA 4C 01 80"))
+
     def test_omitted_user_type_arrays_and_enum(self):
         declarations = """.enum Mode
 off

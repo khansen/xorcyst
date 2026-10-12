@@ -26,7 +26,8 @@ class InputHandling(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
-    def run_tool(self, name, content, environment=None, arguments=(), limited=False):
+    def run_tool(self, name, content, environment=None, arguments=(), limited=False,
+                 pure_binary=True):
         source = 'input.asm' if name == 'xasm' else 'input.script'
         (self.root / source).write_bytes(content.encode() if isinstance(content, str) else content)
         (self.root / 'output').write_bytes(b'previous output')
@@ -39,7 +40,7 @@ class InputHandling(unittest.TestCase):
             resource.setrlimit(resource.RLIMIT_FSIZE, (65536, 65536))
             resource.setrlimit(resource.RLIMIT_CPU, (1, 1))
         result = subprocess.run([str(self.tools[name]), source, '-o', 'output',
-                                 *(['--pure-binary'] if name == 'xasm' else []), *arguments],
+                                 *(['--pure-binary'] if name == 'xasm' and pure_binary else []), *arguments],
                                 cwd=self.root, env=env, capture_output=True, timeout=20,
                                 preexec_fn=limit_resources if limited else None)
         self.assertGreaterEqual(result.returncode, 0, result.stderr.decode())
@@ -68,6 +69,30 @@ class InputHandling(unittest.TestCase):
             with self.subTest(source=source[:60]):
                 result = self.run_tool('xasm', source)
                 self.assertNotEqual(result.returncode, 0, result.stderr.decode())
+
+    def test_empty_initializer_expansions_keep_processing_after_errors(self):
+        cases = (
+            ('.struc Empty\n.ends\n', '.Empty {1}\n', b'too many field initializers'),
+            ('.record Flags padding:1, enabled:1, index:6\ninit .equ {0,1,5}\n',
+             '.Flags init\n', b'record initializer expected'),
+            ('.struc Point\npx .byte\npy .byte\n.ends\n',
+             '.Point 1\n', b'structure initializer expected'),
+            ('.union Choice\nsmall .byte\nwide .word\n.ends\n',
+             '.Choice 1\n', b'union initializer expected'),
+        )
+        for declaration, statement, diagnostic in cases:
+            for body in (statement * 2, '.macro Emit\n' + statement + '.endm\nEmit\nEmit\n',
+                         '.rept 2\n' + statement + '.endm\n'):
+                for pure_binary in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(statement=statement, body=body,
+                                          pure_binary=pure_binary, listing=listing):
+                            arguments = ('--listing=listing.json', '--listing-format=json',
+                                         '--xref=xref.json') if listing else ()
+                            result = self.run_tool('xasm', declaration + body,
+                                                   arguments=arguments, pure_binary=pure_binary)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertEqual(result.stderr.count(diagnostic), 2, result.stderr.decode())
 
     def test_failed_instruction_allocation_frees_operand_and_prior_statements(self):
         for instruction in ('NOP', 'ASL A', 'LDA #Port+2', 'LDA Port+2',

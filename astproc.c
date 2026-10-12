@@ -2179,9 +2179,9 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                 flat->loc
             )
         );
-    } else {
-        astnode_finalize(fill);
+        fill = NULL; /* The storage node owns the remaining size. */
     }
+    astnode_finalize(fill);
     symtab_pop();
 }
 
@@ -2618,7 +2618,8 @@ static int process_ifdef(astnode *ifdef, void *arg, astnode **next)
         /* Replace IFDEF node by the true-branch statement list */
         stmts = astnode_remove_children(astnode_get_child(ifdef, 1));
         astnode_replace(ifdef, stmts);
-        *next = stmts;
+        /* Empty branches leave the walker's saved next sibling intact. */
+        if (stmts != NULL) *next = stmts;
     } else {
         /* Symbol is not defined. */
         /* Replace IFDEF node by the false-branch statement list (if any) */
@@ -2652,7 +2653,7 @@ static int process_ifndef(astnode *ifndef, void *arg, astnode **next)
         /* Replace IFNDEF node by the true-branch statement list */
         stmts = astnode_remove_children(astnode_get_child(ifndef, 1));
         astnode_replace(ifndef, stmts);
-        *next = stmts;
+        if (stmts != NULL) *next = stmts;
     } else {
         /* Symbol is defined. */
         /* Replace IFNDEF node by the false-branch statement list, if any */
@@ -2697,7 +2698,7 @@ static int process_if(astnode *if_node, void *arg, astnode **next)
                     stmts = astnode_remove_children( astnode_get_child(c, 1) );
                     astnode_replace(if_node, stmts);
                     astnode_finalize(if_node);
-                    *next = stmts;
+                    if (stmts != NULL) *next = stmts;
                     return ret;
                 }
             } else {
@@ -2709,7 +2710,7 @@ static int process_if(astnode *if_node, void *arg, astnode **next)
             stmts = astnode_remove_children(c);
             astnode_replace(if_node, stmts);
             astnode_finalize(if_node);
-            *next = stmts;
+            if (stmts != NULL) *next = stmts;
             return ret;
         }
     }
