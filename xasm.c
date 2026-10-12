@@ -141,6 +141,7 @@ static struct option long_options[] = {
   { "listing",  required_argument, 0, 'L' },
   { "lst",      required_argument, 0, 'L' },
   { "listing-format", required_argument, 0, 0 },
+  { "listing-version", required_argument, 0, 0 },
   { "xref", required_argument, 0, 0 },
   { "xref-format", required_argument, 0, 0 },
   { "xref-data", required_argument, 0, 0 },
@@ -210,6 +211,7 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--include-path=DIR] [-I DIR] [--swap-parens]\n\
             [--case-insensitive] [--listing=FILE]\n\
             [--listing-format=text|json|ndjson]\n\
+            [--listing-version=1|2]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
             [--xref-data=true|false]\n\
             [--xref-instructions=true|false]\n\
@@ -261,6 +263,7 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
 -o, --output=FILE          Output to FILE instead of standard output\n\
     --listing=FILE         Generate listing file\n\
     --listing-format=FMT   Listing format: text|json|ndjson\n\
+    --listing-version=N    Structured listing version: 1 (default) or 2\n\
     --xref=FILE            Generate cross-reference output\n\
     --xref-format=FMT      Xref format: text|csv|json\n\
     --xref-data=BOOL       Extend JSON xref with data read/write edges\n\
@@ -679,6 +682,7 @@ parse_arguments (int argc, char **argv)
     xasm_args.listing_file = NULL;
     xasm_args.listing_format = LISTING_FORMAT_TEXT;
     xasm_args.listing_format_set = 0;
+    xasm_args.listing_version = 1;
     xasm_args.compare_file = NULL;
     xasm_args.compare_offset = 0;
     xasm_args.compare_length = -1;
@@ -853,6 +857,11 @@ parse_arguments (int argc, char **argv)
                 }
                 xasm_args.listing_format = fmt;
                 xasm_args.listing_format_set = 1;
+            } else if (strcmp(long_options[index].name, "listing-version") == 0) {
+                if (strcmp(optarg, "1") != 0 && strcmp(optarg, "2") != 0) {
+                    cli_error("invalid value for --listing-version: `%s' (expected 1|2)", optarg);
+                }
+                xasm_args.listing_version = optarg[0] - '0';
             } else if (strcmp(long_options[index].name, "xref") == 0) {
                 xasm_args.xref_file = optarg;
             } else if (strcmp(long_options[index].name, "xref-format") == 0) {
@@ -1075,6 +1084,14 @@ parse_arguments (int argc, char **argv)
 
     if (xasm_args.listing_file == NULL && xasm_args.listing_format_set) {
         warn_global("W0017", "--listing-format is ignored because --listing is not set");
+    }
+    if (xasm_args.listing_version == 2) {
+        if (xasm_args.listing_file == NULL || xasm_args.listing_format == LISTING_FORMAT_TEXT) {
+            cli_error("--listing-version=2 requires --listing=FILE and --listing-format=json|ndjson");
+        }
+        if (!xasm_args.pure_binary) {
+            cli_error("--listing-version=2 requires --pure-binary");
+        }
     }
     return 1;
 }
@@ -1765,6 +1782,8 @@ int main(int argc, char *argv[]) {
         if (!generate_listing(root_node,
                               xasm_args.listing_file,
                               (listing_format)xasm_args.listing_format,
+                              xasm_args.listing_version,
+                              output_generated,
                               xasm_args.input_file,
                               xasm_args.output_file)) {
             exit_code = 3;

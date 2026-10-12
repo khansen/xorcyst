@@ -102,6 +102,7 @@ struct tag_xasm_arguments {
     long audit_rom_hi;
     int listing_format;
     int listing_format_set;
+    int listing_version;
     const char *compare_file;
     long compare_offset;
     long compare_length;

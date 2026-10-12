@@ -16,6 +16,8 @@ typedef struct tag_listing_lookup_result {
 int generate_listing(astnode *root,
                      const char *filename,
                      listing_format format,
+                     int version,
+                     int binary_generated,
                      const char *source_file,
                      const char *output_file);
 int listing_lookup_output_offset(astnode *root, long output_offset, listing_lookup_result *out);

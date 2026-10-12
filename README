@@ -48,6 +48,10 @@ Listings and cross-references
 -----------------------------
 
 `--listing=FILE` supports `--listing-format=text|json|ndjson` (default text).
+Structured listings default to version 1. Use `--listing-version=2` with
+`--pure-binary` and JSON or NDJSON for explicit segment and emission metadata;
+see the listing contract below. Version 1 and text output retain their existing
+format, including version 1's numeric offsets on non-emitting rows.
 `--xref=FILE` supports `--xref-format=json|text|csv` (default JSON). CSV expands
 the supplied prefix into `.symbols.csv` and `.refs.csv` destinations.
 
@@ -146,6 +150,67 @@ file when it switches outputs; a later failure does not roll back earlier files.
 Files used by `copy` must retain their size during linking, including files
 replaced by earlier output commands. A size change fails the current output
 because it would invalidate the addresses calculated during layout.
+
+Listing version 2 contract
+--------------------------
+
+    xasm --pure-binary game.asm -o game.prg \
+      --listing=game.listing.json --listing-format=json --listing-version=2
+
+JSON keeps the `source_file`, `output_file`, and `records` envelope, sets
+`version` to the string `"2"`, and adds `binary_generated`. NDJSON has one
+record per line and no envelope. Every version 2 record contains `version`
+and `binary_generated`, so streamed records are self-describing too. An empty
+NDJSON listing has no records. Object output is unsupported in version 2:
+its serialized object-file offsets are not raw emitted-byte offsets. Invalid
+version values or version 2 without a structured listing and `--pure-binary`
+are command-line errors (exit 2).
+
+Rows retain the source fields (`file`, `line`, `column`, `source_text`),
+`directive_or_opcode`, `addressing_mode`, and `continuation_of_record`.
+Data and included binaries remain split into rows of at most four bytes;
+the continuation flag marks subsequent rows of the same statement. Labels,
+segment switches, and `.ORG` have zero length. Segment-switch rows describe
+the newly selected segment; `.ORG` rows describe the new CPU address.
+
+| Field | Version 2 meaning |
+| --- | --- |
+| `segment` | `"code"` or `"data"`, independently on every row. |
+| `byte_count` | Number of CPU address-space bytes occupied by this row, including reserved storage. Zero for labels and control directives. |
+| `cpu_address_start`, `cpu_address_end` | Inclusive CPU span as `"0xHHHH"` strings, modulo 65536. For zero-length rows both contain the current address. |
+| `binary_generated` | Whether this invocation successfully published a new binary. Does not imply that all later analysis/export operations succeeded. |
+| `emits_bytes` | True only for a positive-length code-segment row when `binary_generated` is true. |
+| `output_offset_start`, `output_offset_end` | Inclusive, zero-based byte offsets in that binary if `emits_bytes` is true; otherwise both are `null`. |
+| `bytes_hex` | Actual emitted bytes as two-digit uppercase hex strings; empty for non-emitting rows and compressed zero-fill storage. |
+| `fill_byte` | `"00"` for emitting storage rows, repeated `byte_count` times; otherwise `null`. |
+
+All data-segment rows have `emits_bytes: false`, null output offsets, and no
+bytes, even when their source has explicit data or `.INCBIN`. They retain
+their CPU spans. A storage directive has one row covering its complete span;
+code storage describes zero fill without materializing a large byte array.
+These rules also apply to padding generated from user-defined types.
+
+Join binary offsets to rows with `emits_bytes: true` using the inclusive
+output interval. These intervals partition the generated binary, including
+storage; `.ORG` changes CPU addresses without inserting file bytes. Join
+instruction records by their `output_offset` against these intervals.
+CPU addresses alone are not unique: code and data can overlap, and `.ORG`
+can reuse addresses. Include `segment` in memory joins and retain all matches
+when addresses are reused. Labels have no output interval; associate them
+with spans by segment and CPU address, accounting for that ambiguity.
+
+A diagnostic listing after an assembly or binary-output error has
+`binary_generated: false`: every row has null output offsets, empty bytes,
+null fill, and `emits_bytes: false`. CPU spans in such a listing are advisory.
+An existing binary from a previous invocation is never claimed as this
+invocation's output. As with version 1, some early failures cannot produce a
+listing; callers must check exit status and avoid using stale artifacts.
+
+Version 2 uses the existing listing traversal and byte evaluation. Added work
+is constant per row; storage is represented in constant space. Default-format
+output must remain byte-for-byte compatible, and real-project timing must
+meet the performance limits below. Tests reconstruct binaries from version 2
+rows, verify joins and JSON/NDJSON equivalence, and preserve version 1 coverage.
 
 Performance
 -----------
