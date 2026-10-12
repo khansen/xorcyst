@@ -1,3 +1,18 @@
+Version 1.9.1:
+- Validate deferred counts of explicitly initialized user-type array fields
+  before storage merging and object encoding. Reject zero and negative counts,
+  including counts defined after an instance, without replacing existing output.
+- Resolve aliases and unary expressions in these counts, detect circular
+  definitions, and preserve values already known when an instance is expanded.
+- Remove zero padding before object encoding to avoid spurious 256-byte fills.
+  Preserve adjacent storage grouping and listing source locations for previously
+  correct inputs, including nested arrays and omitted subfields.
+- Report field-specific errors for invalid named counts, matching literal-count
+  diagnostics without cascading errors after an invalid initializer kind.
+- Preserve listing schemas and instruction-record schema version 3. Other
+  storage-count paths, ordinary-operand aliases and named union counts remain
+  tracked in TODO, along with resolver and aggregate-instance performance work.
+
 Version 1.9.0:
 - Preserve the declared size of explicitly initialized user-type array fields
   in structures and unions: initialize the first element and zero-fill the rest.

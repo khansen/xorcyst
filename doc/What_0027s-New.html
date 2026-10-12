@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.9.0.
+<!-- This is the manual for The XORcyst version 1.9.1.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>What's New (The XORcyst Manual)</title>
@@ -34,6 +34,16 @@ ul.mark-bullet {list-style-type: disc}
 <p class="nav-panel">
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
+
+<h3 class="heading" id="Version-1_002e9_002e1"><span>Version 1.9.1<a class="copiable-link" href="#Version-1_002e9_002e1"> &para;</a></span></h3>
+
+<ul class="itemize mark-bullet">
+<li>Validates deferred counts of explicitly initialized user-type array fields before storage merging and object encoding. Rejects zero and negative counts, including counts defined after an instance, without replacing existing output.
+</li><li>Resolves aliases and unary expressions in these counts, detects circular definitions, and preserves values already known when an instance is expanded.
+</li><li>Removes zero padding before object encoding to avoid spurious 256-byte fills. Preserves adjacent storage grouping and listing source locations for previously correct inputs, including nested arrays and omitted subfields.
+</li><li>Reports field-specific errors for invalid named counts, matching literal-count diagnostics without cascading errors after an invalid initializer kind.
+</li><li>Preserves listing schemas and instruction-record schema version 3. Other storage-count paths, ordinary-operand aliases and named union counts remain tracked in <samp class="file">TODO</samp>, along with resolver and aggregate-instance performance work.
+</li></ul>
 
 <h3 class="heading" id="Version-1_002e9_002e0"><span>Version 1.9.0<a class="copiable-link" href="#Version-1_002e9_002e0"> &para;</a></span></h3>
 

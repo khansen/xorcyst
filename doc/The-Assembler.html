@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.9.0.
+<!-- This is the manual for The XORcyst version 1.9.1.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>The Assembler (The XORcyst Manual)</title>
@@ -799,6 +799,15 @@ example, if <code class="code">points</code> is a <code class="code">Point[2]</c
 two byte fields, <code class="code">{1, 2}</code> initializes <code class="code">points</code> to the four bytes
 <code class="code">1, 2, 0, 0</code>. The next field initializer belongs to the next field of
 the containing structure. This rule also applies to array fields in unions.
+</p>
+<p>An explicitly initialized user-type array field must have at least one element,
+even when the element type occupies zero bytes. For structure fields with a
+constant count, a value available when the instance is expanded is captured
+then; otherwise the count is checked in the final assembly pass. Aliases and
+unary expressions are resolved for this check, and circular definitions are
+errors. A zero or negative count reports the field whose initializer exceeds
+its declared size. Counts requiring link-time addresses retain their existing
+behavior; named counts in union declarations remain a known limitation.
 </p>
 </li><li><strong class="strong">Union</strong>. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
 
