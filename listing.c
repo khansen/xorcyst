@@ -838,7 +838,10 @@ static int list_data(astnode *data, void *arg, astnode **next)
             value = 0;
         }
 
-        if (type->datatype == BYTE_DATATYPE) {
+        /* V1 historically omits numeric .char data. Keep that wire format;
+         * V2 must account for every byte, including unmapped numeric chars. */
+        if (type->datatype == BYTE_DATATYPE
+            || (type->datatype == CHAR_DATATYPE && current_listing_version == 2)) {
             append_byte(&line_bytes, &line_size, &line_capacity, (unsigned char)(value & 0xFF));
             add_current_pc(1);
         } else if (type->datatype == WORD_DATATYPE) {

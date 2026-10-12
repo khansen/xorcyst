@@ -51,7 +51,9 @@ Listings and cross-references
 Structured listings default to version 1. Use `--listing-version=2` with
 `--pure-binary` and JSON or NDJSON for explicit segment and emission metadata;
 see the listing contract below. Version 1 and text output retain their existing
-format, including version 1's numeric offsets on non-emitting rows.
+format, including version 1's numeric offsets on non-emitting rows and its
+omission of numeric-only `.char` data from bytes and address accounting.
+Version 2 corrects both limitations.
 `--xref=FILE` supports `--xref-format=json|text|csv` (default JSON). CSV expands
 the supplied prefix into `.symbols.csv` and `.refs.csv` destinations.
 
@@ -165,6 +167,8 @@ NDJSON listing has no records. Object output is unsupported in version 2:
 its serialized object-file offsets are not raw emitted-byte offsets. Invalid
 version values or version 2 without a structured listing and `--pure-binary`
 are command-line errors (exit 2).
+An explicit `--listing-version=1` without `--listing` warns with W0017,
+like `--listing-format`; `--no-warn` suppresses this warning.
 
 Rows retain the source fields (`file`, `line`, `column`, `source_text`),
 `directive_or_opcode`, `addressing_mode`, and `continuation_of_record`.
@@ -194,6 +198,8 @@ Join binary offsets to rows with `emits_bytes: true` using the inclusive
 output interval. These intervals partition the generated binary, including
 storage; `.ORG` changes CPU addresses without inserting file bytes. Join
 instruction records by their `output_offset` against these intervals.
+Instruction records retain CPU addresses above `$FFFF` unwrapped; compare
+them modulo 65536 to listing CPU addresses, or join by output offset.
 CPU addresses alone are not unique: code and data can overlap, and `.ORG`
 can reuse addresses. Include `segment` in memory joins and retain all matches
 when addresses are reused. Labels have no output interval; associate them

@@ -13,6 +13,85 @@ XASM = Path(sys.argv.pop(1)).resolve()
 
 
 class ListingOffsets(unittest.TestCase):
+    def test_version2_numeric_char_data_and_instruction_joins(self):
+        declarations = """.struc Text
+letter .char
+marker .byte
+.ends
+.union TextChoice
+letter .char
+wide .word
+.ends
+"""
+        cases = ((".char 65\n", b"A"),
+                 (".char 65,66,67,68,69\n", b"ABCDE"),
+                 (".Text {65,1}\n", b"A\x01"),
+                 (".TextChoice {65}\n", b"A\0"),
+                 ('.char 65,"A",66\n', b"A\xC0B"),
+                 ('.char "A",65,66\n', b"\xC0AB"))
+        for body, prefix in cases:
+            for debug, origin in ((False, 0x8000), (True, 0x8000), (False, 0xFFFE)):
+                for format_name in ("json", "ndjson"):
+                    with self.subTest(body=body, debug=debug, origin=origin, format=format_name), tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory)
+                        (root / "map.txt").write_text("A=0xC0\n")
+                        (root / "input.asm").write_text(declarations + f'.charmap "map.txt"\n.org ${origin:04X}\n'
+                                                        + body + "Lbl: nop\njmp Lbl\n.dataseg\n.org $20\n"
+                                                        + body + "RamEnd:\n.codeseg\n")
+                        command = [str(XASM), "--pure-binary", "input.asm", "-o", "output.bin",
+                                   "--listing=listing", f"--listing-format={format_name}",
+                                   "--listing-version=2", "--xref=xref.json", "--xref-instructions=true"]
+                        if debug:
+                            command.append("--debug")
+                        result = subprocess.run(command, cwd=root, capture_output=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        expected = prefix + b"\xEA\x4C" + ((origin + len(prefix)) & 0xFFFF).to_bytes(2, "little")
+                        self.assertEqual((root / "output.bin").read_bytes(), expected)
+                        rows = (json.loads((root / "listing").read_text())["records"] if format_name == "json"
+                                else [json.loads(line) for line in (root / "listing").read_text().splitlines()])
+                        emitted = bytearray()
+                        by_offset = {}
+                        for row in rows:
+                            if row["emits_bytes"]:
+                                self.assertEqual(row["output_offset_start"], len(emitted))
+                                values = (bytes(row["byte_count"]) if row["fill_byte"] == "00"
+                                          else bytes.fromhex("".join(row["bytes_hex"])))
+                                self.assertEqual(len(values), row["byte_count"])
+                                by_offset[len(emitted)] = row
+                                emitted.extend(values)
+                                self.assertEqual(row["output_offset_end"], len(emitted) - 1)
+                            else:
+                                self.assertIsNone(row["output_offset_start"])
+                                self.assertEqual(row["bytes_hex"], [])
+                        self.assertEqual(emitted, expected)
+                        labels = {row["directive_or_opcode"]: row for row in rows}
+                        self.assertEqual(labels["Lbl"]["cpu_address_start"], f"0x{(origin + len(prefix)) & 0xFFFF:04X}")
+                        self.assertEqual(labels["RamEnd"]["cpu_address_start"], f"0x{0x20 + len(prefix):04X}")
+                        records = json.loads((root / "xref.json").read_text())["instruction_records"]["records"]
+                        self.assertEqual(len(records), 2)
+                        for record in records:
+                            row = by_offset[record["output_offset"]]
+                            self.assertEqual(int(row["cpu_address_start"], 16), record["cpu_address"] & 0xFFFF)
+                            self.assertEqual(row["bytes_hex"], [f"{value:02X}" for value in record["bytes"]])
+
+    def test_unused_listing_version_warns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "input.asm").write_text("NOP\n")
+            for arguments, warning in (([], False), (["--listing-version=1"], True),
+                                       (["--listing-version=1", "--no-warn"], False),
+                                       (["--listing-version=1", "--listing=listing"], False)):
+                with self.subTest(arguments=arguments):
+                    result = subprocess.run([str(XASM), "--pure-binary", "input.asm", "-o", "output.bin", *arguments],
+                                            cwd=root, capture_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual((root / "output.bin").read_bytes(), b"\xEA")
+                    if warning:
+                        self.assertIn(b"W0017", result.stderr)
+                        self.assertIn(b"--listing-version is ignored because --listing is not set", result.stderr)
+                    else:
+                        self.assertEqual(result.stderr, b"")
+
     def test_version2_emission_spans_and_instruction_joins(self):
         source_text = """.ORG $8000
 LDA #$42

@@ -683,6 +683,7 @@ parse_arguments (int argc, char **argv)
     xasm_args.listing_format = LISTING_FORMAT_TEXT;
     xasm_args.listing_format_set = 0;
     xasm_args.listing_version = 1;
+    xasm_args.listing_version_set = 0;
     xasm_args.compare_file = NULL;
     xasm_args.compare_offset = 0;
     xasm_args.compare_length = -1;
@@ -862,6 +863,7 @@ parse_arguments (int argc, char **argv)
                     cli_error("invalid value for --listing-version: `%s' (expected 1|2)", optarg);
                 }
                 xasm_args.listing_version = optarg[0] - '0';
+                xasm_args.listing_version_set = 1;
             } else if (strcmp(long_options[index].name, "xref") == 0) {
                 xasm_args.xref_file = optarg;
             } else if (strcmp(long_options[index].name, "xref-format") == 0) {
@@ -1084,6 +1086,10 @@ parse_arguments (int argc, char **argv)
 
     if (xasm_args.listing_file == NULL && xasm_args.listing_format_set) {
         warn_global("W0017", "--listing-format is ignored because --listing is not set");
+    }
+    if (xasm_args.listing_file == NULL && xasm_args.listing_version_set
+        && xasm_args.listing_version == 1) {
+        warn_global("W0017", "--listing-version is ignored because --listing is not set");
     }
     if (xasm_args.listing_version == 2) {
         if (xasm_args.listing_file == NULL || xasm_args.listing_format == LISTING_FORMAT_TEXT) {

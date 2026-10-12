@@ -1739,6 +1739,11 @@ When using the @var{.equ}-directive you can only define each identifier once. (U
 @item W0017: --listing-format is ignored because --listing is not set
 Printed when @code{--listing-format} is given without @code{--listing=@var{FILE}}; there is no listing for the requested format to apply to. Unlike the other messages in this table, it carries no source-file/line prefix, since it is not tied to a line in your program. Suppressed by @code{--no-warn} like any other warning.
 
+@item W0017: --listing-version is ignored because --listing is not set
+Printed when @code{--listing-version=1} is explicitly given without
+@code{--listing=@var{FILE}}. Suppressed by @code{--no-warn}. Version 2 requires
+a structured listing and instead reports a command-line error when it is absent.
+
 @item W0201: symbol `@var{identifier}' defined by .EQU is never used
 Opt-in: silent unless @code{--warn-unused-equ} is given. @code{--Werror=unused-equ} promotes it to a fatal @samp{error W0201} and is @emph{not} silenced by @code{--no-warn}; @code{--Wno-unused-equ} turns the check back off entirely. To suppress one definition without disabling the check everywhere, add a same-line @code{; xasm:ignore unused-equ} comment on the @code{.EQU} statement, or bracket a region with @code{; xasm:disable unused-equ} and @code{; xasm:enable unused-equ} comments.
 
