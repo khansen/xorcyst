@@ -1,3 +1,13 @@
+Version 1.8.2:
+- Restore documented omitted fields in structure, union and record initializers.
+  Leading, middle, trailing and consecutive omissions retain their positions
+  and default to zero, including nested initializers and macro expansion.
+- Correct padding for omitted user-defined fields and anonymous unions. Fix
+  assertion aborts for .CHAR storage, omitted .CHAR fields and short strings.
+- Diagnose unsupported gaps inside built-in array initializers explicitly.
+- Add 16 regression tests covering emitted bytes, linked objects, character
+  maps and label/listing/xref addresses after padding. Output schemas are unchanged.
+
 Version 1.8.1:
 - Correct structured-listing binary offsets after code-segment storage and
   non-emitting data-segment initialized data or .INCBIN. CPU addresses,
