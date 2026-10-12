@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.8.2.
+<!-- This is the manual for The XORcyst version 1.9.0.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>What's New (The XORcyst Manual)</title>
@@ -34,6 +34,16 @@ ul.mark-bullet {list-style-type: disc}
 <p class="nav-panel">
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
+
+<h3 class="heading" id="Version-1_002e9_002e0"><span>Version 1.9.0<a class="copiable-link" href="#Version-1_002e9_002e0"> &para;</a></span></h3>
+
+<ul class="itemize mark-bullet">
+<li>Preserves the declared size of explicitly initialized user-type array fields in structures and unions by initializing the first element and zero-filling the rest. Improves invalid-count diagnostics and avoids cascaded padding errors.
+</li><li>Continues assembly after empty initializer expansions and taken conditional branches, preserving following labels and data and avoiding assertion aborts after repeated initializer errors. Releases unused structure fill expressions.
+</li><li>Adds opt-in <samp class="option">--listing-version=2</samp> for pure-binary JSON/NDJSON listings, with segment, byte-count and emission metadata, compressed storage fill, and emitting spans that partition the binary. Diagnostic listings do not claim bytes from a previous output file.
+</li><li>Accounts for numeric <code class="code">.CHAR</code> data in listing v2 and warns when an explicit listing version has no listing destination. Documents offset joins and CPU-address wraparound.
+</li><li>Preserves default listing v1 output and instruction-record schema version 3. Named and deferred user-type array count limitations remain tracked in <samp class="file">TODO</samp>.
+</li></ul>
 
 <h3 class="heading" id="Version-1_002e8_002e2"><span>Version 1.8.2<a class="copiable-link" href="#Version-1_002e8_002e2"> &para;</a></span></h3>
 
