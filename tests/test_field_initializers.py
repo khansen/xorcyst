@@ -348,6 +348,111 @@ tail .char
                                     for i, part in enumerate(parts))
                 self.assert_bytes(".Text {" + ",".join(fields) + "}\n", expected, declarations)
 
+    def test_deferred_invalid_user_type_array_counts(self):
+        types = TYPES + ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
+        types += ".enum Mode\noff\non\n.ende\n"
+        for field_type, initializer in (("Empty", "{}"), ("Point", "{1,2}"),
+                                         ("Choice", "{1}"), ("Flags", "{,1,0}"), ("Mode", "on")):
+            for definition in ("Count = 0", "Count .equ -1", ".define Count 2-2",
+                               "Count .equ Alias\nAlias .equ Final\nFinal = 0"):
+                for pure_binary in (False, True):
+                    with self.subTest(field_type=field_type, definition=definition,
+                                      pure_binary=pure_binary):
+                        declarations = types + f".struc Array\nitems .{field_type}[Count]\ntail .byte[4]\n.ends\n"
+                        # Positive trailing padding must not hide a negative remainder.
+                        source = declarations + f".Array {{{initializer},}}\n" + definition + "\n"
+                        output = self.root / ("output.bin" if pure_binary else "output.o")
+                        output.write_bytes(b"previous output")
+                        result, binary = self.assemble(source, pure_binary=pure_binary)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+                        self.assertEqual(binary.read_bytes(), b"previous output")
+
+    def test_deferred_errors_in_repeated_initializers(self):
+        declarations = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        declarations += ".struc Array\nitems .Point[Count]\n.ends\n"
+        instance = ".Array {{1,2}}\n"
+        for body in (instance * 2, ".macro Emit\n" + instance + ".endm\nEmit\nEmit\n",
+                     ".rept 2\n" + instance + ".endm\n"):
+            for pure_binary in (False, True):
+                with self.subTest(body=body, pure_binary=pure_binary):
+                    result, _ = self.assemble(declarations + body + "Count = 0\n",
+                                              pure_binary=pure_binary)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(b"error:"), 2, result.stderr.decode())
+
+    def test_deferred_valid_counts_and_following_addresses(self):
+        types = TYPES + ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
+        types += ".enum Mode\noff\non\n.ende\n"
+        for case, (field_type, initializer, element) in enumerate((
+                ("Empty", "{}", b""), ("Point", "{1,2}", b"\x01\x02"),
+                ("Choice", "{1}", b"\x01\0\0\0"), ("Flags", "{,1,0}", b"\x40"),
+                ("Mode", "on", b"\x01"))):
+            for count in (1, 2, 3):
+                for debug in (False, True):
+                    for pure_binary in (False, True):
+                        with self.subTest(field_type=field_type, count=count, debug=debug,
+                                          pure_binary=pure_binary):
+                            source = types + f".struc Array\nitems .{field_type}[Count]\ntail .byte\n.ends\n"
+                            source += ".org $8000\n" if pure_binary else ""
+                            source += f".Array {{{initializer},$5A}}\nAfter: .word After\n"
+                            source += f"Count .equ Alias\nAlias .equ Final\nFinal = {count}\n"
+                            expected = element + bytes(len(element) * (count - 1)) + b"\x5A"
+                            address = 0x8000 + len(expected)
+                            options = ["--debug"] if debug else []
+                            if pure_binary:
+                                listing = self.root / f"forward-{case}-{count}-{debug}.json"
+                                options += [f"--listing={listing}", "--listing-format=json"]
+                            result, binary = self.assemble(source, pure_binary=pure_binary, options=options)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            if pure_binary:
+                                rows = json.loads(listing.read_text())["records"]
+                                after = next(row for row in rows if row["directive_or_opcode"] == "After")
+                                self.assertEqual(after["output_offset_start"], len(expected))
+                                self.assertEqual(after["cpu_address_start"], f"0x{address:04X}")
+                            else:
+                                binary = self.link(binary, origin=0x8000)
+                            self.assertEqual(binary.read_bytes(), expected + address.to_bytes(2, "little"))
+
+    def test_array_counts_keep_instance_time_assignments(self):
+        declarations = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        declarations += ".struc Array\nitems .Point[Count]\ntail .byte\n.ends\n"
+        for pure_binary in (False, True):
+            with self.subTest(pure_binary=pure_binary):
+                source = declarations + "Count = 1\n.Array {{1,2},$5A}\nCount = 2\n.Array {{3,4},$6B}\nCount = 0\n"
+                result, binary = self.assemble(source, pure_binary=pure_binary)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                if not pure_binary:
+                    binary = self.link(binary)
+                self.assertEqual(binary.read_bytes(), bytes.fromhex("01 02 5A 03 04 00 00 6B"))
+                result, _ = self.assemble(declarations + "Count = 0\n.Array {{1,2},$5A}\nCount = 2\n",
+                                          pure_binary=pure_binary)
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+
+    def test_sizeof_data_with_deferred_array_padding(self):
+        declarations = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        declarations += ".struc Array\nitems .Point[Count]\ntail .byte\n.ends\n"
+        source = declarations + "Payload: .Array {{1,2},$5A}\nCount = 2\nEnd:\n.byte sizeof(Payload)\n"
+        for pure_binary in (False, True):
+            with self.subTest(pure_binary=pure_binary):
+                result, binary = self.assemble(source, pure_binary=pure_binary)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                if not pure_binary:
+                    binary = self.link(binary)
+                self.assertEqual(binary.read_bytes(), bytes.fromhex("01 02 00 00 5A 05"))
+
+    def test_circular_array_counts_fail_cleanly(self):
+        declarations = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        declarations += ".struc Array\nitems .Point[Count]\n.ends\n"
+        source = declarations + ".Array {{1,2}}\nCount .equ Alias\nAlias .equ Count\n"
+        for pure_binary in (False, True):
+            with self.subTest(pure_binary=pure_binary):
+                result, _ = self.assemble(source, pure_binary=pure_binary)
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertEqual(result.stderr.count(b"circular definition in field size"), 1,
+                                 result.stderr.decode())
+
     def test_character_storage_and_short_strings(self):
         declarations = """.struc Sample
 number .byte

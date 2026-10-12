@@ -196,6 +196,7 @@ const char *astnode_type_to_string(astnode_type at) {
         case IDENTIFIER_NODE:   return "IDENTIFIER_NODE";
         case DATA_NODE:     return "DATA_NODE";
         case STORAGE_NODE:  return "STORAGE_NODE";
+        case FIELD_PADDING_NODE: return "FIELD_PADDING_NODE";
         case MACRO_DECL_NODE:   return "MACRO_DECL_NODE";
         case MACRO_NODE:    return "MACRO_NODE";
         case ARITHMETIC_NODE:   return "ARITHMETIC_NODE";

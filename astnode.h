@@ -233,7 +233,8 @@ enum tag_astnode_type {
     UNDEF_NODE,
     PUSH_BRANCH_SCOPE_NODE,
     POP_BRANCH_SCOPE_NODE,
-    TOMBSTONE_NODE
+    TOMBSTONE_NODE,
+    FIELD_PADDING_NODE /* internal: element count and remaining byte count */
 };
 
 typedef enum tag_astnode_type astnode_type;
