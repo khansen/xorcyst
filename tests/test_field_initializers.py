@@ -295,6 +295,50 @@ on
                                 self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
                                 self.assertNotIn(b"operand out of range", result.stderr)
 
+    def test_named_array_sizes_have_field_diagnostics(self):
+        types = TYPES + ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
+        types += ".enum Mode\noff\non\n.ende\n"
+        for field_type, initializer, wrong, diagnostic in (
+                ("Empty", "{}", "1", b"structure initializer expected"),
+                ("Point", "{1,2}", "1", b"structure initializer expected"),
+                ("Choice", "{1}", "1", b"union initializer expected"),
+                ("Flags", "{,1,0}", "1", b"record initializer expected"),
+                ("Mode", "on", "{1}", b"identifier expected")):
+            declarations = types + f".struc Array\nitems .{field_type}[Count]\ntail .byte[4]\n.ends\n"
+            for form in ("Count .equ {value}\n", ".define Count {value}\n", "Count = {value}\n"):
+                for count in ("0", "-1"):
+                    definition = form.format(value=count)
+                    for position in ("before_type", "before_instance", "after_instance"):
+                        for value, expected in ((initializer, b"initializer for field `items' exceeds field size"),
+                                                (wrong, diagnostic)):
+                            statement = f".Array {{{value},}}\n"
+                            source = {"before_type": definition + declarations + statement,
+                                      "before_instance": declarations + definition + statement,
+                                      "after_instance": declarations + statement + definition}[position]
+                            line = source.splitlines().index(statement.strip()) + 1
+                            for pure_binary in (False, True):
+                                with self.subTest(field_type=field_type, definition=definition, position=position,
+                                                  value=value, pure_binary=pure_binary):
+                                    result, _ = self.assemble(source, pure_binary=pure_binary)
+                                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                    self.assertIn(f":{line}: error: ".encode() + expected, result.stderr)
+                                    self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+                                    self.assertNotIn(b"operand out of range", result.stderr)
+
+    def test_named_array_diagnostics_keep_field_names_in_macros(self):
+        source = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        source += ".struc First\npoints .Point[Count]\n.ends\n"
+        source += ".struc Second\nother_points .Point[Count]\n.ends\n"
+        source += ".macro Emit\n.First {{1,2}}\n.Second {{3,4}}\n.endm\nEmit\nEmit\nCount = 0\n"
+        for pure_binary in (False, True):
+            with self.subTest(pure_binary=pure_binary):
+                result, _ = self.assemble(source, pure_binary=pure_binary)
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                for name in ("points", "other_points"):
+                    diagnostic = f"initializer for field `{name}' exceeds field size".encode()
+                    self.assertEqual(result.stderr.count(diagnostic), 2, result.stderr.decode())
+                self.assertEqual(result.stderr.count(b"error:"), 4, result.stderr.decode())
+
     def test_invalid_array_initializers_do_not_skip_later_errors(self):
         declarations = ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
         for field_type, initializer, diagnostic in (

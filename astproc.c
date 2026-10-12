@@ -1862,6 +1862,7 @@ static void pad_user_type_field(symtab_entry *field, astnode *type,
         astnode *deferred = astnode_create(FIELD_PADDING_NODE, init->loc);
         astnode_add_child(deferred, astnode_clone(count, init->loc));
         astnode_add_child(deferred, padding);
+        astnode_add_child(deferred, astnode_create_string(field->id, init->loc));
         astnode_add_child(flat, deferred);
     }
 }
@@ -2530,7 +2531,8 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
         return 0;
     }
     if (astnode_is_type(count, INTEGER_NODE) && count->integer < 1) {
-        err(node->loc, "operand out of range");
+        err(node->loc, "initializer for field `%s' exceeds field size",
+            astnode_get_child(node, 2)->string);
         astnode_finalize(node);
         return 0;
     }
@@ -2541,7 +2543,12 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
     }
     if (astnode_is_type(padding, INTEGER_NODE)
         && (padding->integer < 0 || padding->integer >= 0x10000)) {
-        err(node->loc, "operand out of range");
+        if (padding->integer < 0) {
+            err(node->loc, "initializer for field `%s' exceeds field size",
+                astnode_get_child(node, 2)->string);
+        } else {
+            err(node->loc, "operand out of range");
+        }
         astnode_finalize(node);
         return 0;
     }
@@ -2557,6 +2564,7 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
     }
     /* Convert in place: replacing a top-level node scans the statement list
      * for its position, making many array instances unnecessarily quadratic. */
+    astnode_finalize(astnode_get_child(node, 2));
     astnode_finalize(LHS(node));
     astnode_insert_child(node,
         astnode_create_datatype(BYTE_DATATYPE, NULL, node->loc), 0);
