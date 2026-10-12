@@ -20,8 +20,6 @@ Known defects:
 - Invalid named user-type array counts get a generic range diagnostic, even
   when defined before the structure with .equ, .define or =. Only literal and
   folded counts currently get the field-specific size diagnostic.
-- Some invalid inputs abort after diagnostics: repeated excessive initializers
-  for empty structures, and record initializer expressions supplied through .EQU.
 - Listing v1 data-segment rows retain bytes_hex and numeric output offsets
   although pure-binary output does not emit those bytes. Segment directives
   occur in the stream, but individual rows lack segment/emission metadata.

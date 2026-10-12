@@ -150,6 +150,17 @@ class FieldInitializers(unittest.TestCase):
                                         "00 22 33 00 00 00 00"
                                         "11 00 00 41 5A 00 00"))
 
+    def test_empty_structures_do_not_skip_following_statements(self):
+        declarations = ".struc Empty\n.ends\n"
+        for body in (".Empty {}\n.Flags {,1,0}\n",
+                     ".Empty {}, {}\n.Flags {,1,0}\n",
+                     ".Empty {}\n.Empty {}\n.Flags {,1,0}\n",
+                     '.Empty {}\n.char "@"\n',
+                     '.Empty {}\n.rept 2\n.Flags {,1,0}\n.endm\n'):
+            with self.subTest(body=body):
+                expected = b"\x40\x40" if ".rept" in body else b"\x40"
+                self.assert_bytes(body, expected, declarations)
+
     def test_omitted_user_type_arrays_and_enum(self):
         declarations = """.enum Mode
 off

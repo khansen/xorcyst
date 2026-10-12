@@ -2179,9 +2179,9 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                 flat->loc
             )
         );
-    } else {
-        astnode_finalize(fill);
+        fill = NULL; /* The storage node owns the remaining size. */
     }
+    astnode_finalize(fill);
     symtab_pop();
 }
 
