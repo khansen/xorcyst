@@ -2002,16 +2002,16 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                 );
             } else {
                 flatten_union_recursive(e, val, flat);
-                /* Decrease fill amount according to union size */
-                fill = astproc_fold_constants(
-                    astnode_create_arithmetic(
-                        MINUS_OPERATOR,
-                        fill,
-                        astnode_clone(e->struc.size, flat->loc),
-                        flat->loc
-                    )
-                );
             }
+            /* Both omitted and initialized unions consume their full size. */
+            fill = astproc_fold_constants(
+                astnode_create_arithmetic(
+                    MINUS_OPERATOR,
+                    fill,
+                    astnode_clone(e->struc.size, flat->loc),
+                    flat->loc
+                )
+            );
         } else {
             /* VAR_SYMBOL */
             /* Symbol definition is STORAGE_NODE w/ two children: type and count */
@@ -2084,11 +2084,11 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                 case USER_DATATYPE:
                 t = symtab_global_lookup(LHS(type)->ident);
                 if (astnode_is_type(val, NULL_NODE)) {
-                    /* Output sizeof(type) bytes to fill in */
+                    /* Pad the full field in bytes, including array elements. */
                     astnode_add_child(flat,
                         astnode_create_storage(
                             astnode_create_datatype(BYTE_DATATYPE, NULL, val->loc),
-                            astnode_clone(t->struc.size, val->loc),
+                            astnode_clone(e->field.size, val->loc),
                             val->loc
                         )
                     );
@@ -2322,6 +2322,23 @@ static int process_undef(astnode *undef, void *arg, astnode **next)
 }
 
 /**
+ * Finds an omitted slot in a native data initializer, including brace lists.
+ * Omissions have meaning for user-defined fields, not native array elements.
+ */
+static astnode *find_omitted_array_element(astnode *expr)
+{
+    astnode *child;
+    if (astnode_is_type(expr, NULL_NODE)) return expr;
+    if (astnode_is_type(expr, STRUC_NODE)) {
+        for (child = expr->first_child; child != NULL; child = child->next_sibling) {
+            astnode *omitted = find_omitted_array_element(child);
+            if (omitted != NULL) return omitted;
+        }
+    }
+    return NULL;
+}
+
+/**
  * First-time processing of data node.
  * @param data Node of type DATA_NODE
  * @param arg Not used
@@ -2367,6 +2384,13 @@ static int process_data(astnode *data, void *arg, astnode **next)
         expr = astnode_get_child(data, j);
         /* Substitute defines and fold constants */
         expr = reduce_expression(expr, FOLD_PC_NO);
+        if (astnode_is_type(expr, NULL_NODE) || astnode_is_type(expr, STRUC_NODE)) {
+            astnode *omitted = find_omitted_array_element(expr);
+            if (omitted != NULL) {
+                err(omitted->loc, "omitted elements are not supported in built-in array initializers");
+                return 0;
+            }
+        }
         /* If it's a string, replace by array of integers */
         /* (makes it easier to process later... favour regularity) */
         if (astnode_is_type(expr, STRING_NODE)) {
@@ -2420,8 +2444,11 @@ static int process_storage(astnode *storage, void *arg, astnode **next)
     expr = RHS(storage);
     /* If not BYTE_DATATYPE, multiply by word/dword-size */
     switch (type->datatype) {
-        case BYTE_DATATYPE:
-        case CHAR_DATATYPE: item_size = 1; break;
+        case CHAR_DATATYPE:
+        /* Character storage is byte padding; only initialized strings use the charmap. */
+        type->datatype = BYTE_DATATYPE;
+        /* fall through */
+        case BYTE_DATATYPE: item_size = 1; break;
         case WORD_DATATYPE: item_size = 2;  break;
         case DWORD_DATATYPE:    item_size = 4;  break;
         default:  item_size = 1; break; // ### Hmmm...
