@@ -270,6 +270,72 @@ class FieldInitializers(unittest.TestCase):
                                 self.assertIn(message, result.stderr)
                                 self.assertEqual(output.read_bytes(), b"previous output")
 
+    def test_union_fields_accept_named_counts(self):
+        point = ".struc Point\npx .byte\npy .byte\n.ends\n"
+        definitions = ("Count=2\n", "Count .equ 2\n", ".define Count 2\n",
+                       "Count .equ Alias\nAlias .equ Final\nFinal=2\n")
+        for definition in definitions:
+            for field, initializer, expected in ((".Point[Count]", "{1,2}", b"\x01\x02"),
+                                                 (".word[Count]", "{$1122}", b"\x22\x11")):
+                declarations = point + definition + f".union U\nitems {field}\nwide .byte[6]\n.ends\n"
+                for pure_binary in (False, True):
+                    for debug in (False, True):
+                        with self.subTest(definition=definition, field=field, binary=pure_binary, debug=debug):
+                            source = declarations + f".U {{{initializer}}}\nAfter: .word After\n"
+                            result, output = self.assemble(source, pure_binary=pure_binary,
+                                                          options=("--debug",) if debug else ())
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            origin = 0 if pure_binary else 0x8000
+                            if not pure_binary: output = self.link(output, origin)
+                            self.assertEqual(output.read_bytes(), expected + bytes(4) + (origin+6).to_bytes(2, "little"))
+
+    def test_union_count_uses_constants_not_field_names_and_captures_value(self):
+        declarations = (".struc Point\npx .byte\npy .byte\n.ends\nCount=2\n"
+                        ".union U\nCount .byte\nitems .Point[Count]\n.ends\nCount=3\n")
+        self.assert_bytes(".U {,{1,2}}\n", bytes.fromhex("01 02 00 00"), declarations)
+        declarations = (".struc Point\npx .byte\npy .byte\n.ends\nCount=2\n"
+                        ".struc Outer\nCount .byte\n.union\nitems .Point[Count]\nwide .byte[6]\n.ends\ntail .byte\n.ends\n")
+        self.assert_bytes(".Outer {7,{{1,2}},9}\n", bytes.fromhex("07 01 02 00 00 00 00 09"), declarations)
+
+    def test_union_element_size_can_use_previously_defined_forward_constants(self):
+        declarations = (".struc Point\nitems .byte[SubCount]\ntail .byte\n.ends\n"
+                        "SubCount=2\nCount=2\n.union U\nitems .Point[Count]\n.ends\n")
+        self.assert_bytes(".U {{{1},2}}\n", bytes.fromhex("01 00 02 00 00 00"), declarations)
+
+    def test_invalid_union_count_does_not_cascade_at_instances(self):
+        for definition, count, diagnostic in (("", "Missing", b"union member must be of constant size"),
+                                               ("Count .equ Alias\n", "Count", b"union member must be of constant size"),
+                                               ("Count=-1\n", "Count", b"exceeds field size")):
+            for pure_binary in (False, True):
+                with self.subTest(definition=definition, count=count, binary=pure_binary):
+                    source = definition + f".union U\nitems .byte[{count}]\nwide .word\n.ends\n"
+                    source += ".U {{1}}\n.U {{1}}\nAlias=2\n.byte $5A\n"
+                    target = self.root / ("output.bin" if pure_binary else "output.o")
+                    target.write_bytes(b"previous output")
+                    result, output = self.assemble(source, pure_binary=pure_binary)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(b"error:"), 2 if "-1" in definition else 1, result.stderr.decode())
+                    self.assertIn(diagnostic, result.stderr)
+                    self.assertEqual(output.read_bytes(), b"previous output")
+
+    def test_invalid_dotted_union_counts_fail_cleanly(self):
+        declarations = (".enum Kind\nOne\n.ende\n"
+                        ".struc Point\npx .byte\npy .byte\n.ends\ninst .Point\n")
+        for count in ("Nope.fx", "Kind.One", "Point.py", "inst.missing", "inst.px.missing"):
+            for kind in ("byte", "Point"):
+                for pure in (False, True):
+                    for debug in (False, True):
+                        with self.subTest(count=count, kind=kind, pure=pure, debug=debug):
+                            source = declarations + f".union U\nitems .{kind}[{count}]\nwide .word\n.ends\n.U {{}}\n"
+                            target = self.root / ("output.bin" if pure else "output.o")
+                            target.write_bytes(b"previous output")
+                            result, output = self.assemble(source, pure_binary=pure,
+                                                          options=("--debug",) if debug else ())
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+                            self.assertIn(b"union member must be of constant size", result.stderr)
+                            self.assertEqual(output.read_bytes(), b"previous output")
+
     def test_reported_record_reproduction(self):
         self.assert_bytes(".Flags {, 1, 0}\n", b"\x40")
 

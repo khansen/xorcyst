@@ -1091,7 +1091,9 @@ then; otherwise the count is checked in the final assembly pass. Aliases and
 unary expressions are resolved for this check, and circular definitions are
 errors. A zero or negative count reports the field whose initializer exceeds
 its declared size. Counts requiring link-time addresses retain their existing
-behavior; named counts in union declarations remain a known limitation.
+behavior. Union counts and element sizes must be known when the union is
+declared; previously defined constants and their aliases are accepted. Field
+names do not shadow those constants while the declaration is evaluated.
 
 @item @strong{Union}. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
 
@@ -1750,7 +1752,10 @@ When defining data that is an instance of a structure or union, the field value(
 There are too many values given compared to the actual number of fields in the structure or union.
 
 @item union member must be of constant size
-The size of a union member must be known at assembly time. This restriction does not apply to structs.
+The size of a union member must be known when the union is declared. Define
+constants used by its count or element type before that declaration. This
+restriction does not apply to structs. A failed union declaration is diagnosed
+once without adding initializer errors for its later instances.
 
 @item unknown macro or directive `@var{identifier}'
 You attempted to invoke a macro or directive that the assembler doesn't recognize. Check your spelling (remember that identifiers are case sensitive) and/or your macro definitions.

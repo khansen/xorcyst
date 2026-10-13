@@ -14,8 +14,6 @@
 
 Known defects and follow-ups:
 
-- Union fields reject named counts even when the constant is already defined,
-  then can report a cascaded error at the initializer.
 - The user-type array count resolver expands repeated aliases as trees. Cache
   resolved symbols per evaluation to avoid exponential work while preserving
   assignment-time values and cycle detection.

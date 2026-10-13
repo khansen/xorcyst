@@ -820,7 +820,9 @@ then; otherwise the count is checked in the final assembly pass. Aliases and
 unary expressions are resolved for this check, and circular definitions are
 errors. A zero or negative count reports the field whose initializer exceeds
 its declared size. Counts requiring link-time addresses retain their existing
-behavior; named counts in union declarations remain a known limitation.
+behavior. Union counts and element sizes must be known when the union is
+declared; previously defined constants and their aliases are accepted. Field
+names do not shadow those constants while the declaration is evaluated.
 </p>
 </li><li><strong class="strong">Union</strong>. The initializer is of the same form as a structure initializer, except only one of the fields in the union can be initialized.
 

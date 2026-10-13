@@ -2007,6 +2007,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
     ordered_field_list *list;
     int num;
     int errors_before;
+    if (s->flags & INVALID_TYPE_FLAG) return;
     if (!astnode_is_type(init, STRUC_NODE)) {
         err(init->loc, "union initializer expected");
         return;
@@ -2127,6 +2128,8 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                 flat->loc
             )
         );
+    } else {
+        astnode_finalize(fill);
     }
     symtab_pop();
 }
@@ -3484,12 +3487,17 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
     astnode *field_data;
     astnode *field_size;
     symtab_entry *fe;
+    symtab *constants;
+    int errors_before = err_count;
 
     se->symtab = symtab_create();
     if (se->symtab == NULL) {
         err(union_def->loc, "out of memory creating symbol scope");
         return;
     }
+    /* Field names are not a scope for constants in their declarations. */
+    constants = se->symtab;
+    while (constants->parent != NULL) constants = constants->parent;
     se->struc.size = astnode_create_integer(0, union_def->loc);
     plist = &se->struc.fields;
     /* Process field declarations */
@@ -3502,11 +3510,13 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
         field_id = LHS(c);
         assert(astnode_get_type(field_id) == IDENTIFIER_NODE);
         field_data = RHS(c);
-        reduce_expression(RHS(field_data), FOLD_PC_NO);
         if (astnode_is_type(field_data, DATA_NODE)) {
             err(c->loc, "data initialization not allowed here");
             continue;
         }
+        int field_errors = err_count;
+        if (!push_symbol_scope(constants, c->loc)) continue;
+        reduce_expression_complete(RHS(field_data), FOLD_PC_NO);
         /* Calculate field size in bytes: sizeof(datatype) * count */
         field_size = astnode_create_arithmetic(
             MUL_OPERATOR,
@@ -3514,12 +3524,13 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
             astnode_clone(RHS(field_data), field_data->loc),
             field_data->loc
         );
-        field_size = reduce_expression(field_size, FOLD_PC_NO);
-        if (!astnode_is_type(field_size, INTEGER_NODE)) {
-            err(c->loc, "union member must be of constant size");
+        field_size = reduce_field_count(field_size, NULL);
+        symtab_pop();
+        if (err_count != field_errors || !astnode_is_type(field_size, INTEGER_NODE)
+            || !astnode_is_type(RHS(field_data), INTEGER_NODE)) {
+            if (err_count == field_errors) err(c->loc, "union member must be of constant size");
             astnode_finalize(field_size);
-            /* Use default size: 1 byte */
-            field_size = astnode_create_integer(1, field_data->loc);
+            field_size = astnode_create_integer(0, field_data->loc);
         }
         fe = enter_owned_symbol(
             field_id->ident,
@@ -3548,6 +3559,7 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
             astnode_finalize(field_size);
         }
     }
+    if (err_count != errors_before) se->flags |= INVALID_TYPE_FLAG;
     symtab_pop();
 }
 
