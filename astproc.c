@@ -194,6 +194,9 @@ static int in_dataseg = 0;
 /* Default symbol modifiers, i.e. ZEROPAGE_FLAG, PUBLIC_FLAG */
 static int symbol_modifiers = 0;
 
+/* Aliases can introduce dotted references after the reference-validation pass. */
+static int finalizing_expressions = 0;
+
 /* Used when we are outputting pure 6502 binary */
 static int dataseg_pc;
 static int codeseg_pc;
@@ -203,6 +206,7 @@ static int codeseg_pc;
 
 static astnode *reduce_expression(astnode *expr, int fold_pc);
 static astnode *reduce_expression_complete(astnode *expr, int fold_pc);
+static astnode *validate_unresolved_dot(astnode *expr);
 
 /*---------------------------------------------------------------------------*/
 
@@ -1388,9 +1392,13 @@ static astnode *reduce_dot_recursive(astnode *expr)
         right = LHS(right); /* Need identifier */
     }
     /* Lookup 'right' in 'left's symbol table (on stack) */
+    if (!astnode_is_type(right, IDENTIFIER_NODE)) return NULL;
     field = symtab_lookup(right->ident);
+    if (field == NULL || field->type != VAR_SYMBOL
+        || field->def == NULL || field->field.offset == NULL) return NULL;
     /* Look up variable's type definition */
     type = LHS(field->def);
+    if (!astnode_is_type(type, DATATYPE_NODE)) return NULL;
     /* Copy its offset */
     offset = astnode_clone(field->field.offset, right->loc);
     if (index != NULL) {
@@ -1411,10 +1419,14 @@ static astnode *reduce_dot_recursive(astnode *expr)
     expr = RHS(expr);
     if (astnode_is_type(expr, DOT_NODE)) {
         /* Next field */
+        if (type->datatype != USER_DATATYPE || LHS(type) == NULL) goto unresolved;
         def = symtab_global_lookup(LHS(type)->ident);
-        if (!push_symbol_scope(def->symtab, expr->loc)) return offset;
+        if (def == NULL || def->symtab == NULL
+            || (def->type != STRUC_SYMBOL && def->type != UNION_SYMBOL)) goto unresolved;
+        if (!push_symbol_scope(def->symtab, expr->loc)) goto unresolved;
         term = reduce_dot_recursive(expr);
         symtab_pop();
+        if (term == NULL) goto unresolved;
         /* Construct sum */
         offset = astnode_create_arithmetic(
             PLUS_OPERATOR,
@@ -1424,11 +1436,15 @@ static astnode *reduce_dot_recursive(astnode *expr)
         );
     }
     return offset;
+unresolved:
+    astnode_finalize(offset);
+    return NULL;
 }
 
 /**
  * Transforms A.B.C.D . ... to A + offset(B) + offset(C) + ...
- * No error checking, since validate_dotref() should have been called previously.
+ * Count reduction can run before validate_dotref(). Leave unresolved references
+ * intact so validation can report them in the usual pass.
  * @param expr Node of type DOT_NODE
  */
 static astnode *reduce_dot(astnode *expr)
@@ -1447,10 +1463,16 @@ static astnode *reduce_dot(astnode *expr)
         index = RHS(left);
         left = LHS(left);   /* Need identifier */
     }
+    if (!astnode_is_type(left, IDENTIFIER_NODE)) return validate_unresolved_dot(expr);
     father = symtab_lookup(left->ident);
+    if (father == NULL || father->def == NULL) return validate_unresolved_dot(expr);
     /* Look up variable's type definition */
     type = LHS(father->def);    /* DATATYPE_NODE */
+    if (!astnode_is_type(type, DATATYPE_NODE)
+        || type->datatype != USER_DATATYPE || LHS(type) == NULL) return validate_unresolved_dot(expr);
     def = symtab_lookup(LHS(type)->ident);
+    if (def == NULL || def->symtab == NULL
+        || (def->type != STRUC_SYMBOL && def->type != UNION_SYMBOL)) return validate_unresolved_dot(expr);
     /* 1st term of sum is the leftmost structure identifier */
     term1 = astnode_clone(left, left->loc);
     if (index != NULL) {
@@ -1474,6 +1496,10 @@ static astnode *reduce_dot(astnode *expr)
     }
     term2 = reduce_dot_recursive(expr);
     symtab_pop();
+    if (term2 == NULL) {
+        astnode_finalize(term1);
+        return validate_unresolved_dot(expr);
+    }
     /* Calculate final sum */
     sum = astnode_create_arithmetic(
         PLUS_OPERATOR,
@@ -1823,48 +1849,109 @@ static void reduce_enum(symtab_entry *e, astnode *expr, astnode *list)
 
 static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *flat);
 
-/* A user-type field initializer describes the first element. Preserve the
- * declared array extent by zero-filling the remaining elements in bytes.
- * sizeof also handles records and enums, whose representation is one byte. */
-static void pad_user_type_field(symtab_entry *field, astnode *type,
-                                astnode *init, astnode *flat)
+/* Keep unresolved padding separate until its count and byte extent have been
+ * validated. Ordinary storage needs at least one item; omitted fields and
+ * explicit empty built-in initializers may need none. Zero remaining bytes never encode DSI. */
+static void padding_error(location loc, const char *field)
 {
-    astnode *padding;
-    astnode *count = RHS(field->def);
-    if (astnode_is_type(count, INTEGER_NODE) && count->integer < 1) {
-        err(init->loc, "initializer for field `%s' exceeds field size", field->id);
-        return;
+    if (*field) err(loc, "initializer for field `%s' exceeds field size", field);
+    else err(loc, "operand out of range");
+}
+
+static astnode *checked_padding(astnode *count, astnode *bytes,
+                                const char *field, int minimum, location loc)
+{
+    astnode *node;
+    bytes = reduce_expression(bytes, FOLD_PC_NO);
+    if ((astnode_is_type(count, INTEGER_NODE) && count->integer < minimum)
+        || (astnode_is_type(bytes, INTEGER_NODE) && bytes->integer < 0)) {
+        padding_error(loc, field);
+    } else if (astnode_is_type(bytes, INTEGER_NODE) && bytes->integer >= 0x10000) {
+        err(loc, "operand out of range");
+    } else if (!astnode_is_type(count, INTEGER_NODE)
+               || !astnode_is_type(bytes, INTEGER_NODE)) {
+        node = astnode_create(FIELD_PADDING_NODE, loc);
+        astnode_add_children(node, 4, count, bytes,
+            astnode_create_string(field, loc), astnode_create_integer(minimum, loc));
+        return node;
+    } else if (bytes->integer != 0) {
+        astnode_finalize(count);
+        return astnode_create_storage(
+            astnode_create_datatype(BYTE_DATATYPE, NULL, loc), bytes, loc);
     }
-    padding = reduce_expression(
-        astnode_create_arithmetic(
-            MINUS_OPERATOR,
+    astnode_finalize(count);
+    astnode_finalize(bytes);
+    return NULL;
+}
+
+static void pad_user_type_field(symtab_entry *field, astnode *type,
+                                astnode *init, astnode *flat, const char *error_field)
+{
+    astnode_add_child(flat, checked_padding(
+        astnode_clone(RHS(field->def), init->loc),
+        astnode_create_arithmetic(MINUS_OPERATOR,
             astnode_clone(field->field.size, init->loc),
             astnode_create_sizeof(astnode_clone(type, type->loc), init->loc),
-            init->loc
-        ), FOLD_PC_NO
-    );
-    if (astnode_is_type(padding, INTEGER_NODE)
-        && (padding->integer < 0
-            || (padding->integer == 0 && astnode_is_type(count, INTEGER_NODE)))) {
-        if (padding->integer < 0) {
-            err(init->loc, "initializer for field `%s' exceeds field size", field->id);
+            init->loc), error_field, 1, init->loc));
+}
+
+typedef struct omitted_type_scope {
+    symtab_entry *type;
+    const struct omitted_type_scope *parent;
+} omitted_type_scope;
+static const omitted_type_scope *omitted_types;
+
+static void pad_omitted_field(symtab_entry *field, astnode *flat, location loc)
+{
+    int is_union = field->type == UNION_SYMBOL;
+    if (!is_union && LHS(field->def)->datatype == USER_DATATYPE) {
+        astnode *type = LHS(field->def);
+        symtab_entry *definition = symtab_global_lookup(LHS(type)->ident);
+        if (definition != NULL && definition->type == STRUC_SYMBOL) {
+            const omitted_type_scope *seen;
+            omitted_type_scope current = { definition, omitted_types };
+            astnode *empty;
+            astnode *nested;
+            int errors_before = err_count;
+            /* A named omitted field may contain no elements. Check in the
+             * constant scope before expanding the first structure element;
+             * standalone .T[n] storage still requires a positive outer count. */
+            if (*field->id) {
+                symtab *constants = symtab_tos();
+                astnode *count;
+                int zero;
+                while (constants->parent != NULL) constants = constants->parent;
+                if (!push_symbol_scope(constants, loc)) return;
+                count = reduce_expression_complete(astnode_clone(RHS(field->def), loc), FOLD_PC_NO);
+                zero = astnode_is_type(count, INTEGER_NODE) && count->integer == 0;
+                astnode_finalize(count);
+                symtab_pop();
+                if (zero || err_count != errors_before) return;
+            }
+            for (seen = omitted_types; seen != NULL; seen = seen->parent) {
+                if (seen->type == definition) {
+                    err(loc, "size of `%s' is unknown", definition->id);
+                    return;
+                }
+            }
+            /* Validate nested fields separately too: summing their sizes can
+             * conceal a negative count behind a later positive field. */
+            empty = astnode_create(STRUC_NODE, loc);
+            nested = astnode_create(LIST_NODE, loc);
+            omitted_types = &current;
+            flatten_struc_recursive(definition, empty, nested);
+            omitted_types = current.parent;
+            if (err_count == errors_before) pad_user_type_field(field, type, empty, nested, "");
+            astnode_add_child(flat, astnode_remove_children(nested));
+            astnode_finalize(nested);
+            astnode_finalize(empty);
+            return;
         }
-        astnode_finalize(padding);
-    } else if (astnode_is_type(count, INTEGER_NODE)
-               && astnode_is_type(padding, INTEGER_NODE)) {
-        astnode_add_child(flat,
-            astnode_create_storage(
-                astnode_create_datatype(BYTE_DATATYPE, NULL, init->loc),
-                padding, init->loc
-            )
-        );
-    } else {
-        astnode *deferred = astnode_create(FIELD_PADDING_NODE, init->loc);
-        astnode_add_child(deferred, astnode_clone(count, init->loc));
-        astnode_add_child(deferred, padding);
-        astnode_add_child(deferred, astnode_create_string(field->id, init->loc));
-        astnode_add_child(flat, deferred);
     }
+    astnode_add_child(flat, checked_padding(
+        is_union ? astnode_create_integer(1, loc) : astnode_clone(RHS(field->def), loc),
+        astnode_clone(is_union ? field->struc.size : field->field.size, loc),
+        "", *field->id ? 0 : 1, loc));
 }
 
 /**
@@ -1982,7 +2069,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                 default:
                 break;
             }
-            if (err_count == errors_before) pad_user_type_field(e, type, val, flat);
+            if (err_count == errors_before) pad_user_type_field(e, type, val, flat, e->id);
             break;
         }
         /* Decrease fill amount according to field size */
@@ -2019,7 +2106,6 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
  */
 static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *flat)
 {
-    astnode *fill;
     astnode *type;
     astnode *count;
     astnode *temp;
@@ -2035,32 +2121,15 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
     }
     /* Go through fields */
     if (!push_symbol_scope(s->symtab, init->loc)) return;
-    fill = astnode_clone(s->struc.size, flat->loc);
     for (val = init->first_child, list = s->struc.fields; (val != NULL) && (list != NULL); list = list->next, val = val->next_sibling) {
         e = list->entry;
         /* Check if normal field or anonymous union */
         if (e->type == UNION_SYMBOL) {
             if (astnode_is_type(val, NULL_NODE)) {
-                /* Output union size bytes to fill in field */
-                astnode_add_child(flat,
-                    astnode_create_storage(
-                        astnode_create_datatype(BYTE_DATATYPE, NULL, val->loc),
-                        astnode_clone(e->struc.size, val->loc),
-                        val->loc
-                    )
-                );
+                pad_omitted_field(e, flat, val->loc);
             } else {
                 flatten_union_recursive(e, val, flat);
             }
-            /* Both omitted and initialized unions consume their full size. */
-            fill = astproc_fold_constants(
-                astnode_create_arithmetic(
-                    MINUS_OPERATOR,
-                    fill,
-                    astnode_clone(e->struc.size, flat->loc),
-                    flat->loc
-                )
-            );
         } else {
             /* VAR_SYMBOL */
             /* Symbol definition is STORAGE_NODE w/ two children: type and count */
@@ -2073,14 +2142,7 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                 case WORD_DATATYPE:
                 case DWORD_DATATYPE:
                 if (astnode_is_type(val, NULL_NODE)) {
-                    /* Output field_size bytes to fill in field */
-                    astnode_add_child(flat,
-                        astnode_create_storage(
-                            astnode_create_datatype(type->datatype, NULL, type->loc),
-                            astnode_clone(count, count->loc),
-                            val->loc
-                        )
-                    );
+                    pad_omitted_field(e, flat, val->loc);
                 } else {
                     if (astnode_is_type(val, STRUC_NODE)) {
                         /* Handle multi-value array */
@@ -2106,41 +2168,19 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                         );
                         num = astnode_is_type(val, STRING_NODE) ? strlen(val->string) : 1;
                     }
-                    if (astnode_is_type(count, INTEGER_NODE) && (count->integer < num)) {
-                        err(val->loc, "initializer for field `%s' exceeds field size", e->id);
-                    }
-                    /* Fill in remainder of field if necessary: count - 1 */
-                    else if ( (astnode_is_type(count, INTEGER_NODE) && (count->integer > num))
-                    || !astnode_is_type(count, INTEGER_NODE) ) {
-                        astnode_add_child(flat,
-                            astnode_create_storage(
-                                astnode_create_datatype(type->datatype, NULL, flat->loc),
-                                astproc_fold_constants(
-                                    astnode_create_arithmetic(
-                                        MINUS_OPERATOR,
-                                        astnode_clone(count, flat->loc),
-                                        astnode_create_integer(num, flat->loc),
-                                        flat->loc
-                                    )
-                                ),
-                                flat->loc
-                            )
-                        );
-                    }
+                    astnode_add_child(flat, checked_padding(
+                        astnode_clone(count, val->loc),
+                        astnode_create_arithmetic(MINUS_OPERATOR,
+                            astnode_clone(e->field.size, val->loc),
+                            astnode_create_integer(num * datatype_elem_size(type), val->loc),
+                            val->loc), e->id, num, flat->loc));
                 }
                 break;
 
                 case USER_DATATYPE:
                 t = symtab_global_lookup(LHS(type)->ident);
                 if (astnode_is_type(val, NULL_NODE)) {
-                    /* Pad the full field in bytes, including array elements. */
-                    astnode_add_child(flat,
-                        astnode_create_storage(
-                            astnode_create_datatype(BYTE_DATATYPE, NULL, val->loc),
-                            astnode_clone(e->field.size, val->loc),
-                            val->loc
-                        )
-                    );
+                    pad_omitted_field(e, flat, val->loc);
                 } else {
                     int errors_before = err_count;
                     switch (t->type) {
@@ -2163,36 +2203,20 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                         default:
                         break;
                     }
-                    if (err_count == errors_before) pad_user_type_field(e, type, val, flat);
+                    if (err_count == errors_before) pad_user_type_field(e, type, val, flat, e->id);
                 }
                 break;
             }
-            /* Decrease fill amount according to field size */
-            fill = astproc_fold_constants(
-                astnode_create_arithmetic(
-                    MINUS_OPERATOR,
-                    fill,
-                    astnode_clone(e->field.size, flat->loc),
-                    flat->loc
-                )
-            );
         }
     }
     if (val != NULL) {
         err(init->loc, "too many field initializers");
     }
-    else if (list != NULL) {
-        /* All fields not initialized; fill remainder of struc with zeroes */
-        astnode_add_child(flat,
-            astnode_create_storage(
-                astnode_create_datatype(BYTE_DATATYPE, NULL, flat->loc),
-                fill,
-                flat->loc
-            )
-        );
-        fill = NULL; /* The storage node owns the remaining size. */
+    else {
+        /* Validate each omitted field before their storage can be merged. */
+        for (; list != NULL; list = list->next)
+            pad_omitted_field(list->entry, flat, flat->loc);
     }
-    astnode_finalize(fill);
     symtab_pop();
 }
 
@@ -2503,7 +2527,11 @@ static astnode *reduce_field_count(astnode *expr, const field_count_definition *
             field_count_definition current;
             for (previous = definitions; previous != NULL; previous = previous->parent) {
                 if (previous->symbol == symbol) {
-                    err(expr->loc, "circular definition in field size");
+                    astnode *owner = expr;
+                    while (owner != NULL && !astnode_is_type(owner, FIELD_PADDING_NODE))
+                        owner = owner->parent;
+                    err(expr->loc, owner != NULL && !*astnode_get_child(owner, 2)->string
+                        ? "circular definition in storage size" : "circular definition in field size");
                     return expr;
                 }
             }
@@ -2521,6 +2549,51 @@ static astnode *reduce_field_count(astnode *expr, const field_count_definition *
     return fold_constants(expr, FOLD_PC_NO);
 }
 
+/* Counts may still depend on addresses or the PC. Preserve those until the
+ * binary address pass or linker, but reject expressions neither can evaluate. */
+static int valid_storage_expression(const astnode *expr)
+{
+    symtab_entry *symbol;
+    switch (astnode_get_type(expr)) {
+        case INTEGER_NODE:
+        case CURRENT_PC_NODE:
+        return 1;
+
+        case IDENTIFIER_NODE:
+        symbol = symtab_lookup(expr->ident);
+        if (symbol == NULL || (symbol->type == LABEL_SYMBOL
+            && symbol->def == NULL && !(symbol->flags & EXTRN_FLAG))) {
+            err(expr->loc, "unknown symbol `%s'", expr->ident);
+            return 0;
+        }
+        if (symbol->type == LABEL_SYMBOL || symbol->type == VAR_SYMBOL
+            || symbol->type == PROC_SYMBOL) {
+            /* A forward alias may reveal an external only now. Keep it in
+             * the object's symbol table when assigning expression indices. */
+            symbol->ref_count++;
+            return 1;
+        }
+        return 0;
+
+        case ARITHMETIC_NODE:
+        return valid_storage_expression(LHS(expr))
+            && (RHS(expr) == NULL || valid_storage_expression(RHS(expr)));
+
+        default:
+        return 0;
+    }
+}
+
+static int valid_final_storage_count(const astnode *expr)
+{
+    int errors_before = err_count;
+    if (astnode_is_type(expr, INTEGER_NODE)) return 1;
+    if (valid_storage_expression(expr)) return 1;
+    if (err_count == errors_before)
+        err(expr->loc, "storage size expression does not evaluate to integer literal");
+    return 0;
+}
+
 static int resolve_field_padding(astnode *node, astnode **next, int final)
 {
     int errors_before = err_count;
@@ -2530,9 +2603,13 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
         astnode_finalize(node);
         return 0;
     }
-    if (astnode_is_type(count, INTEGER_NODE) && count->integer < 1) {
-        err(node->loc, "initializer for field `%s' exceeds field size",
-            astnode_get_child(node, 2)->string);
+    if (final && !valid_final_storage_count(count)) {
+        astnode_finalize(node);
+        return 0;
+    }
+    if (astnode_is_type(count, INTEGER_NODE)
+        && count->integer < astnode_get_child(node, 3)->integer) {
+        padding_error(node->loc, astnode_get_child(node, 2)->string);
         astnode_finalize(node);
         return 0;
     }
@@ -2541,11 +2618,14 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
         astnode_finalize(node);
         return 0;
     }
+    if (final && !valid_final_storage_count(padding)) {
+        astnode_finalize(node);
+        return 0;
+    }
     if (astnode_is_type(padding, INTEGER_NODE)
         && (padding->integer < 0 || padding->integer >= 0x10000)) {
         if (padding->integer < 0) {
-            err(node->loc, "initializer for field `%s' exceeds field size",
-                astnode_get_child(node, 2)->string);
+            padding_error(node->loc, astnode_get_child(node, 2)->string);
         } else {
             err(node->loc, "operand out of range");
         }
@@ -2564,6 +2644,7 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
     }
     /* Convert in place: replacing a top-level node scans the statement list
      * for its position, making many array instances unnecessarily quadratic. */
+    astnode_finalize(astnode_get_child(node, 3));
     astnode_finalize(astnode_get_child(node, 2));
     astnode_finalize(LHS(node));
     astnode_insert_child(node,
@@ -2631,12 +2712,21 @@ static int process_storage(astnode *storage, void *arg, astnode **next)
     if (astnode_is_type(expr, INTEGER_NODE)) {
         if ((expr->integer <= 0) || (expr->integer >= 0x10000)) {
             err(storage->loc, "operand out of range");
+            astnode_finalize(storage);
+            return 0;
         } else {
             if (in_dataseg)
                 dataseg_pc += expr->integer;
             else
                 codeseg_pc += expr->integer;
         }
+    } else if (type->datatype != USER_DATATYPE) {
+        astnode *count = astnode_clone(expr, expr->loc);
+        astnode_finalize(type);
+        astnode_insert_child(storage, count, 0);
+        astnode_add_children(storage, 2, astnode_create_string("", storage->loc),
+            astnode_create_integer(1, storage->loc));
+        storage->type = FIELD_PADDING_NODE;
     }
     return 1;
 }
@@ -3865,6 +3955,59 @@ static int is_field_ref(astnode *n)
     return 0;
 }
 
+/* Padding is evaluated later, but labels reached through its forward aliases
+ * must survive unused-label removal now. Do not substitute or diagnose here:
+ * count validation has its own timing and cycle diagnostics. Definitions no
+ * longer change in pass 2, so visit each alias once, including cyclic graphs. */
+static void retain_storage_references(const astnode *expr, int member)
+{
+    const astnode *child;
+    symtab_entry *symbol;
+    switch (astnode_get_type(expr)) {
+        case IDENTIFIER_NODE:
+        if (member) return;
+        symbol = symtab_lookup(expr->ident);
+        if (symbol == NULL) return;
+        symbol->ref_count++;
+        if (symbol->type == CONSTANT_SYMBOL && !(symbol->flags & STORAGE_REFS_FLAG)) {
+            symbol->flags |= STORAGE_REFS_FLAG;
+            retain_storage_references(symbol->def, 0);
+        }
+        return;
+
+        case DOT_NODE:
+        retain_storage_references(LHS(expr), member);
+        retain_storage_references(RHS(expr), 1);
+        return;
+
+        case INDEX_NODE:
+        /* A member name is local to its type; its index is an expression. */
+        if (!member && astnode_is_type(LHS(expr), IDENTIFIER_NODE)
+            && strcasecmp(LHS(expr)->ident, "defined") == 0) return;
+        retain_storage_references(LHS(expr), member);
+        retain_storage_references(RHS(expr), 0);
+        return;
+
+        case SCOPE_NODE:
+        /* Type members do not refer to statement labels. */
+        return;
+
+        default:
+        if (expr != NULL) {
+            for (child = expr->first_child; child != NULL; child = child->next_sibling)
+                retain_storage_references(child, 0);
+        }
+        return;
+    }
+}
+
+static int retain_padding_references(astnode *n, void *arg, astnode **next)
+{
+    retain_storage_references(LHS(n), 0);
+    retain_storage_references(RHS(n), 0);
+    return 1;
+}
+
 /**
  * Checks that the given identifier node is present in symbol table.
  * Issues error if it is not, and replaces with integer 0.
@@ -4123,6 +4266,12 @@ static int validate_dotref(astnode *n, void *arg, astnode **next)
     if (astnode_is_type(left, INDEX_NODE)) {
         left = LHS(left);   /* Need identifier */
     }
+    if (!astnode_is_type(left, IDENTIFIER_NODE)) {
+        err(n->loc, "left side of dotted reference is not a structure");
+        astnode_replace(n, astnode_create_integer(0, n->loc));
+        astnode_finalize(n);
+        return 0;
+    }
     father = symtab_lookup(left->ident);
     if (father == NULL) {
         err(n->loc, "unknown symbol `%s'", left->ident);
@@ -4134,7 +4283,8 @@ static int validate_dotref(astnode *n, void *arg, astnode **next)
         father->ref_count++;
         /* Verify the variable's type -- should be user-defined */
         type = LHS(father->def);
-        if ((type == NULL) || (type->datatype != USER_DATATYPE)) {
+        if (!astnode_is_type(type, DATATYPE_NODE) || type->datatype != USER_DATATYPE
+            || LHS(type) == NULL) {
             err(n->loc, "`%s' is not a structure", left->ident);
             /* Replace by integer 0 */
             astnode_replace(n, astnode_create_integer(0, n->loc) );
@@ -4156,13 +4306,42 @@ static int validate_dotref(astnode *n, void *arg, astnode **next)
                 return 0;
             } else {
                 /* Verify fields recursively */
+                int errors_before = err_count;
                 if (!push_symbol_scope(def->symtab, n->loc)) return 0;
                 validate_dotref_recursive(n, n);
                 symtab_pop();
+                /* An invalid member replaces and frees the complete expression. */
+                return err_count == errors_before;
             }
         }
     }
     return 1;
+}
+
+/* Called only when reduction cannot resolve a dotted reference. Before the
+ * final pass it may still be a forward reference. Later, use the normal
+ * validator rather than passing a DOT_NODE to an output encoder. The holder
+ * also gives validation ownership of a detached expression if it replaces it. */
+static astnode *validate_unresolved_dot(astnode *expr)
+{
+    astnode *parent, *previous, *holder = NULL;
+    astnode *next = NULL;
+    if (!finalizing_expressions || analysis_shadow_active) return expr;
+    parent = astnode_get_parent(expr);
+    previous = astnode_get_prev_sibling(expr);
+    if (parent == NULL) {
+        assert(previous == NULL && expr->next_sibling == NULL);
+        holder = astnode_create(LIST_NODE, expr->loc);
+        astnode_add_child(holder, expr);
+        parent = holder;
+    }
+    validate_dotref(expr, NULL, &next);
+    expr = previous != NULL ? previous->next_sibling : parent->first_child;
+    if (holder != NULL) {
+        astnode_remove_children(holder);
+        astnode_finalize(holder);
+    }
+    return expr;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -4174,6 +4353,7 @@ static int validate_dotref(astnode *n, void *arg, astnode **next)
  */
 void astproc_first_pass(astnode *root)
 {
+    finalizing_expressions = 0;
     /* Table of callback functions for our purpose. */
     static astnodeprocmap map[] = {
         { LABEL_NODE, enter_label },
@@ -4398,6 +4578,7 @@ static void report_unused_labels(int remove_labels)
                 warn(n->loc, "`%s' defined but not used", n->label);
             }
             if (remove_labels) {
+                e->def = NULL;
                 astnode_remove(n);
                 astnode_finalize(n);
                 //symtab_remove(n->label); ### FIXME leads to crash sometimes...
@@ -4526,24 +4707,30 @@ static int reduce_user_storage(astnode *n, void *arg, astnode **next)
     if (type->datatype == USER_DATATYPE) {
         e = symtab_lookup(LHS(type)->ident);
         if (e != NULL) {
-            /* Replace by DSB */
+            /* Expand one omitted structure element so its nested field counts
+             * are checked before their sizes are summed. */
             count = RHS(n);
-            byte_storage = astnode_create_storage(
-                astnode_create_datatype(BYTE_DATATYPE, NULL, type->loc),
-                astnode_create_arithmetic(
-                    MUL_OPERATOR,
-                    astnode_create_sizeof(
-                        astnode_create_identifier(LHS(type)->ident, n->loc),
-                        n->loc
-                    ),
-                    astnode_clone(count, n->loc),
-                    n->loc
-                ),
-                n->loc
-            );
+            if (e->type == STRUC_SYMBOL) {
+                symtab_entry field = {0};
+                astnode *flat = astnode_create(LIST_NODE, n->loc);
+                field.id = "";
+                field.def = n;
+                field.field.size = astnode_create_arithmetic(MUL_OPERATOR,
+                    astnode_create_sizeof(astnode_clone(type, n->loc), n->loc),
+                    astnode_clone(count, n->loc), n->loc);
+                pad_omitted_field(&field, flat, n->loc);
+                byte_storage = astnode_remove_children(flat);
+                astnode_finalize(flat);
+                astnode_finalize(field.field.size);
+            } else {
+                byte_storage = checked_padding(astnode_clone(count, n->loc),
+                    astnode_create_arithmetic(MUL_OPERATOR,
+                        astnode_create_sizeof(astnode_clone(type, n->loc), n->loc),
+                        astnode_clone(count, n->loc), n->loc), "", 1, n->loc);
+            }
             astnode_replace(n, byte_storage);
             astnode_finalize(n);
-            *next = byte_storage;
+            if (byte_storage != NULL) *next = byte_storage;
             return 0;
         } else {
             err(n->loc, "unknown symbol `%s'", LHS(type)->ident);
@@ -4573,6 +4760,7 @@ void astproc_second_pass(astnode *root)
         { UNION_DECL_NODE, noop },
         { ENUM_DECL_NODE, noop },
         { RECORD_DECL_NODE, noop },
+        { FIELD_PADDING_NODE, retain_padding_references },
         { 0, NULL }
     };
     in_dataseg = 0; /* codeseg is default */
@@ -4825,6 +5013,7 @@ static int flatten_var_decl(astnode *var, void *arg, astnode **next)
  */
 void astproc_third_pass(astnode *root)
 {
+    finalizing_expressions = 1;
     /* Table of callback functions for our purpose. */
     static astnodeprocmap map[] = {
         { INSTRUCTION_NODE, translate_instruction },
@@ -5311,30 +5500,27 @@ static int write_data(astnode *data, void *arg, astnode **next)
  */
 static int write_storage(astnode *storage, void *arg, astnode **next)
 {
+    astnode *count = eval_expression(RHS(storage));
+    if (!astnode_is_type(count, INTEGER_NODE)) {
+        err(storage->loc, "storage size expression does not evaluate to integer literal");
+        astnode_finalize(count);
+        return 0;
+    }
     if (in_dataseg) {
-        astnode *count = eval_expression(RHS(storage));
-        if (count) {
-            if (astnode_get_type(count) == INTEGER_NODE) {
-                if ((count->integer > 0) && (count->integer < 0x10000)) {
-                    dataseg_pc += count->integer;
-                }
-            }
-            astnode_finalize(count);
+        if ((count->integer > 0) && (count->integer < 0x10000)) {
+            dataseg_pc += count->integer;
         }
+        astnode_finalize(count);
         return 1;
     }
     FILE *fp = (FILE *)arg;
     astnode *type = LHS(storage);
-    astnode *count = eval_expression(RHS(storage));
     assert(type->datatype == BYTE_DATATYPE);
-    if (count) {
-        int i;
-        assert(astnode_get_type(count) == INTEGER_NODE);
-        for (i = 0; i < count->integer; ++i)
-            fputc(0, fp);
-        codeseg_pc += count->integer;
-        astnode_finalize(count);
-    }
+    int i;
+    for (i = 0; i < count->integer; ++i)
+        fputc(0, fp);
+    codeseg_pc += count->integer;
+    astnode_finalize(count);
     return 0;
 }
 
