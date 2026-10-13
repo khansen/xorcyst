@@ -27,8 +27,13 @@ class BackendPerformance(unittest.TestCase):
         if source.count(signature) != 1:
             raise AssertionError('expected one child-index definition to instrument')
         instrumented = root / 'astnode.c'
-        instrumented.write_text(source.replace(signature, signature.replace(
-            'astnode_get_child_index', 'test_real_child_index')))
+        source = source.replace(signature, signature.replace(
+            'astnode_get_child_index', 'test_real_child_index'))
+        source = source.replace('        n->parent = p;',
+                                '        test_list_nodes++; n->parent = p;')
+        source = source.replace('s = s->next_sibling) ;',
+                                's = s->next_sibling) test_list_nodes++;')
+        instrumented.write_text(source)
         processor = (REPO / 'astproc.c').read_text()
         signature = 'static astnode *substitute_ident(astnode *expr)\n{'
         if processor.count(signature) != 1:
@@ -93,6 +98,42 @@ class BackendPerformance(unittest.TestCase):
                         _, (nodes, _) = self.run_measured(['--pure-binary', source, '-o', output, *flags])
                         self.assertEqual(output.read_bytes(), b'\xea' * count + data)
                         self.assertLessEqual(nodes, 16 * count, 'data merging scanned retained statements')
+
+    def test_ast_splicing_preserves_ownership_and_order(self):
+        self.run_measured(['--test-ast-splicing'])
+
+    def test_aggregate_list_work_scales_linearly(self):
+        with tempfile.TemporaryDirectory(prefix='xasm-aggregate-work-') as directory:
+            root = Path(directory)
+            source, output = root / 'input.asm', root / 'output.bin'
+            for elements in (1, 2):
+                for kind in ('literal', 'named', 'forward'):
+                    for debug in (False, True):
+                        samples = []
+                        for count in (256, 1024):
+                            declaration = str(elements) if kind == 'literal' else 'Count'
+                            definition = f'Count={elements}\n'
+                            body = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                                    f'.struc Array\nitems .Point[{declaration}]\ntail .byte\n.ends\n'
+                                    + '.Array {{1,2},$5A}\n' * count + 'After: .word After\n')
+                            source.write_text((definition if kind == 'named' else '') + body
+                                              + (definition if kind == 'forward' else ''))
+                            with self.subTest(elements=elements, kind=kind, debug=debug, count=count):
+                                flags = ['--debug'] if debug else []
+                                result, (indices, _) = self.run_measured([
+                                    '--pure-binary', source, '-o', output, *flags])
+                                match = re.search(rb'LIST_WORK nodes=(\d+)', result.stderr)
+                                self.assertIsNotNone(match, result.stderr.decode())
+                                work = indices + int(match[1])
+                                samples.append(work)
+                                element = b'\x01\x02' + b'\0\0' * (elements - 1) + b'\x5A'
+                                expected = element * count
+                                expected += len(expected).to_bytes(2, 'little')
+                                self.assertEqual(output.read_bytes(), expected)
+                                self.assertLessEqual(work, 400 * count)
+                        self.assertEqual(len(samples), 2)
+                        self.assertLessEqual(samples[1], samples[0] * 4.1,
+                                             'list work grew faster than the instance count')
 
     def test_repeated_constant_aliases_have_bounded_expansion_work(self):
         with tempfile.TemporaryDirectory(prefix='xasm-constant-work-') as directory:
