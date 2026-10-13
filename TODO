@@ -14,9 +14,6 @@
 
 Known defects and follow-ups:
 
-- The user-type array count resolver expands repeated aliases as trees. Cache
-  resolved symbols per evaluation to avoid exponential work while preserving
-  assignment-time values and cycle detection.
 - Repeated aggregate instances still require quadratic statement-list work,
   including when counts are literal. Profile list replacement and merging.
 - Numeric-only .char data is omitted from object output; strings already use

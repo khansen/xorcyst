@@ -116,6 +116,21 @@ class Expressions(unittest.TestCase):
         self.assertEqual(linked.returncode, 0, linked.stderr.decode())
         self.assertEqual((self.root / 'linked.bin').read_bytes(), bytes.fromhex('02 80 AA'))
 
+    def test_repeated_alias_cycle_reports_one_error_per_use(self):
+        depth = 12
+        definitions = ''.join(f'A{i} .equ A{i+1}+A{i+1}\n' for i in range(depth))
+        definitions += f'A{depth} .equ A{depth}\n'
+        for field in (False, True):
+            body = ('.struc S\nitems .byte[Count]\n.ends\n.S {{1}}\n' if field
+                    else '.byte Count\n')
+            for pure in (False, True):
+                with self.subTest(field=field, pure=pure):
+                    result, output = self.assemble(body + 'Count .equ A0\n' + definitions, pure)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(b'error:'), 1, result.stderr.decode())
+                    self.assertIn(b'circular', result.stderr)
+                    self.assertEqual(output.read_bytes(), b'previous output')
+
     def test_cycles_fail_once_per_use_and_preserve_output(self):
         for definitions in ('Value .equ Value\n', 'Value .equ Alias\nAlias .equ Value\n',
                             'Value .equ Alias+1\nAlias .equ <Value\n'):
