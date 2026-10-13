@@ -1635,17 +1635,39 @@ static astnode *reduce_index(astnode *expr)
  * corresponding expression.
  * @param expr The expression whose defines to substitute
  */
-static astnode *substitute_defines(astnode *expr)
+typedef struct constant_expansion {
+    symtab_entry *symbol;
+    const struct constant_expansion *parent;
+} constant_expansion;
+
+static astnode *substitute_defines_recursive(astnode *expr, const constant_expansion *parents)
 {
     switch (astnode_get_type(expr)) {
         case ARITHMETIC_NODE:
-        substitute_defines(LHS(expr));
-        substitute_defines(RHS(expr));
+        substitute_defines_recursive(LHS(expr), parents);
+        substitute_defines_recursive(RHS(expr), parents);
         break;
 
-        case IDENTIFIER_NODE:
-        expr = substitute_ident(expr);
-        break;
+        case IDENTIFIER_NODE: {
+            symtab_entry *symbol = symtab_lookup(expr->ident);
+            const constant_expansion *seen;
+            constant_expansion current = {symbol, parents};
+            if (symbol == NULL || symbol->type != CONSTANT_SYMBOL) break;
+            for (seen = parents; seen != NULL; seen = seen->parent) {
+                if (seen->symbol == symbol) {
+                    astnode *zero;
+                    err(expr->loc, "circular constant definition `%s'", symbol->id);
+                    /* Poison this use, not the definition. Later passes must
+                     * not expand it again or write a bogus symbol index. */
+                    zero = astnode_create_integer(0, expr->loc);
+                    astnode_replace(expr, zero);
+                    astnode_finalize(expr);
+                    return zero;
+                }
+            }
+            expr = substitute_defines_recursive(substitute_ident(expr), &current);
+            return fold_constants(expr, FOLD_PC_NO);
+        }
 
         case SIZEOF_NODE:
         expr = reduce_sizeof(expr);
@@ -1658,17 +1680,17 @@ static astnode *substitute_defines(astnode *expr)
         case INDEX_NODE:
         {
             astnode *id = LHS(expr);
-            substitute_defines(id);
-            /* Don't substitute argument of defined() */
+            /* defined() inspects the spelling, not a constant's value. */
             if (!(astnode_is_type(id, IDENTIFIER_NODE) && strcasecmp(id->ident, "defined") == 0)) {
-                substitute_defines(RHS(expr));
+                substitute_defines_recursive(id, parents);
+                substitute_defines_recursive(RHS(expr), parents);
             }
         }
         break;
 
         case DOT_NODE:
-        substitute_defines(LHS(expr));
-        substitute_defines(RHS(expr));
+        substitute_defines_recursive(LHS(expr), parents);
+        substitute_defines_recursive(RHS(expr), parents);
         break;
 
         default:
@@ -1676,6 +1698,11 @@ static astnode *substitute_defines(astnode *expr)
         break;
     }
     return expr;
+}
+
+static astnode *substitute_defines(astnode *expr)
+{
+    return substitute_defines_recursive(expr, NULL);
 }
 
 /**
@@ -1862,7 +1889,13 @@ static astnode *checked_padding(astnode *count, astnode *bytes,
                                 const char *field, int minimum, location loc)
 {
     astnode *node;
+    int errors_before = err_count;
     bytes = reduce_expression(bytes, FOLD_PC_NO);
+    if (err_count != errors_before) {
+        astnode_finalize(count);
+        astnode_finalize(bytes);
+        return NULL;
+    }
     if ((astnode_is_type(count, INTEGER_NODE) && count->integer < minimum)
         || (astnode_is_type(bytes, INTEGER_NODE) && bytes->integer < 0)) {
         padding_error(loc, field);
@@ -4022,7 +4055,19 @@ static int validate_ref(astnode *n, void *arg, astnode **next)
     if (is_field_ref(n)) {
         return 1;   /* Validated by validate_dotref() */
     }
+    astnode *context = n->parent;
     symtab_entry * e = symtab_lookup(n->ident);
+    while (context != NULL && context->type != LIST_NODE
+           && context->type != FIELD_PADDING_NODE) context = context->parent;
+    /* Padding has its own validation barrier and cycle diagnostic. */
+    if (e != NULL && e->type == CONSTANT_SYMBOL
+        && !astnode_is_type(context, FIELD_PADDING_NODE)) {
+        /* Expansion can reuse n's freed address after several substitutions.
+         * We know this is a constant: always revisit its replacement, even
+         * when its pointer compares equal, before removing unused labels. */
+        *next = substitute_defines(n);
+        return 0;
+    }
     if (e == NULL) {
         /* Maybe it is part of an enumeration */
         if (symtab_list_type(ENUM_SYMBOL, &list) < 0) {

@@ -48,6 +48,12 @@ span:hover a.copiable-link {visibility: visible}
 <dd><p>Make sure <var class="var">identifier</var> is a macro and not a label, constant or other type of symbol.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">circular constant definition `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>A constant refers back to itself, directly or through other constants. Break
+the cycle. Forward aliases in data and instruction operands are resolved before
+their final identifiers are validated and written to an object file.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">circular definition in field size</samp>&rsquo;</dt>
 <dd><p>A constant used to determine the size of an explicitly initialized user-type
 array field refers to itself, directly or through other constants. Break the
