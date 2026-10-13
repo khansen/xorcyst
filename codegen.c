@@ -496,6 +496,7 @@ static void put_statement(FILE *fp, const astnode *n, location *loc)
             if (astnode_get_type(expr) == INTEGER_NODE) {
                 /* Constant, output as binary */
                 switch (type->datatype) {
+                    case CHAR_DATATYPE:
                     case BYTE_DATATYPE:
                     buf_append(expr->integer);
                     break;
@@ -525,6 +526,7 @@ static void put_statement(FILE *fp, const astnode *n, location *loc)
                 buf_flush(fp);
                 /* Output 3-byte sequence: [type-cmd] [expr-id] */
                 switch (type->datatype) {
+                    case CHAR_DATATYPE:
                     case BYTE_DATATYPE: put_1(fp, XASM_CMD_DB);  break;
                     case WORD_DATATYPE: put_1(fp, XASM_CMD_DW);  break;
                     case DWORD_DATATYPE:    put_1(fp, XASM_CMD_DD);  break;

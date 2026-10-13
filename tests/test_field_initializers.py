@@ -1014,6 +1014,68 @@ tail .char
                 self.assertEqual(result.stderr.count(b"circular definition in field size"), 1,
                                  result.stderr.decode())
 
+    def test_numeric_characters_emit_bytes_in_objects(self):
+        declarations = ('.struc TextFields\ntext .char[3]\ntail .byte\n.ends\n'
+                        '.union TextChoice\ntext .char[3]\nwide .dword\n.ends\n')
+        for body, expected in (
+                ('.char 65,0,255\n.byte $5A\n', bytes.fromhex('41 00 FF 5A')),
+                ('.TextFields {{65,0,255},$5A}\n', bytes.fromhex('41 00 FF 5A')),
+                ('.TextChoice {{65,0,255}}\n.byte $5A\n', bytes.fromhex('41 00 FF 00 5A'))):
+            with self.subTest(body=body):
+                self.assert_bytes(body, expected, declarations)
+        charmap = self.root / 'map.txt'
+        charmap.write_text('A=0x99\n')
+        self.assert_bytes(f'.charmap "{charmap}"\n.char 65\n.char "A",65\n'
+                          '.TextFields {{65,65},$5A}\n.TextChoice {"A"}\n',
+                          bytes.fromhex('41 99 41 41 41 00 5A 99 00 00 00'), declarations)
+
+    def test_numeric_character_relocations_and_following_addresses(self):
+        for field in (False, True):
+            declarations = '.struc C\ntext .char\n.ends\n'
+            body = '.C {<After}\n' if field else '.char <After\n'
+            for pure in (False, True):
+                for debug in (False, True):
+                    with self.subTest(field=field, pure=pure, debug=debug):
+                        source = ('.org $8000\n' if pure else '') + declarations
+                        source += body + 'After: nop\n.word After\n'
+                        result, output = self.assemble(source, pure_binary=pure,
+                                                      options=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        if not pure: output = self.link(output, 0x8000)
+                        self.assertEqual(output.read_bytes(), bytes.fromhex('01 EA 01 80'))
+
+    def test_numeric_character_range_warnings_match_output_modes(self):
+        for value in (300, -200, 65, -1):
+            for body in (f".char {value}\n", f".C {{{value}}}\n",
+                         f".char Value\nValue={value}\n"):
+                for pure in (False, True):
+                    for no_warn in (False, True):
+                        with self.subTest(value=value, body=body, pure=pure, no_warn=no_warn):
+                            source = ".struc C\ntext .char\n.ends\n" + body + ".byte $5A\n"
+                            result, output = self.assemble(source, pure_binary=pure,
+                                                          options=("--no-warn",) if no_warn else ())
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr.count(b"operand out of range; truncated"),
+                                             int(not no_warn and value in (300, -200)), result.stderr.decode())
+                            if not pure: output = self.link(output)
+                            self.assertEqual(output.read_bytes(), bytes([value & 255, 0x5A]))
+
+    def test_numeric_character_external_relocation(self):
+        result, output = self.assemble('.char <Remote\n.byte $5A\n', pure_binary=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        provider = self.root / 'provider.asm'
+        provider.write_text('.public Remote\nRemote: .byte $AA\n')
+        result = subprocess.run([str(XASM), str(provider), '-o', str(self.root / 'provider.o')],
+                                capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        script = self.root / 'link.script'
+        script.write_text('link{file=output.o,origin=$8000}\n'
+                          'link{file=provider.o,origin=$8034}\n')
+        result = subprocess.run([str(XLNK), 'link.script', '-o', 'linked.bin'],
+                                cwd=self.root, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'linked.bin').read_bytes(), bytes.fromhex('34 5A AA'))
+
     def test_character_storage_and_short_strings(self):
         declarations = """.struc Sample
 number .byte

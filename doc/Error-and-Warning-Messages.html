@@ -115,6 +115,11 @@ count, including when the count is named or defined after the instance.
 <dd><p>You supplied the wrong amount of arguments to the macro. Check the macro definition if you&rsquo;re unsure how many arguments it takes, and try again.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">left side of dotted reference is not a structure</samp>&rsquo;</dt>
+<dd><p>The left side of a member reference became a value, such as an integer after
+constant substitution, instead of a structure instance identifier.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">member `<var class="var">sub-struct-identifier</var>' of `<var class="var">struct-identifier</var>' is not a structure</samp>&rsquo;</dt>
 <dd><p>The expression <code class="code"><var class="var">struct-identifier</var>.<var class="var">sub-struct-identifier</var>.<var class="var">some-member</var></code> did not resolve because <var class="var">sub-struct-identifier</var> is not a structure.
 </p>
@@ -145,6 +150,12 @@ count, including when the count is named or defined after the instance.
 </dd>
 <dt>&lsquo;<samp class="samp">string or integer argument expected</samp>&rsquo;</dt>
 <dd><p>The <code class="code">message</code> directive takes a string or integer as its argument.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">storage size expression does not evaluate to integer literal</samp>&rsquo;</dt>
+<dd><p>A storage count must be an integer expression. Object output can retain valid
+references to addresses resolved by the linker; pure-binary output requires
+the expression to resolve after its address passes.
 </p>
 </dd>
 <dt>&lsquo;<samp class="samp">structure initializer expected</samp>&rsquo;</dt>
