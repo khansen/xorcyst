@@ -1,3 +1,26 @@
+Version 1.9.2:
+- Validate deferred counts in direct storage, omitted fields and built-in array
+  padding before storage merging and object encoding, avoiding dropped storage
+  and spurious 256-byte fills. Preserve valid zero-length fields and storage
+  grouping in initialized and uninitialized structures.
+- Retain labels reached through forward count aliases before unused-label
+  removal, so listing and analysis options no longer change assembly results
+  or unused-label warnings.
+- Diagnose invalid dotted references and unresolved storage expressions without
+  crashes or invalid objects, preserving existing output files on failure.
+- Resolve forward constant aliases in ordinary operands and sizeof label data,
+  with cycle detection and validation of the symbols at the end of a chain.
+- Accept previously defined named counts in unions, in the constant scope,
+  and avoid cascaded errors after an invalid union declaration.
+- Cache completed integer aliases within each evaluation and remove repeated
+  statement-list scans when expanding aggregates and merging adjacent data.
+- Emit numeric .char data and relocations as bytes in objects. Preserve string
+  character maps and match binary-mode out-of-range truncation warnings.
+- Preserve listing schemas and instruction-record schema version 3. Deferred
+  zero counts on omitted structure-array fields remain unsupported, and union
+  dimensions must be known at declaration time. Other known limitations,
+  including address-dependent counts and local-label aliases, remain in TODO.
+
 Version 1.9.1:
 - Validate deferred counts of explicitly initialized user-type array fields
   before storage merging and object encoding. Reject zero and negative counts,
