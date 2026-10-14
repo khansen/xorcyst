@@ -274,6 +274,111 @@ class InputHandling(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                     self.assertEqual((self.root / 'output').read_bytes(), expected)
 
+    def test_linker_zero_page_layout_updates_forward_and_backward_labels(self):
+        for origin in (0, 0x80, 0xF0, 0x100, 0x8000):
+            for debug in (False, True):
+                for wide in (False, True):
+                    with self.subTest(origin=origin, debug=debug, wide=wide):
+                        mnemonic = 'lda.w' if wide else 'lda'
+                        source = f'Start: {mnemonic} Target\nbne Start\nTarget: nop\n.word Start,Target\n'
+                        result = self.run_tool('xasm', source, pure_binary=False,
+                                               arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        (self.root / 'output').rename(self.root / 'unit.o')
+                        result = self.run_tool('xlnk', f'link{{file=unit.o,origin={origin}}}\n')
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        short = origin < 0x100 and not wide
+                        length = 2 if short else 3
+                        end = origin + length + 2
+                        expected = (bytes([0xA5 if short else 0xAD])
+                                    + end.to_bytes(1 if short else 2, 'little')
+                                    + bytes([0xD0, 256-length-2, 0xEA])
+                                    + origin.to_bytes(2, 'little') + end.to_bytes(2, 'little'))
+                        self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_linker_zero_page_boundary_requires_repeated_layout(self):
+        # Far initially lies at $100. Shortening the second LDA brings it to
+        # $FF; the first LDA can only shorten on the next relocation pass.
+        source = 'lda Far\nlda Near\nNear: .byte 0\nFar: nop\n.word Near,Far\n'
+        for debug in (False, True):
+            result = self.run_tool('xasm', source, pure_binary=False,
+                                   arguments=('--debug',) if debug else ())
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            (self.root / 'output').rename(self.root / 'unit.o')
+            result = self.run_tool('xlnk', 'link{file=unit.o,origin=$F9}\n')
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual((self.root / 'output').read_bytes(),
+                             bytes.fromhex('A5 FE A5 FD 00 EA FD 00 FE 00'))
+
+    def test_linker_zero_page_relaxation_relocates_following_units(self):
+        for bank in (False, True):
+            for debug in (False, True):
+                with self.subTest(bank=bank, debug=debug):
+                    for name, source in (
+                        ('consumer.o', '.extrn Target:label\nlda Target\njmp Target\n'),
+                        ('provider.o', '.public Target\nTarget: nop\n.word Target\n')):
+                        result = self.run_tool('xasm', source, pure_binary=False,
+                                               arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        (self.root / 'output').rename(self.root / name)
+                    script = 'bank{size=32,origin=0}\n' if bank else ''
+                    script += 'link{file=consumer.o}\nlink{file=provider.o}\n'
+                    if bank: script += 'pad{offset=12}\n'
+                    result = self.run_tool('xlnk', script)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    expected = bytes.fromhex('A5 05 4C 05 00 EA 05 00')
+                    if bank: expected += bytes(24)  # Remaining bank space is padded too.
+                    self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_linker_fixed_address_labels_survive_relaxation(self):
+        # LDA fixed; fixed @ $A0: NOP; DW fixed. A fixed address is not the
+        # current output position and must not be overwritten by layout.
+        code = bytes.fromhex('f7ad0000f60800a0f400eaf90000f3')
+        (self.root / 'unit.o').write_bytes(object_file(code=code, expressions=[bytes.fromhex('080000')]))
+        result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('A5 A0 EA A0 00'))
+
+    def test_linker_relaxes_only_unsigned_byte_addresses(self):
+        for expression, expected in (('240101', 'AD FF FF'), ('0100', 'A5 00'),
+                                     ('01ff', 'A5 FF'), ('020100', 'AD 00 01')):
+            with self.subTest(expression=expression):
+                (self.root / 'unit.o').write_bytes(object_file(
+                    code=bytes.fromhex('f7ad0000f3'), expressions=[bytes.fromhex(expression)]))
+                result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex(expected))
+
+    def test_linker_rejects_operand_that_outgrows_relaxed_mode(self):
+        result = self.run_tool('xasm', 'lda $102-Target\nTarget: nop\n', pure_binary=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        (self.root / 'output').rename(self.root / 'unit.o')
+        result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+        self.assertEqual(result.returncode, 1, result.stderr.decode())
+        self.assertIn(b"instruction operand doesn't fit in 1 byte", result.stderr)
+
+    def test_linker_rejects_negative_final_zero_page_addresses(self):
+        for instruction in ('lda Target-3', 'lda Target-3,x', 'ldx Target-3,y'):
+            for debug in (False, True):
+                with self.subTest(instruction=instruction, debug=debug):
+                    result = self.run_tool('xasm', instruction + '\nTarget: nop\n',
+                                           pure_binary=False, arguments=('--debug',) if debug else ())
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    (self.root / 'output').rename(self.root / 'unit.o')
+                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertIn(b"instruction operand doesn't fit in 1 byte", result.stderr)
+
+    def test_linker_keeps_negative_immediates_and_backward_branches(self):
+        # An expression-backed immediate exercises write_instr, rather than a
+        # byte already folded by xasm. The branch still uses a signed offset.
+        code = bytes.fromhex('f7a90000f7d00001f3')
+        expressions = [bytes.fromhex('240101'), bytes.fromhex('0100')]
+        (self.root / 'unit.o').write_bytes(object_file(code=code, expressions=expressions))
+        result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('A9 FF D0 FC'))
+
     def test_storage_counts_are_bounded_before_any_output(self):
         expressions = [b'\x04' + n.to_bytes(4, 'big') for n in
                        (0, 65536, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF)]

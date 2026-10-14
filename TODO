@@ -78,5 +78,7 @@ Known defects and follow-ups:
   in binary mode. This also affects counts that use such literal operands.
 - Forward strings differ between binary and object output, and exported forward
   constant aliases can still fail object encoding.
-- When linking below $100, shortening an instruction with a forward label to
-  zero-page addressing can leave later symbol addresses at their former values.
+- Pure-binary assembler relaxation can still select zero page for an operand
+  that becomes negative after shortening (lda Target-3 / Target: nop at origin
+  zero). The linker now rejects this case instead of publishing a truncated
+  address; the assembler needs the equivalent final-mode validation.
