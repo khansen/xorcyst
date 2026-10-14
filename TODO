@@ -14,10 +14,6 @@
 
 Known defects and follow-ups:
 
-- Deferred nonpositive storage counts outside explicit user-type initializer
-  padding can produce oversized zero fills in object output. Cover omitted
-  user-type fields and initialized/omitted built-in arrays; distinguish invalid
-  counts from valid zero padding before object encoding.
 - Forward alias chains in ordinary operands can fail in pure-binary output or
   produce objects with invalid local symbol indices. sizeof(label) also cannot
   resolve multi-level forward aliases in storage counts.
@@ -28,3 +24,5 @@ Known defects and follow-ups:
   assignment-time values and cycle detection.
 - Repeated aggregate instances still require quadratic statement-list work,
   including when counts are literal. Profile list replacement and merging.
+- Numeric-only .char data is omitted from object output; strings already use
+  byte encoding. Keep numeric characters independent of the character map.

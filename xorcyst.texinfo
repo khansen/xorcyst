@@ -1030,6 +1030,12 @@ Note that an enumerated value is encoded as a @code{byte}.
 
 @end itemize
 
+Storage counts that resolve to assembly-time constants are validated before
+adjacent storage is merged. Ordinary byte, word and dword storage must occupy
+between 1 and 65535 bytes per directive, including when the count is defined
+later in the source. Zero remaining padding after a field initializer is valid
+and emits no bytes in either binary or object output.
+
 @subsection Defining data of user-defined types
 
 The general syntax is
@@ -1071,6 +1077,13 @@ two byte fields, @code{@{1, 2@}} initializes @code{points} to the four bytes
 @code{1, 2, 0, 0}. The next field initializer belongs to the next field of
 the containing structure. This rule also applies to array fields in unions.
 
+An omitted array field may have zero elements; it occupies no space. Negative
+counts are errors. Standalone storage directives and the outer count of
+@code{.T[n]} still require a positive count. For an omitted structure-array
+field, a zero count must be known when the instance is expanded: expansion
+reserves one element to validate nested fields before a deferred count is
+resolved. A deferred zero count for that case is rejected. An explicit empty
+built-in array initializer can occupy zero bytes when its declared count is zero.
 An explicitly initialized user-type array field must have at least one element,
 even when the element type occupies zero bytes. For structure fields with a
 constant count, a value available when the instance is expanded is captured
@@ -1658,6 +1671,10 @@ Make sure @var{identifier} is a macro and not a label, constant or other type of
 A constant used to determine the size of an explicitly initialized user-type
 array field refers to itself, directly or through other constants. Break the
 cycle so the count and padding can be evaluated.
+
+@item circular definition in storage size
+A constant used by standalone storage or an omitted field refers to itself,
+directly or through other constants. Break the cycle so its size can be evaluated.
 
 @item conditional expression does not evaluate to literal
 Conditional assembly with the @code{.if}-directive requires that the expression tested can be evaluated immediately, so it can't contain references to labels and such (since these aren't computed by the assembler, that's the linker's job).

@@ -43,9 +43,12 @@ class FieldInitializers(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
-    def assemble(self, source, *, pure_binary=True, options=()):
+    def assemble(self, source, *, pure_binary=True, options=(), fresh_output=False):
         assembly = self.root / "input.asm"
         binary = self.root / ("output.bin" if pure_binary else "output.o")
+        # Failure tests may seed an output file to verify it survives an error.
+        if fresh_output and binary.exists():
+            binary.unlink()
         assembly.write_text(source)
         result = subprocess.run([str(XASM), *(["--pure-binary"] if pure_binary else []),
                                  *options, str(assembly), "-o", str(binary)],
@@ -54,6 +57,8 @@ class FieldInitializers(unittest.TestCase):
 
     def link(self, object_file, origin=0):
         script, binary = self.root / "link.script", self.root / "linked.bin"
+        if binary.exists():
+            binary.unlink()
         script.write_text(f"link{{file={object_file.name},origin=${origin:04X}}}\n")
         result = subprocess.run([str(XLNK), str(script), "-o", str(binary)],
                                 cwd=self.root, capture_output=True, timeout=10)
@@ -72,8 +77,373 @@ class FieldInitializers(unittest.TestCase):
                         binary = self.link(binary)
                     self.assertEqual(binary.read_bytes(), expected * (2 if macro else 1))
 
+    def test_invalid_deferred_storage_counts_preserve_output(self):
+        declarations = (".struc Point\npx .byte\npy .byte\n.ends\n"
+                        ".struc Box\nitems .Point[Count]\ntail .byte[4]\n.ends\n"
+                        ".struc BufferFields\nitems .byte[Count]\ntail .byte[4]\n.ends\n")
+        bodies = ((".dsb Count\n.dsb 4\n", (0, -1), b"operand out of range"),
+                  ("buf .word[Count]\n", (0, -1), b"operand out of range"),
+                  (".Box {,{1,2,3,4}}\n", (0, -1), b"operand out of range"),
+                  (".Box {}\n", (0, -1), b"operand out of range"),
+                  (".BufferFields {{1},{1,2,3,4}}\n", (0, -1), b"initializer for field `items' exceeds field size"),
+                  (".BufferFields {,{1,2,3,4}}\n", (-1,), b"operand out of range"),
+                  (".BufferFields {}\n", (-1,), b"operand out of range"),
+                  ("buf .Point[Count]\n", (0, -1), b"operand out of range"))
+        for body, invalid_counts, message in bodies:
+            for value in (*invalid_counts, 2):
+                for pure_binary in (False, True):
+                    for debug in (False, True):
+                        with self.subTest(body=body, value=value, binary=pure_binary, debug=debug):
+                            target = self.root / ("output.bin" if pure_binary else "output.o")
+                            target.write_bytes(b"previous output")
+                            source = declarations + body + ".byte $5A\nCount = " + str(value) + "\n"
+                            result, output = self.assemble(source, pure_binary=pure_binary,
+                                                          options=("--debug",) if debug else ())
+                            if value == 2:
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                if not pure_binary: output = self.link(output)
+                                self.assertTrue(output.read_bytes().endswith(b"Z"))
+                            else:
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+                                self.assertIn(message, result.stderr)
+                                self.assertEqual(output.read_bytes(), b"previous output")
+
+    def test_deferred_builtin_padding_bytes_and_following_addresses(self):
+        for kind, width in (("byte", 1), ("char", 1), ("word", 2), ("dword", 4)):
+            for count in (1, 2):
+                for initializer in ("{1}", "", "{}"):
+                    declarations = f".struc S\nitems .{kind}[Count]\ntail .byte\n.ends\n"
+                    value = 65 if kind == "char" else 1
+                    expected = ((bytes([value]) + bytes(width - 1)) if initializer == "{1}" else bytes(width))
+                    expected += bytes(width * (count - 1)) + b"Z"
+                    for pure_binary in (False, True):
+                        for debug in (False, True):
+                            with self.subTest(kind=kind, count=count, init=initializer,
+                                              binary=pure_binary, debug=debug):
+                                field_init = '"A"' if kind == "char" and initializer == "{1}" else initializer
+                                source = declarations + f".S {{{field_init},$5A}}\nAfter: .word After\nCount = {count}\n"
+                                result, output = self.assemble(source, pure_binary=pure_binary,
+                                                              options=("--debug",) if debug else ())
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                origin = 0 if pure_binary else 0x8000
+                                if not pure_binary: output = self.link(output, origin)
+                                self.assertEqual(output.read_bytes(), expected + (origin + len(expected)).to_bytes(2, "little"))
+
+    def test_zero_padding_is_distinct_from_invalid_storage(self):
+        sources = (".struc Empty\n.ends\nbuf .Empty[Count]\n",
+                   ".struc S\nitems .byte[Count-1]\n.ends\n.S {{}}\n")
+        for source in sources:
+            for pure_binary in (False, True):
+                with self.subTest(source=source, binary=pure_binary):
+                    result, output = self.assemble(source + ".byte $5A\nCount = 1\n", pure_binary=pure_binary)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    if not pure_binary: output = self.link(output)
+                    self.assertEqual(output.read_bytes(), b"Z")
+
+    def test_deferred_storage_validation_in_expansions_and_data_segment(self):
+        for wrapper in ("{}", ".macro Emit\n{}\n.endm\nEmit\n", ".rept 2\n{}\n.endm\n", ".dataseg\n{}"):
+            for value in (0, -1, 65536):
+                with self.subTest(wrapper=wrapper, value=value):
+                    result, _ = self.assemble(wrapper.format(".dsb Count\n.dsb 4\n") + f"Count = {value}\n")
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr.count(b"error:"), 2 if ".rept" in wrapper else 1,
+                                     result.stderr.decode())
+
+    def test_nested_omitted_fields_validate_each_count(self):
+        declarations = (".struc Inner\nitems .byte[Count]\ntail .byte[4]\n.ends\n"
+                        ".struc Outer\ninner .Inner[2]\ntail .byte\n.ends\n")
+        for count in (-1, 0, 1, 2):
+            for body in (".Outer {}\n", ".Outer {,$5A}\n", "buffer .Outer\n"):
+                for pure_binary in (False, True):
+                    with self.subTest(count=count, body=body, binary=pure_binary):
+                        result, output = self.assemble(declarations + body + f"Count={count}\n",
+                                                       pure_binary=pure_binary)
+                        if count < 0:
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b"operand out of range", result.stderr)
+                        else:
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            if not pure_binary: output = self.link(output)
+                            self.assertEqual(output.read_bytes(), bytes(2*(count+4)) + (b"Z" if "$5A" in body else b"\0"))
+
+    def test_zero_length_omitted_fields_preserve_storage(self):
+        for kind in ("byte", "char", "word", "dword", "Empty", "Point"):
+            for definition in ("literal", "before", "after_declaration", "deferred"):
+                if kind in ("Empty", "Point") and definition == "deferred":
+                    continue  # Deferred zero structure-array counts remain unsupported.
+                count = "0" if definition == "literal" else "Zero"
+                declarations = (".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
+                                ".struc Packet\nlen .byte\n"
+                                f"payload .{kind}[{count}]\n.ends\n")
+                if definition == "before": declarations = "Zero=0\n" + declarations
+                if definition == "after_declaration": declarations += "Zero=0\n"
+                for data_segment in (False, True):
+                    body = (".dataseg\ninst .Packet[2]\n.codeseg\n" if data_segment else
+                            ".Packet\ninst .Packet[2]\n")
+                    body += ".byte $5A\nlda #sizeof Packet\nAfter: .word After\n"
+                    if definition == "deferred": body += "Zero=0\n"
+                    for pure in (False, True):
+                        for debug in (False, True):
+                            with self.subTest(kind=kind, definition=definition, data=data_segment,
+                                              pure=pure, debug=debug):
+                                result, output = self.assemble(declarations + body, pure_binary=pure,
+                                                              options=("--debug",) if debug else ())
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                expected = (b"" if data_segment else bytes(3)) + bytes.fromhex("5A A9 01")
+                                origin = 0 if pure else 0x8000
+                                expected += (origin + len(expected)).to_bytes(2, "little")
+                                if not pure: output = self.link(output, origin)
+                                self.assertEqual(output.read_bytes(), expected)
+
+    def test_zero_length_fields_in_partial_initializers(self):
+        for count in ("0", "Zero"):
+            declarations = (f".struc S\nhead .byte\nitems .byte[{count}]\ntail .byte\n.ends\n")
+            for body in (".S {$11}\n", ".S {$11,}\n", ".S {$11,,0}\n"):
+                for pure in (False, True):
+                    with self.subTest(count=count, body=body, pure=pure):
+                        result, output = self.assemble(declarations + body + "After: .word After\nZero=0\n",
+                                                      pure_binary=pure)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        if not pure: output = self.link(output, 0x8000)
+                        self.assertEqual(output.read_bytes(), bytes.fromhex("11 00 02") + (b"\0" if pure else b"\x80"))
+
+    def test_cyclic_direct_storage_has_storage_diagnostic(self):
+        for pure in (False, True):
+            with self.subTest(pure=pure):
+                result, _ = self.assemble(".dsb Value\nValue .equ Value\n", pure_binary=pure)
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
+                self.assertIn(b"circular definition in storage size", result.stderr)
+
+    def test_zero_length_nonempty_structure_fields(self):
+        for count in ("0", "Count"):
+            for deferred in (False, True):
+                declarations = (".struc Point\npx .byte\npy .byte\n.ends\n"
+                                f".struc S\nhead .byte\npoints .Point[{count}]\ntail .byte\n.ends\n")
+                for body in (".S {$11}\n", ".S {$11,}\n", ".S {$11,,0}\n", "inst .S[1]\n"):
+                    for pure in (False, True):
+                        for debug in (False, True):
+                            with self.subTest(count=count, deferred=deferred, body=body, pure=pure, debug=debug):
+                                source = declarations + ("" if deferred else "Count=0\n")
+                                source += body + "After: .word After\n" + ("Count=0\n" if deferred else "")
+                                target = self.root / ("output.bin" if pure else "output.o")
+                                target.write_bytes(b"previous output")
+                                result, output = self.assemble(source, pure_binary=pure,
+                                                              options=("--debug",) if debug else ())
+                                if count == "Count" and deferred and not body.startswith("inst"):
+                                    # One element is expanded before its count is known; this
+                                    # documented limit must fail instead of emitting that element.
+                                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                    self.assertIn(b"operand out of range", result.stderr)
+                                    self.assertEqual(output.read_bytes(), b"previous output")
+                                else:
+                                    # Uninitialized storage expands in pass 2, after this
+                                    # definition is available, so it can omit the element.
+                                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                    if not pure: output = self.link(output, 0x8000)
+                                    expected = bytes([0 if body.startswith("inst") else 0x11, 0, 2,
+                                                      0 if pure else 0x80])
+                                    self.assertEqual(output.read_bytes(), expected)
+
+    def test_invalid_dotted_field_counts_preserve_output(self):
+        declarations = (".enum Kind\nOne\n.ende\n"
+                        ".struc Point\npx .byte\npy .byte\n.ends\ninst .Point\n")
+        references = (("Nope.fx", b"unknown symbol `Nope'"),
+                      ("Kind.One", b"`Kind' is not a structure"),
+                      ("Point.py", b"`Point' is not a structure"),
+                      ("inst.missing", b"`missing' is not a member of `inst'"),
+                      ("inst.px.missing", b"member `px' of `inst' is not a structure"))
+        for reference, message in references:
+            for kind in ("byte", "Point"):
+                for body in (".S {$11}\n", ".S {$11,{1}}\n", "buf .S[1]\n"):
+                    for pure in (False, True):
+                        for analysis in (False, True):
+                            with self.subTest(reference=reference, kind=kind, body=body, pure=pure, analysis=analysis):
+                                source = declarations + f".struc S\nhd .byte\nitems .{kind}[{reference}]\ntl .byte\n.ends\n" + body
+                                target = self.root / ("output.bin" if pure else "output.o")
+                                target.write_bytes(b"previous output")
+                                options = ("--debug", f"--listing={self.root / 'listing.json'}",
+                                           "--listing-format=json", f"--xref={self.root / 'xref.json'}") if analysis else ()
+                                result, output = self.assemble(source, pure_binary=pure, options=options)
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(message, result.stderr)
+                                self.assertEqual(output.read_bytes(), b"previous output")
+
     def test_reported_record_reproduction(self):
         self.assert_bytes(".Flags {, 1, 0}\n", b"\x40")
+
+    def test_forward_dotted_alias_counts_fail_without_replacing_output(self):
+        declarations = (".struc S\nfa .byte\nfb .byte\n.ends\ninst .S\nv: .S {1,2}\n"
+                        ".struc Layout\nhead .byte\nitems .byte[Alias]\n.ends\n"
+                        ".struc NestedCount\nhead .byte\nitems .S[Alias]\n.ends\n")
+        references = (("Nope.fx", b"unknown symbol `Nope'"),
+                      ("inst.missing", b"`missing' is not a member of `inst'"),
+                      ("inst.fa.deep", b"member `fa' of `inst' is not a structure"),
+                      ("v.fb", b"`v' is not a structure"))
+        bodies = (".dsb Alias\n", "buf .byte[Alias]\n",
+                  ".dataseg\nbuf .byte[Alias]\n.codeseg\n", ".Layout {$11}\n",
+                  ".Layout {$11,{1}}\n", ".NestedCount {$11}\n", "buf .NestedCount\n")
+        for reference, diagnostic in references:
+            for body in bodies:
+                for pure in (False, True):
+                    for debug in (False, True):
+                        with self.subTest(reference=reference, body=body, pure=pure, debug=debug):
+                            target = self.root / ("output.bin" if pure else "output.o")
+                            target.write_bytes(b"previous output")
+                            result, output = self.assemble(declarations + body + f".byte $77\nAlias .equ {reference}\n",
+                                                          pure_binary=pure, options=("--debug",) if debug else ())
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(diagnostic, result.stderr)
+                            self.assertNotIn(b"put_expr_recursive", result.stderr)
+                            self.assertEqual(output.read_bytes(), b"previous output")
+
+    def test_forward_invalid_dotted_operands_fail_on_first_branch(self):
+        declarations = ".struc S\nfa .byte\nfb .byte\n.ends\nv: .S {1,2}\n"
+        for reference, diagnostic in (("v.fb", b"`v' is not a structure"),
+                                      ("Nope.fx", b"unknown symbol `Nope'"),
+                                      ("Val.fx", b"is not a structure")):
+            for body in ("lda Alias\n", ".word Alias\n", ".dsb Alias\n"):
+                for pure in (False, True):
+                    for analysis in (False, True):
+                        with self.subTest(reference=reference, body=body, pure=pure, analysis=analysis):
+                            target = self.root / ("output.bin" if pure else "output.o")
+                            target.write_bytes(b"previous output")
+                            options = ("--debug", f"--listing={self.root / 'late.json'}",
+                                       "--listing-format=json", f"--xref={self.root / 'late.xref'}") if analysis else ()
+                            result, output = self.assemble(declarations + body + f"Alias .equ {reference}\nVal=1\n",
+                                                          pure_binary=pure, options=options)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(diagnostic, result.stderr)
+                            self.assertEqual(output.read_bytes(), b"previous output")
+
+    def test_unresolved_alias_storage_counts_fail_cleanly(self):
+        for value in ("Undefined", '"text"'):
+            for body in (".dsb Alias\n", ".dataseg\nbuf .byte[Alias]\n.codeseg\n"):
+                for pure in (False, True):
+                    with self.subTest(value=value, body=body, pure=pure):
+                        target = self.root / ("output.bin" if pure else "output.o")
+                        target.write_bytes(b"previous output")
+                        result, output = self.assemble(body + f".byte $77\nAlias .equ {value}\n", pure_binary=pure)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b"unknown symbol `Undefined'" if value == "Undefined" else
+                                      b"storage size expression does not evaluate to integer literal", result.stderr)
+                        self.assertEqual(output.read_bytes(), b"previous output")
+
+    def test_address_dependent_storage_remains_supported(self):
+        for body, expected in ((".org $8000\n.dsb $8002-$\n.byte $77\n", b"\0\0w"),
+                               (".dsb 1+($-$)\n.byte $77\n", b"\0w"),
+                               ("Begin: .byte 1\nLast: .dsb Last-Begin\n.byte $77\n", b"\1\0w")):
+            for debug in (False, True):
+                with self.subTest(body=body, debug=debug):
+                    result, output = self.assemble(body, options=("--debug",) if debug else ())
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(output.read_bytes(), expected)
+        provider = self.root / "provider.asm"
+        provider.write_text(".public Count\nCount=2\n")
+        built = subprocess.run([str(XASM), str(provider), "-o", str(self.root / "provider.o")],
+                               capture_output=True, timeout=10)
+        self.assertEqual(built.returncode, 0, built.stderr.decode())
+        for expression in ("Count", "Count+1", "Alias"):
+            with self.subTest(expression=expression):
+                result, output = self.assemble(f".extrn Count:label\n.dsb {expression}\n.byte $77\nAlias .equ Count\n",
+                                              pure_binary=False)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                script = self.root / "external.script"
+                script.write_text(f"link{{file={output.name},origin=$8000}}\nlink{{file=provider.o,origin=$9000}}\n")
+                linked = subprocess.run([str(XLNK), str(script), "-o", "external.bin"], cwd=self.root,
+                                        capture_output=True, timeout=10)
+                self.assertEqual(linked.returncode, 0, linked.stderr.decode())
+                self.assertEqual((self.root / "external.bin").read_bytes(), bytes(3 if expression == "Count+1" else 2) + b"w")
+
+    def test_forward_count_aliases_retain_labels_without_analysis(self):
+        cases = (
+            ("Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nAlias .equ Last-Begin\n", "01 00 77"),
+            ("Lab: .byte 1\n.dsb Alias\n.byte $77\nAlias .equ Lab+2\n", "01 00 00 77"),
+            ("Lab: .byte 1\n.dsb Alias\n.byte $77\nAlias .equ Mid\nMid .equ Lab+2\n", "01 00 00 77"),
+            (".struc S\nitems .byte[Alias]\n.ends\nBegin: .byte 1\nLast: .S {}\n"
+             ".byte $77\nAlias .equ Last-Begin\n", "01 00 77"),
+            (".struc S\nitems .byte[Alias]\n.ends\nBegin: .byte 1\nLast: .S {{2}}\n"
+             ".byte $77\nAlias .equ Last-Begin+1\n", "01 02 00 77"),
+        )
+        for case, (source, expected) in enumerate(cases):
+            for proc in (False, True):
+                body = ".proc Routine\n" + source + ".endp\n" if proc else source
+                for pure in (False, True):
+                    for debug in (False, True):
+                        for analysis in ("none", "listing", "xref"):
+                            with self.subTest(case=case, proc=proc, pure=pure, debug=debug, analysis=analysis):
+                                path = self.root / f"analysis-{case}-{proc}-{pure}-{debug}-{analysis}"
+                                options = ("--debug",) if debug else ()
+                                if analysis == "listing":
+                                    options += (f"--listing={path}", "--listing-format=json")
+                                elif analysis == "xref":
+                                    options += (f"--xref={path}",)
+                                result, output = self.assemble(body, pure_binary=pure, options=options,
+                                                               fresh_output=True)
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertNotIn(b"defined but not used", result.stderr)
+                                if not pure:
+                                    output = self.link(output)
+                                self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
+                                if analysis != "none":
+                                    self.assertTrue(path.is_file())
+
+    def test_count_aliases_do_not_retain_unrelated_labels(self):
+        cases = (
+            ("Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nUnused: .byte 5\n"
+             "Alias .equ Last-Begin+defined(Unused)\n", "01 00 00 77 05", ("Unused",), (False, True)),
+            (".struc S\nfa .byte\nfb .byte\n.ends\nfb: .byte 9\n"
+             "Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nAlias .equ S::fb+Last-Begin\n",
+             "09 01 00 00 77", ("fb",), (False, True)),
+            (".enum E\nfb\nfc\n.ende\nfc: .byte 9\n"
+             "Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nAlias .equ E::fc+Last-Begin\n",
+             "09 01 00 00 77", ("fc",), (False, True)),
+            ("Begin: .byte 1\nLast: .byte 2\nAlias .equ Last-Begin\n",
+             "01 02", ("Begin", "Last"), (False, True)),
+            (".macro Emit\n.dsb Alias\n.endm\nBegin: .byte 1\nLast: .byte 2\nAlias .equ Last-Begin\n",
+             "01 02", ("Begin", "Last"), (False, True)),
+            ("Begin: .byte 1\nLast: .byte 2\n.if 0\n.dsb Alias\n.endif\nAlias .equ Last-Begin\n",
+             "01 02", ("Begin", "Last"), (False, True)),
+            ("Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nAlias .equ Last-Begin\n"
+             ".undef Alias\nAlias .equ 3\n", "01 00 00 00 77", ("Begin", "Last"), (False, True)),
+            # Reach the walk's guards: types declared after the alias, defined()
+            # in a count, and an alias whose dotted base is declared later.
+            ("Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nAlias .equ S::fb+Last-Begin\n"
+             ".struc S\nfa .byte\nfb .byte\n.ends\nfb: .byte 9\n", "01 00 00 77 09", ("fb",), (False, True)),
+            ("Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nAlias .equ E::fc+Last-Begin\n"
+             ".enum E\nfb\nfc\n.ende\nfc: .byte 9\n", "01 00 00 77 09", ("fc",), (False, True)),
+            ("Begin: .byte 1\nLast: .dsb Last-Begin+defined(Unused)\n.byte $77\nUnused: .byte 5\n",
+             "01 00 00 77 05", ("Unused",), (False, True)),
+            # Pure binary does not resolve data-variable addresses; both dotted
+            # cases therefore check the member-address difference via the linker.
+            (".struc S\nfa .byte\nfb .byte\n.ends\nAlias .equ v.fb-v\nv .S {1,2}\nfb: .byte 9\n"
+             ".dsb Alias\n.byte $77\n", "01 02 09 00 77", ("fb",), (False,)),
+            (".struc S\nfa .byte\nfb .byte\n.ends\nv .S {1,2}\nfb: .byte 9\n"
+             ".dsb Alias\n.byte $77\nAlias .equ v.fb-v\n", "01 02 09 00 77", ("fb",), (False,)),
+        )
+        for case, (source, expected, unused, modes) in enumerate(cases):
+            for pure in modes:
+                for debug in (False, True):
+                    for analysis in ("none", "listing", "xref"):
+                        with self.subTest(case=case, pure=pure, debug=debug, analysis=analysis):
+                            path = self.root / f"unused-{case}-{pure}-{debug}-{analysis}"
+                            options = ("--debug",) if debug else ()
+                            if analysis == "listing":
+                                options += (f"--listing={path}", "--listing-format=json")
+                            elif analysis == "xref":
+                                options += (f"--xref={path}",)
+                            result, output = self.assemble(source, pure_binary=pure, options=options,
+                                                           fresh_output=True)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            messages = [line.split(": warning: ", 1)[1]
+                                        for line in result.stderr.decode().splitlines() if ": warning: " in line]
+                            self.assertCountEqual(messages, [f"`{name}' defined but not used" for name in unused])
+                            if not pure:
+                                output = self.link(output)
+                            self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
+                            if analysis != "none":
+                                self.assertTrue(path.is_file())
 
     def test_record_omission_positions(self):
         # All subsets cover leading, middle, trailing, consecutive and all-omitted fields.

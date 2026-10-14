@@ -54,6 +54,11 @@ array field refers to itself, directly or through other constants. Break the
 cycle so the count and padding can be evaluated.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">circular definition in storage size</samp>&rsquo;</dt>
+<dd><p>A constant used by standalone storage or an omitted field refers to itself,
+directly or through other constants. Break the cycle so its size can be evaluated.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">conditional expression does not evaluate to literal</samp>&rsquo;</dt>
 <dd><p>Conditional assembly with the <code class="code">.if</code>-directive requires that the expression tested can be evaluated immediately, so it can&rsquo;t contain references to labels and such (since these aren&rsquo;t computed by the assembler, that&rsquo;s the linker&rsquo;s job).
 </p>
