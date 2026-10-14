@@ -1763,6 +1763,10 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
 
         case SIZEOF_NODE:
         expr = reduce_sizeof(expr);
+        /* A user type's size is itself an expression. Resolve constants in
+         * the copied size too, including counts introduced by index scaling.
+         * Otherwise an object can encode a constant as a local symbol index. */
+        expr = substitute_defines_recursive(expr, parents, cache);
         break;
 
         case MASK_NODE:

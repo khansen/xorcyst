@@ -65,6 +65,10 @@ class Expressions(unittest.TestCase):
         self.assert_output('.byte Alias\nAlias .equ Value\nValue=3\n.byte Alias\nValue=4\n.byte Alias\n',
                            bytes.fromhex('04 03 04'))
 
+    def test_explicit_sizeof_captures_known_reassignable_counts(self):
+        self.assert_output('Count=1\n.struc S\nhead .byte\nitems .word[Count]\ntail .byte\n.ends\n'
+                           '.byte sizeof(S)\nCount=3\n.byte sizeof(S)\n', bytes.fromhex('04 08'))
+
     def test_nested_indexed_instance_members_in_objects(self):
         source = ('.struc Point\npx .byte\npy .byte\n.ends\n'
                   '.struc Box\npoints .Point[2]\n.ends\nv .Box\n'
@@ -75,6 +79,53 @@ class Expressions(unittest.TestCase):
                     result, output = self.assemble(source, False, debug, listing)
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                     self.assertEqual(self.linked(output), bytes.fromhex('00 00 00 00 03 80'))
+
+    def test_indexed_structure_sizes_resolve_named_counts(self):
+        for definition, placement in (("", "literal"), ("Count=2\n", "before"),
+                                      ("Count .equ 2\n", "before"),
+                                      (".define Count 2\n", "before"),
+                                      ("Count .equ Other\nOther=2\n", "after"),
+                                      ("Count .equ -Other\nOther=-2\n", "after")):
+            types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                     '.struc S\nhead .byte\npoints .Point[Count]\ntail .byte\n.ends\n'
+                     '.struc Box\nprefix .byte\narr .S[2]\nsuffix .byte\n.ends\n')
+            operands = ('lda inst[1].head\n'
+                        '.word inst[1]-inst,inst[1].points[1].py-inst,inst[1].tail-inst\n'
+                        '.word box.arr[1].head-box,box.arr[1].points[1].py-box\n'
+                        '.byte sizeof(S),sizeof(Box)\n.word inst,box\n')
+            if placement == 'literal': types = types.replace('[Count]', '[2]')
+            for external in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(definition=definition, placement=placement,
+                                          external=external, debug=debug, listing=listing):
+                            declarations = ((definition if placement == 'before' else '') + types)
+                            storage = '.dataseg\ninst .S[4]\nbox .Box\n.codeseg\n'
+                            source = declarations + ('.extrn inst:S\n.extrn box:Box\n' if external else storage)
+                            source += operands + (definition if placement == 'after' else '')
+                            result, output = self.assemble(source, False, debug, listing)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            script = 'ram{start=$0200,end=$07FF}\nlink{file=output,origin=$8000}\n'
+                            if external:
+                                (self.root / 'provider.asm').write_text(
+                                    declarations + '.public inst,box\n' + storage
+                                    + (definition if placement == 'after' else ''))
+                                provider = subprocess.run([str(XASM), 'provider.asm', '-o', 'provider.o'],
+                                                          cwd=self.root, capture_output=True, timeout=10)
+                                self.assertEqual(provider.returncode, 0, provider.stderr.decode())
+                                script += 'link{file=provider.o}\n'
+                            (self.root / 'link.script').write_text(script)
+                            binary = self.root / 'linked.bin'
+                            binary.unlink(missing_ok=True)
+                            linked = subprocess.run([str(XLNK), 'link.script', '-o', binary.name],
+                                                    cwd=self.root, capture_output=True, timeout=10)
+                            self.assertEqual(linked.returncode, 0, linked.stderr.decode())
+                            data = binary.read_bytes()
+                            inst = int.from_bytes(data[-4:-2], 'little')
+                            self.assertGreaterEqual(inst, 0x200)
+                            expected = (b'\xad' + (inst + 6).to_bytes(2, 'little')
+                                        + bytes.fromhex('06 00 0A 00 0B 00 07 00 0B 00 06 0E'))
+                            self.assertEqual(data[:-4], expected)
 
     def test_alias_to_untyped_label_member_fails_cleanly(self):
         source = ('.struc Point\npx .byte\npy .byte\n.ends\n'
