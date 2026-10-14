@@ -14,13 +14,33 @@
 
 Known defects and follow-ups:
 
+- An omitted structure-array count that still depends on $ after constant
+  substitution uses first-element expansion and cannot become zero in
+  pure-binary mode. Object output retains its previous link-time behavior.
+  The binary remainder evaluates the count after the first element, changing
+  some layouts from 1.9.2, which evaluated it at the field start. Constants
+  and label differences support late zero counts, including nested layouts.
+- Equates (.equ and =) fold $ during pass 1, before deferred storage sizes
+  settle. They can capture a provisional PC, including after a late-zero
+  omitted structure array, ordinary .dsb or a built-in array. PC-dependent
+  counts defined this way no longer contain $ when later validation runs.
+  Defer or reject these captures when layout is uncertain; meanwhile use a
+  label for the final address, or define the count before allocating storage.
+- Both outer omitted-array counts and nested field counts that depend on $
+  can differ between binary and object output: binary uses the remainder's
+  PC after the first element for an outer count and each field's PC for nested
+  counts; object merging uses the start of the merged storage. At origin zero,
+  an omitted Inner[3-$] with two-byte elements and a trailing byte occupies
+  three bytes in binary, seven in object output and in 1.9.2. Keep address-
+  dependent field counts in labels/constants when both output modes must agree.
+- Conditional extents for late omitted structure-array counts add expression
+  evaluation work, especially for nested arrays and object output. Benchmark
+  omitted arrays too, not only explicitly initialized arrays, when reducing
+  this overhead. Known positive counts use direct expansion.
 - S::member offsets after a named-count field do not substitute constants in
   the copied offset. They can mis-link as local-symbol references, fail to link,
   or crash in binary address evaluation. Apply the sizeof substitution policy
   to reduce_scope too, with regression coverage.
-- An omitted structure-array field whose count resolves to zero only after the
-  instance is expanded is still rejected. Known zero counts and deferred zero
-  built-in field counts are supported; standalone storage still requires >0.
 - Shared alias chains ending in labels are expanded as trees, so evaluation
   time and object size can grow exponentially. Sufficiently deep definitions
   can also exhaust the recursive evaluator's stack.
@@ -38,11 +58,8 @@ Known defects and follow-ups:
 - Dotted references inside another member reference's index are not fully
   reduced or validated. Object encoding can report an unknown expression type
   but still exit 0 and write an unloadable object, including for invalid aliases.
-- Late PC- or address-dependent binary storage counts lack range and size
-  consistency checks against the address pass. Negative/zero/oversized counts
-  can be accepted, and changing sizes can silently give later operands wrong
-  addresses. A field remainder that becomes zero only at link time is also
-  encoded as storage and rejected by the linker instead of being omitted.
+- A field remainder that becomes zero only at link time is encoded as storage
+  and rejected by the linker instead of being omitted.
 - Data-segment storage counts built from data-segment labels can fail link
   layout with "storage size must evaluate to an integer during layout", even
   when the link script provides a RAM region.
@@ -55,6 +72,10 @@ Known defects and follow-ups:
   object with exit 0 instead of rejecting the initializer.
 - Signed integer overflow in constant folding is undefined (e.g.
   .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
+- Negative literal operands inside unresolved object expressions are read as
+  unsigned 32-bit values on 64-bit hosts. Signed comparisons can disagree with
+  binary output: L1: nop / L2: .byte (L2-L1+-2)<0 gives EA 00 linked, EA 01
+  in binary mode. This also affects counts that use such literal operands.
 - Forward strings differ between binary and object output, and exported forward
   constant aliases can still fail object encoding.
 - When linking below $100, shortening an instruction with a forward label to

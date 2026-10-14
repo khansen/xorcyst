@@ -83,8 +83,8 @@ class FieldInitializers(unittest.TestCase):
                         ".struc BufferFields\nitems .byte[Count]\ntail .byte[4]\n.ends\n")
         bodies = ((".dsb Count\n.dsb 4\n", (0, -1), b"operand out of range"),
                   ("buf .word[Count]\n", (0, -1), b"operand out of range"),
-                  (".Box {,{1,2,3,4}}\n", (0, -1), b"operand out of range"),
-                  (".Box {}\n", (0, -1), b"operand out of range"),
+                  (".Box {,{1,2,3,4}}\n", (-1,), b"operand out of range"),
+                  (".Box {}\n", (-1,), b"operand out of range"),
                   (".BufferFields {{1},{1,2,3,4}}\n", (0, -1), b"initializer for field `items' exceeds field size"),
                   (".BufferFields {,{1,2,3,4}}\n", (-1,), b"operand out of range"),
                   (".BufferFields {}\n", (-1,), b"operand out of range"),
@@ -170,8 +170,6 @@ class FieldInitializers(unittest.TestCase):
     def test_zero_length_omitted_fields_preserve_storage(self):
         for kind in ("byte", "char", "word", "dword", "Empty", "Point"):
             for definition in ("literal", "before", "after_declaration", "deferred"):
-                if kind in ("Empty", "Point") and definition == "deferred":
-                    continue  # Deferred zero structure-array counts remain unsupported.
                 count = "0" if definition == "literal" else "Zero"
                 declarations = (".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
                                 ".struc Packet\nlen .byte\n"
@@ -231,20 +229,229 @@ class FieldInitializers(unittest.TestCase):
                                 target.write_bytes(b"previous output")
                                 result, output = self.assemble(source, pure_binary=pure,
                                                               options=("--debug",) if debug else ())
-                                if count == "Count" and deferred and not body.startswith("inst"):
-                                    # One element is expanded before its count is known; this
-                                    # documented limit must fail instead of emitting that element.
-                                    self.assertEqual(result.returncode, 1, result.stderr.decode())
-                                    self.assertIn(b"operand out of range", result.stderr)
-                                    self.assertEqual(output.read_bytes(), b"previous output")
-                                else:
-                                    # Uninitialized storage expands in pass 2, after this
-                                    # definition is available, so it can omit the element.
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                if not pure: output = self.link(output, 0x8000)
+                                expected = bytes([0 if body.startswith("inst") else 0x11, 0, 2,
+                                                  0 if pure else 0x80])
+                                self.assertEqual(output.read_bytes(), expected)
+
+    def test_deferred_nested_layout_still_validates_each_count(self):
+        declarations = ('.struc Inner\nitems .byte[InnerCount]\ntail .byte[4]\n.ends\n'
+                        '.struc S\nitems .Inner[OuterCount]\ntail .byte[4]\n.ends\n')
+        for outer, inner in ((0, 1), (2, -1), (2, 1)):
+            for pure in (False, True):
+                with self.subTest(outer=outer, inner=inner, pure=pure):
+                    target = self.root / ('output.bin' if pure else 'output.o')
+                    target.write_bytes(b'previous output')
+                    source = declarations + f'.S {{}}\nOuterCount={outer}\nInnerCount={inner}\n'
+                    result, output = self.assemble(source, pure_binary=pure)
+                    if inner < 0:
+                        # A positive neighbor must not hide a negative count.
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'operand out of range', result.stderr)
+                        self.assertEqual(output.read_bytes(), b'previous output')
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        if not pure: output = self.link(output)
+                        self.assertEqual(output.read_bytes(), bytes(outer * (inner + 4) + 4))
+
+    def test_late_nested_counts_cannot_hide_behind_positive_fields(self):
+        for subtraction in (0, 1, 2):
+            for debug in (False, True):
+                with self.subTest(subtraction=subtraction, debug=debug):
+                    source = ('.struc Inner\nitems .byte[Last-Start-' + str(subtraction) + ']\n'
+                              'tail .byte[4]\n.ends\n.struc S\nitems .Inner[2]\ntail .byte[4]\n.ends\n'
+                              'Start: .byte 1\nLast: .S {}\nAfter: .word After\n')
+                    target = self.root / 'output.bin'
+                    target.write_bytes(b'previous output')
+                    result, output = self.assemble(source, options=('--debug',) if debug else ())
+                    if subtraction == 2:
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'operand out of range', result.stderr)
+                        self.assertEqual(output.read_bytes(), b'previous output')
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        expected = b'\1' + bytes(2 * (5-subtraction) + 4)
+                        self.assertEqual(output.read_bytes(), expected + len(expected).to_bytes(2, 'little'))
+
+    def test_late_negative_omitted_arrays_fail_in_both_output_modes(self):
+        for shape in ('flat', 'large_tail', 'nested', 'nested_large', 'empty_element', 'storage', 'standalone'):
+            inner = ('.struc Inner\nv .byte\nw .byte\n.ends\n' if shape != 'empty_element'
+                     else '.struc Inner\n.ends\n')
+            fields = 'hd .byte\nitems .Inner[N]\ntl .byte' + ('[8]' if shape == 'large_tail' else '')
+            types = inner + '.struc S\n' + fields + '\n.ends\n'
+            body = '.S {$11}\n'
+            outer_count = 4 if shape == 'nested_large' else 2
+            if shape in ('nested', 'nested_large'):
+                types += f'.struc Outer\nitems .S[{outer_count}]\ntl .byte[8]\n.ends\n'
+                body = '.Outer {}\n'
+            elif shape == 'storage': body = 'inst .S[2]\n'
+            elif shape == 'standalone': body = 'inst .Inner[N]\n.dsb 1\n'
+            # A large negative nested remainder must not cancel a $10000
+            # invalid-count marker when the outer array's padding is merged.
+            for count in ((-32768, 0, 1) if shape == 'nested_large' else (-3, -1, 0, 1, 2)):
+                invalid = count < 0 or (shape == 'standalone' and count == 0)
+                # Labels remain unresolved until binary layout / linking.
+                adjustment = f'-{1-count}' if count <= 1 else f'+{count-1}'
+                source = types + f'N .equ L2-L1{adjustment}\nL1: nop\nL2:\n' + body + 'After: .word After\n'
+                for pure in (False, True):
+                    for debug in (False, True):
+                        with self.subTest(shape=shape, count=count, pure=pure, debug=debug):
+                            target = self.root / ('output.bin' if pure else 'output.o')
+                            target.write_bytes(b'previous output')
+                            result, output = self.assemble(source, pure_binary=pure,
+                                                          options=('--debug',) if debug else ())
+                            if invalid and pure:
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(b'operand out of range', result.stderr)
+                                self.assertEqual(output.read_bytes(), b'previous output')
+                                continue
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            if invalid:
+                                script, linked = self.root / 'link.script', self.root / 'linked.bin'
+                                script.write_text(f'link{{file={output.name},origin=0}}\n')
+                                linked.write_bytes(b'previous linked output')
+                                linked_result = subprocess.run([str(XLNK), str(script), '-o', str(linked)],
+                                                               cwd=self.root, capture_output=True, timeout=10)
+                                self.assertNotEqual(linked_result.returncode, 0, linked_result.stderr.decode())
+                                self.assertIn(b'storage size out of range', linked_result.stderr)
+                                self.assertEqual(linked.read_bytes(), b'previous linked output')
+                            else:
+                                if not pure: output = self.link(output)
+                                element = bytes((0 if shape == 'empty_element' else 2) * count)
+                                prefix = b'\xea' + b'\x11' + element + bytes(8 if shape == 'large_tail' else 1)
+                                if shape in ('nested', 'nested_large', 'storage'):
+                                    prefix = b'\xea' + bytes(outer_count * (len(element) + 2)
+                                                             + (0 if shape == 'storage' else 8))
+                                elif shape == 'standalone': prefix = b'\xea' + bytes(len(element) + 1)
+                                self.assertEqual(output.read_bytes(), prefix + len(prefix).to_bytes(2, 'little'))
+
+    def test_empty_outer_array_discards_nested_link_time_guards(self):
+        source = ('.struc Inner\nv .byte\nw .byte\n.ends\n.struc Mid\n'
+                  'items .Inner[N]\ntl .byte\n.ends\n.struc S\nitems .Mid[M]\ntl .byte\n.ends\n'
+                  'L1: nop\nL2:\n.S {}\nAfter: .word After\n'
+                  'N .equ (L1-L2)*32768\nM .equ L2-L1-1\n')
+        for pure in (False, True):
+            for debug in (False, True):
+                with self.subTest(pure=pure, debug=debug):
+                    result, output = self.assemble(source, pure_binary=pure,
+                                                  options=('--debug',) if debug else (), fresh_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    if not pure: output = self.link(output)
+                    self.assertEqual(output.read_bytes(), bytes.fromhex('ea 00 02 00'))
+
+    def test_pc_equates_after_deferred_storage_document_provisional_values(self):
+        # Known limitation: equates fold $ in pass 1, before deferred sizes
+        # settle. Pin this separately from the label-based workaround; these
+        # provisional equate values are NOT the desired final addresses.
+        types = ('.struc Inner\nv .byte\nw .byte\n.ends\n.struc S\n'
+                 'hd .byte\nitems .Inner[Z]\ntl .byte\n.ends\n')
+        cases = ((types + '.S {$11}\n', 'Z .equ 0\n', b'\x11\0', 4),
+                 (types + 'L1:\nL2:\n.S {$11}\n', 'Z .equ L2-L1\n', b'\x11\0', 4),
+                 ('.struc S\nhd .byte\nitems .byte[Z]\ntl .byte\n.ends\n.S {$11}\n',
+                  'Z .equ 3\n', b'\x11' + bytes(4), 2),
+                 ('.byte 1\n.dsb Z\n', 'Z .equ 2\n', b'\1\0\0', 1))
+        for case, (body, definition, prefix, provisional) in enumerate(cases):
+            for binding in ('.equ $', '= $', 'label'):
+                here = 'Here: .word Here\n' if binding == 'label' else f'Here {binding}\n.word Here\n'
+                for pure in (False, True):
+                    for debug in (False, True):
+                        for listing in (False, True):
+                            with self.subTest(case=case, binding=binding, pure=pure, debug=debug, listing=listing):
+                                options = ['--debug'] if debug else []
+                                if listing: options += [f'--listing={self.root}/pc-equ-{case}-{binding}-{pure}-{debug}.txt']
+                                result, output = self.assemble(body + here + 'Lbl: .word Lbl\n' + definition,
+                                                              pure_binary=pure, options=options, fresh_output=True)
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                if not pure: output = self.link(output)
+                                captured = len(prefix) if binding == 'label' else provisional
+                                self.assertEqual(output.read_bytes(), prefix + captured.to_bytes(2, 'little')
+                                                 + (len(prefix) + 2).to_bytes(2, 'little'))
+
+    def test_nested_pc_counts_document_object_merging_difference(self):
+        source = ('.struc Inner\nhd .byte\nitems .byte[3-$]\n.ends\n'
+                  '.struc S\nitems .Inner\ntl .byte\n.ends\n.S {}\nAfter: .word After\n')
+        for pure in (False, True):
+            for debug in (False, True):
+                with self.subTest(pure=pure, debug=debug):
+                    result, output = self.assemble(source, pure_binary=pure,
+                                                  options=('--debug',) if debug else (), fresh_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    if not pure: output = self.link(output)
+                    size = 4 if pure else 5
+                    self.assertEqual(output.read_bytes(), bytes(size) + size.to_bytes(2, 'little'))
+
+    def test_omitted_structure_array_captures_known_counts(self):
+        declarations = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                        '.struc S\npoints .Point[Count]\ntail .byte\n.ends\n')
+        for later in (0, 3):
+            for pure in (False, True):
+                with self.subTest(later=later, pure=pure):
+                    result, output = self.assemble(declarations + 'Count=1\nPayload: .S {}\n'
+                                                  f'Count={later}\nAfter: .word After\n.byte sizeof(Payload)\n',
+                                                  pure_binary=pure, fresh_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    if not pure: output = self.link(output)
+                    self.assertEqual(output.read_bytes(), bytes.fromhex('00 00 00 03 00 03'))
+
+    def test_omitted_arrays_keep_pc_dependent_field_evaluation_positions(self):
+        inner = '.struc Inner\nhd .byte\nitems .byte[3-$]\n.ends\n'
+        cases = [
+            (inner + '.struc S\nitems .Inner\ntl .byte\n.ends\n.S {}\n', '00 00 00 00 04 00'),
+            (inner + '.struc S\nitems .Inner[Count]\ntl .byte\n.ends\n.S {}\nCount=1\n',
+             '00 00 00 00 04 00'),
+            (inner.replace('[3-$]', '[5-$]') + '.struc S\nitems .Inner[Last-First]\ntl .byte\n.ends\n'
+             'First: .byte 9\nLast: .S {}\n', '09 00 00 00 00 00 06 00'),
+        ]
+        cases.append(('.struc Inner\nfa .byte\nfb .byte\n.ends\n.struc S\n'
+                      'items .Inner[3-$]\ntl .byte\n.ends\n.S {}\n', '00 00 00 03 00'))
+        for case, (source, expected) in enumerate(cases):
+            for debug in (False, True):
+                for listing in (False, True):
+                    with self.subTest(case=case, debug=debug, listing=listing):
+                        options = ['--debug'] if debug else []
+                        if listing:
+                            options += [f'--listing={self.root}/pc-{case}-{debug}.json',
+                                        '--listing-format=json', '--listing-version=2']
+                        result, output = self.assemble(source + 'After: .word After\n',
+                                                      options=options, fresh_output=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
+
+    def test_late_zero_structure_array_fields_keep_following_addresses(self):
+        for placement in ("leading", "middle", "trailing"):
+            fields = {"leading": "items .Inner[Count]\nhd .byte\ntl .byte\n",
+                      "middle": "hd .byte\nitems .Inner[Count]\ntl .byte\n",
+                      "trailing": "hd .byte\ntl .byte\nitems .Inner[Count]\n"}[placement]
+            body = ".S {}\n" if placement == "leading" else ".S {$11}\n"
+            types = ".struc Inner\nv .byte\nw .byte\n.ends\n.struc S\n" + fields + ".ends\n"
+            for count in ("L2-L1", "Zero", "nested"):
+                declarations = types.replace("[Count]", f"[{count if count != 'nested' else 'L2-L1'}]")
+                if count == "nested": declarations = declarations.replace("v .byte", "v .byte[Width]")
+                for form in ("initialized", "macro", "storage", "data"):
+                    if form == "macro": instance = ".macro Emit\n" + body + ".endm\nEmit\n"
+                    elif form == "storage": instance = "inst .S[2]\n"
+                    elif form == "data": instance = ".dataseg\ninst .S[2]\n.codeseg\n"
+                    else: instance = body
+                    prefix = b"" if form == "data" else bytes(4) if form == "storage" else bytes(2) if placement == "leading" else b"\x11\0"
+                    # The linker cannot lay out data storage depending on code
+                    # labels yet; that separate limitation remains tracked in TODO.
+                    for pure in ((True,) if form == "data" and count in ("L2-L1", "nested") else (False, True)):
+                        for debug in (False, True):
+                            for listing in (False, True):
+                                with self.subTest(placement=placement, count=count, form=form,
+                                                  pure=pure, debug=debug, listing=listing):
+                                    options = ["--debug"] if debug else []
+                                    report = self.root / f"{placement}-{count}-{form}-{pure}-{debug}.json"
+                                    if listing: options += [f"--listing={report}", "--listing-format=json",
+                                                            f"--listing-version={2 if pure else 1}"]
+                                    source = declarations + "L1:\nL2:\n" + instance + "After: .word After\nZero .equ 0\nWidth=1\n"
+                                    result, output = self.assemble(source, pure_binary=pure,
+                                                                  options=options, fresh_output=True)
                                     self.assertEqual(result.returncode, 0, result.stderr.decode())
-                                    if not pure: output = self.link(output, 0x8000)
-                                    expected = bytes([0 if body.startswith("inst") else 0x11, 0, 2,
-                                                      0 if pure else 0x80])
-                                    self.assertEqual(output.read_bytes(), expected)
+                                    origin = 0 if pure else 0x8000
+                                    if not pure: output = self.link(output, origin)
+                                    self.assertEqual(output.read_bytes(), prefix + (origin+len(prefix)).to_bytes(2, "little"))
 
     def test_invalid_dotted_field_counts_preserve_output(self):
         declarations = (".enum Kind\nOne\n.ende\n"
@@ -395,6 +602,93 @@ class FieldInitializers(unittest.TestCase):
                         self.assertIn(b"unknown symbol `Undefined'" if value == "Undefined" else
                                       b"storage size expression does not evaluate to integer literal", result.stderr)
                         self.assertEqual(output.read_bytes(), b"previous output")
+
+    def test_late_storage_ranges_preserve_output(self):
+        bodies = (
+            '.org $8000\n.dsb $8000-$\n.byte $77\n',
+            '.org $8000\n.dsb $7FFF-$\n.dsb 4\n.byte $77\n',
+            '.org $8000\n.dsb $18000-$\n.byte $77\n',
+            '.org $8000\n.dsw $10000-($/2)\n.byte $77\n',
+            'Begin: .byte 1\nLast: .dsb Alias\n.byte $77\nAlias .equ Last-Begin-2\n',
+            '.struc S\nitems .byte[Alias]\ntail .byte[4]\n.ends\n'
+            'Begin: .byte 1\nLast: .S {}\n.byte $77\nAlias .equ Last-Begin-2\n',
+            '.dataseg\n.org $8000\nbuf .char[$7FFF-$]\n.codeseg\n.byte $77\n')
+        for case, source in enumerate(bodies):
+            for debug in (False, True):
+                for analysis in ('none', 'listing', 'xref'):
+                    with self.subTest(case=case, debug=debug, analysis=analysis):
+                        options = ['--debug'] if debug else []
+                        if analysis != 'none':
+                            options.append(f'--{analysis}={self.root}/{case}-{debug}-{analysis}.json')
+                        if analysis == 'listing': options += ['--listing-format=json', '--listing-version=2']
+                        (self.root / 'output.bin').write_bytes(b'previous output')
+                        result, output = self.assemble(source, options=options)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'out of range', result.stderr)
+                        self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_storage_size_changes_after_layout_preserve_output(self):
+        for segment in ('', '.dataseg\n'):
+            for debug in (False, True):
+                for listing in (False, True):
+                    with self.subTest(segment=segment, debug=debug, listing=listing):
+                        source = (segment + '.org $8000\n.dsb Later-$7FFE\n'
+                                  'Later: .byte $77\n.codeseg\nlda Later\n')
+                        options = ['--debug'] if debug else []
+                        if listing:
+                            options += [f'--listing={self.root}/changed-{bool(segment)}-{debug}.json',
+                                        '--listing-format=json', '--listing-version=2']
+                        (self.root / 'output.bin').write_bytes(b'previous output')
+                        result, output = self.assemble(source, options=options)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'storage size changed after address calculation', result.stderr)
+                        self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_late_storage_keeps_each_statement_pc_and_zero_field_remainders(self):
+        cases = (
+            ('.dsb 2\n.dsb 4-$\nAfter: .byte $77\n.word After\n', '00 00 00 00 77 04 00'),
+            ('.org $8000\n.dsb $8004-$\nAfter: .word After\n', '00 00 00 00 04 80'),
+            ('.struc S\nitems .word[Alias]\n.ends\n'
+             'Begin: .byte 1\nLast: .S {{2,3}}\nAfter: .byte $77\n.word After\n'
+             'Alias .equ Last-Begin+1\n', '01 02 00 03 00 77 05 00'),
+            ('Begin: .byte 1\nLast: .dsb Alias\nAfter: .byte $77\n.word After\n'
+             'Alias .equ Last-Begin\n', '01 00 77 02 00'))
+        for case, (source, expected) in enumerate(cases):
+            for debug in (False, True):
+                for listing in (False, True):
+                    with self.subTest(case=case, debug=debug, listing=listing):
+                        options = ['--debug'] if debug else []
+                        if listing:
+                            options += [f'--listing={self.root}/valid-{case}-{debug}.json',
+                                        '--listing-format=json', '--listing-version=2']
+                        result, output = self.assemble(source, options=options, fresh_output=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
+
+    def test_link_time_zero_remainders_keep_existing_object_grouping(self):
+        for fields, expected in (('fa .byte\nfb .byte\n', '01 00 00 77'),
+                                 ('items .byte[Alias]\n', '01 00 77')):
+            for instance in ('.S[Alias]', '.S'):
+                for debug in (False, True):
+                    for pure_binary in (False, True):
+                        with self.subTest(fields=fields, instance=instance, debug=debug, pure=pure_binary):
+                            source = ('.struc S\n' + fields + '.ends\nBegin: .byte 1\n'
+                                      'Last: ' + instance + '\n.byte $77\nAlias .equ Last-Begin\n')
+                            result, output = self.assemble(source, pure_binary=pure_binary,
+                                                          options=('--debug',) if debug else (),
+                                                          fresh_output=True)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            if not pure_binary: output = self.link(output, origin=0x8000)
+                            self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
+
+    def test_adjacent_maximum_storage_commands_remain_independent(self):
+        for pure_binary in (False, True):
+            with self.subTest(pure_binary=pure_binary):
+                result, output = self.assemble('.dsb 65535\n.dsb 1\n', pure_binary=pure_binary,
+                                              fresh_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                if not pure_binary: output = self.link(output)
+                self.assertEqual(output.read_bytes(), bytes(65536))
 
     def test_address_dependent_storage_remains_supported(self):
         for body, expected in ((".org $8000\n.dsb $8002-$\n.byte $77\n", b"\0\0w"),

@@ -2047,10 +2047,11 @@ static void pad_omitted_field(symtab_entry *field, astnode *flat, location loc)
             astnode *empty;
             astnode *nested;
             int errors_before = err_count;
+            int positive = 0;
             /* A named omitted field may contain no elements. Check in the
              * constant scope before expanding the first structure element;
              * standalone .T[n] storage still requires a positive outer count. */
-            if (*field->id) {
+            {
                 symtab *constants = symtab_tos();
                 astnode *count;
                 int zero;
@@ -2058,9 +2059,10 @@ static void pad_omitted_field(symtab_entry *field, astnode *flat, location loc)
                 if (!push_symbol_scope(constants, loc)) return;
                 count = reduce_expression_complete(astnode_clone(RHS(field->def), loc), FOLD_PC_NO);
                 zero = astnode_is_type(count, INTEGER_NODE) && count->integer == 0;
+                positive = astnode_is_type(count, INTEGER_NODE) && count->integer > 0;
                 astnode_finalize(count);
                 symtab_pop();
-                if (zero || err_count != errors_before) return;
+                if ((*field->id && zero) || err_count != errors_before) return;
             }
             for (seen = omitted_types; seen != NULL; seen = seen->parent) {
                 if (seen->type == definition) {
@@ -2075,8 +2077,32 @@ static void pad_omitted_field(symtab_entry *field, astnode *flat, location loc)
             omitted_types = &current;
             flatten_struc_recursive(definition, empty, nested);
             omitted_types = current.parent;
-            if (err_count == errors_before) pad_user_type_field(field, type, empty, nested, "");
-            astnode_add_child(flat, astnode_remove_children(nested));
+            if (err_count == errors_before && positive) {
+                /* A known positive count never discards the first element.
+                 * Keep the direct expansion; only unresolved counts need the
+                 * deferred container and its conditional size expressions. */
+                pad_user_type_field(field, type, empty, nested, "");
+                astnode_add_child(flat, astnode_remove_children(nested));
+            } else if (err_count == errors_before) {
+                astnode *padding = astnode_create(FIELD_PADDING_NODE, loc);
+                astnode *remainder = astnode_create(LIST_NODE, loc);
+                pad_user_type_field(field, type, empty, remainder, "");
+                if (err_count != errors_before) {
+                    astnode_finalize(padding);
+                    astnode_finalize(remainder);
+                } else {
+                    /* Keep the first element separate until aliases are resolved.
+                     * Its fields may use $, so combining their sizes would change
+                     * the PC at which those expressions are evaluated. */
+                    astnode_add_children(padding, 6,
+                        astnode_clone(RHS(field->def), loc),
+                        astnode_clone(field->field.size, loc),
+                        astnode_create_string("", loc),
+                        astnode_create_integer(*field->id ? 0 : 1, loc), nested, remainder);
+                    astnode_add_child(flat, padding);
+                    nested = NULL;
+                }
+            }
             astnode_finalize(nested);
             astnode_finalize(empty);
             return;
@@ -2793,17 +2819,29 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
                    || !astnode_is_type(padding, INTEGER_NODE))) {
         return 1;
     }
-    if (astnode_is_type(padding, INTEGER_NODE) && padding->integer == 0) {
-        /* Zero padding is valid, but an object-code storage count of zero
+    if (astnode_is_type(padding, INTEGER_NODE) && padding->integer == 0
+        && (!xasm_args.pure_binary || astnode_is_type(count, INTEGER_NODE))) {
+        /* Binary count-only checks must survive until label addresses exist.
+         * Zero padding is valid, but an object-code storage count of zero
          * encodes 256 bytes. Remove it before either output path sees it. */
         astnode_finalize(node);
         return 0;
     }
     /* Convert in place, retaining this statement's identity and location
      * without allocating a replacement node. */
-    astnode_finalize(astnode_get_child(node, 3));
-    astnode_finalize(astnode_get_child(node, 2));
-    astnode_finalize(LHS(node));
+    if (final && xasm_args.pure_binary
+        && (!astnode_is_type(count, INTEGER_NODE)
+            || !astnode_is_type(padding, INTEGER_NODE))) {
+        /* Keep the original element-count constraint until addresses exist.
+         * STORAGE children: datatype, byte size, count, field name, minimum.
+         * This also distinguishes a valid zero field remainder from .dsb 0. */
+        astnode_remove(count);
+        astnode_insert_child(node, count, 1);
+    } else {
+        astnode_finalize(astnode_get_child(node, 3));
+        astnode_finalize(astnode_get_child(node, 2));
+        astnode_finalize(LHS(node));
+    }
     astnode_insert_child(node,
         astnode_create_datatype(BYTE_DATATYPE, NULL, node->loc), 0);
     node->type = STORAGE_NODE;
@@ -2813,11 +2851,168 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
 
 static int process_field_padding(astnode *node, void *arg, astnode **next)
 {
+    /* Six-child padding temporarily owns an omitted structure element. */
+    if (astnode_get_child(node, 4) != NULL) {
+        int errors_before = err_count;
+        /* Capture counts already known at this instance, as the remainder
+         * does. A later reassignment must not erase an initialized element. */
+        reduce_field_count(LHS(node), NULL);
+        if (err_count == errors_before) reduce_field_count(RHS(node), NULL);
+        if (err_count != errors_before) {
+            astnode_finalize(node);
+            return 0;
+        }
+        return 1;
+    }
     return resolve_field_padding(node, next, 0);
+}
+
+/* A PC-dependent outer count retains the historical first-element layout.
+ * Label differences are independent of the current field's PC and can safely
+ * gate each part of an omitted array, including a late zero count. */
+static int expression_uses_pc(const astnode *expr)
+{
+    const astnode *child;
+    if (astnode_is_type(expr, CURRENT_PC_NODE)) return 1;
+    for (child = expr->first_child; child != NULL; child = child->next_sibling)
+        if (expression_uses_pc(child)) return 1;
+    return 0;
+}
+
+static astnode *gate_omitted_size(astnode *value, const astnode *count)
+{
+    return astnode_create_arithmetic(MUL_OPERATOR,
+        astnode_create_arithmetic(GT_OPERATOR,
+            astnode_clone(count, count->loc), astnode_create_integer(0, count->loc), count->loc),
+        value, value->loc);
+}
+
+/* Object-only STORAGE/FIELD_PADDING param: RHS is bytes | invalid-count mask.
+ * Keep the two expressions separate while merging: adding a negative extent
+ * to the mask could otherwise cancel it and publish an invalid layout. */
+#define OBJECT_STORAGE_GUARD 1
+
+static astnode *take_object_storage_guard(astnode **extent)
+{
+    astnode *wrapper = *extent;
+    assert(astnode_is_type(wrapper, ARITHMETIC_NODE) && wrapper->oper == OR_OPERATOR);
+    astnode *mask = astnode_remove_child_at(wrapper, 1);
+    *extent = astnode_remove_child_at(wrapper, 0);
+    astnode_finalize(wrapper);
+    return mask;
+}
+
+static astnode *combine_object_storage_guards(astnode *lhs, astnode *rhs)
+{
+    if (lhs == NULL) return rhs;
+    if (rhs == NULL) return lhs;
+    return astnode_create_arithmetic(OR_OPERATOR, lhs, rhs, lhs->loc);
+}
+
+static astnode *gate_omitted_extent(astnode *bytes, const astnode *count,
+                                  astnode *part, int minimum)
+{
+    astnode *mask = NULL;
+    if (!xasm_args.pure_binary && part->param == OBJECT_STORAGE_GUARD) {
+        mask = take_object_storage_guard(&bytes);
+        /* An empty outer array has no inner counts to validate. */
+        mask = gate_omitted_size(mask, count);
+    }
+    bytes = gate_omitted_size(bytes, count);
+    if (!xasm_args.pure_binary && minimum >= 0) {
+        /* One mask per array is enough, including zero-size elements. */
+        mask = combine_object_storage_guards(mask,
+            astnode_create_arithmetic(MUL_OPERATOR,
+                astnode_create_arithmetic(LT_OPERATOR,
+                    astnode_clone(count, count->loc),
+                    astnode_create_integer(minimum, count->loc), count->loc),
+                astnode_create_integer(0x10000, count->loc), count->loc));
+    }
+    if (mask != NULL) {
+        part->param = OBJECT_STORAGE_GUARD;
+        bytes = astnode_create_arithmetic(OR_OPERATOR, bytes, mask, bytes->loc);
+    }
+    return bytes;
+}
+
+static astnode *lower_omitted_array(astnode *node)
+{
+    int errors_before = err_count;
+    astnode *count = reduce_field_count(LHS(node), NULL);
+    astnode *element = astnode_get_child(node, 4);
+    astnode *remainder_list = astnode_get_child(node, 5);
+    astnode *remainder = remainder_list->first_child;
+    astnode *part, *result;
+    int minimum = astnode_get_child(node, 3)->integer;
+    int gate;
+    if (err_count != errors_before || !valid_final_storage_count(count)) return NULL;
+    if (astnode_is_type(count, INTEGER_NODE)) {
+        if (count->integer < minimum) {
+            padding_error(node->loc, "");
+            return NULL;
+        }
+        if (count->integer == 0) return NULL;
+    }
+    gate = !astnode_is_type(count, INTEGER_NODE) && !expression_uses_pc(count);
+    for (part = element->first_child; part != NULL;) {
+        astnode *following = part->next_sibling;
+        if (astnode_is_type(part, FIELD_PADDING_NODE) && astnode_get_child(part, 4) != NULL) {
+            astnode *expanded = lower_omitted_array(part);
+            astnode_replace(part, expanded);
+            astnode_finalize(part);
+        }
+        part = following;
+    }
+    /* Keep the first-pass PC contributions and the original positive-count
+     * representation. Only a late address-based count needs to gate output. */
+    astnode_add_child(element, astnode_remove_children(remainder_list));
+    if (gate && astnode_is_type(remainder, FIELD_PADDING_NODE))
+        astnode_get_child(remainder, 3)->integer = minimum;
+    if (gate) {
+        for (part = element->first_child; part != NULL; part = part->next_sibling) {
+            astnode *bytes = RHS(part);
+            astnode_remove(bytes);
+            astnode_insert_child(part, gate_omitted_extent(bytes, count, part,
+                part == remainder ? minimum : -1), 1);
+            if (astnode_is_type(part, STORAGE_NODE)) {
+                astnode_finalize(LHS(part));
+                astnode_insert_child(part, astnode_create_integer(1, part->loc), 0);
+                astnode_add_children(part, 2, astnode_create_string("", part->loc),
+                    astnode_create_integer(0, part->loc));
+                part->type = FIELD_PADDING_NODE;
+            } else if (part != remainder) {
+                /* An empty outer array has no nested elements to validate.
+                 * Gate a nested constraint to its own minimum in that case. */
+                int limit = astnode_get_child(part, 3)->integer;
+                astnode *constraint = LHS(part);
+                astnode_remove(constraint);
+                constraint = gate_omitted_size(constraint, count);
+                if (limit != 0) {
+                    constraint = astnode_create_arithmetic(PLUS_OPERATOR, constraint,
+                        astnode_create_arithmetic(MUL_OPERATOR,
+                            astnode_create_arithmetic(LE_OPERATOR, astnode_clone(count, count->loc),
+                                astnode_create_integer(0, part->loc), part->loc),
+                            astnode_create_integer(limit, part->loc), part->loc), part->loc);
+                }
+                astnode_insert_child(part, constraint, 0);
+            }
+        }
+    }
+    result = astnode_remove_children(element);
+    return result;
 }
 
 static int finalize_field_padding(astnode *node, void *arg, astnode **next)
 {
+    if (astnode_get_child(node, 4) != NULL) {
+        astnode *previous = astnode_get_prev_sibling(node);
+        astnode *expanded = lower_omitted_array(node);
+        astnode_replace(node, expanded);
+        astnode_finalize(node);
+        if (astnode_is_type(previous, STORAGE_NODE)) *next = previous;
+        else if (expanded != NULL) *next = expanded;
+        return 0;
+    }
     astnode *previous = astnode_get_prev_sibling(node);
     int descend = resolve_field_padding(node, next, 1);
     /* The preceding storage could not merge across this validation barrier.
@@ -5144,19 +5339,43 @@ static int maybe_merge_storage(astnode *storage, void *arg, astnode **next)
     astnode *temp;
     astnode *new_count;
     astnode *old_count;
+    int literals = astnode_is_type(*next, STORAGE_NODE)
+        && astnode_is_type(RHS(storage), INTEGER_NODE)
+        && astnode_is_type(RHS(*next), INTEGER_NODE);
+    /* Binary layout needs each late expression's own PC and range check; a
+     * positive neighbor must not hide a negative count. Preserve object-mode
+     * grouping, which can absorb a field remainder that is zero at link time.
+     * Keep each immediate storage command below 65536 bytes in either mode. */
     if (astnode_is_type(*next, STORAGE_NODE)
-        && astnode_equal(LHS(storage), LHS(*next)) ) {
+        && astnode_equal(LHS(storage), LHS(*next))
+        && (!xasm_args.pure_binary || (literals
+            && astnode_get_child(storage, 2) == NULL
+            && astnode_get_child(*next, 2) == NULL))
+        && (!literals || (long)RHS(storage)->integer + RHS(*next)->integer < 0x10000)) {
         /* Merge ahead */
         temp = *next;
         astnode_finalize( astnode_remove_child_at(temp, 0) );   /* Remove datatype node */
         old_count = RHS(storage);
-        /* Calculate new count */
-        new_count = astnode_create_arithmetic(
-            PLUS_OPERATOR,
-            astnode_remove_child_at(temp, 0),
-            astnode_clone(old_count, storage->loc),
-            storage->loc
-        );
+        /* Combine byte extents separately from object count guards. A guard
+         * is ORed into the complete sum, so no negative neighbor can erase it. */
+        if (!xasm_args.pure_binary
+            && (storage->param == OBJECT_STORAGE_GUARD || temp->param == OBJECT_STORAGE_GUARD)) {
+            astnode *lhs = astnode_remove_child_at(temp, 0);
+            astnode *rhs = astnode_clone(old_count, storage->loc);
+            astnode *mask = NULL;
+            if (temp->param == OBJECT_STORAGE_GUARD)
+                mask = take_object_storage_guard(&lhs);
+            if (storage->param == OBJECT_STORAGE_GUARD)
+                mask = combine_object_storage_guards(mask, take_object_storage_guard(&rhs));
+            new_count = astnode_create_arithmetic(OR_OPERATOR,
+                astnode_create_arithmetic(PLUS_OPERATOR, lhs, rhs, storage->loc),
+                mask, storage->loc);
+            storage->param = OBJECT_STORAGE_GUARD;
+        } else {
+            new_count = astnode_create_arithmetic(
+                PLUS_OPERATOR, astnode_remove_child_at(temp, 0),
+                astnode_clone(old_count, storage->loc), storage->loc);
+        }
         new_count = reduce_expression_complete(new_count, FOLD_PC_NO);
         astnode_replace(old_count, new_count);
         astnode_finalize(old_count);
@@ -5459,24 +5678,55 @@ static int inc_pc_by_data(astnode *data, void *arg, astnode **next)
     return 0;
 }
 
+/* Evaluate each late count independently, before combining it with any
+ * neighboring storage. The first address walk may still see forward labels;
+ * report errors only when validating the final output. */
+static int binary_storage_size(astnode *storage, int report)
+{
+    astnode *constraint = astnode_get_child(storage, 2);
+    astnode *value;
+    int size;
+    if (constraint != NULL) {
+        value = eval_expression(constraint);
+        if (!astnode_is_type(value, INTEGER_NODE)) {
+            if (report) err(storage->loc, "storage size expression does not evaluate to integer literal");
+            astnode_finalize(value);
+            return -1;
+        }
+        if (value->integer < astnode_get_child(storage, 4)->integer) {
+            if (report) padding_error(storage->loc, astnode_get_child(storage, 3)->string);
+            astnode_finalize(value);
+            return -1;
+        }
+        astnode_finalize(value);
+    }
+    value = eval_expression(RHS(storage));
+    if (!astnode_is_type(value, INTEGER_NODE)) {
+        if (report) err(storage->loc, "storage size expression does not evaluate to integer literal");
+        astnode_finalize(value);
+        return -1;
+    }
+    size = value->integer;
+    astnode_finalize(value);
+    if (size < (constraint != NULL ? 0 : 1) || size >= 0x10000) {
+        if (report) err(storage->loc, "storage size out of range");
+        return -1;
+    }
+    return size;
+}
+
 /**
- * Increments PC according to the size of the storage.
+ * Record the extent used by the last address walk for comparison at emission.
+ * STORAGE_NODE's otherwise unused param holds the byte count, or -1 if unknown.
  */
 static int inc_pc_by_storage(astnode *storage, void *arg, astnode **next)
 {
-    astnode *type = LHS(storage);
-    assert(type->datatype == BYTE_DATATYPE);
-    astnode *count = eval_expression(RHS(storage));
-    if (count) {
-        if (astnode_get_type(count) == INTEGER_NODE) {
-            if ((count->integer > 0) && (count->integer < 0x10000)) {
-                if (in_dataseg)
-                    dataseg_pc += count->integer;
-                else
-                    codeseg_pc += count->integer;
-            }
-        }
-        astnode_finalize(count);
+    int size = binary_storage_size(storage, 0);
+    assert(LHS(storage)->datatype == BYTE_DATATYPE);
+    storage->param = size;
+    if (size >= 0) {
+        if (in_dataseg) dataseg_pc += size;
+        else codeseg_pc += size;
     }
     return 1;
 }
@@ -5693,27 +5943,20 @@ static int write_data(astnode *data, void *arg, astnode **next)
  */
 static int write_storage(astnode *storage, void *arg, astnode **next)
 {
-    astnode *count = eval_expression(RHS(storage));
-    if (!astnode_is_type(count, INTEGER_NODE)) {
-        err(storage->loc, "storage size expression does not evaluate to integer literal");
-        astnode_finalize(count);
+    int i, size = binary_storage_size(storage, 1);
+    FILE *fp = (FILE *)arg;
+    if (size < 0) return 0;
+    if (size != storage->param) {
+        err(storage->loc, "storage size changed after address calculation");
         return 0;
     }
     if (in_dataseg) {
-        if ((count->integer > 0) && (count->integer < 0x10000)) {
-            dataseg_pc += count->integer;
-        }
-        astnode_finalize(count);
-        return 1;
+        dataseg_pc += size;
+        return 0;
     }
-    FILE *fp = (FILE *)arg;
-    astnode *type = LHS(storage);
-    assert(type->datatype == BYTE_DATATYPE);
-    int i;
-    for (i = 0; i < count->integer; ++i)
-        fputc(0, fp);
-    codeseg_pc += count->integer;
-    astnode_finalize(count);
+    assert(LHS(storage)->datatype == BYTE_DATATYPE);
+    for (i = 0; i < size; ++i) fputc(0, fp);
+    codeseg_pc += size;
     return 0;
 }
 

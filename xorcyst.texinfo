@@ -82,6 +82,9 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Preserves late zero-length omitted and uninitialized structure-array fields, including nested deferred layouts. These use field padding with a minimum count of zero, including label-difference counts in binary output and forward constants. Late negative counts remain invalid in object output. Known positive counts keep direct expansion. The positive-count rule for standalone storage, including the outer count of @code{.T[n]}, now also applies to late counts in both output modes; some late zero counts accepted by 1.9.2 are now rejected. Explicitly initialized user-type arrays require positive counts.
+@item Validates late PC- and address-dependent binary storage counts and rejects sizes that change after address calculation, preserving the previous output file. Keeps unresolved binary storage statements separate so each uses its own PC and range check; valid zero field remainders remain supported. Known-count object grouping is preserved; late label-based omitted-array counts can use conditional size expressions.
+@item Documents existing PC-capture limitations: @code{.equ $} and @code{= $} can retain a provisional first-pass address after deferred storage, including newly supported late-zero arrays. Use a label for the final address. Both outer omitted-array counts and nested field counts that depend on @code{$} can differ between binary and object output. Binary output evaluates the outer remainder after the first element, which can change layouts from 1.9.2; object output evaluates @code{$} at the start of merged storage.
 @item Resolves named constants in copied structure-size expressions, so indexed member references use the correct element stride in object output, including nested members and external instances.
 @item An explicit @code{sizeof(T)} now captures a known reassignable @code{=} count at the line where @code{sizeof} is used, as initialized instances do. Previously it used the final value. Index strides, uninitialized allocation and member offsets can still use the final value; reassigning counts does not provide a single fixed layout for a type.
 @end itemize
@@ -1058,7 +1061,20 @@ and emits no bytes in either binary or object output.
 Invalid expressions introduced by forward aliases are rejected before object
 encoding. In pure-binary output, address- and PC-dependent counts are evaluated
 after addresses are assigned; a count that still does not evaluate to an
-integer is an error instead of silently allocating no storage.
+integer is an error instead of silently allocating no storage. Binary storage
+also checks the count range and rejects an extent that changes after address
+calculation. Late binary storage is kept separate, which can add listing rows
+compared with older versions that merged these statements. Object-mode
+merging and link-time count limitations are unchanged.
+
+Equates are an exception to late PC evaluation: @code{.equ $} and @code{= $}
+capture the first-pass PC. If earlier storage has an unresolved size, this can
+be a provisional address, even when the final storage count is valid. For
+example, after @code{.byte 1} and @code{.dsb Z}, an equate can capture 1 when
+@code{Z} is defined as 2 later; the final address is 3. This also affects equates
+after late-zero omitted structure arrays. Use a label at the desired position,
+or define storage counts before their use. PC-based equates used as counts
+have already lost their @code{$} expression before late validation runs.
 
 @subsection Defining data of user-defined types
 
@@ -1103,10 +1119,24 @@ the containing structure. This rule also applies to array fields in unions.
 
 An omitted array field may have zero elements; it occupies no space. Negative
 counts are errors. Standalone storage directives and the outer count of
-@code{.T[n]} still require a positive count. For an omitted structure-array
-field, a zero count must be known when the instance is expanded: expansion
-reserves one element to validate nested fields before a deferred count is
-resolved. A deferred zero count for that case is rejected. An explicit empty
+@code{.T[n]} require a positive count, including when the count is resolved
+later. Some late zero counts accepted by version 1.9.2 are now rejected in
+both output modes. For an omitted structure-array
+field, a zero count may also be resolved later, including from label differences.
+In binary output, nested fields retain their individual evaluation positions.
+Object output merges adjacent storage and evaluates @code{$} at the start of
+the merged run. Both nested field counts and outer omitted-array counts that
+depend on @code{$} can therefore produce different layouts. In pure-binary
+mode, an omitted structure-array count that still depends on @code{$} after
+constant substitution expands the first element, then evaluates the remainder
+at the PC after that element. This can change the layout from version 1.9.2,
+which evaluated the count at the field start. For example, at origin zero,
+an omitted @code{Inner[3-$]} field with a two-byte element followed by one byte
+occupies three bytes in binary output, but seven bytes in object output and
+in version 1.9.2. Such a count cannot become zero in pure-binary mode.
+Use fixed constants or label differences for matching layouts in both modes
+and for zero-length structure-array fields. Object output retains its existing
+link-time behavior for PC-dependent counts. An explicit empty
 built-in array initializer can occupy zero bytes when its declared count is zero.
 An explicitly initialized user-type array field must have at least one element,
 even when the element type occupies zero bytes. For structure fields with a
