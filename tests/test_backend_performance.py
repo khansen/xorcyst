@@ -29,6 +29,16 @@ class BackendPerformance(unittest.TestCase):
         instrumented = root / 'astnode.c'
         instrumented.write_text(source.replace(signature, signature.replace(
             'astnode_get_child_index', 'test_real_child_index')))
+        processor = (REPO / 'astproc.c').read_text()
+        signature = 'static astnode *substitute_ident(astnode *expr)\n{'
+        if processor.count(signature) != 1:
+            raise AssertionError('expected one constant-substitution definition')
+        processor = processor.replace(signature, signature +
+            '\n    extern unsigned long test_constant_expansions;\n    test_constant_expansions++;')
+        processor = processor.replace('entries = calloc(capacity, sizeof(*entries));',
+            'entries = getenv("XASM_TEST_CONSTANT_CACHE_FAIL") ? NULL : calloc(capacity, sizeof(*entries));')
+        measured_processor = root / 'astproc.c'
+        measured_processor.write_text(processor)
         objects = []
         for section in ('TEST_AST_WORK', 'TEST_JSON_WORK', 'TEST_BACKEND_MAIN'):
             obj = root / (section + '.o')
@@ -41,7 +51,8 @@ class BackendPerformance(unittest.TestCase):
         sources = re.search(r'^xasm_SOURCES = (.*?)(?=\n\n)',
                             (REPO / 'Makefile.am').read_text(), re.M | re.S)[1]
         sources = [REPO / name for name in sources.replace('\\\n', ' ').split()
-                   if name.endswith('.c') and name not in ('astnode.c', 'listing.c', 'xasm.c')]
+                   if name.endswith('.c') and name not in ('astnode.c', 'astproc.c', 'listing.c', 'xasm.c')]
+        sources.append(measured_processor)
         command = [*compiler, *map(str, sources + objects), '-o', str(cls.executable)]
         if sys.platform == 'darwin':
             command += ['-framework', 'CoreFoundation']
@@ -82,6 +93,44 @@ class BackendPerformance(unittest.TestCase):
                         _, (nodes, _) = self.run_measured(['--pure-binary', source, '-o', output, *flags])
                         self.assertEqual(output.read_bytes(), b'\xea' * count + data)
                         self.assertLessEqual(nodes, 16 * count, 'data merging scanned retained statements')
+
+    def test_repeated_constant_aliases_have_bounded_expansion_work(self):
+        with tempfile.TemporaryDirectory(prefix='xasm-constant-work-') as directory:
+            root = Path(directory)
+            source, output = root / 'input.asm', root / 'output.bin'
+            for depth in (12, 20):
+                aliases = ''.join(f'A{i} .equ A{i+1}+A{i+1}\n' for i in range(depth))
+                aliases += f'A{depth}=1\n'
+                for field in (False, True):
+                    if field:
+                        body = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                                '.struc Array\nitems .Point[Count]\ntail .byte\n.ends\n'
+                                '.Array {{1,2},$5A}\n')
+                        expected = bytes.fromhex('01 02 00 00 5A')
+                    else:
+                        body, expected = '.byte Count+Count\n', b'\x04'
+                    source.write_text(body + f'Count .equ (A0 >> {depth})+1\n' + aliases)
+                    with self.subTest(depth=depth, field=field):
+                        result, _ = self.run_measured(['--pure-binary', source, '-o', output])
+                        match = re.search(rb'CONSTANT_WORK expansions=(\d+)', result.stderr)
+                        self.assertIsNotNone(match, result.stderr.decode())
+                        self.assertLessEqual(int(match[1]), 32 * (depth + 1),
+                                             'repeated aliases were expanded as a tree')
+                        self.assertEqual(output.read_bytes(), expected)
+
+    def test_constant_cache_allocation_failure_preserves_output(self):
+        with tempfile.TemporaryDirectory(prefix='xasm-constant-failure-') as directory:
+            root = Path(directory)
+            source, output = root / 'input.asm', root / 'output.bin'
+            source.write_text('.byte Value\nValue .equ Alias+Alias\nAlias=1\n')
+            output.write_bytes(b'previous output')
+            result = subprocess.run([str(self.executable), '--pure-binary', str(source), '-o', str(output)],
+                                    env={**os.environ, 'XASM_TEST_CONSTANT_CACHE_FAIL': '1'},
+                                    capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 1, result.stderr.decode())
+            self.assertEqual(result.stderr.count(b'out of memory resolving constants'), 1,
+                             result.stderr.decode())
+            self.assertEqual(output.read_bytes(), b'previous output')
 
     def test_json_escaping_preserves_all_bytes_and_embedded_nuls(self):
         for payload in (bytes(range(256)), b'\x00after nul\x00', b'"\\\b\f\n\r\t',

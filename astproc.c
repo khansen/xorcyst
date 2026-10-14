@@ -102,6 +102,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -1038,6 +1039,12 @@ astnode *astproc_fold_constants(astnode *expr)
  * Substitutes identifier if it has a constant definition in symbol table.
  * @param expr Node of type IDENTIFIER_NODE
  */
+static void reference_constant(astnode *expr, symtab_entry *symbol)
+{
+    if (!analysis_shadow_active) symbol->ref_count++;
+    else if (expr == analysis_shadow_root) analysis_bind_symbol(symbol);
+}
+
 static astnode *substitute_ident(astnode *expr)
 {
     astnode *c;
@@ -1045,11 +1052,7 @@ static astnode *substitute_ident(astnode *expr)
     e = symtab_lookup(expr->ident);
     if (e != NULL) {
         if (e->type == CONSTANT_SYMBOL) {
-            if (!analysis_shadow_active) {
-                e->ref_count++;
-            } else if (expr == analysis_shadow_root) {
-                analysis_bind_symbol(e);
-            }
+            reference_constant(expr, e);
             /* This is a defined symbol that should be
             replaced by the expression it stands for */
             c = astnode_clone((astnode *)e->def, expr->loc);
@@ -1635,28 +1638,113 @@ static astnode *reduce_index(astnode *expr)
  * corresponding expression.
  * @param expr The expression whose defines to substitute
  */
+/* Cache only completed integer values, and only for this evaluation. A later
+ * assignment, scope activation, or forward-definition pass gets a fresh cache.
+ * Literal definitions need no cache; their existing fast path allocates none. */
+typedef struct constant_cache_entry {
+    symtab_entry *symbol;
+    int value;
+} constant_cache_entry;
+
+typedef struct constant_cache {
+    constant_cache_entry *entries;
+    size_t count, capacity;
+    int failed;
+} constant_cache;
+
+static size_t constant_slot(symtab_entry *symbol, size_t capacity)
+{
+    uintptr_t hash = (uintptr_t)symbol;
+    hash ^= hash >> 17;
+    hash *= (uintptr_t)0xed5ad4bbU;
+    hash ^= hash >> 11;
+    return hash & (capacity - 1);
+}
+
+static int cached_constant(constant_cache *cache, symtab_entry *symbol, int *value)
+{
+    size_t slot;
+    if (cache->capacity == 0) return 0;
+    slot = constant_slot(symbol, cache->capacity);
+    while (cache->entries[slot].symbol != NULL) {
+        if (cache->entries[slot].symbol == symbol) {
+            *value = cache->entries[slot].value;
+            return 1;
+        }
+        slot = (slot + 1) & (cache->capacity - 1);
+    }
+    return 0;
+}
+
+static void cache_constant(constant_cache *cache, symtab_entry *symbol, int value, location loc)
+{
+    size_t slot;
+    if (cache->failed) return;
+    if (cache->count >= cache->capacity / 2) {
+        size_t i, capacity = cache->capacity ? cache->capacity * 2 : 32;
+        constant_cache_entry *entries = NULL;
+        if (capacity > cache->capacity && capacity <= SIZE_MAX / sizeof(*entries))
+            entries = calloc(capacity, sizeof(*entries));
+        if (entries == NULL) {
+            cache->failed = 1;
+            err(loc, "out of memory resolving constants");
+            return;
+        }
+        for (i = 0; i < cache->capacity; i++) {
+            if (cache->entries[i].symbol == NULL) continue;
+            slot = constant_slot(cache->entries[i].symbol, capacity);
+            while (entries[slot].symbol != NULL) slot = (slot + 1) & (capacity - 1);
+            entries[slot] = cache->entries[i];
+        }
+        free(cache->entries);
+        cache->entries = entries;
+        cache->capacity = capacity;
+    }
+    slot = constant_slot(symbol, cache->capacity);
+    while (cache->entries[slot].symbol != NULL) slot = (slot + 1) & (cache->capacity - 1);
+    cache->entries[slot].symbol = symbol;
+    cache->entries[slot].value = value;
+    cache->count++;
+}
+
+static astnode *replace_constant_value(astnode *expr, int value)
+{
+    astnode *result = astnode_create_integer(value, expr->loc);
+    astnode_replace(expr, result);
+    astnode_finalize(expr);
+    return result;
+}
+
 typedef struct constant_expansion {
     symtab_entry *symbol;
     const struct constant_expansion *parent;
 } constant_expansion;
 
-static astnode *substitute_defines_recursive(astnode *expr, const constant_expansion *parents)
+static astnode *substitute_defines_recursive(astnode *expr, const constant_expansion *parents, constant_cache *cache)
 {
+    if (cache->failed) return expr;
     switch (astnode_get_type(expr)) {
         case ARITHMETIC_NODE:
-        substitute_defines_recursive(LHS(expr), parents);
-        substitute_defines_recursive(RHS(expr), parents);
+        substitute_defines_recursive(LHS(expr), parents, cache);
+        substitute_defines_recursive(RHS(expr), parents, cache);
         break;
 
         case IDENTIFIER_NODE: {
             symtab_entry *symbol = symtab_lookup(expr->ident);
             const constant_expansion *seen;
             constant_expansion current = {symbol, parents};
+            int value, errors_before = err_count;
             if (symbol == NULL || symbol->type != CONSTANT_SYMBOL) break;
+            if (astnode_is_type(symbol->def, INTEGER_NODE)) return substitute_ident(expr);
+            if (cached_constant(cache, symbol, &value)) {
+                reference_constant(expr, symbol);
+                return replace_constant_value(expr, value);
+            }
             for (seen = parents; seen != NULL; seen = seen->parent) {
                 if (seen->symbol == symbol) {
                     astnode *zero;
                     err(expr->loc, "circular constant definition `%s'", symbol->id);
+                    cache->failed = 1;
                     /* Poison this use, not the definition. Later passes must
                      * not expand it again or write a bogus symbol index. */
                     zero = astnode_create_integer(0, expr->loc);
@@ -1665,8 +1753,12 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
                     return zero;
                 }
             }
-            expr = substitute_defines_recursive(substitute_ident(expr), &current);
-            return fold_constants(expr, FOLD_PC_NO);
+            expr = substitute_defines_recursive(substitute_ident(expr), &current, cache);
+            expr = fold_constants(expr, FOLD_PC_NO);
+            if (err_count != errors_before) cache->failed = 1;
+            if (err_count == errors_before && astnode_is_type(expr, INTEGER_NODE))
+                cache_constant(cache, symbol, expr->integer, expr->loc);
+            return expr;
         }
 
         case SIZEOF_NODE:
@@ -1682,15 +1774,15 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
             astnode *id = LHS(expr);
             /* defined() inspects the spelling, not a constant's value. */
             if (!(astnode_is_type(id, IDENTIFIER_NODE) && strcasecmp(id->ident, "defined") == 0)) {
-                substitute_defines_recursive(id, parents);
-                substitute_defines_recursive(RHS(expr), parents);
+                substitute_defines_recursive(id, parents, cache);
+                substitute_defines_recursive(RHS(expr), parents, cache);
             }
         }
         break;
 
         case DOT_NODE:
-        substitute_defines_recursive(LHS(expr), parents);
-        substitute_defines_recursive(RHS(expr), parents);
+        substitute_defines_recursive(LHS(expr), parents, cache);
+        substitute_defines_recursive(RHS(expr), parents, cache);
         break;
 
         default:
@@ -1702,7 +1794,12 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
 
 static astnode *substitute_defines(astnode *expr)
 {
-    return substitute_defines_recursive(expr, NULL);
+    constant_cache cache = {NULL, 0, 0, 0};
+    expr = substitute_defines_recursive(expr, NULL, &cache);
+    free(cache.entries);
+    /* Do not leave an unexpanded constant that validate_ref would revisit
+     * forever after an expansion failure. The diagnostic already failed it. */
+    return cache.failed ? replace_constant_value(expr, 0) : expr;
 }
 
 /**
@@ -2554,13 +2651,20 @@ typedef struct field_count_definition {
  * definition. Resolve those too before validating, without looping on cycles.
  * Use the current scope and capture available values on the first pass so
  * later assignments do not change the count of an earlier instance. */
-static astnode *reduce_field_count(astnode *expr, const field_count_definition *definitions)
+static astnode *reduce_field_count_cached(astnode *expr, const field_count_definition *definitions, constant_cache *cache)
 {
+    if (cache->failed) return expr;
     if (astnode_is_type(expr, IDENTIFIER_NODE)) {
         symtab_entry *symbol = symtab_lookup(expr->ident);
         if (symbol != NULL && symbol->type == CONSTANT_SYMBOL) {
             const field_count_definition *previous;
             field_count_definition current;
+            int value, errors_before = err_count;
+            if (astnode_is_type(symbol->def, INTEGER_NODE)) return substitute_ident(expr);
+            if (cached_constant(cache, symbol, &value)) {
+                reference_constant(expr, symbol);
+                return replace_constant_value(expr, value);
+            }
             for (previous = definitions; previous != NULL; previous = previous->parent) {
                 if (previous->symbol == symbol) {
                     astnode *owner = expr;
@@ -2568,21 +2672,34 @@ static astnode *reduce_field_count(astnode *expr, const field_count_definition *
                         owner = owner->parent;
                     err(expr->loc, owner != NULL && !*astnode_get_child(owner, 2)->string
                         ? "circular definition in storage size" : "circular definition in field size");
+                    cache->failed = 1;
                     return expr;
                 }
             }
             current.symbol = symbol;
             current.parent = definitions;
-            return reduce_field_count(substitute_ident(expr), &current);
+            expr = reduce_field_count_cached(substitute_ident(expr), &current, cache);
+            if (err_count != errors_before) cache->failed = 1;
+            if (err_count == errors_before && astnode_is_type(expr, INTEGER_NODE))
+                cache_constant(cache, symbol, expr->integer, expr->loc);
+            return expr;
         }
     } else if (astnode_is_type(expr, ARITHMETIC_NODE)) {
-        reduce_field_count(LHS(expr), definitions);
-        reduce_field_count(RHS(expr), definitions);
+        reduce_field_count_cached(LHS(expr), definitions, cache);
+        reduce_field_count_cached(RHS(expr), definitions, cache);
     } else {
         astnode *reduced = reduce_expression_complete(expr, FOLD_PC_NO);
-        if (reduced != expr) return reduce_field_count(reduced, definitions);
+        if (reduced != expr) return reduce_field_count_cached(reduced, definitions, cache);
     }
     return fold_constants(expr, FOLD_PC_NO);
+}
+
+static astnode *reduce_field_count(astnode *expr, const field_count_definition *definitions)
+{
+    constant_cache cache = {NULL, 0, 0, 0};
+    expr = reduce_field_count_cached(expr, definitions, &cache);
+    free(cache.entries);
+    return cache.failed ? replace_constant_value(expr, 0) : expr;
 }
 
 /* Counts may still depend on addresses or the PC. Preserve those until the

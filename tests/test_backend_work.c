@@ -186,6 +186,7 @@ int test_write_json_string(const char *length_arg)
 
 extern unsigned long test_child_index_nodes;
 extern unsigned long test_json_stdio_calls;
+unsigned long test_constant_expansions;
 int test_remove_ast_nodes(int count);
 int test_indexed_ast_removal(void);
 int test_write_json_string(const char *length_arg);
@@ -203,6 +204,7 @@ int main(int argc, char **argv)
         result = assembler_main(argc, argv);
     fprintf(stderr, "BACKEND_WORK index_nodes=%lu json_calls=%lu\n",
             test_child_index_nodes, test_json_stdio_calls);
+    fprintf(stderr, "CONSTANT_WORK expansions=%lu\n", test_constant_expansions);
     return result;
 }
 #endif
