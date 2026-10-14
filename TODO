@@ -14,6 +14,10 @@
 
 Known defects and follow-ups:
 
+- S::member offsets after a named-count field do not substitute constants in
+  the copied offset. They can mis-link as local-symbol references, fail to link,
+  or crash in binary address evaluation. Apply the sizeof substitution policy
+  to reduce_scope too, with regression coverage.
 - An omitted structure-array field whose count resolves to zero only after the
   instance is expanded is still rejected. Known zero counts and deferred zero
   built-in field counts are supported; standalone storage still requires >0.
@@ -31,9 +35,6 @@ Known defects and follow-ups:
   and byte-size expressions, followed by a range error. Cyclic counts in
   uninitialized structures can also report at both instance and declaration.
 - Union dimensions must be known when the union is declared.
-- Indexed member references can mis-link when a structure size contains named
-  counts: the inserted index scale can retain constant identifiers that the
-  object encoder mistakes for local symbol indices.
 - Dotted references inside another member reference's index are not fully
   reduced or validated. Object encoding can report an unknown expression type
   but still exit 0 and write an unloadable object, including for invalid aliases.
