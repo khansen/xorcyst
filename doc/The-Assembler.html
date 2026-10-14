@@ -766,7 +766,20 @@ and emits no bytes in either binary or object output.
 Invalid expressions introduced by forward aliases are rejected before object
 encoding. In pure-binary output, address- and PC-dependent counts are evaluated
 after addresses are assigned; a count that still does not evaluate to an
-integer is an error instead of silently allocating no storage.
+integer is an error instead of silently allocating no storage. Binary storage
+also checks the count range and rejects an extent that changes after address
+calculation. Late binary storage is kept separate, which can add listing rows
+compared with older versions that merged these statements. Object-mode
+merging and link-time count limitations are unchanged.
+</p>
+<p>Equates are an exception to late PC evaluation: <code class="code">.equ $</code> and <code class="code">= $</code>
+capture the first-pass PC. If earlier storage has an unresolved size, this can
+be a provisional address, even when the final storage count is valid. For
+example, after <code class="code">.byte 1</code> and <code class="code">.dsb Z</code>, an equate can capture 1 when
+<code class="code">Z</code> is defined as 2 later; the final address is 3. This also affects equates
+after late-zero omitted structure arrays. Use a label at the desired position,
+or define storage counts before their use. PC-based equates used as counts
+have already lost their <code class="code">$</code> expression before late validation runs.
 </p>
 </div>
 <div class="subsection-level-extent" id="Defining-data-of-user_002ddefined-types">
@@ -812,10 +825,24 @@ the containing structure. This rule also applies to array fields in unions.
 </p>
 <p>An omitted array field may have zero elements; it occupies no space. Negative
 counts are errors. Standalone storage directives and the outer count of
-<code class="code">.T[n]</code> still require a positive count. For an omitted structure-array
-field, a zero count must be known when the instance is expanded: expansion
-reserves one element to validate nested fields before a deferred count is
-resolved. A deferred zero count for that case is rejected. An explicit empty
+<code class="code">.T[n]</code> require a positive count, including when the count is resolved
+later. Some late zero counts accepted by version 1.9.2 are now rejected in
+both output modes. For an omitted structure-array
+field, a zero count may also be resolved later, including from label differences.
+In binary output, nested fields retain their individual evaluation positions.
+Object output merges adjacent storage and evaluates <code class="code">$</code> at the start of
+the merged run. Both nested field counts and outer omitted-array counts that
+depend on <code class="code">$</code> can therefore produce different layouts. In pure-binary
+mode, an omitted structure-array count that still depends on <code class="code">$</code> after
+constant substitution expands the first element, then evaluates the remainder
+at the PC after that element. This can change the layout from version 1.9.2,
+which evaluated the count at the field start. For example, at origin zero,
+an omitted <code class="code">Inner[3-$]</code> field with a two-byte element followed by one byte
+occupies three bytes in binary output, but seven bytes in object output and
+in version 1.9.2. Such a count cannot become zero in pure-binary mode.
+Use fixed constants or label differences for matching layouts in both modes
+and for zero-length structure-array fields. Object output retains its existing
+link-time behavior for PC-dependent counts. An explicit empty
 built-in array initializer can occupy zero bytes when its declared count is zero.
 An explicitly initialized user-type array field must have at least one element,
 even when the element type occupies zero bytes. For structure fields with a
