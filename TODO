@@ -14,5 +14,47 @@
 
 Known defects and follow-ups:
 
-- Numeric-only .char data is omitted from object output; strings already use
-  byte encoding. Keep numeric characters independent of the character map.
+- An omitted structure-array field whose count resolves to zero only after the
+  instance is expanded is still rejected. Known zero counts and deferred zero
+  built-in field counts are supported; standalone storage still requires >0.
+- Shared alias chains ending in labels are expanded as trees, so evaluation
+  time and object size can grow exponentially. Sufficiently deep definitions
+  can also exhaust the recursive evaluator's stack.
+- Forward aliases containing @@ local labels retain unrenamed names in their
+  stored definitions. Operand uses can emit an unloadable object with exit 0;
+  count uses fail with a generic error and false unused-label warnings. Uses
+  after the alias definition work. The object encoder should reject unsupported
+  expression nodes instead of merely printing an unknown-expression message.
+- Repeated cyclic references within one ordinary expression can report once
+  per use (e.g. .byte Value+Value), rather than once per expression.
+- Invalid dotted storage counts can report the same error for both the count
+  and byte-size expressions, followed by a range error. Cyclic counts in
+  uninitialized structures can also report at both instance and declaration.
+- Union dimensions must be known when the union is declared.
+- Indexed member references can mis-link when a structure size contains named
+  counts: the inserted index scale can retain constant identifiers that the
+  object encoder mistakes for local symbol indices.
+- Dotted references inside another member reference's index are not fully
+  reduced or validated. Object encoding can report an unknown expression type
+  but still exit 0 and write an unloadable object, including for invalid aliases.
+- Late PC- or address-dependent binary storage counts lack range and size
+  consistency checks against the address pass. Negative/zero/oversized counts
+  can be accepted, and changing sizes can silently give later operands wrong
+  addresses. A field remainder that becomes zero only at link time is also
+  encoded as storage and rejected by the linker instead of being omitted.
+- Data-segment storage counts built from data-segment labels can fail link
+  layout with "storage size must evaluate to an integer during layout", even
+  when the link script provides a RAM region.
+- A late error in merged storage can point to the preceding storage statement
+  instead of the statement that supplied the invalid count.
+- Procedure-local dotted references with instruction xref can read a statement
+  list freed by flatten_proc when analysis_bind_symbol reports its definition.
+- Reassigning an = constant leaks the previous definition.
+- Excess brace nesting in built-in array initializers can write an invalid
+  object with exit 0 instead of rejecting the initializer.
+- Signed integer overflow in constant folding is undefined (e.g.
+  .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
+- Forward strings differ between binary and object output, and exported forward
+  constant aliases can still fail object encoding.
+- When linking below $100, shortening an instruction with a forward label to
+  zero-page addressing can leave later symbol addresses at their former values.

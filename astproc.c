@@ -5098,6 +5098,14 @@ static int maybe_merge_data(astnode *n, void *arg, astnode **next)
             if (astnode_is_type(temp, INTEGER_NODE)) {
                 /* Check that value fits according to datatype */
                 switch (type->datatype) {
+                    case CHAR_DATATYPE:
+                    /* Pure output diagnoses this when writing bytes. Objects
+                     * need the same warning here; retain the value so legacy
+                     * listings and character-map behavior stay unchanged. */
+                    if (!xasm_args.pure_binary && !IS_BYTE_VALUE(temp->integer))
+                        warn(temp->loc, "operand out of range; truncated");
+                    break;
+
                     case BYTE_DATATYPE:
                     if (!IS_BYTE_VALUE(temp->integer)) {
                         warn(temp->loc, "operand out of range; truncated");

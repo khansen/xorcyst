@@ -647,7 +647,7 @@ i = i*2
 </p>
 <h3 class="heading" id="Defining-non_002dASCII-text-data"><span>Defining non-ASCII text data<a class="copiable-link" href="#Defining-non_002dASCII-text-data"> &para;</a></span></h3>
 
-<p>Use the <code class="code">.charmap</code> directive to specify a map file describing the mapping from regular ASCII-coded characters to your custom set. See <a class="ref" href="Custom-Character-Maps.html">Custom Character Maps</a> for a description of the format of such a custom character map file. Once the character map has been set, you can define your textual data by using the <code class="code">.char</code>-directive. The information in the character map is applied to the given data by the assembler in order to transform it to a regular <code class="code">.db</code> directive internally. The <code class="code">.charmap</code> directive obeys program order, meaning you can use different character maps at different points in your code. If no character map has been set, <code class="code">.char</code> is equivalent to <code class="code">.db</code>. A simple example of the use of <code class="code">.charmap</code> and <code class="code">.char</code> follows.
+<p>Use the <code class="code">.charmap</code> directive to specify a map file describing the mapping from regular ASCII-coded characters to your custom set. See <a class="ref" href="Custom-Character-Maps.html">Custom Character Maps</a> for a description of the format of such a custom character map file. Once the character map has been set, you can define your textual data by using the <code class="code">.char</code>-directive. The information in the character map is applied to strings by the assembler in order to transform it to a regular <code class="code">.db</code> directive internally. The <code class="code">.charmap</code> directive obeys program order, meaning you can use different character maps at different points in your code. If no character map has been set, <code class="code">.char</code> is equivalent to <code class="code">.db</code>. Numeric values and expressions in <code class="code">.char</code> are emitted as bytes without character-map conversion, in both binary and object output. A simple example of the use of <code class="code">.charmap</code> and <code class="code">.char</code> follows.
 </p>
 <div class="example">
 <pre class="example-preformatted">.charmap &quot;my_map.tbl&quot;          ; set the custom character map to the one defined in my_map.tbl
@@ -763,6 +763,10 @@ adjacent storage is merged. Ordinary byte, word and dword storage must occupy
 between 1 and 65535 bytes per directive, including when the count is defined
 later in the source. Zero remaining padding after a field initializer is valid
 and emits no bytes in either binary or object output.
+Invalid expressions introduced by forward aliases are rejected before object
+encoding. In pure-binary output, address- and PC-dependent counts are evaluated
+after addresses are assigned; a count that still does not evaluate to an
+integer is an error instead of silently allocating no storage.
 </p>
 </div>
 <div class="subsection-level-extent" id="Defining-data-of-user_002ddefined-types">

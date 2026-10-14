@@ -79,6 +79,19 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Unreleased
+
+@itemize
+@item Retains labels reached through forward aliases in storage and field counts before unused-label removal, so requesting a listing or analysis output no longer changes whether these counts assemble.
+@item Reports invalid dotted references without crashing, including nested members and references introduced by forward aliases in storage counts or operands. Clears removed label definitions and prevents validation from visiting freed expressions.
+@item Rejects unresolved or invalid storage expressions instead of silently dropping binary storage or writing invalid objects. Preserves PC-based binary counts and valid link-time object counts, including external symbols introduced by aliases.
+@item Validates deferred storage counts in direct storage and omitted or built-in array fields before merging and object encoding. Preserves zero-length omitted fields in initialized and uninitialized structures, empty explicit built-in initializers, and zero-size user types. Deferred zero counts for omitted structure-array fields remain unsupported; standalone storage still requires a positive count.
+@item Resolves forward constant aliases in ordinary operands and @code{sizeof} label data, with cycle detection and validation of the symbols at the end of a chain.
+@item Accepts previously defined named counts in unions, in the constant scope, and avoids secondary errors when a union declaration is invalid. Union dimensions must still be known at declaration time.
+@item Caches completed integer aliases within each evaluation and avoids repeated statement-list scans when expanding aggregates and merging adjacent data.
+@item Encodes numeric @code{.char} data and relocations as bytes in objects. Numeric characters remain independent of the character map, which applies to strings. Out-of-range numeric characters now warn in object output as they do in binary output.
+@end itemize
+
 @heading Version 1.9.1
 
 @itemize
@@ -920,7 +933,7 @@ Note that data cannot be initialized in a data segment; only storage for the dat
 
 @heading Defining non-ASCII text data
 
-Use the @code{.charmap} directive to specify a map file describing the mapping from regular ASCII-coded characters to your custom set. See @ref{Custom Character Maps} for a description of the format of such a custom character map file. Once the character map has been set, you can define your textual data by using the @code{.char}-directive. The information in the character map is applied to the given data by the assembler in order to transform it to a regular @code{.db} directive internally. The @code{.charmap} directive obeys program order, meaning you can use different character maps at different points in your code. If no character map has been set, @code{.char} is equivalent to @code{.db}. A simple example of the use of @code{.charmap} and @code{.char} follows.
+Use the @code{.charmap} directive to specify a map file describing the mapping from regular ASCII-coded characters to your custom set. See @ref{Custom Character Maps} for a description of the format of such a custom character map file. Once the character map has been set, you can define your textual data by using the @code{.char}-directive. The information in the character map is applied to strings by the assembler in order to transform it to a regular @code{.db} directive internally. The @code{.charmap} directive obeys program order, meaning you can use different character maps at different points in your code. If no character map has been set, @code{.char} is equivalent to @code{.db}. Numeric values and expressions in @code{.char} are emitted as bytes without character-map conversion, in both binary and object output. A simple example of the use of @code{.charmap} and @code{.char} follows.
 
 @example
 .charmap "my_map.tbl"          ; set the custom character map to the one defined in my_map.tbl
@@ -1035,6 +1048,10 @@ adjacent storage is merged. Ordinary byte, word and dword storage must occupy
 between 1 and 65535 bytes per directive, including when the count is defined
 later in the source. Zero remaining padding after a field initializer is valid
 and emits no bytes in either binary or object output.
+Invalid expressions introduced by forward aliases are rejected before object
+encoding. In pure-binary output, address- and PC-dependent counts are evaluated
+after addresses are assigned; a count that still does not evaluate to an
+integer is an error instead of silently allocating no storage.
 
 @subsection Defining data of user-defined types
 
@@ -1721,6 +1738,10 @@ You supplied an invalid operand to a statement, for example a string as operand 
 @item macro `@var{identifier}' does not take @var{count} argument(s)
 You supplied the wrong amount of arguments to the macro. Check the macro definition if you're unsure how many arguments it takes, and try again.
 
+@item left side of dotted reference is not a structure
+The left side of a member reference became a value, such as an integer after
+constant substitution, instead of a structure instance identifier.
+
 @item member `@var{sub-struct-identifier}' of `@var{struct-identifier}' is not a structure
 The expression @code{@var{struct-identifier}.@var{sub-struct-identifier}.@var{some-member}} did not resolve because @var{sub-struct-identifier} is not a structure.
 
@@ -1744,6 +1765,11 @@ The operand to the @code{sizeof} operator must be one of @code{BYTE}, @code{WORD
 
 @item string or integer argument expected
 The @code{message} directive takes a string or integer as its argument.
+
+@item storage size expression does not evaluate to integer literal
+A storage count must be an integer expression. Object output can retain valid
+references to addresses resolved by the linker; pure-binary output requires
+the expression to resolve after its address passes.
 
 @item structure initializer expected
 When defining data that is an instance of a structure or union, the field value(s) must be enclosed in a pair of braces @{ @}.

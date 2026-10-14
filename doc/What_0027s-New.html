@@ -35,6 +35,19 @@ ul.mark-bullet {list-style-type: disc}
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
 
+<h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
+
+<ul class="itemize mark-bullet">
+<li>Retains labels reached through forward aliases in storage and field counts before unused-label removal, so requesting a listing or analysis output no longer changes whether these counts assemble.
+</li><li>Reports invalid dotted references without crashing, including nested members and references introduced by forward aliases in storage counts or operands. Clears removed label definitions and prevents validation from visiting freed expressions.
+</li><li>Rejects unresolved or invalid storage expressions instead of silently dropping binary storage or writing invalid objects. Preserves PC-based binary counts and valid link-time object counts, including external symbols introduced by aliases.
+</li><li>Validates deferred storage counts in direct storage and omitted or built-in array fields before merging and object encoding. Preserves zero-length omitted fields in initialized and uninitialized structures, empty explicit built-in initializers, and zero-size user types. Deferred zero counts for omitted structure-array fields remain unsupported; standalone storage still requires a positive count.
+</li><li>Resolves forward constant aliases in ordinary operands and <code class="code">sizeof</code> label data, with cycle detection and validation of the symbols at the end of a chain.
+</li><li>Accepts previously defined named counts in unions, in the constant scope, and avoids secondary errors when a union declaration is invalid. Union dimensions must still be known at declaration time.
+</li><li>Caches completed integer aliases within each evaluation and avoids repeated statement-list scans when expanding aggregates and merging adjacent data.
+</li><li>Encodes numeric <code class="code">.char</code> data and relocations as bytes in objects. Numeric characters remain independent of the character map, which applies to strings. Out-of-range numeric characters now warn in object output as they do in binary output.
+</li></ul>
+
 <h3 class="heading" id="Version-1_002e9_002e1"><span>Version 1.9.1<a class="copiable-link" href="#Version-1_002e9_002e1"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">
