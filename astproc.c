@@ -2795,8 +2795,8 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
         astnode_finalize(node);
         return 0;
     }
-    /* Convert in place: replacing a top-level node scans the statement list
-     * for its position, making many array instances unnecessarily quadratic. */
+    /* Convert in place, retaining this statement's identity and location
+     * without allocating a replacement node. */
     astnode_finalize(astnode_get_child(node, 3));
     astnode_finalize(astnode_get_child(node, 2));
     astnode_finalize(LHS(node));
@@ -5074,17 +5074,24 @@ static int maybe_merge_data(astnode *n, void *arg, astnode **next)
 {
     astnode *temp;
     astnode *type;
+    astnode *tail = NULL;
     type = LHS(n);
     /* Only merge if no debugging, otherwise line information is lost. */
-    if (!xasm_args.debug && astnode_is_type(*next, DATA_NODE)
+    while (!xasm_args.debug && astnode_is_type(*next, DATA_NODE)
         && astnode_equal(type, LHS(*next)) ) {
-        /* Merge ahead */
+        /* Merge the whole run, retaining the tail instead of rescanning all
+         * accumulated operands for every adjacent data statement. */
+        astnode *operands;
+        if (tail == NULL) tail = astnode_get_last_sibling(n->first_child);
         temp = *next;
         astnode_finalize( astnode_remove_child_at(temp, 0) );   /* Remove datatype node */
-        astnode_add_child(n, astnode_remove_children(temp) );
+        operands = astnode_remove_children(temp);
+        astnode_add_sibling_after(tail, operands);
+        if (operands != NULL) tail = astnode_get_last_sibling(operands);
+        *next = temp->next_sibling;
         astnode_finalize(temp);
-        *next = n;
-    } else {
+    }
+    {
         /* Reduce expressions to final form */
         for (n = n->first_child; n != NULL; n = temp->next_sibling) {
             temp = reduce_expression_complete(n, FOLD_PC_NO);

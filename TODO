@@ -14,7 +14,5 @@
 
 Known defects and follow-ups:
 
-- Repeated aggregate instances still require quadratic statement-list work,
-  including when counts are literal. Profile list replacement and merging.
 - Numeric-only .char data is omitted from object output; strings already use
   byte encoding. Keep numeric characters independent of the character map.

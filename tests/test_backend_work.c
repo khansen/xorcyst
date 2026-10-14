@@ -5,6 +5,7 @@
 #include "../astnode.h"
 
 unsigned long test_child_index_nodes;
+unsigned long test_list_nodes;
 int test_real_child_index(const astnode *parent, const astnode *child);
 
 int astnode_get_child_index(const astnode *parent, const astnode *child)
@@ -112,6 +113,60 @@ int test_indexed_ast_removal(void)
     return 0;
 }
 
+int test_ast_splicing(void)
+{
+    location loc = {0};
+    int position, length, operation;
+    for (operation = 0; operation < 3; operation++) {
+        for (position = 0; position < 3; position++) {
+            for (length = 0; length <= 3; length++) {
+                astnode *parent = astnode_create_list(NULL), *original[3], *expected[6];
+                astnode *replacement = NULL, *added[3], *old;
+                int i, used = 0;
+                for (i = 0; i < 3; i++) {
+                    original[i] = astnode_create_list(astnode_create_integer(i, loc));
+                    original[i]->analysis_origin_id = 100 + i;
+                    astnode_add_child(parent, original[i]);
+                }
+                for (i = 0; i < length; i++) {
+                    added[i] = astnode_create_list(astnode_create_integer(10 + i, loc));
+                    if (replacement == NULL) replacement = added[i];
+                    else astnode_add_sibling(replacement, added[i]);
+                }
+                old = original[position];
+                if (operation == 0) {
+                    astnode_replace(old, old); /* Identity leaves the chain intact. */
+                    assert_children(parent, original, 3);
+                    astnode_replace(old, replacement);
+                    assert(old->parent == NULL && old->next_sibling == NULL && old->prev_sibling == NULL);
+                    assert(old->first_child->parent == old && old->first_child->integer == position);
+                    if (replacement != NULL) assert(replacement->analysis_origin_id == old->analysis_origin_id);
+                } else if (operation == 1) {
+                    astnode_insert_child(parent, replacement, position);
+                } else {
+                    astnode_add_sibling_after(old, replacement);
+                }
+                for (i = 0; i < 3; i++) {
+                    int j;
+                    if (i == position && operation != 2)
+                        for (j = 0; j < length; j++) expected[used++] = added[j];
+                    if (i != position || operation != 0) expected[used++] = original[i];
+                    if (i == position && operation == 2)
+                        for (j = 0; j < length; j++) expected[used++] = added[j];
+                }
+                assert_children(parent, expected, used);
+                for (i = 0; i < length; i++) {
+                    assert(added[i]->first_child->parent == added[i]);
+                    assert(added[i]->first_child->integer == 10 + i);
+                }
+                if (operation == 0) astnode_finalize(old);
+                astnode_finalize(parent);
+            }
+        }
+    }
+    return 0;
+}
+
 #elif defined(TEST_JSON_WORK)
 #include <stdio.h>
 #include <stdlib.h>
@@ -185,10 +240,12 @@ int test_write_json_string(const char *length_arg)
 #undef main
 
 extern unsigned long test_child_index_nodes;
+extern unsigned long test_list_nodes;
 extern unsigned long test_json_stdio_calls;
 unsigned long test_constant_expansions;
 int test_remove_ast_nodes(int count);
 int test_indexed_ast_removal(void);
+int test_ast_splicing(void);
 int test_write_json_string(const char *length_arg);
 
 int main(int argc, char **argv)
@@ -198,6 +255,8 @@ int main(int argc, char **argv)
         result = test_remove_ast_nodes(atoi(argv[2]));
     else if (argc == 2 && strcmp(argv[1], "--test-indexed-removal") == 0)
         result = test_indexed_ast_removal();
+    else if (argc == 2 && strcmp(argv[1], "--test-ast-splicing") == 0)
+        result = test_ast_splicing();
     else if (argc == 3 && strcmp(argv[1], "--test-json-string") == 0)
         result = test_write_json_string(argv[2]);
     else
@@ -205,6 +264,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "BACKEND_WORK index_nodes=%lu json_calls=%lu\n",
             test_child_index_nodes, test_json_stdio_calls);
     fprintf(stderr, "CONSTANT_WORK expansions=%lu\n", test_constant_expansions);
+    fprintf(stderr, "LIST_WORK nodes=%lu\n", test_list_nodes);
     return result;
 }
 #endif

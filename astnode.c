@@ -483,19 +483,28 @@ void astnode_set_parent(astnode *c, astnode *p)
  */
 void astnode_replace(astnode *old_node, astnode *new_node)
 {
-    astnode *p;
-    int i;
-    p = astnode_get_parent(old_node);
-    if (p != NULL) {
-        if (new_node != NULL && new_node->analysis_origin_id == 0) {
-            new_node->analysis_origin_id = old_node->analysis_origin_id;
-        }
-        i = astnode_remove_child(p, old_node);
-        if (new_node) {
-            /* Insert new child at old child's position */
-            astnode_insert_child(p, new_node, i);
-        }
+    astnode *p = astnode_get_parent(old_node);
+    astnode *last;
+    if (p == NULL || old_node == new_node) return;
+    if (new_node == NULL) {
+        astnode_remove(old_node);
+        return;
     }
+    if (new_node->analysis_origin_id == 0)
+        new_node->analysis_origin_id = old_node->analysis_origin_id;
+    /* The replacement is a detached chain. Set its parents before joining
+     * the old suffix, so only the new nodes need to be visited. */
+    last = astnode_get_last_sibling(new_node);
+    astnode_set_parent(new_node, p);
+    new_node->prev_sibling = old_node->prev_sibling;
+    last->next_sibling = old_node->next_sibling;
+    if (old_node->prev_sibling != NULL)
+        old_node->prev_sibling->next_sibling = new_node;
+    else
+        p->first_child = new_node;
+    if (old_node->next_sibling != NULL)
+        old_node->next_sibling->prev_sibling = last;
+    old_node->parent = old_node->prev_sibling = old_node->next_sibling = NULL;
 }
 
 /* Detach a known child without computing its position in the sibling list. */
@@ -590,6 +599,7 @@ void astnode_insert_child(astnode *p, astnode *c, int i)
         }
         else {
             n = astnode_get_last_sibling(c);
+            astnode_set_parent(c, p);
             /* Make c..n precede x */
             c->prev_sibling = x->prev_sibling;
             if (x->prev_sibling) {
@@ -598,7 +608,6 @@ void astnode_insert_child(astnode *p, astnode *c, int i)
             n->next_sibling = x;
             x->prev_sibling = n;
         }
-        astnode_set_parent(c, p);
         /* Check if head */
         if (i == 0) {
             p->first_child = c;
@@ -697,7 +706,9 @@ void astnode_add_sibling_after(astnode *brother, astnode *sister)
     if (brother && sister) {
         /* Link sister (and its chain) between brother and brother->next_sibling */
         last = astnode_get_last_sibling(sister);
-        
+
+        p = astnode_get_parent(brother);
+        astnode_set_parent(sister, p);
         last->next_sibling = brother->next_sibling;
         if (brother->next_sibling) {
             brother->next_sibling->prev_sibling = last;
@@ -705,9 +716,6 @@ void astnode_add_sibling_after(astnode *brother, astnode *sister)
         
         brother->next_sibling = sister;
         sister->prev_sibling = brother;
-        
-        p = astnode_get_parent(brother);
-        astnode_set_parent(sister, p);
     }
 }
 
