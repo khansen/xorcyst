@@ -1667,6 +1667,11 @@ you can achieve the same result from the statement
 @item cannot expand `@var{identifier}'; not a macro
 Make sure @var{identifier} is a macro and not a label, constant or other type of symbol.
 
+@item circular constant definition `@var{identifier}'
+A constant refers back to itself, directly or through other constants. Break
+the cycle. Forward aliases in data and instruction operands are resolved before
+their final identifiers are validated and written to an object file.
+
 @item circular definition in field size
 A constant used to determine the size of an explicitly initialized user-type
 array field refers to itself, directly or through other constants. Break the
