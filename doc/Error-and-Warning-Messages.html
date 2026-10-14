@@ -156,7 +156,10 @@ count, including when the count is named or defined after the instance.
 </p>
 </dd>
 <dt>&lsquo;<samp class="samp">union member must be of constant size</samp>&rsquo;</dt>
-<dd><p>The size of a union member must be known at assembly time. This restriction does not apply to structs.
+<dd><p>The size of a union member must be known when the union is declared. Define
+constants used by its count or element type before that declaration. This
+restriction does not apply to structs. A failed union declaration is diagnosed
+once without adding initializer errors for its later instances.
 </p>
 </dd>
 <dt>&lsquo;<samp class="samp">unknown macro or directive `<var class="var">identifier</var>'</samp>&rsquo;</dt>

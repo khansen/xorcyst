@@ -80,6 +80,7 @@ typedef struct tag_label_attribs label_attribs;
 #define ADDR_FLAG   0x40    /* Symbol has hardcoded address */
 #define ERROR_UNDEFINED_FLAG  0x80
 #define EQU_FLAG    0x100   /* Symbol is defined using EQU */
+#define INVALID_TYPE_FLAG 0x200 /* A type declaration already reported an error */
 #define STORAGE_REFS_FLAG 0x400 /* Constant's storage references visited in pass 2 */
 /**
  * Must keep a definition-ordered list of struct or union's fields.
