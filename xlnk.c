@@ -404,6 +404,10 @@ int warn_count = 0;
 
 static int suppress;
 
+/* Each relaxation permanently shortens one opcode. Repeat layout when this
+ * happens so forward labels and subsequent units get their final addresses. */
+static int code_shortened;
+
 /* Head of the list of available 6502 RAM blocks (for data allocation). */
 static avail_ram_block *ram_block_head = NULL;
 
@@ -1247,11 +1251,12 @@ static void inc_pc_instr_impl(const unsigned char *b, void *arg, int wide)
     if (eval_instruction_operand(args->xu, exid, &c) && !wide) {
 	mode = opcode_addressing_mode(op);
         /* See if it can be reduced to ZP instruction */
-        if ((c.integer < 0x100) &&
+        if ((c.integer >= 0) && (c.integer < 0x100) &&
         ((t = opcode_zp_equiv(op, mode)) != 0xFF)) {
             /* replace op by ZP-version */
             op = t;
             ((unsigned char*)b)[1] = t;
+            code_shortened = 1;
         }
     }
     /* Advance PC */
@@ -1347,7 +1352,13 @@ static void write_instr(const unsigned char *b, void *arg)
             c.integer &= 0xFF;
             break;
         }
-        if (c.integer >= 0x100) {
+        /* Relaxation is permanent. A later layout can move a previously
+         * nonnegative address below zero; do not publish its truncated byte.
+         * Immediate values and signed relative displacements are unaffected. */
+        if (c.integer >= 0x100 || (c.integer < 0
+            && (opcode_addressing_mode(op) == ZEROPAGE_MODE
+                || opcode_addressing_mode(op) == ZEROPAGE_X_MODE
+                || opcode_addressing_mode(op) == ZEROPAGE_Y_MODE))) {
             err("instruction operand doesn't fit in 1 byte");
         }
         else {
@@ -2340,7 +2351,8 @@ static void set_code_address(const unsigned char *b, void *arg)
 {
     calc_address_args *args = (calc_address_args *)arg;
     local *l = &args->xu->code_locals.entries[args->index];
-    if (!l->resolved) {
+    if (!(l->flags & XASM_LABEL_FLAG_ADDR)
+        && (!l->resolved || l->phys_addr != pc)) {
         l->phys_addr = pc;
         l->resolved = 1;
         if (program_args.verbose) {
@@ -3273,7 +3285,12 @@ int main(int argc, char **argv)
             suppress = 1;
             relocate_units(&sc);
             suppress = 0;
-            if (err_count == 0) relocate_units(&sc);
+            if (err_count == 0) {
+                do {
+                    code_shortened = 0;
+                    relocate_units(&sc);
+                } while (err_count == 0 && code_shortened);
+            }
 
             if (err_count == 0) {
                 verbose(1, "generating output...");
