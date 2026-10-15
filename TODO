@@ -18,9 +18,6 @@ Known defects and follow-ups:
   in pure-binary output while the linker rejects them. For example, at origin
   zero, lda [Target+$FE],y / Target: nop emits B1 00 EA; the immediate form has
   the same discrepancy. Final zero-page checks do not cover these modes.
-- A type containing a field whose count is sizeof of that same type can crash
-  during recursive size expansion (fb .byte[sizeof(S)] inside S). Scoped
-  member-offset cycles are diagnosed, but pure sizeof cycles still need a guard.
 - mask R::lo can crash when R is unknown; record fields with named widths can
   also crash during mask reduction. Validate the namespace and width first.
 - An omitted structure-array count that still depends on $ after constant

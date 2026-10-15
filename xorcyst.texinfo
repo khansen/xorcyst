@@ -79,6 +79,12 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Unreleased
+
+@itemize
+@item Rejects recursive @code{sizeof} layouts with a diagnostic instead of crashing or repeatedly expanding them. A structure or union cannot use its own unfinished size. Size ancestry also covers storage behind a label; repeated independent uses and nested completed types remain supported.
+@end itemize
+
 @heading Version 1.9.4
 
 @itemize
@@ -1753,6 +1759,11 @@ directly or through other constants. Break the cycle so its size can be evaluate
 Expanding a scoped member offset leads back to the same member, directly or
 through another type's layout or a constant. Break the layout cycle. Referring
 to an earlier, independent offset of the same type is allowed.
+
+@item circular size definition `@var{identifier}'
+Computing a @code{sizeof} expression depends on the same size again, or on the
+size of a structure or union whose declaration is still being processed.
+Break the dependency cycle or use the size of an already completed type.
 
 @item conditional expression does not evaluate to literal
 Conditional assembly with the @code{.if}-directive requires that the expression tested can be evaluated immediately, so it can't contain references to labels and such (since these aren't computed by the assembler, that's the linker's job).
