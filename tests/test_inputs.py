@@ -27,7 +27,7 @@ class InputHandling(unittest.TestCase):
         self.root = Path(temporary.name)
 
     def run_tool(self, name, content, environment=None, arguments=(), limited=False,
-                 pure_binary=True):
+                 pure_binary=True, timeout=20):
         source = 'input.asm' if name == 'xasm' else 'input.script'
         (self.root / source).write_bytes(content.encode() if isinstance(content, str) else content)
         (self.root / 'output').write_bytes(b'previous output')
@@ -41,7 +41,7 @@ class InputHandling(unittest.TestCase):
             resource.setrlimit(resource.RLIMIT_CPU, (1, 1))
         result = subprocess.run([str(self.tools[name]), source, '-o', 'output',
                                  *(['--pure-binary'] if name == 'xasm' and pure_binary else []), *arguments],
-                                cwd=self.root, env=env, capture_output=True, timeout=20,
+                                cwd=self.root, env=env, capture_output=True, timeout=timeout,
                                 preexec_fn=limit_resources if limited else None)
         self.assertGreaterEqual(result.returncode, 0, result.stderr.decode())
         self.assertNotRegex(result.stderr, SANITIZER_REPORT)
@@ -93,6 +93,75 @@ class InputHandling(unittest.TestCase):
                                                    arguments=arguments, pure_binary=pure_binary)
                             self.assertEqual(result.returncode, 1, result.stderr.decode())
                             self.assertEqual(result.stderr.count(diagnostic), 2, result.stderr.decode())
+
+    def test_unsupported_object_expressions_never_publish_output(self):
+        types = ('.struc S\nfa .byte\nfb .byte\n.ends\n'
+                 '.dataseg\ninst .S\narr .S[4]\n.codeseg\n')
+        cases = (
+            ('.struc P\nitems .byte[3]\n.ends\n.P {{{1,2,3}}}\n', b'STRUC_NODE'),
+            ('Begin:\n@@s: .byte 1\n@@e: lda #Alias\nAlias .equ @@e-@@s\n', b'LOCAL_ID_NODE'),
+            (types + 'lda arr[inst.fa].fb\n', b'DOT_NODE'),
+            (types + '.byte arr[inst.missing].fa\n', b'DOT_NODE'),
+        )
+        for source, node_type in cases:
+            for debug in (False, True):
+                for analysis in ((), ('--listing=listing.json', '--listing-format=json'),
+                                 ('--xref=xref.json',)):
+                    with self.subTest(source=source, debug=debug, analysis=analysis):
+                        result = self.run_tool('xasm', source, pure_binary=False,
+                                               arguments=analysis + (('--debug',) if debug else ()))
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'error: unsupported expression in object output', result.stderr)
+                        self.assertIn(node_type, result.stderr)
+                        self.assertRegex(result.stderr, rb'input\.asm:\d+: error:')
+                        # Also reject it when no prior output exists.
+                        (self.root / 'output').unlink()
+                        result = subprocess.run([str(self.tools['xasm']), 'input.asm', '-o', 'output',
+                                                 *analysis, *(('--debug',) if debug else ())],
+                                                cwd=self.root, capture_output=True, timeout=20)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertNotRegex(result.stderr, SANITIZER_REPORT)
+                        self.assertFalse((self.root / 'output').exists())
+                        self.assertFalse((self.root / 'output.tmp').exists())
+
+    def test_object_expression_limit_preserves_output(self):
+        source = 'Target: nop\n' + ''.join(f'.word Target+{i}\n' for i in range(16390))
+        for debug in (False, True):
+            with self.subTest(debug=debug):
+                flags = ('--debug',) if debug else ()
+                result = self.run_tool('xasm', source, pure_binary=False, arguments=flags, timeout=120)
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertEqual(result.stderr.count(b'too many object expressions (maximum 16384)'), 1)
+                self.assertRegex(result.stderr, rb'input\.asm:\d+: error:')
+                (self.root / 'output').unlink()
+                result = subprocess.run([str(self.tools['xasm']), 'input.asm', '-o', 'output', *flags],
+                                        cwd=self.root, capture_output=True, timeout=120)
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertNotRegex(result.stderr, SANITIZER_REPORT)
+                self.assertEqual(result.stderr.count(b'too many object expressions (maximum 16384)'), 1)
+                self.assertFalse((self.root / 'output').exists())
+                self.assertFalse((self.root / 'output.tmp').exists())
+
+    def test_object_expression_limit_allows_boundary_and_duplicates(self):
+        # Exactly 16384 distinct expressions, then duplicates after the table
+        # is full. They must reuse IDs and still link to the correct values.
+        values = [*range(16384), 0, 1, 16383]
+        source = 'Target: nop\n' + ''.join(f'.word Target+{i}\n' for i in values)
+        for debug in (False, True):
+            with self.subTest(debug=debug):
+                result = self.run_tool('xasm', source, pure_binary=False,
+                                       arguments=('--debug',) if debug else (), timeout=120)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(result.stderr, b'')
+                (self.root / 'link.script').write_text('link{file=output,origin=0}\n')
+                linked = self.root / 'linked.bin'
+                linked.unlink(missing_ok=True)
+                result = subprocess.run([str(self.tools['xlnk']), 'link.script', '-o', linked.name],
+                                        cwd=self.root, capture_output=True, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertNotRegex(result.stderr, SANITIZER_REPORT)
+                self.assertEqual(linked.read_bytes(), b'\xea' + b''.join(
+                    value.to_bytes(2, 'little') for value in values))
 
     def test_failed_instruction_allocation_frees_operand_and_prior_statements(self):
         for instruction in ('NOP', 'ASL A', 'LDA #Port+2', 'LDA Port+2',

@@ -48,10 +48,9 @@ Known defects and follow-ups:
   values are cached per evaluation. Sufficiently deep definitions can also
   exhaust the recursive evaluator's stack.
 - Forward aliases containing @@ local labels retain unrenamed names in their
-  stored definitions. Operand uses can emit an unloadable object with exit 0;
-  count uses fail with a generic error and false unused-label warnings. Uses
-  after the alias definition work. The object encoder should reject unsupported
-  expression nodes instead of merely printing an unknown-expression message.
+  stored definitions. Operand uses are rejected by the object encoder; count
+  uses fail with a generic error and false unused-label warnings. Uses after
+  the alias definition work. Resolve the stored local names before use.
 - Repeated cyclic references within one ordinary expression can report once
   per use (e.g. .byte Value+Value), rather than once per expression.
 - Invalid dotted storage counts can report the same error for both the count
@@ -59,8 +58,9 @@ Known defects and follow-ups:
   uninitialized structures can also report at both instance and declaration.
 - Union dimensions must be known when the union is declared.
 - Dotted references inside another member reference's index are not fully
-  reduced or validated. Object encoding can report an unknown expression type
-  but still exit 0 and write an unloadable object, including for invalid aliases.
+  reduced or validated. Object encoding now rejects these expressions without
+  publishing output, including otherwise valid nested indexes. Reduce and
+  validate the copied index before encoding it.
 - A field remainder that becomes zero only at link time is encoded as storage
   and rejected by the linker instead of being omitted.
 - Data-segment storage counts built from data-segment labels can fail link
@@ -71,8 +71,6 @@ Known defects and follow-ups:
 - Procedure-local dotted references with instruction xref can read a statement
   list freed by flatten_proc when analysis_bind_symbol reports its definition.
 - Reassigning an = constant leaks the previous definition.
-- Excess brace nesting in built-in array initializers can write an invalid
-  object with exit 0 instead of rejecting the initializer.
 - Signed integer overflow in constant folding is undefined (e.g.
   .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
 - Negative literal operands inside unresolved object expressions are read as

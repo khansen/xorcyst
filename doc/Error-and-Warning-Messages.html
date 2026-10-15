@@ -191,6 +191,20 @@ once without adding initializer errors for its later instances.
 <dd><p>Your code refers to a symbol which hasn&rsquo;t been defined locally nor has it been declared to be external.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">too many object expressions (maximum 16384)</samp>&rsquo;</dt>
+<dd><p>One object unit can contain at most 16384 distinct unresolved expressions.
+Split the source into multiple units or simplify its expressions. Repeated
+equivalent expressions share an entry and do not consume additional slots.
+Assembly fails without replacing the previous output file.
+</p>
+</dd>
+<dt>&lsquo;<samp class="samp">unsupported expression in object output (<var class="var">node-type</var>)</samp>&rsquo;</dt>
+<dd><p>An expression reached object encoding in a form the object format cannot
+represent. Assembly fails and preserves an existing output file. Check for
+excess initializer braces. Forward aliases containing local labels and dotted
+references inside another member&rsquo;s index are also currently unsupported.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">value not allowed in data segment</samp>&rsquo;</dt>
 <dd><p>Data cannot be initialized in a data segment; the data segment can only specify how many bytes of storage will be needed at runtime.
 </p>

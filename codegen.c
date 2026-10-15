@@ -209,6 +209,7 @@ static unsigned char operator_to_bytecode(arithmetic_operator op)
 
         default:
         fprintf(stderr, "operator_to_bytecode(): bad operator\n");
+        err_count++;
     }
     return 0xFF;
 }
@@ -222,6 +223,7 @@ static unsigned char operator_to_bytecode(arithmetic_operator op)
 static astnode *expr_list[MAX_EXPRS];
 /* Number of expressions generated so far. */
 static int expr_count = 0;
+static int expr_limit_reported = 0;
 
 /**
  * Registers an expression with the code generator.
@@ -242,7 +244,13 @@ static int register_expression(astnode *expr)
     }
     /* This is a new expression, add it to end of list if possible. */
     if (expr_count == MAX_EXPRS) {
-        fprintf(stderr, "register_expression(): buffer overflow\n");
+        if (!expr_limit_reported) {
+            fprintf(stderr, "%s:", expr->loc.file != NULL ? expr->loc.file : "<unknown>");
+            LOCATION_PRINT(stderr, expr->loc);
+            fprintf(stderr, ": error: too many object expressions (maximum %d)\n", MAX_EXPRS);
+            err_count++;
+            expr_limit_reported = 1;
+        }
         return -1;
     }
     else {
@@ -321,12 +329,16 @@ static void put_expr_recursive(FILE *fp, const astnode *expr)
         break;
 
         default:
-        /* Error */
+        /* The temporary object must never be published with a missing
+         * expression. xasm discards it when code generation reports errors. */
+        fprintf(stderr, "%s:", expr->loc.file != NULL ? expr->loc.file : "<unknown>");
+        LOCATION_PRINT(stderr, expr->loc);
         fprintf(
             stderr,
-            "put_expr_recursive(): unknown expression type (%s)\n",
+            ": error: unsupported expression in object output (%s)\n",
             astnode_type_to_string(astnode_get_type(expr))
         );
+        err_count++;
         break;
     }
 }
@@ -595,6 +607,7 @@ static void put_statement(FILE *fp, const astnode *n, location *loc)
         default:
         /* Nada */
         fprintf(stderr, "put_statement(%s): unsupported type\n", astnode_type_to_string(astnode_get_type(n)));
+        err_count++;
         break;
     }
 }
@@ -810,6 +823,7 @@ static void put_bytecodes(FILE *fp, const astnode *root)
 void codegen_write(const astnode *root, FILE *fp)
 {
     expr_count = 0;
+    expr_limit_reported = 0;
     buf_file = fp;
 
     /* Write magic number */
