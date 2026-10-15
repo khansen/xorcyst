@@ -35,6 +35,14 @@ ul.mark-bullet {list-style-type: disc}
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
 
+<h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
+
+<ul class="itemize mark-bullet">
+<li>Resolves named constants in copied <code class="code">S::member</code> offsets, preventing incorrect local-symbol references in objects and crashes in binary address evaluation. Nested layouts, forward aliases and link-time counts are supported. Cycles through scoped field offsets are rejected, including mutual layout cycles and uses through <code class="code">sizeof</code>; references to earlier offsets of the same type remain valid.
+Completed integer offsets are cached within each evaluation, preventing repeated expansion of shared offset dependencies. Unresolved link-time offsets still expand as expression trees.
+</li><li>An explicit <code class="code">S::member</code> now captures a known reassignable <code class="code">=</code> count at its use site, matching explicit <code class="code">sizeof(T)</code>. Previously it could use the final value. Other type-layout paths can still use the final value; reassigning counts does not define a single fixed layout for a type.
+</li></ul>
+
 <h3 class="heading" id="Version-1_002e9_002e3"><span>Version 1.9.3<a class="copiable-link" href="#Version-1_002e9_002e3"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">

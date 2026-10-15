@@ -79,6 +79,14 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Unreleased
+
+@itemize
+@item Resolves named constants in copied @code{S::member} offsets, preventing incorrect local-symbol references in objects and crashes in binary address evaluation. Nested layouts, forward aliases and link-time counts are supported. Cycles through scoped field offsets are rejected, including mutual layout cycles and uses through @code{sizeof}; references to earlier offsets of the same type remain valid.
+Completed integer offsets are cached within each evaluation, preventing repeated expansion of shared offset dependencies. Unresolved link-time offsets still expand as expression trees.
+@item An explicit @code{S::member} now captures a known reassignable @code{=} count at its use site, matching explicit @code{sizeof(T)}. Previously it could use the final value. Other type-layout paths can still use the final value; reassigning counts does not define a single fixed layout for a type.
+@end itemize
+
 @heading Version 1.9.3
 
 @itemize
@@ -1737,6 +1745,11 @@ cycle so the count and padding can be evaluated.
 @item circular definition in storage size
 A constant used by standalone storage or an omitted field refers to itself,
 directly or through other constants. Break the cycle so its size can be evaluated.
+
+@item circular definition of scoped member `@var{identifier}'
+Expanding a scoped member offset leads back to the same member, directly or
+through another type's layout or a constant. Break the layout cycle. Referring
+to an earlier, independent offset of the same type is allowed.
 
 @item conditional expression does not evaluate to literal
 Conditional assembly with the @code{.if}-directive requires that the expression tested can be evaluated immediately, so it can't contain references to labels and such (since these aren't computed by the assembler, that's the linker's job).
