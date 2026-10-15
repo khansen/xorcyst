@@ -5844,12 +5844,24 @@ static int write_instruction(astnode *instr, void *arg, astnode **next)
                     }
                     break;
 
-                    default:
-                    if (!IS_BYTE_VALUE(value)) {
+                    default: {
+                    /* Address passes can shorten an instruction before its
+                     * final operand is known. Check the emitted opcode, not
+                     * instr.mode, which can still describe the wide form.
+                     * Literal operands already passed translation's byte
+                     * checks, as they do before object encoding. */
+                    addressing_mode mode = opcode_addressing_mode(op);
+                    if ((mode == ZEROPAGE_MODE || mode == ZEROPAGE_X_MODE
+                         || mode == ZEROPAGE_Y_MODE)
+                        && !astnode_is_type(LHS(instr), INTEGER_NODE)
+                        && !IS_UNSIGNED_BYTE_VALUE(value)) {
+                        err(operand->loc, "instruction operand doesn't fit in 1 byte");
+                    } else if (!IS_BYTE_VALUE(value)) {
                         warn(operand->loc, "operand out of range; truncated");
                         value &= 0xFF;
                     }
                     break;
+                    }
                 }
                 fputc((unsigned char)value, fp);
             } else {

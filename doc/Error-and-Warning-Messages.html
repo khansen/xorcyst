@@ -105,6 +105,16 @@ count, including when the count is named or defined after the instance.
 <dd><p>Instructions can only be contained in a code segment (after a <code class="code">codeseg</code> directive).
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">instruction operand doesn't fit in 1 byte</samp>&rsquo;</dt>
+<dd><p>A late zero-page operand is outside <code class="code">0..$FF</code> after binary address
+calculation or instruction shortening. Assembly fails without replacing the
+output file. The assembler does not retry with a wider instruction; force the
+wide form with <code class="code">.w</code> when the mnemonic supports it. For example, at origin
+zero, <code class="code">lda Target-3</code> followed by <code class="code">Target: nop</code> fails after shortening
+makes the operand negative. <code class="code">lda.w Target-3</code> keeps the valid absolute
+encoding <code class="code">AD 00 00 EA</code> instead.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">invalid addressing mode</samp>&rsquo;</dt>
 <dd><p>The combination of mnemonic and addressing mode for the 6502 instruction is invalid. For example, <code class="code">LDX $00,X</code> is invalid since the <code class="code">LDX</code> instruction does not have a ZeroPage,X-mode version. Consult a 6502 manual to see what modes are valid for each instruction.
 </p>

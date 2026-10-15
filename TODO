@@ -14,6 +14,10 @@
 
 Known defects and follow-ups:
 
+- Late immediate and indirect operands of $100 or more still warn and truncate
+  in pure-binary output while the linker rejects them. For example, at origin
+  zero, lda [Target+$FE],y / Target: nop emits B1 00 EA; the immediate form has
+  the same discrepancy. Final zero-page checks do not cover these modes.
 - A type containing a field whose count is sizeof of that same type can crash
   during recursive size expansion (fb .byte[sizeof(S)] inside S). Scoped
   member-offset cycles are diagnosed, but pure sizeof cycles still need a guard.
@@ -79,7 +83,3 @@ Known defects and follow-ups:
   in binary mode. This also affects counts that use such literal operands.
 - Forward strings differ between binary and object output, and exported forward
   constant aliases can still fail object encoding.
-- Pure-binary assembler relaxation can still select zero page for an operand
-  that becomes negative after shortening (lda Target-3 / Target: nop at origin
-  zero). The linker now rejects this case instead of publishing a truncated
-  address; the assembler needs the equivalent final-mode validation.

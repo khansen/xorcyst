@@ -438,6 +438,54 @@ class InputHandling(unittest.TestCase):
                     self.assertEqual(result.returncode, 1, result.stderr.decode())
                     self.assertIn(b"instruction operand doesn't fit in 1 byte", result.stderr)
 
+    def test_binary_rejects_final_zero_page_operands_outside_address_range(self):
+        for mnemonic, suffix in (('lda', ''), ('lda', ',x'), ('ldx', ',y'),
+                                 ('sty', ',x'), ('stx', ',y')):
+            for operand in ('Target-3', '$102-Target'):
+                instruction = f'{mnemonic} {operand}{suffix}\n'
+                for body in (instruction, '.macro Emit\n' + instruction + '.endm\nEmit\n',
+                             '.rept 1\n' + instruction + '.endm\n'):
+                    for debug in (False, True):
+                        for analysis in ((), ('--listing=listing.json', '--listing-format=json'),
+                                         ('--xref=xref.json',)):
+                            with self.subTest(instruction=instruction, body=body, debug=debug,
+                                              analysis=analysis):
+                                result = self.run_tool('xasm', body + 'Target: nop\n',
+                                                       arguments=analysis + (('--debug',) if debug else ()))
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(b"instruction operand doesn't fit in 1 byte", result.stderr)
+
+    def test_binary_zero_page_validation_preserves_other_addressing_modes(self):
+        cases = (
+            ('lda Target-2\nTarget: nop\n', 'A5 00 EA'),
+            ('lda $101-Target\nTarget: nop\n', 'A5 FF EA'),
+            ('lda Target+254\nTarget: nop\n', 'AD 01 01 EA'),
+            ('lda Target-4\nTarget: nop\n', 'AD FF FF EA'),
+            ('lda.w Target-3\nTarget: nop\n', 'AD 00 00 EA'),
+            ('lda #Target-3\nTarget: bne Target\n', 'A9 FF D0 FE'),
+            ('lda [Target-3],y\nTarget: nop\n', 'B1 FF EA'),
+            ('lda [Target-3,x]\nTarget: nop\n', 'A1 FF EA'),
+            # Literal signed bytes have already been accepted by translation,
+            # matching the raw instruction bytes emitted in object mode.
+            ('stx -1,y\nsty -1,x\n', '96 FF 94 FF'),
+        )
+        for source, expected in cases:
+            for debug in (False, True):
+                with self.subTest(source=source, debug=debug):
+                    result = self.run_tool('xasm', source, arguments=('--debug',) if debug else ())
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex(expected))
+
+    def test_binary_invalid_zero_page_operand_leaves_no_new_output(self):
+        (self.root / 'input.asm').write_text('lda Target-3\nTarget: nop\n')
+        result = subprocess.run([str(self.tools['xasm']), '--pure-binary', 'input.asm', '-o', 'output'],
+                                cwd=self.root, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 1, result.stderr.decode())
+        self.assertIn(b"instruction operand doesn't fit in 1 byte", result.stderr)
+        self.assertNotRegex(result.stderr, SANITIZER_REPORT)
+        self.assertFalse((self.root / 'output').exists())
+        self.assertFalse((self.root / 'output.tmp').exists())
+
     def test_linker_keeps_negative_immediates_and_backward_branches(self):
         # An expression-backed immediate exercises write_instr, rather than a
         # byte already folded by xasm. The branch still uses a signed offset.
