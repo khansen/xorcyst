@@ -82,6 +82,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Checks the final value of late zero-page operands in pure-binary output. If an operand becomes negative or exceeds @code{$FF} after address calculation or shortening, assembly fails without replacing existing output, matching the linker check. Signed immediates, branch offsets, explicit indirect operands, forced-wide instructions and the existing handling of literal byte operands are unchanged.
 @item Resolves named constants in copied @code{S::member} offsets, preventing incorrect local-symbol references in objects and crashes in binary address evaluation. Nested layouts, forward aliases and link-time counts are supported. Cycles through scoped field offsets are rejected, including mutual layout cycles and uses through @code{sizeof}; references to earlier offsets of the same type remain valid.
 Completed integer offsets are cached within each evaluation, preventing repeated expansion of shared offset dependencies. Unresolved link-time offsets still expand as expression trees.
 @item An explicit @code{S::member} now captures a known reassignable @code{=} count at its use site, matching explicit @code{sizeof(T)}. Previously it could use the final value. Other type-layout paths can still use the final value; reassigning counts does not define a single fixed layout for a type.
@@ -1778,6 +1779,15 @@ count, including when the count is named or defined after the instance.
 
 @item instructions not allowed in data segment
 Instructions can only be contained in a code segment (after a @code{codeseg} directive).
+
+@item instruction operand doesn't fit in 1 byte
+A late zero-page operand is outside @code{0..$FF} after binary address
+calculation or instruction shortening. Assembly fails without replacing the
+output file. The assembler does not retry with a wider instruction; force the
+wide form with @code{.w} when the mnemonic supports it. For example, at origin
+zero, @code{lda Target-3} followed by @code{Target: nop} fails after shortening
+makes the operand negative. @code{lda.w Target-3} keeps the valid absolute
+encoding @code{AD 00 00 EA} instead.
 
 @item invalid addressing mode
 The combination of mnemonic and addressing mode for the 6502 instruction is invalid. For example, @code{LDX $00,X} is invalid since the @code{LDX} instruction does not have a ZeroPage,X-mode version. Consult a 6502 manual to see what modes are valid for each instruction.
