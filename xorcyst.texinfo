@@ -38,7 +38,7 @@
 @c %**end of header
 
 @copying
-This is the manual for The XORcyst version 1.9.3.
+This is the manual for The XORcyst version 1.9.4.
 
 Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @end copying
@@ -79,7 +79,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
-@heading Unreleased
+@heading Version 1.9.4
 
 @itemize
 @item Checks the final value of late zero-page operands in pure-binary output. If an operand becomes negative or exceeds @code{$FF} after address calculation or shortening, assembly fails without replacing existing output, matching the linker check. Signed immediates, branch offsets, explicit indirect operands, forced-wide instructions and the existing handling of literal byte operands are unchanged.
