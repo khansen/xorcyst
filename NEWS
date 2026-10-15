@@ -1,3 +1,24 @@
+Version 1.9.5:
+
+- Reject recursive sizeof layouts and label-storage cycles with diagnostics
+  instead of crashes or repeated expansion. Structures and unions cannot use
+  their own unfinished size; this also rejects the field-order-dependent
+  provisional union sizes previously accepted. Completed nested types and
+  repeated independent size queries remain supported.
+- Validate mask namespaces, members and record layouts without crashing.
+  Resolve known named widths in the declaration's constant scope, preserving
+  capture before reassignment even when a field shadows the constant. Forward
+  aliases to masks now produce the correct bits instead of zero. Widths must
+  still be known when the record is declared.
+- Keep procedure definitions alive after flattening their bodies, preventing
+  use-after-free in instruction xref and separate instruction records. Preserve
+  declaration locations, existing diagnostics and linked bytes. Linux CI now
+  runs the procedure lifetime regressions with instrumented xasm and xlnk.
+- Preserve listing and instruction-record schemas. Pure-binary resolution of
+  procedure and variable addresses remains unsupported; explicit body labels
+  work. Other known limitations remain in TODO, including repeated diagnostics
+  on invalid size expressions.
+
 Version 1.9.4:
 
 - Resolve named counts in scoped S::member offsets before binary evaluation
