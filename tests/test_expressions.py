@@ -2,6 +2,7 @@
 """Resolve forward constants before validating and encoding their uses."""
 import os
 from pathlib import Path
+import resource
 import subprocess
 import sys
 import tempfile
@@ -11,13 +12,18 @@ XASM = Path(sys.argv.pop(1)).resolve()
 XLNK = Path(os.environ.get('XLNK', XASM.with_name('xlnk'))).resolve()
 
 
+def limit_cycle_resources():
+    # A missing ancestry check can spin or grow its expression tree rapidly.
+    resource.setrlimit(resource.RLIMIT_CPU, (1, 1))
+
+
 class Expressions(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='xasm-expressions-')
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
-    def assemble(self, source, pure, debug=False, listing=False):
+    def assemble(self, source, pure, debug=False, listing=False, cyclic=False):
         (self.root / 'input.asm').write_text(source)
         output = self.root / 'output'
         output.write_bytes(b'previous output')
@@ -25,11 +31,13 @@ class Expressions(unittest.TestCase):
         if debug: flags += ['--debug']
         if listing: flags += ['--listing=listing.json', '--listing-format=json', '--xref=xref.json']
         result = subprocess.run([str(XASM), *flags, 'input.asm', '-o', output.name],
-                                cwd=self.root, capture_output=True, timeout=10)
+                                cwd=self.root, capture_output=True, timeout=10,
+                                preexec_fn=limit_cycle_resources if cyclic else None)
         return result, output
 
     def linked(self, output):
         (self.root / 'link.script').write_text('link{file=output,origin=$8000}\n')
+        (self.root / 'linked.bin').unlink(missing_ok=True)
         result = subprocess.run([str(XLNK), 'link.script', '-o', 'linked.bin'],
                                 cwd=self.root, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
@@ -68,6 +76,131 @@ class Expressions(unittest.TestCase):
     def test_explicit_sizeof_captures_known_reassignable_counts(self):
         self.assert_output('Count=1\n.struc S\nhead .byte\nitems .word[Count]\ntail .byte\n.ends\n'
                            '.byte sizeof(S)\nCount=3\n.byte sizeof(S)\n', bytes.fromhex('04 08'))
+
+    def test_scoped_offsets_resolve_named_counts_in_nested_layouts(self):
+        for definition, placement in (("", "literal"), ("Count=2\n", "before"),
+                                      ("Count .equ 2\n", "before"),
+                                      (".define Count 2\n", "before"),
+                                      ("Count .equ Other\nOther=2\n", "after"),
+                                      ("Count .equ -Other\nOther=-2\n", "after")):
+            # A field named Count must not shadow the global array count.
+            types = ('.struc Inner\nv .byte\nw .byte\n.ends\n'
+                     '.struc S\nCount .byte\nitems .Inner[Count]\ntail .byte\n.ends\n'
+                     '.struc Box\nprefix .byte\nitems .S[2]\nsuffix .byte\n.ends\n')
+            if placement == 'literal': types = types.replace('[Count]', '[2]')
+            source = ((definition if placement == 'before' else '') + types
+                      + 'Base: .byte 0\n.word S::tail,Box::suffix\nlda Base+S::tail\n'
+                      + (definition if placement == 'after' else ''))
+            with self.subTest(definition=definition, placement=placement):
+                self.assert_output(source, bytes.fromhex('00 05 00 0D 00 AD 05 80'))
+
+    def test_forward_scoped_offset_aliases_and_macro_uses(self):
+        self.assert_output('Offset .equ S::tail\n'
+                           '.struc S\nitems .word[Count]\ntail .byte\n.ends\n'
+                           '.macro Emit\n.word Offset,S::tail\n.endm\n'
+                           '.proc Main\nEmit\n.endp\n'
+                           '.rept 2\nEmit\n.endm\nCount .equ Next\nNext=2\n',
+                           bytes.fromhex('04 00 04 00') * 3)
+
+    def test_scoped_offsets_capture_known_reassignable_counts(self):
+        self.assert_output('Count=1\n.struc S\nhead .byte\nitems .word[Count]\n'
+                           'tail .byte\n.ends\n.word S::tail\nCount=3\n.word S::tail\n',
+                           bytes.fromhex('03 00 07 00'))
+
+    def test_scoped_offsets_keep_link_time_counts(self):
+        source = ('Count .equ Ext\n.struc S\nitems .word[Count]\ntail .byte\n.ends\n'
+                  '.word S::tail\n')
+        for debug in (False, True):
+            for listing in (False, True):
+                with self.subTest(debug=debug, listing=listing):
+                    result, output = self.assemble(source, False, debug, listing)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    (self.root / 'provider.asm').write_text('.public Ext\nExt=2\n')
+                    (self.root / 'provider.o').unlink(missing_ok=True)
+                    provider = subprocess.run([str(XASM), 'provider.asm', '-o', 'provider.o'],
+                                              cwd=self.root, capture_output=True, timeout=10)
+                    self.assertEqual(provider.returncode, 0, provider.stderr.decode())
+                    (self.root / 'link.script').write_text('link{file=output,origin=$8000}\n'
+                                                          'link{file=provider.o}\n')
+                    (self.root / 'linked.bin').unlink(missing_ok=True)
+                    linked = subprocess.run([str(XLNK), 'link.script', '-o', 'linked.bin'],
+                                            cwd=self.root, capture_output=True, timeout=10)
+                    self.assertEqual(linked.returncode, 0, linked.stderr.decode())
+                    self.assertEqual((self.root / 'linked.bin').read_bytes(), bytes.fromhex('04 00'))
+
+    def test_invalid_scoped_offsets_fail_without_publishing_output(self):
+        cases = (
+            ('.struc S\nitems .byte[Count]\ntail .byte\n.ends\n'
+             '.word S::tail\nCount .equ S::tail\n', b'circular constant definition'),
+            ('.struc S\nhead .byte\n.ends\n.word S::missing\n', b'unknown symbol'),
+            ('.word Missing::tail\n', b'unknown namespace'),
+        )
+        for source, diagnostic in cases:
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(source=source, pure=pure, debug=debug, listing=listing):
+                            result, output = self.assemble(source, pure, debug, listing)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(diagnostic, result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_cyclic_scoped_offsets_fail_without_publishing_output(self):
+        direct = '.struc S\nfa .byte\nfb .byte[S::tail]\ntail .byte\n.ends\n'
+        mutual = ('.struc TA\nx1 .byte[TB::y2]\nz1 .byte\n.ends\n'
+                  '.struc TB\nw2 .byte[TA::z1]\ny2 .byte\n.ends\n')
+        cases = [direct + use for use in ('.word S::tail\n', 'lda S::tail\n',
+                                         '.byte sizeof(S)\n', 'v: .S {}\n')]
+        cases += [mutual + '.word TA::z1\n', mutual + '.byte sizeof(TB)\n']
+        for source in cases:
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(source=source, pure=pure, debug=debug, listing=listing):
+                            result, output = self.assemble(source, pure, debug, listing, cyclic=True)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b'circular definition of scoped member', result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+                            output.unlink()
+                            flags = ['--pure-binary'] if pure else []
+                            if debug: flags += ['--debug']
+                            if listing: flags += ['--listing=listing.json', '--listing-format=json',
+                                                  '--xref=xref.json']
+                            result = subprocess.run([str(XASM), *flags, 'input.asm', '-o', output.name],
+                                                    cwd=self.root, capture_output=True, timeout=10,
+                                                    preexec_fn=limit_cycle_resources)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertFalse(output.exists())
+
+    def test_scoped_offsets_allow_acyclic_references_to_the_same_type(self):
+        self.assert_output('.struc S\nfa .byte\nfb .byte[S::fa+1]\n'
+                           'fc .byte[S::fb+1]\ntail .byte\n.ends\n'
+                           '.word S::fa,S::fb,S::fc,S::tail,sizeof(S),S::tail+S::tail\n'
+                           '.S {}\n', bytes.fromhex('00 00 01 00 02 00 04 00 05 00 08 00')
+                           + bytes(5))
+
+    def test_dependent_scoped_offsets_reuse_completed_values(self):
+        # Without caching, the previous offsets are repeatedly copied and
+        # expanded. A CPU limit keeps a regression from exhausting memory.
+        source = '.struc S\nf0 .byte\n' + ''.join(
+            f'f{i} .byte[1+0*S::f{i-1}]\n' for i in range(1, 41))
+        source += '.ends\n.word S::f40\n'
+        for pure in (False, True):
+            for debug in (False, True):
+                for listing in (False, True):
+                    with self.subTest(pure=pure, debug=debug, listing=listing):
+                        result, output = self.assemble(source, pure, debug, listing, cyclic=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'')
+                        self.assertEqual(output.read_bytes() if pure else self.linked(output), b'\x28\x00')
+
+    def test_scoped_offset_cache_is_local_to_each_evaluation(self):
+        self.assert_output('Count=1\n.struc S\nitems .byte[Count]\ntail .byte\n.ends\n'
+                           '.word S::tail+S::tail\nCount=3\n.word S::tail+S::tail\n',
+                           bytes.fromhex('02 00 06 00'))
+        self.assert_output('.struc S\nitems .byte[Count]\ntail .byte\n.ends\n'
+                           '.word S::tail+S::tail\nCount .equ Value\nValue=2\n',
+                           bytes.fromhex('04 00'))
 
     def test_nested_indexed_instance_members_in_objects(self):
         source = ('.struc Point\npx .byte\npy .byte\n.ends\n'

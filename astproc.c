@@ -1319,8 +1319,9 @@ static astnode *reduce_sizeof(astnode *expr)
  * If A is a union: substitute with 0
  * If A is an enumeration: substitute with value for B
  * @param expr Node of type SCOPE_NODE
+ * @param resolved_symbol Optional identity of the member whose value was copied
  */
-static astnode *reduce_scope(astnode *expr)
+static astnode *reduce_scope(astnode *expr, symtab_entry **resolved_symbol)
 {
     symtab_entry *ns;
     symtab_entry *sym;
@@ -1342,6 +1343,7 @@ static astnode *reduce_scope(astnode *expr)
                 case UNION_SYMBOL:
                 case RECORD_SYMBOL:
                 /* Replace with field offset */
+                if (resolved_symbol != NULL) *resolved_symbol = sym;
                 c = astnode_clone(sym->field.offset, sym->field.offset->loc);
                 astnode_replace(expr, c);
                 astnode_finalize(expr);
@@ -1350,6 +1352,7 @@ static astnode *reduce_scope(astnode *expr)
 
                 case ENUM_SYMBOL:
                 /* Replace with enum entry value */
+                if (resolved_symbol != NULL) *resolved_symbol = sym;
                 c = astnode_clone(sym->def, sym->def->loc);
                 astnode_replace(expr, c);
                 astnode_finalize(expr);
@@ -1769,6 +1772,40 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
         expr = substitute_defines_recursive(expr, parents, cache);
         break;
 
+        case SCOPE_NODE: {
+            symtab_entry *symbol = NULL;
+            astnode *resolved = reduce_scope(expr, &symbol);
+            const constant_expansion *seen;
+            constant_expansion current = {symbol, parents};
+            int value, errors_before = err_count;
+            /* A copied field offset can contain named counts, just like a
+             * copied sizeof expression. Resolve them in the caller's scope
+             * and include the member itself in the ancestry: a layout cycle
+             * need not pass through a named constant. Track members rather
+             * than their type, since earlier offsets can be used legally. */
+            if (resolved == expr) break; /* Leave unknown names for validation. */
+            assert(symbol != NULL);
+            if (astnode_is_type(resolved, INTEGER_NODE)) return resolved;
+            if (cached_constant(cache, symbol, &value))
+                return replace_constant_value(resolved, value);
+            for (seen = parents; seen != NULL; seen = seen->parent) {
+                if (seen->symbol == symbol) {
+                    err(resolved->loc, "circular definition of scoped member `%s'", symbol->id);
+                    cache->failed = 1;
+                    return replace_constant_value(resolved, 0);
+                }
+            }
+            expr = substitute_defines_recursive(resolved, &current, cache);
+            expr = fold_constants(expr, FOLD_PC_NO);
+            if (err_count != errors_before) cache->failed = 1;
+            /* Repeated references to earlier offsets must not expand the
+             * same dependency tree again. Keep only completed integers in
+             * this evaluation's cache; relocations remain expressions. */
+            if (err_count == errors_before && astnode_is_type(expr, INTEGER_NODE))
+                cache_constant(cache, symbol, expr->integer, expr->loc);
+            break;
+        }
+
         case MASK_NODE:
         expr = reduce_mask(expr);
         break;
@@ -1818,7 +1855,7 @@ static astnode *reduce_highlevel_constructs(astnode *expr)
         break;
 
         case SCOPE_NODE:
-        expr = reduce_scope(expr);
+        expr = reduce_scope(expr, NULL);
         break;
 
         case DOT_NODE:

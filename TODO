@@ -14,6 +14,11 @@
 
 Known defects and follow-ups:
 
+- A type containing a field whose count is sizeof of that same type can crash
+  during recursive size expansion (fb .byte[sizeof(S)] inside S). Scoped
+  member-offset cycles are diagnosed, but pure sizeof cycles still need a guard.
+- mask R::lo can crash when R is unknown; record fields with named widths can
+  also crash during mask reduction. Validate the namespace and width first.
 - An omitted structure-array count that still depends on $ after constant
   substitution uses first-element expansion and cannot become zero in
   pure-binary mode. Object output retains its previous link-time behavior.
@@ -37,13 +42,11 @@ Known defects and follow-ups:
   evaluation work, especially for nested arrays and object output. Benchmark
   omitted arrays too, not only explicitly initialized arrays, when reducing
   this overhead. Known positive counts use direct expansion.
-- S::member offsets after a named-count field do not substitute constants in
-  the copied offset. They can mis-link as local-symbol references, fail to link,
-  or crash in binary address evaluation. Apply the sizeof substitution policy
-  to reduce_scope too, with regression coverage.
-- Shared alias chains ending in labels are expanded as trees, so evaluation
-  time and object size can grow exponentially. Sufficiently deep definitions
-  can also exhaust the recursive evaluator's stack.
+- Shared alias chains and dependent scoped offsets that remain unresolved
+  (for example, with label or external counts) are expanded as trees, so
+  evaluation time and object size can grow exponentially. Completed integer
+  values are cached per evaluation. Sufficiently deep definitions can also
+  exhaust the recursive evaluator's stack.
 - Forward aliases containing @@ local labels retain unrenamed names in their
   stored definitions. Operand uses can emit an unloadable object with exit 0;
   count uses fail with a generic error and false unused-label warnings. Uses
