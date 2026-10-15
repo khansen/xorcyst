@@ -119,7 +119,7 @@ struct tag_symtab_entry {
     int flags;
     int tag;
     int ref_count;
-    location assignment_loc;    /* Statement that gave a constant its current value */
+    location assignment_loc;    /* Constant assignment or procedure declaration span */
     int has_assignment_loc;
     int align;  /* 2^align = boundary */
     int address;

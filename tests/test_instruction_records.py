@@ -788,6 +788,84 @@ END
         self.assertEqual(targets, ["NOP", "NOP", "RTS", "RTS", "NOP", "NOP"])
         self.assertEqual(len({r["operand_value"] for r in forward}), 6)
 
+    def check_procedure_analysis_failure(self, source, expected_object_bytes):
+        # Pure binary already rejects PROC/VAR address operands. Analysis must
+        # report those same errors without a use-after-free, and preserve output.
+        # Object output resolves these addresses at link time and must stay valid.
+        for debug in (False, True):
+            with self.subTest(debug=debug):
+                asm = self.root / 'input.asm'
+                asm.write_text(source)
+                output = self.root / 'output.bin'
+                stderr = None
+                options = ['--debug'] if debug else []
+                for mode in ('plain', 'xref', 'records'):
+                    with self.subTest(mode=mode):
+                        flags = []
+                        if mode == 'xref':
+                            flags = [f'--xref={self.root / "xref.json"}', '--xref-instructions=true']
+                        if mode == 'records':
+                            flags = [f'--instruction-records-output={self.root / "records.json"}',
+                                     f'--dependency-manifest={self.root / "deps.json"}']
+                        output.write_bytes(b'previous output')
+                        result = subprocess.run([str(XASM), '--pure-binary', *options, *flags,
+                                                 str(asm), '-o', str(output)],
+                                                capture_output=True, timeout=10)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'operand does not evaluate to literal', result.stderr)
+                        self.assertNotIn(b'AddressSanitizer', result.stderr)
+                        self.assertNotIn(b'runtime error:', result.stderr)
+                        if stderr is None: stderr = result.stderr
+                        self.assertEqual(result.stderr, stderr)
+                        self.assertEqual(output.read_bytes(), b'previous output')
+                asm.write_text(source.replace('.org $8000\n', ''))
+                objects = []
+                for analysis in (False, True):
+                    obj = self.root / 'procedure.o'
+                    obj.unlink(missing_ok=True)
+                    flags = [f'--xref={self.root / "object-xref.json"}'] if analysis else []
+                    result = subprocess.run([str(XASM), *options, *flags, str(asm), '-o', str(obj)],
+                                            capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    objects.append(obj.read_bytes())
+                    script = self.root / 'procedure.link'
+                    script.write_text(f'link{{file={obj},origin=$8000}}\n')
+                    linked = self.root / 'linked.bin'
+                    linked.unlink(missing_ok=True)
+                    result = subprocess.run([str(XLNK), str(script), '-o', str(linked)],
+                                            capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(linked.read_bytes(), expected_object_bytes)
+                self.assertEqual(*objects)
+
+    def test_procedure_analysis_survives_flattened_member_accesses(self):
+        self.check_procedure_analysis_failure(
+            '.org $8000\n.struc Point\npx .byte\npy .byte\n.ends\n'
+            '.struc Box\nhd .byte\npts .Point[2]\n.ends\n'
+            '.proc P\nb .Box\nlda b.pts[1].py\n.dw b.pts[1].px\nrts\n.endp\njsr P\n',
+            bytes.fromhex('00 00 00 00 00 AD 04 80 03 80 60 20 00 80'))
+
+    def test_forward_recursive_and_empty_procedure_analysis(self):
+        self.check_procedure_analysis_failure(
+            '.org $8000\njsr Forward\n.proc Empty\n.endp\n'
+            '.proc Forward\njsr Forward\njsr Empty\nrts\n.endp\n',
+            bytes.fromhex('20 03 80 20 03 80 20 03 80 60'))
+
+    def test_procedure_body_labels_keep_binary_and_record_addresses(self):
+        source = ('.org $8000\n.struc Point\npx .byte\npy .byte\n.ends\n'
+                  '.proc P\nEntry: .Point {1,2}\nlda Entry+Point::py\nrts\n.endp\njsr Entry\n')
+        for debug in (False, True):
+            with self.subTest(debug=debug):
+                (self.root / 'output.bin').unlink(missing_ok=True)
+                records = self.assemble(source, options=('--debug',) if debug else ())
+                self.assertEqual((self.root / 'output.bin').read_bytes(),
+                                 bytes.fromhex('01 02 AD 01 80 60 20 00 80'))
+                self.assertEqual(records[0]['operand_value'], 0x8001)
+                call = records[-1]
+                self.assertEqual(call['operand_value'], 0x8000)
+                self.assertEqual(self.binding(call['additive_terms']['terms'][0]),
+                                 ('label', 7, None))
+
     def test_constant_bindings_follow_assembly_order(self):
         records = self.assemble(""".ORG $C000
     LDA #LATER

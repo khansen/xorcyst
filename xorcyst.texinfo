@@ -82,6 +82,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Keeps procedure symbol definitions valid after procedure bodies are flattened. Instruction xref and separate instruction records can analyze procedure references, including procedures containing dotted member accesses, without reading freed memory. Bindings retain the original procedure declaration location.
 @item Validates @code{mask} namespaces and record layouts without crashing. Known named record widths are resolved in the declaration's constant scope, even when a field has the same name. Widths must still be known when the record is declared; later assignments do not change an existing record layout. Forward aliases to record masks now resolve to the correct mask instead of zero; for example, @code{M .equ mask R::lo} before the record declaration resolves correctly when used afterward.
 @item Rejects recursive @code{sizeof} layouts with a diagnostic instead of crashing or repeatedly expanding them. A structure or union cannot use its own unfinished size. Size ancestry also covers storage behind a label; repeated independent uses and nested completed types remain supported.
 @end itemize

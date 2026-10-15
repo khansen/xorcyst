@@ -67,8 +67,6 @@ Known defects and follow-ups:
   when the link script provides a RAM region.
 - A late error in merged storage can point to the preceding storage statement
   instead of the statement that supplied the invalid count.
-- Procedure-local dotted references with instruction xref can read a statement
-  list freed by flatten_proc when analysis_bind_symbol reports its definition.
 - Reassigning an = constant leaks the previous definition.
 - Signed integer overflow in constant folding is undefined (e.g.
   .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
@@ -78,3 +76,7 @@ Known defects and follow-ups:
   in binary mode. This also affects counts that use such literal operands.
 - Forward strings differ between binary and object output, and exported forward
   constant aliases can still fail object encoding.
+- Pure-binary address evaluation resolves LABEL symbols but not PROC or VAR
+  symbols. Direct calls to procedures and operands using variable declarations
+  can fail with "operand does not evaluate to literal" even though their objects
+  link correctly. Explicit labels in procedure bodies work in both modes.

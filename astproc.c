@@ -3666,7 +3666,12 @@ static int enter_proc(astnode *proc, void *arg, astnode **next)
         symtab_remove(id->ident);
     }
     /* Enter it! RHS(proc) is the list of procedure statements */
-    symtab_enter(id->ident, PROC_SYMBOL, RHS(proc), (in_dataseg ? DATA_FLAG : 0) );
+    e = symtab_enter(id->ident, PROC_SYMBOL, RHS(proc), (in_dataseg ? DATA_FLAG : 0) );
+    if (e != NULL) {
+        /* Keep the declaration span when flattening replaces the body list. */
+        e->assignment_loc = proc->loc;
+        e->has_assignment_loc = 1;
+    }
     label_count++;
 
     return 1;
@@ -5459,6 +5464,10 @@ static int flatten_proc(astnode *proc, void *arg, astnode **next)
 {
     astnode *id = LHS(proc);
     astnode *list = RHS(proc);
+    symtab_entry *symbol = symtab_lookup(id->ident);
+    /* The statement-list container dies with PROC. The label survives and
+     * remains the procedure's definition for later operand/analysis passes. */
+    if (symbol != NULL && symbol->def == list) symbol->def = id;
     astnode_remove(id);
     id->type = LABEL_NODE;
     astnode_insert_child(list, id, 0);
