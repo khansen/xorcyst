@@ -97,6 +97,11 @@ Break the dependency cycle or use the size of an already completed type.
 <dd><p>A structure or union declaration cannot contain initialization of its fields.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">invalid layout for record member `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>A record mask requires an integer field width and offset that fit within one
+byte. Correct the record declaration before using its mask.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">initializer does not evaluate to integer literal</samp>&rsquo;</dt>
 <dd><p>A member of an enumerated datatype must be assigned a constant value.
 </p>

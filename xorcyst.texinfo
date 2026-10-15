@@ -82,6 +82,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Validates @code{mask} namespaces and record layouts without crashing. Known named record widths are resolved in the declaration's constant scope, even when a field has the same name. Widths must still be known when the record is declared; later assignments do not change an existing record layout. Forward aliases to record masks now resolve to the correct mask instead of zero; for example, @code{M .equ mask R::lo} before the record declaration resolves correctly when used afterward.
 @item Rejects recursive @code{sizeof} layouts with a diagnostic instead of crashing or repeatedly expanding them. A structure or union cannot use its own unfinished size. Size ancestry also covers storage behind a label; repeated independent uses and nested completed types remain supported.
 @end itemize
 
@@ -1779,6 +1780,10 @@ A structure or union field must be of the form @code{@var{identifier} @var{datat
 
 @item data initialization not allowed here
 A structure or union declaration cannot contain initialization of its fields.
+
+@item invalid layout for record member `@var{identifier}'
+A record mask requires an integer field width and offset that fit within one
+byte. Correct the record declaration before using its mask.
 
 @item initializer does not evaluate to integer literal
 A member of an enumerated datatype must be assigned a constant value.

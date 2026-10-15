@@ -127,6 +127,71 @@ class Expressions(unittest.TestCase):
                            'Payload: .dsb 2\nEnd: .word sizeof(Payload)+sizeof(Payload)\n',
                            bytes.fromhex('06 00 0C 00 02 00 06 00 00 00 04 00'))
 
+    def test_mask_rejects_invalid_names_without_publishing_output(self):
+        cases = (
+            ('.byte mask Missing::lo\n', b"unknown namespace `Missing'"),
+            ('.record R hi:1,lo:7\n.byte mask R::missing\n',
+             b"unknown symbol `missing' in namespace `R'"),
+            ('R=2\n.byte mask R::lo\n', b"`R' is not a record"),
+            ('.struc S\nlo .byte\n.ends\n.word mask S::lo\n', b"`S' is not a record"),
+            ('.enum E\nlo\n.ende\n.byte mask E::lo\n', b"`E' is not a record"),
+            ('Alias .equ mask Missing::lo\n.byte Alias\n', b"unknown namespace `Missing'"),
+            ('.macro Emit\n.byte mask Missing::lo\n.endm\nEmit\nEmit\n',
+             b"unknown namespace `Missing'"),
+        )
+        for source, diagnostic in cases:
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(source=source, pure=pure, debug=debug, listing=listing):
+                            result, output = self.assemble(source, pure, debug, listing)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(diagnostic, result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_mask_rejects_invalid_record_widths(self):
+        cases = (
+            ('', 'Missing', b'is not of constant size'),
+            ('Width .equ Width\n', 'Width', b'circular constant definition'),
+            ('Width=0\n', 'Width', b'out of range'),
+            ('Width=-1\n', 'Width', b'out of range'),
+            ('Width=8\n', 'Width', b'out of range'),
+            ('Width=7\n', 'Width', b'exceeds 8 bits'),
+            ('', '3', None),
+        )
+        for definition, width, diagnostic in cases:
+            # A forward width must still be known at the record declaration.
+            source = definition + f'.record R hi:{width},lo:5\n.byte mask R::lo\n'
+            if diagnostic is None:
+                source = source.replace('hi:3', 'hi:Width') + 'Width=3\n'
+                diagnostic = b'is not of constant size'
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(source=source, pure=pure, debug=debug, listing=listing):
+                            result, output = self.assemble(source, pure, debug, listing)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(diagnostic, result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_mask_and_record_initializers_accept_known_named_widths(self):
+        for definition in ('Width=3\n', 'Width .equ 3\n', '.define Width 3\n',
+                           'Other=2\nWidth .equ Other+1\n'):
+            with self.subTest(definition=definition):
+                self.assert_output(definition + '.record R hi:Width,lo:5\n'
+                                   '.byte mask R::hi,mask R::lo\n.R {5,3}\n',
+                                   bytes.fromhex('E0 1F A3'))
+        self.assert_output('Width=3\n.record R Width:1,hi:Width,lo:4\n'
+                           'Width=2\n.byte mask R::Width,mask R::hi,mask R::lo\n'
+                           '.R {1,5,3}\n', bytes.fromhex('80 70 0F D3'))
+
+    def test_mask_preserves_literal_and_forward_record_references(self):
+        self.assert_output('.byte mask R::hi\nAlias .equ mask R::lo\n'
+                           '.record R hi:1,lo:7\n'
+                           '.macro Emit\nlda #Alias\n.byte mask R::hi+1\n.endm\n'
+                           '.rept 2\nEmit\n.endm\n',
+                           bytes.fromhex('80 A9 7F 81 A9 7F 81'))
+
     def test_scoped_offsets_resolve_named_counts_in_nested_layouts(self):
         for definition, placement in (("", "literal"), ("Count=2\n", "before"),
                                       ("Count .equ 2\n", "before"),

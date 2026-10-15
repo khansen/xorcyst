@@ -1535,60 +1535,43 @@ static astnode *reduce_dot(astnode *expr)
  */
 static astnode *reduce_mask(astnode *mask)
 {
-    symtab_entry *ns;
-    symtab_entry *sym;
-    astnode *c;
+    astnode *expr = LHS(mask);
     astnode *namespace;
     astnode *symbol;
-    astnode *expr;
-    /* Child is a scope node, record::field */
-    expr = LHS(mask);
-    /* Look up the namespace */
+    symtab_entry *ns;
+    symtab_entry *field;
+    astnode *value;
+    int bits = 0;
+    /* A failed scoped-reference validator may already have replaced the child.
+     * Never return a child while leaving its owning MASK node in the tree. */
+    if (!astnode_is_type(expr, SCOPE_NODE)) return mask;
     namespace = LHS(expr);
+    symbol = RHS(expr);
     ns = symtab_lookup(namespace->ident);
-    if (ns != NULL) {
-        /* Make sure it's a record */
-        if (ns->type != RECORD_SYMBOL) {
-            err(expr->loc, "`%s' is not a record");
-            /* Replace by 0 */
-            c = astnode_create_integer(0, expr->loc);
-            astnode_replace(mask, c);
-            astnode_finalize(mask);
-            expr = c;
-        }
-        else {
-            /* Look up the local symbol */
-            if (!push_symbol_scope(ns->symtab, mask->loc)) return mask;
-            symbol = RHS(expr);
-            sym = symtab_lookup(symbol->ident);
-            if (sym != NULL) {
-                /* Calculate field mask */
-                // mask = ((1 << width) - 1) << offset
-                c = astnode_create_arithmetic(
-                    SHL_OPERATOR,
-                    astnode_create_arithmetic(
-                        MINUS_OPERATOR,
-                        astnode_create_arithmetic(
-                            SHL_OPERATOR,
-                            astnode_create_integer(1, expr->loc),
-                            astnode_clone(sym->field.size, expr->loc),
-                            expr->loc
-                            ),
-                        astnode_create_integer(1, expr->loc),
-                        expr->loc
-                    ),
-                    astnode_clone(sym->field.offset, expr->loc),
-                    expr->loc
-                );
-                c = reduce_expression(c, FOLD_PC_NO);
-                astnode_replace(mask, c);
-                astnode_finalize(mask);
-                expr = c;
-            }
-            symtab_pop();
+    if (ns == NULL) return mask; /* Allow forward references; validate later. */
+    if (ns->type != RECORD_SYMBOL) {
+        err(expr->loc, "`%s' is not a record", namespace->ident);
+    } else if (!(ns->flags & INVALID_TYPE_FLAG)) {
+        if (!push_symbol_scope(ns->symtab, mask->loc)) return mask;
+        field = symtab_lookup(symbol->ident);
+        symtab_pop();
+        if (field == NULL) return mask; /* The scoped validator reports it. */
+        /* Widths and offsets are fixed when the record is declared. Validate
+         * them before shifting, including after an invalid declaration. */
+        if (!astnode_is_type(field->field.size, INTEGER_NODE) ||
+            !astnode_is_type(field->field.offset, INTEGER_NODE) ||
+            field->field.size->integer < 1 || field->field.size->integer > 7 ||
+            field->field.offset->integer < 0 ||
+            field->field.offset->integer > 8 - field->field.size->integer) {
+            err(expr->loc, "invalid layout for record member `%s'", symbol->ident);
+        } else {
+            bits = ((1 << field->field.size->integer) - 1) << field->field.offset->integer;
         }
     }
-    return expr;
+    value = astnode_create_integer(bits, mask->loc);
+    astnode_replace(mask, value);
+    astnode_finalize(mask);
+    return value;
 }
 
 /**
@@ -4052,6 +4035,8 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
     int offset;
     symtab_entry *se;
     symtab_entry *fe;
+    symtab *constants;
+    int errors_before = err_count;
     astnode *record_id = astnode_get_child(record_def, 0);
     assert(astnode_get_type(record_id) == IDENTIFIER_NODE);
     se = symtab_enter(record_id->ident, RECORD_SYMBOL, record_def, 0);
@@ -4065,12 +4050,19 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
             err(record_def->loc, "out of memory creating symbol scope");
             return 0;
         }
+        /* A field name must not shadow a constant used by another width. */
+        constants = se->symtab;
+        while (constants->parent != NULL) constants = constants->parent;
         offset = 8;
         plist = &se->struc.fields;
         for (c = record_id->next_sibling; c != NULL; c = c->next_sibling) {
             /* c has two children: field identifier and its width */
             field_id = LHS(c);
-            field_width = reduce_expression(RHS(c), FOLD_PC_NO);
+            int field_errors = err_count;
+            if (!push_symbol_scope(constants, c->loc)) continue;
+            field_width = reduce_expression_complete(RHS(c), FOLD_PC_NO);
+            symtab_pop();
+            if (err_count != field_errors) continue;
             /* Validate the width -- must be positive integer literal */
             if (!astnode_is_type(field_width, INTEGER_NODE)) {
                 err(c->loc, "record member `%s' is not of constant size", field_id->ident);
@@ -4104,6 +4096,7 @@ static int enter_record(astnode *record_def, void *arg, astnode **next)
             /* Set size of record (in bits) */
             se->struc.size = astnode_create_integer(size, record_def->loc);
         }
+        if (err_count != errors_before) se->flags |= INVALID_TYPE_FLAG;
         symtab_pop();
     }
     /* ### Remove RECORD node from AST */
