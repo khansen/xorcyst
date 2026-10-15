@@ -1,3 +1,25 @@
+Version 1.9.4:
+
+- Resolve named counts in scoped S::member offsets before binary evaluation
+  and object encoding. Diagnose direct and mutual field-offset cycles while
+  allowing references to earlier members of the same type. Cache completed
+  integer offsets per evaluation to avoid repeated dependency-tree expansion.
+- Explicit S::member expressions capture known reassignable counts at the use
+  site, matching sizeof(T). Uninitialized storage and other layout paths can
+  still use final values; reassignment does not give a type one fixed layout.
+- Reject unsupported object expressions, operators and statements instead
+  of publishing unloadable objects. Report the 16384-expression limit once per
+  unit, preserve previous output on failure, and retain duplicate reuse when
+  the table is full. Forward local aliases and nested dotted indexes remain
+  unsupported and tracked for earlier resolution.
+- Reject late zero-page operands outside 0..255 in pure-binary output, matching
+  the linker. Validate the emitted opcode, including indexed zero-page modes.
+  Force a valid absolute encoding with .w when shortening would invalidate an
+  operand; literal bytes, signed immediates and branches retain their behavior.
+- Document remaining limits, including unresolved link-time expression-tree
+  growth, pure sizeof layout recursion, mask-reduction crashes and late
+  immediate/indirect operand differences between binary and linked output.
+
 Version 1.9.3:
 - Resolve named constants in copied structure-size expressions, so indexed
   member references use the correct stride in objects, including nested and
