@@ -77,6 +77,56 @@ class Expressions(unittest.TestCase):
         self.assert_output('Count=1\n.struc S\nhead .byte\nitems .word[Count]\ntail .byte\n.ends\n'
                            '.byte sizeof(S)\nCount=3\n.byte sizeof(S)\n', bytes.fromhex('04 08'))
 
+    def test_recursive_sizeof_fails_without_publishing_output(self):
+        direct = '.struc S\nfa .byte\nfb .byte[sizeof(S)]\n.ends\n'
+        cases = [direct + use for use in ('.word sizeof(S)\n', 'lda #sizeof(S)\n',
+                                         'v: .S {}\n', 'inst .S[2]\n')]
+        cases += [
+            '.union U\nfa .byte\nfb .byte[sizeof(U)]\n.ends\n.word sizeof(U)\n',
+            '.macro Make\n' + direct + '.word sizeof(S)\n.endm\nMake\n',
+            '.proc Main\n' + direct + '.word sizeof(S)\n.endp\n',
+            # sizeof(label) enters a fresh evaluator for its storage counts.
+            'Payload: .dsb sizeof(Payload)\n.byte $5A\n',
+        ]
+        for source in cases:
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(source=source, pure=pure, debug=debug, listing=listing):
+                            result, output = self.assemble(source, pure, debug, listing, cyclic=True)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b'circular size definition', result.stderr)
+                            self.assertNotIn(b'syntax error', result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_sizeof_cycles_through_aliases_and_other_types_fail(self):
+        cases = (
+            '.struc S\nfb .byte[N]\n.ends\nN .equ sizeof(S)\n.word sizeof(S)\n',
+            '.struc TA\nfa .byte[N]\n.ends\n'
+            '.struc TB\nfb .byte[M]\n.ends\n'
+            'N .equ sizeof(TB)\nM .equ sizeof(TA)\n.word sizeof(TA)\n',
+            '.struc S\nfa .byte[N]\nfb .byte\n.ends\n'
+            'N .equ sizeof(S)\n.word S::fb\n',
+        )
+        for source in cases:
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(source=source, pure=pure, debug=debug, listing=listing):
+                            result, output = self.assemble(source, pure, debug, listing, cyclic=True)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b'circular', result.stderr)
+                            self.assertNotIn(b'syntax error', result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_sizeof_allows_repeated_and_nested_independent_layouts(self):
+        self.assert_output('.struc Inner\nfa .word\n.ends\n'
+                           '.struc S\nfa .byte[sizeof(Inner)]\nfb .Inner[2]\n.ends\n'
+                           '.union U\nfa .S\nfb .word[sizeof(Inner)]\n.ends\n'
+                           '.word sizeof(S),sizeof(S)+sizeof(S),sizeof(Inner),sizeof(U)\n'
+                           'Payload: .dsb 2\nEnd: .word sizeof(Payload)+sizeof(Payload)\n',
+                           bytes.fromhex('06 00 0C 00 02 00 06 00 00 00 04 00'))
+
     def test_scoped_offsets_resolve_named_counts_in_nested_layouts(self):
         for definition, placement in (("", "literal"), ("Count=2\n", "before"),
                                       ("Count .equ 2\n", "before"),

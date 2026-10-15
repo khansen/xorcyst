@@ -35,6 +35,12 @@ ul.mark-bullet {list-style-type: disc}
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
 
+<h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
+
+<ul class="itemize mark-bullet">
+<li>Rejects recursive <code class="code">sizeof</code> layouts with a diagnostic instead of crashing or repeatedly expanding them. A structure or union cannot use its own unfinished size. Size ancestry also covers storage behind a label; repeated independent uses and nested completed types remain supported.
+</li></ul>
+
 <h3 class="heading" id="Version-1_002e9_002e4"><span>Version 1.9.4<a class="copiable-link" href="#Version-1_002e9_002e4"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">

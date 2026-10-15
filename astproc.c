@@ -1261,6 +1261,15 @@ static astnode *reduce_sizeof(astnode *expr)
             switch (e->type) {
                 case STRUC_SYMBOL:
                 case UNION_SYMBOL:
+                /* A declaration is visible before its layout is complete. */
+                if (e->struc.size == NULL) {
+                    err(expr->loc, "circular size definition `%s'", e->id);
+                    astnode_finalize(count);
+                    c = astnode_create_integer(0, expr->loc);
+                    astnode_replace(expr, c);
+                    astnode_finalize(expr);
+                    return c;
+                }
                 /* Datatype is defined, replace sizeof with proper expression */
                 c = astnode_clone((astnode *)(e->struc.size), ((astnode *)(e->struc.size))->loc);
                 astnode_replace(expr, c);
@@ -1723,6 +1732,11 @@ typedef struct constant_expansion {
     const struct constant_expansion *parent;
 } constant_expansion;
 
+/* sizeof(label) also reduces cloned storage counts through a fresh expression
+ * evaluation. Keep size ancestry across those calls, not just within one
+ * constant cache. Entries live on the C stack and are popped before returning. */
+static const constant_expansion *active_sizes = NULL;
+
 static astnode *substitute_defines_recursive(astnode *expr, const constant_expansion *parents, constant_cache *cache)
 {
     if (cache->failed) return expr;
@@ -1764,13 +1778,32 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
             return expr;
         }
 
-        case SIZEOF_NODE:
-        expr = reduce_sizeof(expr);
-        /* A user type's size is itself an expression. Resolve constants in
-         * the copied size too, including counts introduced by index scaling.
-         * Otherwise an object can encode a constant as a local symbol index. */
-        expr = substitute_defines_recursive(expr, parents, cache);
-        break;
+        case SIZEOF_NODE: {
+            astnode *id = LHS(expr);
+            symtab_entry *symbol;
+            const constant_expansion *seen;
+            int errors_before = err_count;
+            if (astnode_is_type(id, DATATYPE_NODE)) id = LHS(id);
+            symbol = astnode_is_type(id, IDENTIFIER_NODE)
+                ? symtab_global_lookup(id->ident) : NULL;
+            constant_expansion current = {symbol, active_sizes};
+            for (seen = active_sizes; symbol != NULL && seen != NULL; seen = seen->parent) {
+                if (seen->symbol == symbol) {
+                    err(expr->loc, "circular size definition `%s'", symbol->id);
+                    cache->failed = 1;
+                    return replace_constant_value(expr, 0);
+                }
+            }
+            active_sizes = &current;
+            expr = reduce_sizeof(expr);
+            /* Copied layouts can contain constants or further sizeof uses.
+             * Keep the size active until the entire copy has been reduced. */
+            if (err_count == errors_before)
+                expr = substitute_defines_recursive(expr, parents, cache);
+            active_sizes = current.parent;
+            if (err_count != errors_before) cache->failed = 1;
+            break;
+        }
 
         case SCOPE_NODE: {
             symtab_entry *symbol = NULL;
@@ -3839,6 +3872,7 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
     astnode *field_id;
     astnode *field_data;
     astnode *field_size;
+    astnode *size;
     symtab_entry *fe;
     symtab *constants;
     int errors_before = err_count;
@@ -3851,7 +3885,7 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
     /* Field names are not a scope for constants in their declarations. */
     constants = se->symtab;
     while (constants->parent != NULL) constants = constants->parent;
-    se->struc.size = astnode_create_integer(0, union_def->loc);
+    size = astnode_create_integer(0, union_def->loc);
     plist = &se->struc.fields;
     /* Process field declarations */
     for (c = RHS(union_def); c != NULL; c = c->next_sibling) {
@@ -3905,13 +3939,14 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
         fe->field.offset = astnode_create_integer(0, union_def->loc);
         fe->field.size = astnode_clone(field_size, field_size->loc);
         /* See if field size of this member is largest so far */
-        if (se->struc.size->integer < field_size->integer) {
-            astnode_finalize(se->struc.size);
-            se->struc.size = field_size;
+        if (size->integer < field_size->integer) {
+            astnode_finalize(size);
+            size = field_size;
         } else {
             astnode_finalize(field_size);
         }
     }
+    se->struc.size = size;
     if (err_count != errors_before) se->flags |= INVALID_TYPE_FLAG;
     symtab_pop();
 }
