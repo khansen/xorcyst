@@ -1,3 +1,32 @@
+Version 1.9.3:
+- Resolve named constants in copied structure-size expressions, so indexed
+  member references use the correct stride in objects, including nested and
+  external instances.
+- Validate late binary storage counts and reject extents that change after
+  address calculation, preserving previous output on failure. Keep unresolved
+  binary storage separate so each count uses its own PC and range check.
+- Preserve late zero-length omitted and uninitialized structure-array fields,
+  including nested arrays and forward constants. Reject late negative counts
+  in objects even across nested fields and merged storage. Known positive
+  omitted-array counts retain direct expansion.
+- Apply the positive-count rule for standalone storage and the outer count of
+  .T[n] to late counts in both modes. Some late zero counts accepted by 1.9.2
+  are now rejected; explicitly initialized user-type arrays require positive
+  counts too.
+- Recalculate code labels and unit origins after linker zero-page shortening,
+  repeating layout until instruction sizes settle. Preserve forced-wide
+  instructions and fixed label addresses; reject final zero-page operands
+  outside 0..255 without publishing output.
+- Explicit sizeof(T) now captures a known reassignable = count at its use site
+  instead of its final value. Other layout paths can still use the final value.
+- Document PC-dependent limitations: .equ $ and = $ can capture provisional
+  addresses after deferred storage. Outer omitted-array remainders and nested
+  field counts can evaluate $ at different positions in binary and object
+  modes; binary layouts can differ from 1.9.2. Use labels or fixed counts where
+  matching layouts are required.
+- Preserve listing schemas and instruction-record schema version 3. Remaining
+  defects and the extra cost of nested late omitted-array counts are in TODO.
+
 Version 1.9.2:
 - Validate deferred counts in direct storage, omitted fields and built-in array
   padding before storage merging and object encoding, avoiding dropped storage
