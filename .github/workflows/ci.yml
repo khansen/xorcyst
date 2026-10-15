@@ -51,6 +51,7 @@ jobs:
       TEST_BACKEND_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_FAULT_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_LINKER_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
+      TEST_ASSEMBLER_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_INPUT_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
     steps:
@@ -70,3 +71,19 @@ jobs:
           python3 tests/test_output_failures.py
           python3 tests/test_linker_outputs.py
           python3 tests/test_inputs.py
+      - name: Check procedure instruction-analysis lifetimes
+        run: |
+          python3 - <<'PYTOOLS'
+          import os
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'tests')
+          from tool_test_support import build_tool
+          root = Path(os.environ['RUNNER_TEMP'])
+          build_tool('xasm', root / 'xasm-asan', 'TEST_ASSEMBLER_CFLAGS')
+          build_tool('xlnk', root / 'xlnk-asan', 'TEST_ASSEMBLER_CFLAGS')
+          PYTOOLS
+          XLNK="$RUNNER_TEMP/xlnk-asan" python3 tests/test_instruction_records.py "$RUNNER_TEMP/xasm-asan" \
+            InstructionRecords.test_procedure_analysis_survives_flattened_member_accesses \
+            InstructionRecords.test_forward_recursive_and_empty_procedure_analysis \
+            InstructionRecords.test_procedure_body_labels_keep_binary_and_record_addresses

@@ -38,7 +38,8 @@ ul.mark-bullet {list-style-type: disc}
 <h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">
-<li>Validates <code class="code">mask</code> namespaces and record layouts without crashing. Known named record widths are resolved in the declaration&rsquo;s constant scope, even when a field has the same name. Widths must still be known when the record is declared; later assignments do not change an existing record layout. Forward aliases to record masks now resolve to the correct mask instead of zero; for example, <code class="code">M .equ mask R::lo</code> before the record declaration resolves correctly when used afterward.
+<li>Keeps procedure symbol definitions valid after procedure bodies are flattened. Instruction xref and separate instruction records can analyze procedure references, including procedures containing dotted member accesses, without reading freed memory. Bindings retain the original procedure declaration location.
+</li><li>Validates <code class="code">mask</code> namespaces and record layouts without crashing. Known named record widths are resolved in the declaration&rsquo;s constant scope, even when a field has the same name. Widths must still be known when the record is declared; later assignments do not change an existing record layout. Forward aliases to record masks now resolve to the correct mask instead of zero; for example, <code class="code">M .equ mask R::lo</code> before the record declaration resolves correctly when used afterward.
 </li><li>Rejects recursive <code class="code">sizeof</code> layouts with a diagnostic instead of crashing or repeatedly expanding them. A structure or union cannot use its own unfinished size. Size ancestry also covers storage behind a label; repeated independent uses and nested completed types remain supported.
 </li></ul>
 
