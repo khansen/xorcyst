@@ -1769,6 +1769,14 @@ int main(int argc, char *argv[]) {
             if (total_errors() != 0) {
                 remove(tmp_outfile);
                 output_generated = 0;
+            } else if (analysis != NULL && !analysis_values_resolved(analysis)) {
+                /* Collection defers unevaluable values so the writer can give
+                   source diagnostics. If it succeeds, analysis is unsupported;
+                   preserve all previous outputs rather than publish placeholders. */
+                fprintf(stderr, "error: could not collect assembly analysis\n");
+                exit_code = 3;
+                remove(tmp_outfile);
+                output_generated = 0;
             } else {
                 if (rename(tmp_outfile, xasm_args.output_file) != 0) {
                     fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);

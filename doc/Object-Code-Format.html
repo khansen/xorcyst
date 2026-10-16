@@ -73,6 +73,13 @@ ul.mark-bullet {list-style-type: disc}
 
 <p>This is a series of triplets <var class="var">(identifier, type, value)</var>, each describing a constant made publicly available.
 </p>
+<p>Integer values use the same encoding as integer expression nodes: the 8-,
+16- and 24-bit forms contain nonnegative values, and the 32-bit form contains
+a signed two&rsquo;s-complement value. The assembler uses the 32-bit form for every
+negative integer. Multi-byte integer payloads are stored most-significant
+byte first. These rules apply to both exported constants and expression
+literals, independently of the linker&rsquo;s host word size.
+</p>
 </div>
 <div class="section-level-extent" id="Descriptors-for-imported-symbols">
 <h3 class="section"><span>D.3 Descriptors for imported symbols<a class="copiable-link" href="#Descriptors-for-imported-symbols"> &para;</a></span></h3>

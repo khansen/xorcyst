@@ -362,6 +362,13 @@ Examples of valid identifiers are
 
 <p><code class="code">$</code> can be used in an expression to refer to the address where the current instruction is assembled.
 </p>
+<p><code class="code"><var class="var">value</var> &gt;&gt; <var class="var">count</var></code> shifts the low 32 bits of <var class="var">value</var> right,
+filling with zeros. The count must be in the range 0&ndash;31. The result is a
+signed 32-bit integer, so shifting by zero preserves a negative value;
+shifting by 1&ndash;31 produces a nonnegative value. This rule applies to constants,
+label expressions and external symbols alike. For example, <code class="code">(-2)&gt;&gt;1</code>
+is <code class="code">$7FFFFFFF</code>, not <code class="code">-1</code>.
+</p>
 <p><code class="code">^<var class="var">symbol</var></code> gets the bank number in which <var class="var">symbol</var> is located (determined at link time).
 </p>
 <p><code class="code">sizeof(<var class="var">symbol</var>)</code> gets the size of <var class="var">symbol</var> in bytes.

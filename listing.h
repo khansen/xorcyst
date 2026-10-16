@@ -28,7 +28,8 @@ int prepare_xref_instruction_provenance(int capture_terms);
 const char *capture_xref_instruction_source(const char *filename, const char *directory, FILE *fp);
 int finish_xref_instruction_provenance(astnode *root);
 void clear_xref_instruction_provenance(void);
-/* Collection owns resolved facts; it does not open output files. */
+/* Collection owns facts; unresolved values await writer diagnostics.
+   Collection does not open output files. */
 typedef struct tag_analysis_result analysis_result;
 typedef struct tag_analysis_output_plan analysis_output_plan;
 
@@ -65,6 +66,8 @@ analysis_output_plan *plan_analysis_outputs(const analysis_result *analysis,
 int validate_analysis_outputs(const analysis_output_plan *plan);
 /* Prepare names only for successful assembly; diagnostic listings need paths only. */
 int prepare_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan);
+/* Check after the writer's diagnostics, before publishing binary or analysis. */
+int analysis_values_resolved(const analysis_result *analysis);
 int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan *plan);
 void free_analysis_outputs(analysis_output_plan *plan);
 int generate_xref_summary(astnode *root,

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Run malformed inputs and allocation failures through the actual tools."""
+import json
 import os
 from pathlib import Path
 import resource
+import re
 import subprocess
 import tempfile
 import unittest
@@ -495,6 +497,536 @@ class InputHandling(unittest.TestCase):
         result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('A9 FF D0 FC'))
+
+    def test_object_integer_widths_preserve_sign_and_compact_positive_values(self):
+        # Exercise existing object bytes directly, including high bits in the
+        # compact unsigned forms and both endpoints of the signed 32-bit form.
+        for width, values in (
+                (1, (0, 127, 128, 255)),
+                (2, (256, 32767, 32768, 65535)),
+                (3, (65536, 8388607, 8388608, 16777215)),
+                (4, (0, 16777216, 0x7FFFFFFF, 0x80000000,
+                     0xFFFFFF7F, 0xFFFFFF80, 0xFFFFFFFF))):
+            for bits in values:
+                with self.subTest(width=width, bits=bits):
+                    value = bits - (1 << 32) if width == 4 and bits >= (1 << 31) else bits
+                    literal = bytes([width]) + bits.to_bytes(width, 'big')
+                    # DD literal; DB literal < 0, literal > 0.
+                    expressions = [literal, b'\x1c' + literal + b'\x01\0',
+                                   b'\x1d' + literal + b'\x01\0']
+                    (self.root / 'unit.o').write_bytes(object_file(
+                        code=bytes.fromhex('fa0000f80001f80002f3'), expressions=expressions))
+                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(result.stderr, b'')
+                    self.assertEqual((self.root / 'output').read_bytes(),
+                                     bits.to_bytes(4, 'little') + bytes([value < 0, value > 0]))
+
+    def test_signed_relocatable_expressions_match_binary_output(self):
+        values = (-2147483648, -8388609, -32769, -129, -128, -2, -1, 0,
+                  127, 128, 255, 256, 32768, 65536, 8388608, 16777216, 2147483647)
+        source = 'L1: nop\nL2:\n'
+        expected = bytearray(b'\xea')
+        for value in values:
+            # Spell INT_MIN without negating an out-of-range positive int.
+            literal = '(-2147483647-1)' if value == -2147483648 else str(value)
+            expression = f'(L2-L1-1+({literal}))'
+            source += f'.dword {expression}\n.byte {expression}<0,{expression}>0\n'
+            expected += (value & 0xFFFFFFFF).to_bytes(4, 'little')
+            expected += bytes([value < 0, value > 0])
+        source += '.word (L2-L1+-4)/2,(L2-L1+-4)%2\nlda #(L2-L1+-2)\n'
+        expected += bytes.fromhex('FF FF FF FF A9 FF')
+        for origin in (0, 0x8000):
+            for debug in (False, True):
+                for analysis in ((), ('--listing=listing.json', '--listing-format=json',
+                                      '--xref=xref.json')):
+                    for pure in (False, True):
+                        with self.subTest(origin=origin, debug=debug, analysis=analysis, pure=pure):
+                            result = self.run_tool('xasm', (f'.org {origin}\n' if pure else '') + source,
+                                                   pure_binary=pure,
+                                                   arguments=analysis + (('--debug',) if debug else ()))
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr, b'')
+                            if not pure:
+                                (self.root / 'output').rename(self.root / 'unit.o')
+                                result = self.run_tool('xlnk', f'link{{file=unit.o,origin={origin}}}\n')
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual(result.stderr, b'')
+                            self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_exported_signed_constants_match_local_constants(self):
+        values = (-1, -128, -32768, -2147483648, 128, 32768, 8388608, 2147483647)
+        names = ','.join(f'Value{i}' for i in range(len(values)))
+        provider = '.public ' + names + '\n'
+        consumer = ''
+        expected = bytearray()
+        for index, value in enumerate(values):
+            literal = '(-2147483647-1)' if value == -2147483648 else str(value)
+            provider += f'Value{index} .equ {literal}\n'
+            consumer += f'.dword Value{index}\n.byte Value{index}<0,Value{index}>0\n'
+            expected += (value & 0xFFFFFFFF).to_bytes(4, 'little')
+            expected += bytes([value < 0, value > 0])
+        consumer += '.dsb 1+(Value0<0)\n.byte $5A\n'
+        expected += b'\0\0\x5a'
+        for debug in (False, True):
+            flags = ('--debug',) if debug else ()
+            with self.subTest(debug=debug, local=True):
+                result = self.run_tool('xasm', provider + consumer, arguments=flags)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual((self.root / 'output').read_bytes(), expected)
+            for name, source in (('provider.o', provider),
+                                 ('consumer.o', f'.extrn {names}:byte\n' + consumer)):
+                result = self.run_tool('xasm', source, pure_binary=False, arguments=flags)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(result.stderr, b'')
+                (self.root / 'output').rename(self.root / name)
+            for order in (('provider.o', 'consumer.o'), ('consumer.o', 'provider.o')):
+                with self.subTest(debug=debug, order=order):
+                    result = self.run_tool('xlnk', ''.join(f'link{{file={name}}}\n' for name in order))
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(result.stderr, b'')
+                    self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_right_shifts_match_for_folded_relocated_and_external_values(self):
+        values = (-2147483648, -2, -1, 0, 255, 16777215, 2147483647)
+        counts = (0, 1, 16, 24, 25, 31)
+        definitions = ''.join(f'Value{i} .equ {value}\n' if value != -2147483648
+                              else f'Value{i} .equ $80000000\n'
+                              for i, value in enumerate(values))
+        names = ','.join(f'Value{i}' for i in range(len(values)))
+        for debug in (False, True):
+            flags = ('--debug',) if debug else ()
+            for form in ('literal', 'constant', 'label', 'external'):
+                source, expected = '', bytearray()
+                for i, value in enumerate(values):
+                    expr = '$80000000' if value == -2147483648 else str(value)
+                    if form in ('constant', 'external'):
+                        expr = f'Value{i}'
+                    elif form == 'label':
+                        expr = f'L2-L1-1+({expr})'
+                    for count in counts:
+                        source += f'.dword ({expr})>>{count}\n.byte (({expr})>>{count})<0\n'
+                        bits = (value & 0xFFFFFFFF) >> count
+                        expected += bits.to_bytes(4, 'little') + bytes([count == 0 and value < 0])
+                # M1's observable instruction/data cases must not warn or fail.
+                neg = 'Value1' if form in ('constant', 'external') else (
+                    'L2-L1+-3' if form == 'label' else '-2')
+                source += (f'lda #({neg})>>25\n.word ({neg})>>16\n'
+                           f'.byte ({neg})>>24,({neg})>>31,(({neg})>>1)>>30\n')
+                expected += bytes.fromhex('A9 7F FF FF FF 01 01')
+                if form == 'constant':
+                    source = definitions + source
+                elif form == 'label':
+                    source = 'L1: nop\nL2:\n' + source
+                    expected = b'\xea' + expected
+                elif form == 'external':
+                    result = self.run_tool('xasm', '.public ' + names + '\n' + definitions,
+                                           pure_binary=False, arguments=flags)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    (self.root / 'output').rename(self.root / 'provider.o')
+                    source = f'.extrn {names}:byte\n' + source
+                for origin in (0, 0x8000):
+                    for pure in ((False,) if form == 'external' else (False, True)):
+                        with self.subTest(form=form, debug=debug, origin=origin, pure=pure):
+                            result = self.run_tool('xasm', (f'.org {origin}\n' if pure else '') + source,
+                                                   pure_binary=pure, arguments=flags)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr, b'')
+                            if pure:
+                                self.assertEqual((self.root / 'output').read_bytes(), expected)
+                                continue
+                            (self.root / 'output').rename(self.root / 'consumer.o')
+                            orders = (('consumer.o',),) if form != 'external' else (
+                                ('provider.o', 'consumer.o'), ('consumer.o', 'provider.o'))
+                            for order in orders:
+                                result = self.run_tool('xlnk', ''.join(
+                                    f'link{{file={name}' + (f',origin={origin}' if i == 0 else '') + '}\n'
+                                    for i, name in enumerate(order)))
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual(result.stderr, b'')
+                                self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_right_shift_analysis_matches_emitted_bytes(self):
+        body = ('L1: nop\nL2: lda #((L1-L2)>>25)\n.dword (L1-L2-1)>>1\n'
+                'Half = (L1-L2)>>28\nlda #Half\nlda Half\n'
+                'lda Tab+((L1-L2)>>30)\nTab: .byte $11\n'
+                '.dword (L1-L2)>>0,(L1-L2+-2147483647)>>31,((L1-L2)>>4)>>27\n'
+                'lda #((L1-L2)>>0)\nlda #((L1-L2+-2147483647)>>31)\n'
+                'lda #(((L1-L2)>>4)>>27)\n.word Tab+((L1-L2)>>30)\n')
+        formats = (('text', 1), ('json', 1), ('ndjson', 1), ('json', 2), ('ndjson', 2),
+                   ('xref', 0), ('records', 0))
+        for origin in (0x8000, 0xC000):
+            expected = (bytes.fromhex('EA A9 7F FF FF FF 7F A9 0F A5 0F AD')
+                        + (origin + 17).to_bytes(2, 'little')
+                        + bytes.fromhex('11 FF FF FF FF 01 00 00 00 01 00 00 00 A9 FF A9 01 A9 01')
+                        + (origin + 17).to_bytes(2, 'little'))
+            source = f'.org {origin}\n' + body
+            for debug in (False, True):
+                flags = ('--debug',) if debug else ()
+                plain = self.run_tool('xasm', source, arguments=flags)
+                self.assertEqual(plain.returncode, 0, plain.stderr.decode())
+                self.assertEqual(plain.stderr, b'')
+                self.assertEqual((self.root / 'output').read_bytes(), expected)
+                for fmt, version in formats:
+                    with self.subTest(origin=origin, debug=debug, format=fmt, version=version):
+                        stem = f'{origin}-{debug}-{fmt}-{version}'
+                        listing, xref, sidecar = (self.root / (stem + suffix)
+                                                   for suffix in ('.lst', '.xref', '.records'))
+                        arguments = list(flags)
+                        if fmt != 'records':
+                            arguments += [f'--xref={xref}', '--xref-instructions=true', '--xref-data=true']
+                        if fmt != 'xref':
+                            arguments += [f'--instruction-records-output={sidecar}',
+                                          f'--dependency-manifest={stem}.deps']
+                        if version:
+                            arguments += [f'--listing={listing}', f'--listing-format={fmt}',
+                                          f'--listing-version={version}']
+                        result = self.run_tool('xasm', source, arguments=arguments)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, plain.stderr)
+                        self.assertEqual((self.root / 'output').read_bytes(), expected)
+                        if fmt == 'text':
+                            text = listing.read_text()
+                            rows = [line for line in text.splitlines()
+                                    if re.match(r'^(?:\d{4}| {4})  [0-9A-F]{4}  ', line)]
+                            self.assertEqual(b''.join(bytes.fromhex(line[12:24]) for line in rows), expected)
+                            self.assertRegex(text, r'(?m)^Half\s+= \$000F$')
+                            self.assertRegex(text, rf'(?m)^Tab\s+= \${origin + 14:04X}$')
+                        elif version:
+                            rows = (json.loads(listing.read_text())['records'] if fmt == 'json'
+                                    else [json.loads(line) for line in listing.read_text().splitlines()])
+                            emitted = bytearray()
+                            for row in rows:
+                                data = bytes.fromhex(''.join(row['bytes_hex']))
+                                if not data:
+                                    continue
+                                offset = row['output_offset_start']
+                                self.assertEqual(offset, len(emitted))
+                                self.assertEqual(row['output_offset_end'], offset + len(data) - 1)
+                                self.assertEqual(int(row['cpu_address_start'], 16), origin + offset)
+                                self.assertEqual(data, expected[offset:offset + len(data)])
+                                emitted.extend(data)
+                            self.assertEqual(emitted, expected)
+                        documents = []
+                        if fmt != 'records':
+                            facts = json.loads(xref.read_text())
+                            documents.append(facts['instruction_records'])
+                            data_refs = facts['data_directive_references']
+                            self.assertEqual([r['use_output_offset'] for r in data_refs], [3, 15, 19, 23, 33])
+                            for ref in data_refs:
+                                offset, width = ref['use_output_offset'], ref['width_bytes']
+                                self.assertEqual(ref['emitted_value'],
+                                                 int.from_bytes(expected[offset:offset + width], 'little'))
+                        if fmt != 'xref':
+                            documents.append(json.loads(sidecar.read_text()))
+                        self.assertEqual(documents[0], documents[-1])
+                        records = documents[0]['records']
+                        self.assertEqual([r['operand_value'] for r in records],
+                                         [None, 127, 15, 15, origin + 17, -1, 1, 1])
+                        for record in records:
+                            offset = record['output_offset']
+                            self.assertEqual(bytes(record['bytes']), expected[offset:offset + record['size']])
+                            self.assertEqual(record['cpu_address'], origin + offset)
+                            if record['operand_value'] is not None:
+                                self.assertEqual(sum(t['sign'] * t['value']
+                                                     for t in record['additive_terms']['terms']),
+                                                 record['operand_value'])
+                        self.assertEqual(records[3]['memory_access']['data']['address'], 15)
+                        self.assertEqual(records[4]['memory_access']['data']['address'], origin + 17)
+
+    def test_invalid_right_shifts_are_safe_in_diagnostic_listings(self):
+        formats = (('text', 1), ('json', 1), ('ndjson', 1), ('json', 2), ('ndjson', 2))
+        for count in (-1, 32, 63, 64):
+            for index, body in enumerate((f'.byte (L2-L1)>>({count})\n',
+                                          f'lda #((L2-L1)>>(L2-L1-1+({count})))\n',
+                                          f'Shift = (L2-L1)>>(L2-L1-1+({count}))\n.byte Shift\n',
+                                          f'.word L1+((L2-L1)>>({count}))\n',
+                                          f'.byte Shift\nShift .equ (L2-L1)>>({count})\n',
+                                          f'lda L1+((L2-L1)>>({count}))\n',
+                                          f'lda L1+((L2-L1)>>({count})),y\n')):
+                source = '.org $8000\nL1: nop\nL2:\n' + body
+                for debug in (False, True):
+                    flags = ('--debug',) if debug else ()
+                    plain = self.run_tool('xasm', source, arguments=flags)
+                    self.assertEqual(plain.returncode, 1, plain.stderr.decode())
+                    self.assertIn(b'invalid shift count in expression', plain.stderr)
+                    self.assertRegex(plain.stderr, rb'input\.asm:\d+: error: invalid shift count')
+                    for fmt, version in formats:
+                        with self.subTest(count=count, body=index, debug=debug, format=fmt, version=version):
+                            stem = f'{count}-{index}-{debug}-{fmt}-{version}'
+                            listing, xref, sidecar, ram, manifest = (self.root / (stem + suffix)
+                                for suffix in ('.lst', '.xref', '.records', '.nl', '.deps'))
+                            exports = (xref, sidecar, ram, manifest)
+                            if debug:
+                                for path in exports:
+                                    path.write_bytes(b'previous analysis')
+                            arguments = [*flags, f'--listing={listing}', f'--listing-format={fmt}',
+                                         f'--listing-version={version}', f'--xref={xref}',
+                                         '--xref-data=true', '--xref-instructions=true',
+                                         f'--instruction-records-output={sidecar}',
+                                         f'--fceux-nl-ram-output={ram}',
+                                         f'--dependency-manifest={manifest}']
+                            result = self.run_tool('xasm', source, arguments=arguments)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertEqual(result.stderr, plain.stderr)
+                            self.assertTrue(listing.exists())
+                            for path in exports:
+                                if debug:
+                                    self.assertEqual(path.read_bytes(), b'previous analysis')
+                                else:
+                                    self.assertFalse(path.exists())
+                            if fmt == 'text' and index == 2:
+                                self.assertNotRegex(listing.read_text(), r'(?m)^Shift\s+=')
+                            if version == 2:
+                                rows = (json.loads(listing.read_text())['records'] if fmt == 'json'
+                                        else [json.loads(line) for line in listing.read_text().splitlines()])
+                                for row in rows:
+                                    self.assertFalse(row['binary_generated'])
+                                    self.assertFalse(row['emits_bytes'])
+                                    self.assertEqual(row['bytes_hex'], [])
+
+    def test_invalid_shifts_with_individual_analysis_outputs(self):
+        modes = (('--xref=xref.json', '--xref-data=true'),
+                 ('--xref=xref.json', '--xref-instructions=true'),
+                 ('--instruction-records-output=records.json', '--dependency-manifest=deps.json'),
+                 ('--fceux-nl-ram-output=ram.nl',))
+        for body in ('.byte (L2-L1)>>32', 'lda #((L2-L1)>>32)',
+                     'lda L1+((L2-L1)>>32)', 'lda L1+((L2-L1)>>32),y'):
+            source = '.org $8000\nL1: nop\nL2: ' + body + '\n'
+            plain = self.run_tool('xasm', source)
+            self.assertEqual(plain.returncode, 1, plain.stderr.decode())
+            for arguments in modes:
+                with self.subTest(body=body, arguments=arguments):
+                    result = self.run_tool('xasm', source, arguments=arguments)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertEqual(result.stderr, plain.stderr)
+                    for filename in ('xref.json', 'records.json', 'ram.nl', 'deps.json'):
+                        self.assertFalse((self.root / filename).exists())
+
+    def test_unresolved_storage_with_rom_export_preserves_outputs(self):
+        # Known limitation: an incomplete ROM layout cannot enumerate all NL
+        # destinations, so collection fails before writing a diagnostic listing.
+        cases = [(f'(L2-L1)>>(L2-L1-1+({count}))', b'invalid shift count in expression')
+                 for count in (-1, 32, 63, 64)]
+        cases += [('L1-L2', b'operand out of range')]
+        for expression, error in cases:
+            source = f'.org $8000\nL1: nop\nL2:\n.dsb {expression}\n.byte 1\n'
+            for debug in (False, True):
+                flags = ['--debug'] if debug else []
+                listing = self.root / 'listing.txt'
+                plain = self.run_tool('xasm', source, arguments=[*flags, f'--listing={listing}'])
+                self.assertEqual(plain.returncode, 1, plain.stderr.decode())
+                self.assertIn(error, plain.stderr)
+                self.assertIn('SOURCE CODE', listing.read_text())
+                for manifest in (False, True):
+                    with self.subTest(expression=expression, debug=debug, manifest=manifest):
+                        for filename in ('listing.txt', 'rom.0.nl', 'deps.json'):
+                            (self.root / filename).write_bytes(b'previous analysis')
+                        arguments = [*flags, f'--listing={listing}', '--fceux-nl-rom-prefix=rom.']
+                        if manifest:
+                            arguments += ['--dependency-manifest=deps.json']
+                        result = self.run_tool('xasm', source, arguments=arguments)
+                        self.assertEqual(result.returncode, 3 if manifest or expression == 'L1-L2' else 1,
+                                         result.stderr.decode())
+                        self.assertIn(b'could not collect assembly analysis', result.stderr)
+                        for filename in ('listing.txt', 'rom.0.nl', 'deps.json'):
+                            self.assertEqual((self.root / filename).read_bytes(), b'previous analysis')
+        result = self.run_tool('xasm', '.org $8000\nL1: nop\nL2:\n.dsb L2-L1+1\n.byte 1\n',
+                               arguments=('--fceux-nl-rom-prefix=control.',))
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('EA 00 00 01'))
+        self.assertIn('$8001#L2#', (self.root / 'control.0.nl').read_text())
+
+    def test_unresolved_analysis_values_preserve_all_outputs(self):
+        # The binary writer understands $, but xref-data does not yet. Deferring
+        # analysis errors must never publish its placeholder value or a new binary.
+        source = '.org $8000\nL1: nop\n.word $-L1\n'
+        plain = self.run_tool('xasm', source)
+        self.assertEqual(plain.returncode, 0, plain.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), b'\xea\x01\x00')
+        for debug in (False, True):
+            for combined in (False, True):
+                with self.subTest(debug=debug, combined=combined):
+                    outputs = ('xref.json', 'records.json', 'ram.nl', 'listing.json', 'deps.json')
+                    for filename in outputs:
+                        (self.root / filename).write_bytes(b'previous analysis')
+                    arguments = ['--xref=xref.json', '--xref-data=true']
+                    if debug:
+                        arguments += ['--debug']
+                    if combined:
+                        arguments += ['--xref-instructions=true', '--instruction-records-output=records.json',
+                                      '--fceux-nl-ram-output=ram.nl', '--listing=listing.json',
+                                      '--listing-format=json', '--listing-version=2',
+                                      '--dependency-manifest=deps.json']
+                    result = self.run_tool('xasm', source, arguments=arguments)
+                    self.assertEqual(result.returncode, 3, result.stderr.decode())
+                    self.assertEqual(result.stderr, b'error: could not collect assembly analysis\n')
+                    for filename in outputs:
+                        self.assertEqual((self.root / filename).read_bytes(), b'previous analysis')
+
+    def test_invalid_right_shift_counts_preserve_output(self):
+        for count in (-1, 32, 63, 64):
+            for debug in (False, True):
+                flags = ('--debug',) if debug else ()
+                for form in ('literal', 'late_value', 'late_count', 'external'):
+                    if form == 'external':
+                        result = self.run_tool('xasm', f'.public Count\nCount .equ {count}\n',
+                                               pure_binary=False, arguments=flags)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        (self.root / 'output').rename(self.root / 'provider.o')
+                        source = '.extrn Count:byte\n.dword (-2)>>Count\n'
+                    elif form == 'literal':
+                        source = f'.dword (-2)>>({count})\n'
+                    elif form == 'late_value':
+                        source = f'L1: nop\nL2: .dword (L2-L1+-3)>>({count})\n'
+                    else:
+                        source = f'L1: nop\nL2: .dword (-2)>>(L2-L1-1+({count}))\n'
+                    for pure in ((False,) if form == 'external' else (False, True)):
+                        with self.subTest(count=count, debug=debug, form=form, pure=pure):
+                            result = self.run_tool('xasm', source, pure_binary=pure, arguments=flags)
+                            if not pure and form != 'literal':
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                (self.root / 'output').rename(self.root / 'consumer.o')
+                                result = self.run_tool('xlnk',
+                                    ('link{file=provider.o,origin=0}\n' if form == 'external' else '')
+                                    + 'link{file=consumer.o,origin=0}\n')
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b'invalid shift count in expression', result.stderr)
+
+    def test_linker_instruction_signed_range_boundaries(self):
+        for template, opcode, width, minimum in (
+                ('lda #{}', 0xA9, 1, -128), ('lda [{},x]', 0xA1, 1, -128),
+                ('lda [{}],y', 0xB1, 1, -128), ('lda.w {}', 0xAD, 2, -32768),
+                ('jmp {}', 0x4C, 2, -32768), ('stx {},y', 0x96, 1, 0)):
+            maximum = (1 << (8 * width)) - 1
+            for value in (minimum - 1, minimum, -1, 0, maximum, maximum + 1):
+                for debug in (False, True):
+                    flags = ('--debug',) if debug else ()
+                    for external in (False, True):
+                        with self.subTest(template=template, value=value, debug=debug, external=external):
+                            if external:
+                                result = self.run_tool('xasm', f'.public Value\nValue .equ {value}\n',
+                                                       pure_binary=False, arguments=flags)
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                (self.root / 'output').rename(self.root / 'provider.o')
+                                source, expr, expected = '.extrn Value:byte\n', 'Value', b''
+                            else:
+                                source, expr, expected = 'L1: nop\nL2:\n', f'(L2-L1-1+({value}))', b'\xea'
+                            result = self.run_tool('xasm', source + template.format(expr) + '\n',
+                                                   pure_binary=False, arguments=flags)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            (self.root / 'output').rename(self.root / 'consumer.o')
+                            result = self.run_tool('xlnk',
+                                ('link{file=provider.o,origin=0}\n' if external else '')
+                                + 'link{file=consumer.o,origin=0}\n')
+                            if value < minimum or value > maximum:
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(f"instruction operand doesn't fit in {width} byte".encode(),
+                                              result.stderr)
+                            else:
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual(result.stderr, b'')
+                                self.assertEqual((self.root / 'output').read_bytes(), expected + bytes([opcode])
+                                                 + (value & maximum).to_bytes(width, 'little'))
+
+    def test_linker_data_signed_range_warnings(self):
+        for directive, minimum, maximum, width in (('byte', -128, 255, 1), ('word', -32768, 65535, 2)):
+            for debug in (False, True):
+                for external in (False, True):
+                    with self.subTest(directive=directive, debug=debug, external=external):
+                        values = (minimum - 1, minimum, -1, 0, maximum, maximum + 1)
+                        names = ','.join(f'Value{i}' for i in range(len(values)))
+                        flags = ('--debug',) if debug else ()
+                        if external:
+                            provider = '.public ' + names + '\n' + ''.join(
+                                f'Value{i} .equ {value}\n' for i, value in enumerate(values))
+                            result = self.run_tool('xasm', provider, pure_binary=False, arguments=flags)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            (self.root / 'output').rename(self.root / 'provider.o')
+                        source = (f'.extrn {names}:byte\n' if external else 'L1: nop\nL2:\n')
+                        source += ''.join(f'.{directive} ' + (f'Value{i}' if external else
+                                           f'L2-L1-1+({value})') + '\n' for i, value in enumerate(values))
+                        result = self.run_tool('xasm', source, pure_binary=False, arguments=flags)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'')
+                        (self.root / 'output').rename(self.root / 'consumer.o')
+                        result = self.run_tool('xlnk',
+                            ('link{file=provider.o,origin=0}\n' if external else '')
+                            + 'link{file=consumer.o,origin=0}\n')
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr.count(b'warning:'), 2, result.stderr.decode())
+                        self.assertEqual(result.stderr.count(b'out of range; truncated'), 2)
+                        self.assertIn(f'operand {minimum - 1} out of range; truncated'.encode(), result.stderr)
+                        self.assertIn(f'operand ${maximum + 1:X} out of range; truncated'.encode(), result.stderr)
+                        self.assertEqual((self.root / 'output').read_bytes(), (b'' if external else b'\xea')
+                                         + b''.join((value & maximum).to_bytes(width, 'little') for value in values))
+
+    def test_linker_wide_truncation_warning_prints_full_value(self):
+        # The evaluator uses long. Exercise the full diagnostic on hosts where
+        # it can represent a result beyond 32 bits, without overflowing on ILP32.
+        import ctypes
+        if ctypes.sizeof(ctypes.c_long) < 8:
+            self.skipTest('requires a linker with 64-bit long')
+        source = 'L1: nop\nL2: .byte (L2-L1+$3FFFFFFF)*8-1\n.word (L2-L1+$3FFFFFFF)*8-1\n'
+        result = self.run_tool('xasm', source, pure_binary=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        (self.root / 'output').rename(self.root / 'unit.o')
+        result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(result.stderr.count(b'$1FFFFFFFF out of range; truncated'), 2, result.stderr.decode())
+        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('EA FF FF FF'))
+
+    def test_signed_storage_comparisons_validate_the_final_count(self):
+        for expression, count in (('1+2*((L2-L1+-2)<0)', 3),
+                                  ('L2-L1+-2+2', 1), ('(L2-L1+-2)>0', 0)):
+            for debug in (False, True):
+                for pure in (False, True):
+                    with self.subTest(expression=expression, debug=debug, pure=pure):
+                        result = self.run_tool('xasm', 'L1: nop\nL2:\n.dsb ' + expression + '\n.byte $5A\n',
+                                               pure_binary=pure, arguments=('--debug',) if debug else ())
+                        if pure and not count:
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b'operand out of range', result.stderr)
+                            continue
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        if not pure:
+                            (self.root / 'output').rename(self.root / 'unit.o')
+                            result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                            if not count:
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(b'storage size out of range', result.stderr)
+                                continue
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual((self.root / 'output').read_bytes(), b'\xea' + b'\0'*count + b'\x5a')
+
+    def test_signed_omitted_array_counts_allow_zero_but_reject_negative(self):
+        types = ('.struc Inner\nv .byte\nw .byte\n.ends\n'
+                 '.struc S\nhd .byte\nitems .Inner[N]\ntl .byte\n.ends\n')
+        for count in (-1, 0, 1):
+            source = (types + 'N .equ L2-L1+-1\nL1:\n' + 'nop\n'*(count+1)
+                      + 'L2:\n.S {$11}\nAfter: .word After\n')
+            for origin in (0, 0x8000):
+                for debug in (False, True):
+                    for pure in (False, True):
+                        with self.subTest(count=count, origin=origin, debug=debug, pure=pure):
+                            result = self.run_tool('xasm', (f'.org {origin}\n' if pure else '') + source,
+                                                   pure_binary=pure, arguments=('--debug',) if debug else ())
+                            if pure and count < 0:
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(b'operand out of range', result.stderr)
+                                continue
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            if not pure:
+                                (self.root / 'output').rename(self.root / 'unit.o')
+                                result = self.run_tool('xlnk', f'link{{file=unit.o,origin={origin}}}\n')
+                                if count < 0:
+                                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                    self.assertIn(b'storage size out of range', result.stderr)
+                                    continue
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            expected = b'\xea'*(count+1) + b'\x11' + b'\0'*(2*count+1)
+                            expected += (origin+len(expected)).to_bytes(2, 'little')
+                            self.assertEqual((self.root / 'output').read_bytes(), expected)
 
     def test_storage_counts_are_bounded_before_any_output(self):
         expressions = [b'\x04' + n.to_bytes(4, 'big') for n in

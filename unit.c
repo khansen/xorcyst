@@ -71,14 +71,17 @@ static unsigned int get_3(FILE *fp)
     result |= get_1(fp);        /* Low byte */
     return result;
 }
-/* Reads an int (big-endian) */
-static unsigned int get_4(FILE *fp)
+/* Reads a signed 32-bit integer (big-endian). Negative assembler integers
+ * always use this width; the compact 8/16/24-bit forms are nonnegative. */
+static long get_4(FILE *fp)
 {
-    unsigned int result;
-    /* Assumes little-endian machine!! */
-    result = (unsigned int)get_2(fp) << 16;   /* High 16 bits */
+    unsigned long result;
+    result = (unsigned long)get_2(fp) << 16; /* High 16 bits */
     result |= get_2(fp);        /* Low 16 bits */
-    return result;
+    /* Avoid an out-of-range unsigned-to-signed cast on either 32- or 64-bit
+     * hosts. The complemented magnitude always fits in a signed long. */
+    if (result & 0x80000000UL) return -1L - (long)(0xFFFFFFFFUL - result);
+    return (long)result;
 }
 /* Reads a string prepended by 8-bit length */
 static char *get_str_8(FILE *fp)
