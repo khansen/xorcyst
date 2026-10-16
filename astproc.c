@@ -5588,19 +5588,19 @@ static astnode *eval_arithmetic(const astnode *expr, const astnode *lhs, const a
             }
         }
         /* Use some mathematical identities... */
-        else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 0))
+        else if (rhs != NULL && (astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 0))
             && (expr->oper == PLUS_OPERATOR)) {
             /* 0+expr == expr */
             return astnode_clone(rhs, rhs->loc);
-        } else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 0))
+        } else if (lhs != NULL && (astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 0))
             && (expr->oper == PLUS_OPERATOR)) {
             /* expr+0 == expr */
             return astnode_clone(lhs, lhs->loc);
-        } else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 1))
+        } else if (rhs != NULL && (astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 1))
             && (expr->oper == MUL_OPERATOR)) {
             /* 1*expr == expr */
             return astnode_clone(rhs, rhs->loc);
-        } else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 1))
+        } else if (lhs != NULL && (astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 1))
             && ((expr->oper == MUL_OPERATOR) || (expr->oper == DIV_OPERATOR)) ) {
             /* expr*1 == expr */
             /* expr/1 == expr */

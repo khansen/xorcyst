@@ -72,6 +72,89 @@ class InputHandling(unittest.TestCase):
                 result = self.run_tool('xasm', source)
                 self.assertNotEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_forward_label_identities_wait_for_addresses(self):
+        expressions = ('Fwd+(L2-L1-1)', '(L2-L1-1)+Fwd', 'Fwd*(L2-L1)',
+                       '(L2-L1)*Fwd', 'Fwd/(L2-L1)',
+                       '(Fwd+(L2-L1-1))*(L2-L1)')
+        cases = [(expression, 'lda') for expression in expressions]
+        # Late storage sizes also evaluate identities before forward addresses exist.
+        cases += [('(Tail-Head)+(L2-L1-1)', '.dsb'),
+                  ('(Tail-Head)*(L2-L1)', '.dsb')]
+        for index, (expression, directive) in enumerate(cases):
+            for origin in (0, 0x8000):
+                # Forward storage sizes are supported here only in pure-binary mode.
+                for pure in ((True,) if directive == '.dsb' else (False, True)):
+                    for debug in (False, True):
+                        for analysis in (False, True):
+                            with self.subTest(expression=expression, directive=directive, origin=origin, pure=pure,
+                                              debug=debug, analysis=analysis):
+                                stem = f'ident-{index}-{origin}-{pure}-{debug}-{analysis}'
+                                listing = self.root / (stem + '.json')
+                                flags = ['--debug'] if debug else []
+                                if analysis:
+                                    flags += [f'--listing={listing}', '--listing-format=json',
+                                              '--listing-version=' + ('2' if pure else '1'),
+                                              f'--xref={stem}.xref']
+                                    if pure:
+                                        flags += ['--xref-instructions=true', '--xref-data=true',
+                                                  f'--instruction-records-output={stem}.records',
+                                                  f'--dependency-manifest={stem}.deps']
+                                source = (f'.org ${origin:04X}\n' if pure else '')
+                                source += f'L1: nop\nL2: {directive} {expression}\n'
+                                source += ('.byte 1\nHead: nop\nnop\nTail: rts\n' if directive == '.dsb'
+                                           else 'Fwd: rts\n')
+                                result = self.run_tool('xasm', source, pure_binary=pure, arguments=flags)
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual(result.stderr, b'')
+                                if not pure:
+                                    (self.root / 'output').rename(self.root / 'unit.o')
+                                    result = self.run_tool('xlnk', f'link{{file=unit.o,origin=${origin:04X}}}\n')
+                                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                expected = (bytes.fromhex('EA A5 03 60') if origin == 0
+                                            else bytes((0xEA, 0xAD, 4, origin >> 8, 0x60)))
+                                if directive == '.dsb':
+                                    expected = bytes.fromhex('EA 00 00 01 EA EA 60')
+                                self.assertEqual((self.root / 'output').read_bytes(), expected)
+                                # Late storage listing extents have a separate tracked limitation.
+                                if pure and analysis and directive != '.dsb':
+                                    rows = json.loads(listing.read_text())['records']
+                                    self.assertEqual(b''.join(bytes.fromhex(''.join(r['bytes_hex']))
+                                                             for r in rows), expected)
+                                    records = json.loads((self.root / (stem + '.records')).read_text())['records']
+                                    self.assertEqual(records[1]['operand_value'], origin + (3 if origin == 0 else 4))
+
+    def test_invalid_shifts_with_forward_labels_fail_without_crashing(self):
+        for count in (-1, 32, 63, 64):
+            for expression in (f'Fwd+((L2-L1)>>({count}))',
+                               f'((L2-L1)>>({count}))+Fwd',
+                               f'Fwd*(1+((L2-L1)>>({count})))',
+                               f'(1+((L2-L1)>>({count})))*Fwd',
+                               f'Fwd/(1+((L2-L1)>>({count})))'):
+                for debug in (False, True):
+                    for analysis in (False, True):
+                        with self.subTest(count=count, expression=expression, debug=debug, analysis=analysis):
+                            flags = ['--debug'] if debug else []
+                            if analysis:
+                                flags += ['--listing=listing.json', '--listing-format=json', '--listing-version=2',
+                                          '--xref=xref.json', '--xref-instructions=true', '--xref-data=true',
+                                          '--instruction-records-output=records.json', '--dependency-manifest=deps.json',
+                                          '--fceux-nl-ram-output=ram.nl', '--fceux-nl-rom-prefix=rom.']
+                            for filename in ('xref.json', 'records.json', 'deps.json', 'ram.nl', 'rom.0.nl'):
+                                (self.root / filename).write_bytes(b'previous analysis')
+                            listing = self.root / 'listing.json'
+                            listing.unlink(missing_ok=True)
+                            source = f'.org $8000\nL1: nop\nL2: lda {expression}\nFwd: rts\n'
+                            result = self.run_tool('xasm', source, arguments=flags)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b'input.asm:3: error: invalid shift count in expression', result.stderr)
+                            if analysis:
+                                rows = json.loads(listing.read_text())['records']
+                                self.assertTrue(rows)
+                                self.assertTrue(all(not r['binary_generated'] and not r['emits_bytes']
+                                                    and not r['bytes_hex'] for r in rows))
+                            for filename in ('xref.json', 'records.json', 'deps.json', 'ram.nl', 'rom.0.nl'):
+                                self.assertEqual((self.root / filename).read_bytes(), b'previous analysis')
+
     def test_empty_initializer_expansions_keep_processing_after_errors(self):
         cases = (
             ('.struc Empty\n.ends\n', '.Empty {1}\n', b'too many field initializers'),
