@@ -99,7 +99,7 @@ struct tag_xasm_expression
     xasm_expr_type type;
     union {
         xasm_operator_expr op_expr;  /* type == OPERATOR_EXPRESSION */
-        unsigned long integer;  /* type == INTEGER_EXPRESSION */
+        long integer;      /* type == INTEGER_EXPRESSION; signed value */
         char *string;       /* type == STRING_EXPRESSION */
         int local_id;       /* type == LOCAL_EXPRESSION */
         int extrn_id;       /* type == EXTERNAL_EXPRESSION */

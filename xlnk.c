@@ -916,11 +916,16 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
                     }
                     break;
                     case XASM_OP_SHR:
-                    if (rhs_result.integer < 0 || (size_t)rhs_result.integer >= sizeof(long) * CHAR_BIT) {
+                    if (rhs_result.integer < 0 || rhs_result.integer >= 32) {
                         err("invalid shift count in expression");
                         result->type = -1;
                     } else {
-                        result->integer = (long)((unsigned long)lhs_result.integer >> rhs_result.integer);
+                        /* Match xasm's logical 32-bit shift, even when long
+                         * is wider. Keep a zero-shift result signed without
+                         * an out-of-range unsigned-to-signed conversion. */
+                        uint32_t bits = (uint32_t)lhs_result.integer >> rhs_result.integer;
+                        result->integer = (bits & 0x80000000UL)
+                            ? -1L - (long)(0xFFFFFFFFUL - bits) : (long)bits;
                     }
                     break;
                     case XASM_OP_AND:    result->integer = lhs_result.integer & rhs_result.integer;  break;
@@ -1354,8 +1359,9 @@ static void write_instr(const unsigned char *b, void *arg)
         }
         /* Relaxation is permanent. A later layout can move a previously
          * nonnegative address below zero; do not publish its truncated byte.
-         * Immediate values and signed relative displacements are unaffected. */
-        if (c.integer >= 0x100 || (c.integer < 0
+         * Other byte operands may also use the signed byte range. Relative
+         * displacements were checked and converted to bytes above. */
+        if (c.integer < -128 || c.integer >= 0x100 || (c.integer < 0
             && (opcode_addressing_mode(op) == ZEROPAGE_MODE
                 || opcode_addressing_mode(op) == ZEROPAGE_X_MODE
                 || opcode_addressing_mode(op) == ZEROPAGE_Y_MODE))) {
@@ -1368,7 +1374,7 @@ static void write_instr(const unsigned char *b, void *arg)
     } else {
         assert(opcode_length(op) == 3);
         /* Operand must fit in 2 bytes */
-        if (c.integer >= 0x10000) {
+        if (c.integer < -32768 || c.integer >= 0x10000) {
             err("instruction operand doesn't fit in 2 bytes");
         }
         else {
@@ -1401,15 +1407,19 @@ static void write_dx(const unsigned char *b, void *arg)
         /* If 2+ bytes, write high ones */
         switch (b[0]) {
             case XASM_CMD_DB:
-            if (c.integer > 0xFF) {
-                warn("`.DB' operand $%X out of range; truncated", c.integer);
+            if (c.integer < -128) {
+                warn("`.DB' operand %ld out of range; truncated", c.integer);
+            } else if (c.integer > 0xFF) {
+                warn("`.DB' operand $%lX out of range; truncated", (unsigned long)c.integer);
             }
             break;
 
             case XASM_CMD_DW:
             fputc(c.integer >> 8, args->fp);
-            if (c.integer > 0xFFFF) {
-                warn("`.DW' operand $%X out of range; truncated", c.integer);
+            if (c.integer < -32768) {
+                warn("`.DW' operand %ld out of range; truncated", c.integer);
+            } else if (c.integer > 0xFFFF) {
+                warn("`.DW' operand $%lX out of range; truncated", (unsigned long)c.integer);
             }
             break;
 

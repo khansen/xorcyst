@@ -79,6 +79,15 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Unreleased
+
+@itemize
+@item Preserves negative 32-bit integers when loading object expressions and exported constants on 64-bit hosts. Relocated comparisons, arithmetic and storage counts no longer treat these values as large positive integers. Compact 8-, 16- and 24-bit positive values retain their existing interpretation. The object format and emitted object bytes are unchanged; existing objects can be linked with the corrected reader.
+In-range negative relocated instruction operands now link, and negative byte/word data no longer produce spurious truncation warnings. For example, @code{lda #(L2-L1+-2)} with adjacent labels emits @code{A9 FF}.
+@item Defines @code{>>} consistently as a logical 32-bit right shift in constant folding, binary address evaluation, listings, analysis outputs and linking. Negative exported constants keep the results of local constant expressions: @code{(-2)>>1} is @code{$7FFFFFFF}, and @code{(-2)>>31} is @code{1}. This deliberately changes formerly sign-filling negative label expressions in binary output and some previously successful links. A shift count must be 0--31; link-time counts of 32 or more are now rejected even on 64-bit hosts. A zero shift retains the signed 32-bit value. Listing bytes, symbol values and instruction records follow this same rule; diagnostic listings treat invalid shifts as unevaluable instead of executing an undefined shift. Invalid shifts in data or instruction operands retain their source-located errors and diagnostic listings when cross-reference data, instruction records or FCEUX names are requested. Storage counts with FCEUX ROM export remain an exception: an unevaluable or negative extent prevents complete output-path planning, so analysis collection fails and suppresses the diagnostic listing. A late negative count can also lose its source-located range error, leaving only @code{could not collect assembly analysis} and exit status 3 even without a dependency manifest. Omit ROM export to obtain the ordinary diagnostic; this limitation is tracked in @file{TODO}.
+@item Checks lower as well as upper bounds on relocated linker operands. One-byte instruction operands must fit -128--255, two-byte operands -32768--65535, and zero-page addresses 0--255; relative branches retain their signed displacement check. Out-of-range instructions fail without replacing output. Byte and word data outside their signed/unsigned ranges warn before truncation, including negative values; diagnostics print negative values in signed decimal and nonnegative values in full hexadecimal.
+@end itemize
+
 @heading Version 1.9.5
 
 @itemize
@@ -691,6 +700,13 @@ Operands to assembler statements are expressions. An expression can contain any 
 @end itemize
 
 @code{$} can be used in an expression to refer to the address where the current instruction is assembled.
+
+@code{@var{value} >> @var{count}} shifts the low 32 bits of @var{value} right,
+filling with zeros. The count must be in the range 0--31. The result is a
+signed 32-bit integer, so shifting by zero preserves a negative value;
+shifting by 1--31 produces a nonnegative value. This rule applies to constants,
+label expressions and external symbols alike. For example, @code{(-2)>>1}
+is @code{$7FFFFFFF}, not @code{-1}.
 
 @code{^@var{symbol}} gets the bank number in which @var{symbol} is located (determined at link time).
 
@@ -1651,6 +1667,13 @@ The magic number is the 16-bit constant @code{0xFACE}. It is followed by the one
 @section Definitions of exported constants
 
 This is a series of triplets @var{(identifier, type, value)}, each describing a constant made publicly available.
+
+Integer values use the same encoding as integer expression nodes: the 8-,
+16- and 24-bit forms contain nonnegative values, and the 32-bit form contains
+a signed two's-complement value. The assembler uses the 32-bit form for every
+negative integer. Multi-byte integer payloads are stored most-significant
+byte first. These rules apply to both exported constants and expression
+literals, independently of the linker's host word size.
 
 @section Descriptors for imported symbols
 

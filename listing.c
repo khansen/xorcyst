@@ -407,6 +407,18 @@ static const char *get_source_line(const char *filename, int line)
     return source_line_buffer;
 }
 
+/* Match folding, binary evaluation and linking: logical 32-bit right shift,
+ * with the signed value preserved for count zero. Analysis may still run
+ * after an assembly error, so reject invalid counts before shifting. */
+static int eval_shift_right(int lhs, int rhs, int *value)
+{
+    if (rhs < 0 || rhs >= 32) {
+        return 0;
+    }
+    *value = rhs ? (int)((uint32_t)lhs >> rhs) : lhs;
+    return 1;
+}
+
 static int eval_expression_int(astnode *expr, int *value, int depth)
 {
     int lhs = 0;
@@ -478,7 +490,7 @@ static int eval_expression_int(astnode *expr, int *value, int depth)
                         case OR_OPERATOR: *value = lhs | rhs; return 1;
                         case XOR_OPERATOR: *value = lhs ^ rhs; return 1;
                         case SHL_OPERATOR: *value = lhs << rhs; return 1;
-                        case SHR_OPERATOR: *value = lhs >> rhs; return 1;
+                        case SHR_OPERATOR: return eval_shift_right(lhs, rhs, value);
                         case LT_OPERATOR: *value = lhs < rhs; return 1;
                         case GT_OPERATOR: *value = lhs > rhs; return 1;
                         case EQ_OPERATOR: *value = lhs == rhs; return 1;
@@ -2585,6 +2597,9 @@ typedef struct tag_xref_build_context {
     int current_segment_id;
     int next_segment_id;
     int failed;
+    /* Let the binary writer diagnose invalid operands at their source location.
+       These incomplete facts must never be published if the writer succeeds. */
+    int unresolved_values;
     /* Real symbols are collected independently of output scope filters. */
     int *symbol_index; /* open-addressed name -> symbol array index + 1 */
     size_t symbol_index_capacity;
@@ -2963,7 +2978,7 @@ static int eval_expression_int_with_xref(astnode *expr,
         case OR_OPERATOR: *value = lhs | rhs; return 1;
         case XOR_OPERATOR: *value = lhs ^ rhs; return 1;
         case SHL_OPERATOR: *value = lhs << rhs; return 1;
-        case SHR_OPERATOR: *value = lhs >> rhs; return 1;
+        case SHR_OPERATOR: return eval_shift_right(lhs, rhs, value);
         case LT_OPERATOR: *value = lhs < rhs; return 1;
         case GT_OPERATOR: *value = lhs > rhs; return 1;
         case EQ_OPERATOR: *value = lhs == rhs; return 1;
@@ -3560,10 +3575,8 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
                 if (out->lexical_owner == NULL) { ctx->failed = 1; goto finish; }
             }
             if (len > 1 && !eval_expression_int(LHS(instr), &out->operand_value, 0)) {
-                ctx->failed = 1;
-                goto finish;
-            }
-            if (len > 1 && !evaluate_instruction_terms(out)) {
+                ctx->unresolved_values = 1;
+            } else if (len > 1 && !evaluate_instruction_terms(out)) {
                 ctx->failed = 1;
                 goto finish;
             }
@@ -3630,9 +3643,12 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
         && strcmp(meta.access, "call") != 0 && strcmp(meta.access, "jump") != 0) {
         unsigned long id = instr->analysis_origin_id;
         int address;
-        if (id == 0 || id > instruction_provenance_count
-            || !eval_expression_int(LHS(instr), &address, 0)) {
+        if (id == 0 || id > instruction_provenance_count) {
             ctx->failed = 1;
+            goto finish;
+        }
+        if (!eval_expression_int(LHS(instr), &address, 0)) {
+            ctx->unresolved_values = 1;
             goto finish;
         }
         if (address >= 0 && address < 0x8000
@@ -10040,8 +10056,8 @@ analysis_result *collect_analysis(astnode *root, const analysis_options *options
             xref_data_directive_reference *record = &ctx->data_directive_refs[i];
             int value = 0;
             if (!eval_expression_int_with_xref(record->final_expression, ctx, &value, 0)) {
-                ok = 0;
-                break;
+                ctx->unresolved_values = 1;
+                continue;
             }
             record->emitted_value = (unsigned long)(unsigned int)
                 astproc_truncate_data_value(record->provenance->datatype, value, NULL);
@@ -10100,6 +10116,11 @@ int prepare_analysis_outputs(analysis_result *analysis, const analysis_output_pl
                           options->ram_file != NULL, options->mirror_16k);
 }
 
+int analysis_values_resolved(const analysis_result *analysis)
+{
+    return !analysis->facts.unresolved_values;
+}
+
 int validate_analysis_outputs(const analysis_output_plan *plan)
 {
     size_t i;
@@ -10120,6 +10141,7 @@ int write_analysis_outputs(analysis_result *analysis, const analysis_output_plan
     const analysis_output_options *options = &plan->options;
     const xref_build_context *ctx = &analysis->facts;
     int ok = 1;
+    if (!analysis_values_resolved(analysis)) return 0;
     if (options->xref_file != NULL) {
         switch (options->format) {
             case XREF_FORMAT_JSON:

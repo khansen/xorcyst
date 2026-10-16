@@ -777,6 +777,18 @@ static int expand_macro(astnode *macro, void *arg, astnode **next)
 
 /*---------------------------------------------------------------------------*/
 
+/* Use the same logical 32-bit right shift during folding and address
+ * evaluation. A zero shift keeps the signed value; positive shifts clear
+ * the sign bit, so their result is representable as an int. */
+static astnode *shift_right(int value, int count, location loc)
+{
+    if (count < 0 || count >= 32) {
+        err(loc, "invalid shift count in expression");
+        return astnode_create_integer(0, loc);
+    }
+    return astnode_create_integer(count ? (int)((uint32_t)value >> count) : value, loc);
+}
+
 /**
  * Does constant folding of expression.
  * If the expression can be folded, the original expression is replaced by the
@@ -856,12 +868,7 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                         }
                         break;
                     case SHR_OPERATOR:
-                        if (rhs->integer < 0 || (size_t)rhs->integer >= sizeof(int) * CHAR_BIT) {
-                            err(expr->loc, "invalid shift count in expression");
-                            folded = astnode_create_integer(0, expr->loc);
-                        } else {
-                            folded = astnode_create_integer((int)((unsigned int)lhs->integer >> rhs->integer), expr->loc);
-                        }
+                        folded = shift_right(lhs->integer, rhs->integer, expr->loc);
                         break;
                     case LT_OPERATOR:   folded = astnode_create_integer(lhs->integer < rhs->integer, expr->loc);    break;
                     case GT_OPERATOR:   folded = astnode_create_integer(lhs->integer > rhs->integer, expr->loc);    break;
@@ -5568,7 +5575,7 @@ static astnode *eval_arithmetic(const astnode *expr, const astnode *lhs, const a
                 case OR_OPERATOR:    return astnode_create_integer(lhs->integer | rhs->integer, expr->loc);
                 case XOR_OPERATOR:   return astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);
                 case SHL_OPERATOR:   return astnode_create_integer(lhs->integer << rhs->integer, expr->loc);
-                case SHR_OPERATOR:   return astnode_create_integer(lhs->integer >> rhs->integer, expr->loc);
+                case SHR_OPERATOR:   return shift_right(lhs->integer, rhs->integer, expr->loc);
                 case LT_OPERATOR:    return astnode_create_integer(lhs->integer < rhs->integer, expr->loc);
                 case GT_OPERATOR:    return astnode_create_integer(lhs->integer > rhs->integer, expr->loc);
                 case EQ_OPERATOR:    return astnode_create_integer(lhs->integer == rhs->integer, expr->loc);

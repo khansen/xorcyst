@@ -14,6 +14,28 @@
 
 Known defects and follow-ups:
 
+- FCEUX ROM export rejects an unevaluable or negative storage count during
+  analysis collection, before the writer can supply its diagnostic listing.
+  A late negative count can lose the located range error too, leaving only
+  "could not collect assembly analysis" and exit 3 without a manifest. With a
+  dependency manifest this also exits 3 when an invalid shift has already
+  produced a located error. Omit ROM export to obtain the ordinary diagnostic.
+  Deferring collection failure also needs safe destination planning: unknown
+  size means not all ROM bank paths can be enumerated, and allowing a listing
+  can overwrite an NL file that was omitted from the incomplete plan.
+- Binary address evaluation can dereference an unresolved operand when applying
+  identities such as x+0, 0+x, x*1, 1*x or x/1. For example, a forward label in
+  lda Fwd+(L2-L1-1) crashes while checking zero-page optimization. Guard the
+  unevaluated operand before cloning it; an invalid shift returning zero can
+  reach the same path after its diagnostic.
+- Data-reference analysis (--xref-data) cannot evaluate the current PC ($),
+  so valid input such as L1: nop / .word $-L1 fails with "could not collect
+  assembly analysis". Supply the directive's PC to the xref evaluator;
+  meanwhile this failure preserves existing outputs instead of publishing
+  an unknown emitted value.
+- The linker label-sort key shifts signed integers into the sign bit (SORT_KEY
+  in label_partition). A zero-page data label triggers undefined behavior under
+  UBSan. Use an unsigned key with a comparator that preserves the ordering.
 - Late immediate and indirect operands of $100 or more still warn and truncate
   in pure-binary output while the linker rejects them. For example, at origin
   zero, lda [Target+$FE],y / Target: nop emits B1 00 EA; the immediate form has
@@ -70,10 +92,6 @@ Known defects and follow-ups:
 - Reassigning an = constant leaks the previous definition.
 - Signed integer overflow in constant folding is undefined (e.g.
   .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
-- Negative literal operands inside unresolved object expressions are read as
-  unsigned 32-bit values on 64-bit hosts. Signed comparisons can disagree with
-  binary output: L1: nop / L2: .byte (L2-L1+-2)<0 gives EA 00 linked, EA 01
-  in binary mode. This also affects counts that use such literal operands.
 - Forward strings differ between binary and object output, and exported forward
   constant aliases can still fail object encoding.
 - Pure-binary address evaluation resolves LABEL symbols but not PROC or VAR
