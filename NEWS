@@ -1,3 +1,29 @@
+Version 1.9.6:
+
+- Preserve negative 32-bit object expressions and exported constants on
+  64-bit hosts. In-range negative relocated operands now link, and negative
+  byte/word data no longer produce spurious truncation warnings. Compact
+  positive encodings and the object format are unchanged.
+- Define >> consistently as a logical 32-bit shift in constant folding,
+  binary evaluation, listings, analysis and linking. Counts must be 0..31;
+  a zero shift retains the signed value. For example, (-2)>>1 is $7FFFFFFF.
+  This deliberately changes formerly sign-filling negative label expressions
+  in binary output and some previously successful links. Listing bytes,
+  symbol values and instruction records now match the emitted binary.
+- Check lower and upper bounds on relocated linker instruction operands.
+  Byte/word data outside their signed/unsigned ranges warn before truncation,
+  with negative values in decimal and wide positive values in full hex.
+- Keep located writer diagnostics for unevaluable data/instruction analysis
+  values, while protecting existing output from incomplete publication.
+  ROM export with unknown storage extents remains an exception: it can suppress
+  the diagnostic listing and a late negative count's located range error.
+- Avoid cloning unresolved arithmetic operands in x+0, 0+x, x*1, 1*x and x/1.
+  This fixes crashes during zero-page optimization and late storage-size
+  evaluation without changing completed expressions' bytes or addressing modes.
+- Preserve listing and instruction-record schemas. Known limitations remain
+  in TODO, including forward-storage link layout and omitted listing fill
+  bytes, ROM-storage diagnostics, and current-PC data-reference analysis.
+
 Version 1.9.5:
 
 - Reject recursive sizeof layouts and label-storage cycles with diagnostics
