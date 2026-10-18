@@ -3192,13 +3192,19 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
     if (astnode_has_ancestor_of_type(assign, ENUM_DECL_NODE)) {
         return 0;
     }
+    id = astnode_get_child(assign, 0);
+    assert(astnode_is_type(id, IDENTIFIER_NODE));
+    e = symtab_lookup(id->ident);
+    if (e != NULL && e->type != CONSTANT_SYMBOL) {
+        err(assign->loc, "cannot assign to non-constant symbol `%s'", id->ident);
+        astnode_remove(assign);
+        astnode_finalize(assign);
+        return 0;
+    }
     /* Very similar to EQU, except symbol 1) can be
     redefined and 2) is volatile (see end of proc) */
     expr = astnode_clone(astnode_get_child(assign, 1), assign->loc);
     expr = reduce_expression(expr, FOLD_PC_YES);
-    id = astnode_get_child(assign, 0);
-    assert(astnode_is_type(id, IDENTIFIER_NODE));
-    e = symtab_lookup(id->ident);
     if (e == NULL) {
         /* Symbol is being defined for the first time */
         /* Note that the VOLATILE_FLAG is set */
@@ -3207,9 +3213,8 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
         /* Symbol is being redefined */
         /* This is OK for ASSIGN equate, simply replace definition */
         expr->loc = e->def->loc;
-        /* Constants own detached definitions. Other symbol kinds may borrow
-           nodes from the statement tree; reassignment must not free those. */
-        if (e->type == CONSTANT_SYMBOL) astnode_finalize(e->def);
+        /* Constants own detached definitions. */
+        astnode_finalize(e->def);
         e->def = expr;
     }
     /* The definition keeps the first location; bindings need this one. */

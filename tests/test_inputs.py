@@ -152,25 +152,54 @@ class InputHandling(unittest.TestCase):
                     else:
                         self.assertEqual((self.root / 'output').read_bytes(), b'\x02\x04')
 
-    def test_reassignment_does_not_free_borrowed_symbol_definitions(self):
-        # Compatibility only: assignment to a non-constant is a tracked defect.
-        # Those paths already leak; keep ASan's access checks, but not LSan here.
-        environment = {'ASAN_OPTIONS': os.environ.get('ASAN_OPTIONS', '') + ':detect_leaks=0'}
-        cases = [('L: nop\nL = 5\nlda #L\n', 0, b'', bytes.fromhex('EA A9 00')),
-                 ('.proc P\nrts\n.endp\nP = 3\njsr P\n', 1,
-                  b'input.asm:5: error: operand does not evaluate to literal\n', None)]
-        for source, status, diagnostic, expected in cases:
-            for debug in (False, True):
-                for analysis in (False, True):
-                    with self.subTest(source=source, debug=debug, analysis=analysis):
-                        flags = ['--debug'] if debug else []
-                        if analysis:
-                            flags += ['--xref=borrowed.json', '--xref-instructions=true']
-                        result = self.run_tool('xasm', source, environment, arguments=flags)
-                        self.assertEqual(result.returncode, status, result.stderr.decode())
-                        self.assertEqual(result.stderr, diagnostic)
-                        if expected is not None:
-                            self.assertEqual((self.root / 'output').read_bytes(), expected)
+    def test_reassignment_rejects_nonconstant_symbols_without_leaks(self):
+        declarations = ('Target: nop\n', '.proc Target\nrts\n.endp\n',
+                        '.struc Target\nfield .byte\n.ends\n',
+                        '.union Target\nfield .byte\n.ends\n',
+                        '.enum Target\nmember = 2\n.ende\n',
+                        '.record Target field:1\n',
+                        '.macro Target\nnop\n.endm\n',
+                        'Target .byte 1\n', '.dataseg\nTarget .byte[2]\n.codeseg\n',
+                        '.extrn Target:label\n', '.extrn Target:proc\n', '.extrn Target:byte\n')
+        for declaration in declarations:
+            for pure in (False, True):
+                for debug in (False, True):
+                    for analysis in (False, True):
+                        with self.subTest(declaration=declaration, pure=pure, debug=debug, analysis=analysis):
+                            flags = ['--debug'] if debug else []
+                            if analysis:
+                                flags += ['--xref=borrowed.json']
+                                if pure:
+                                    flags += ['--xref-instructions=true']
+                            line = declaration.count('\n') + 1
+                            # Reject before reducing the replacement expression.
+                            source = declaration + 'Target = 1/0\n.byte 7\n'
+                            result = self.run_tool('xasm', source, {'XASM_TEST_TRACK_NODES': '1'},
+                                                   arguments=flags, pure_binary=pure)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            expected = f"input.asm:{line}: error: cannot assign to non-constant symbol `Target'\n"
+                            if declaration == 'Target: nop\n':
+                                expected += "input.asm:1: warning: `Target' defined but not used\n"
+                            self.assertEqual(result.stderr, expected.encode() + b'AST_NODES_LIVE=0\n')
+
+    def test_rejected_assignment_keeps_original_definition_for_following_statements(self):
+        cases = [('Target: nop\n', 'lda Target\n'),
+                 ('.struc Target\nfield .byte\n.ends\n', '.Target {7}\n'),
+                 ('.macro Target\n.byte 7\n.endm\n', 'Target\n'),
+                 ('.enum Target\nmember = 2\n.ende\n', '.byte Target::member\n')]
+        for declaration, use in cases:
+            for pure in (False, True):
+                for wrapped in (False, True):
+                    with self.subTest(declaration=declaration, pure=pure, wrapped=wrapped):
+                        body = 'Target = 5\n' + use + 'Target = 6\n' + use
+                        source = declaration + ('.macro Change\n' + body + '.endm\nChange\n'
+                                                if wrapped else body)
+                        result = self.run_tool('xasm', source, {'XASM_TEST_TRACK_NODES': '1'}, pure_binary=pure)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        errors = [line for line in result.stderr.splitlines() if b'error:' in line]
+                        self.assertEqual(len(errors), 2, result.stderr.decode())
+                        self.assertTrue(all(b"cannot assign to non-constant symbol `Target'" in line for line in errors))
+                        self.assertIn(b'AST_NODES_LIVE=0\n', result.stderr)
 
     def test_reassignment_preserves_first_definition_and_current_binding_locations(self):
         source = '.org $8000\nV .equ 1\nlda #V\nV = 2\nlda #V\n'

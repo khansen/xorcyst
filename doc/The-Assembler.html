@@ -467,7 +467,7 @@ rts
 
 <p>There are three ways to define equates.
 </p><ul class="itemize mark-bullet">
-<li>With the <code class="code">=</code> operator. An equate defined this way can be redefined, and it obeys program order.
+<li>With the <code class="code">=</code> operator. An equate defined this way can be redefined, and it obeys program order. The target must be a new identifier or an existing constant; assignment to a label, procedure, type, macro or data variable is an error.
 
 <div class="example">
 <pre class="example-preformatted">i = 10
