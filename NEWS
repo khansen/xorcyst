@@ -1,3 +1,23 @@
+Version 1.9.9:
+
+- Restore pure-binary procedure and variable addresses lost in 1.7.0,
+  including forward calls, recursive procedures, data-segment variables and
+  indexed operands. Nested member indexes now also work in pure-binary output.
+- Resolve dotted references inside array indexes in the caller's scope,
+  including nested indexes and forward aliases. Valid object expressions
+  retain their relocations; invalid members produce located errors and
+  preserve existing output.
+- Resolve generated element sizes in indexed instruction analysis. Separate
+  records, xref instructions and v2 listings agree with the assembled binary.
+- Deliberate compatibility change: late immediate and indexed-indirect byte
+  operands must fit -128..255 in pure-binary output, matching the linker.
+  Previously warned-and-truncated values outside that range now fail without
+  replacing output. Zero-page addresses remain 0..255. Literal truncation,
+  word-operand warnings and branch-displacement checks retain their behavior.
+- Preserve binary object formats and listing/instruction-record schemas.
+  Remaining limitations, including late-shortened instruction mode metadata,
+  phantom member names in xref and word-operand overflow policy, are in TODO.
+
 Version 1.9.8:
 
 - Bind local-label references in saved .equ, .define and = expressions to the
