@@ -192,6 +192,9 @@ All data-segment rows have `emits_bytes: false`, null output offsets, and no
 bytes, even when their source has explicit data or `.INCBIN`. They retain
 their CPU spans. A storage directive has one row covering its complete span;
 code storage describes zero fill without materializing a large byte array.
+This also covers late label-difference counts once binary layout is resolved.
+Text and version 1 listings intentionally omit storage bytes; use version 2
+for complete binary reconstruction, including zero fill.
 These rules also apply to padding generated from user-defined types.
 
 Join binary offsets to rows with `emits_bytes: true` using the inclusive

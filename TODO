@@ -12,6 +12,14 @@
 - a way to specify fixed-point numbers?
 - .ifdef inside struct/union
 
+Compatibility planning:
+
+- Future listing and binary object formats may deliberately break compatibility
+  when the benefits justify it; preserving existing formats is not an absolute
+  constraint. Plan format/schema versioning where appropriate, migration notes,
+  and coordinated updates to Nesrev and other consumers with regression coverage.
+  Keep the current formats unchanged until such a change is designed and validated.
+
 Known defects and follow-ups:
 
 - FCEUX ROM export rejects an unevaluable or negative storage count during
@@ -70,9 +78,10 @@ Known defects and follow-ups:
 - A forward code-label difference used as storage size can assemble in binary
   mode but fail object link layout with "storage size must evaluate to an
   integer during layout". For example, .dsb Tail-Head before Head: nop / nop /
-  Tail: rts emits two zero bytes in binary. Listings omit those bytes, even
-  though the binary writer emits them. Resolve late listing extents and
-  support resolvable forward differences during link layout.
+  Tail: rts emits two zero bytes in binary. Support resolvable forward
+  differences during link layout. Listing v2 already describes the full fill
+  span with byte_count and fill_byte; text/v1 intentionally omit storage
+  bytes while retaining following addresses and output offsets.
 - Data-segment storage counts built from data-segment labels can fail link
   layout with "storage size must evaluate to an integer during layout", even
   when the link script provides a RAM region.
