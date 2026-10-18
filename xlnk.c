@@ -2224,22 +2224,27 @@ static void calc_data_addresses(xunit *u)
 
 /*--------------------------------------------------------------------------*/
 
-/* Constructs 32-bit sort key for local. */
-#define SORT_KEY(l) (unsigned long)((((l)->flags & XASM_LABEL_FLAG_ZEROPAGE) << 30) | ((l)->align << 24) | (0x10000-(l)->size))
+/* Sort zero-page constraints first, then alignment, then smaller extents.
+ * Keep both construction and comparison unsigned, including bit 31. */
+static uint32_t label_sort_key(const local *l)
+{
+    return ((uint32_t)(l->flags & XASM_LABEL_FLAG_ZEROPAGE) << 30)
+        | ((uint32_t)l->align << 24) | (UINT32_C(0x10000) - (uint32_t)l->size);
+}
 
 /**
  * Array is sorted from high to low value.
  */
 static int label_partition(local **a, int p, int r)
 {
-    int x;
+    uint32_t x;
     int i;
     int j;
-    x = SORT_KEY(a[r]);
+    x = label_sort_key(a[r]);
     i = p - 1;
     local *temp;
     for (j=p; j<r; j++) {
-        if (SORT_KEY(a[j]) >= x) {
+        if (label_sort_key(a[j]) >= x) {
             i = i + 1;
             temp = a[i];
             a[i] = a[j];

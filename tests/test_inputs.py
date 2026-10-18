@@ -72,6 +72,34 @@ class InputHandling(unittest.TestCase):
                 result = self.run_tool('xasm', source)
                 self.assertNotEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_data_label_sort_preserves_zero_page_alignment_and_size_priority(self):
+        fields = [('zp_byte', 1, True, 1, 0x21), ('zp_wide', 3, True, 1, 0x22),
+                  ('zp_aligned', 4, True, 16, 0x30), ('plain_small', 2, False, 1, 0x25),
+                  ('plain_large', 7, False, 1, 0x27), ('plain_aligned', 5, False, 64, 0x40)]
+        expected = b''.join(address.to_bytes(2, 'little') for _, _, _, _, address in fields)
+        for reverse in (False, True):
+            ordered = list(reversed(fields)) if reverse else fields
+            for rotation in range(len(fields)):
+                order = ordered[rotation:] + ordered[:rotation]
+                for debug in (False, True):
+                    with self.subTest(reverse=reverse, rotation=rotation, debug=debug):
+                        source = '.dataseg\n'
+                        for name, size, zp, alignment, _ in order:
+                            source += ('.zeropage ' if zp else '') + f'{name} .byte[{size}]\n'
+                            if alignment > 1:
+                                source += f'.align {name} {alignment}\n'
+                        source += '.codeseg\n.word ' + ','.join(f[0] for f in fields) + '\n'
+                        result = self.run_tool('xasm', source, pure_binary=False,
+                                               arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'')
+                        (self.root / 'output').rename(self.root / 'unit.o')
+                        result = self.run_tool('xlnk', 'ram{start=$21,end=$7FF}\n'
+                                               'link{file=unit.o,origin=$8000}\n')
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'')
+                        self.assertEqual((self.root / 'output').read_bytes(), expected)
+
     def test_forward_label_identities_wait_for_addresses(self):
         expressions = ('Fwd+(L2-L1-1)', '(L2-L1-1)+Fwd', 'Fwd*(L2-L1)',
                        '(L2-L1)*Fwd', 'Fwd/(L2-L1)',
