@@ -1529,7 +1529,9 @@ static astnode *reduce_dot(astnode *expr)
         term2,
         expr->loc
     );
-    sum = reduce_expression(sum, FOLD_PC_NO);
+    /* Index expressions are evaluated in the caller's scope, after all member
+     * scopes have been popped. They can themselves contain dotted accesses. */
+    sum = reduce_expression_complete(sum, FOLD_PC_NO);
     /* Replace dotted expression by sum */
     astnode_replace(expr, sum);
     astnode_finalize(expr);
@@ -1607,7 +1609,7 @@ static astnode *reduce_index(astnode *expr)
         return c;
     }
 
-    index = reduce_expression(RHS(expr), FOLD_PC_NO);
+    index = reduce_expression_complete(RHS(expr), FOLD_PC_NO);
     /* Lookup identifier */
     e = symtab_lookup(id->ident);
     if (e == NULL) {
@@ -4732,8 +4734,10 @@ static int validate_dotref(astnode *n, void *arg, astnode **next)
     symtab_entry *def;
     astnode *type;
     astnode *left;
-    if (astnode_has_ancestor_of_type(n, DOT_NODE)) {
-        return 1;   /* Already validated, since this function is recursive */
+    if (astnode_is_type(astnode_get_parent(n), DOT_NODE)) {
+        /* Only the direct member-chain continuation shares the outer scope.
+         * A dotted reference inside an index is an independent expression. */
+        return 1;
     }
     /* Look up parent in global symbol table */
     left = LHS(n);  /* n := left . right */

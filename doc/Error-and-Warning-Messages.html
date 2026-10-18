@@ -227,8 +227,8 @@ Assembly fails without replacing the previous output file.
 <dt>&lsquo;<samp class="samp">unsupported expression in object output (<var class="var">node-type</var>)</samp>&rsquo;</dt>
 <dd><p>An expression reached object encoding in a form the object format cannot
 represent. Assembly fails and preserves an existing output file. Check for
-excess initializer braces. Dotted references inside another member&rsquo;s index
-are also currently unsupported.
+excess initializer braces. Valid dotted references inside indexes are reduced
+before encoding; invalid member names produce their own source diagnostics.
 </p>
 </dd>
 <dt>&lsquo;<samp class="samp">value not allowed in data segment</samp>&rsquo;</dt>

@@ -82,6 +82,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Reduces and validates dotted member accesses inside array indexes, including nested indexes and forward aliases, in the caller's scope. Valid object expressions retain their relocations and invalid members report located diagnostics before publication. Pure-binary procedure and variable addresses remain a separate limitation.
 @item Rejects late byte instruction operands outside their signed/unsigned range in pure-binary output, matching the linker. This deliberately replaces warning-and-truncation behavior for late immediate and indexed-indirect operands: these must fit -128--255, while zero-page addresses remain 0--255. Existing output is preserved on failure. Literal and word operands retain their existing warnings and truncation; relative branches retain their displacement checks.
 @end itemize
 
@@ -126,7 +127,7 @@ In-range negative relocated instruction operands now link, and negative byte/wor
 @item Resolves named constants in copied @code{S::member} offsets, preventing incorrect local-symbol references in objects and crashes in binary address evaluation. Nested layouts, forward aliases and link-time counts are supported. Cycles through scoped field offsets are rejected, including mutual layout cycles and uses through @code{sizeof}; references to earlier offsets of the same type remain valid.
 Completed integer offsets are cached within each evaluation, preventing repeated expansion of shared offset dependencies. Unresolved link-time offsets still expand as expression trees.
 @item An explicit @code{S::member} now captures a known reassignable @code{=} count at its use site, matching explicit @code{sizeof(T)}. Previously it could use the final value. Other type-layout paths can still use the final value; reassigning counts does not define a single fixed layout for a type.
-@item Rejects unsupported expressions during object encoding, reports their source location, and preserves the previous output file. This prevents invalid objects with excess initializer braces, unresolved forward local-label aliases, or dotted references inside another member's index from being published with a successful exit status. Forward local aliases and nested dotted indexes still need earlier resolution to support their valid forms.
+@item Rejects unsupported expressions during object encoding, reports their source location, and preserves the previous output file. This prevents invalid objects with excess initializer braces, unresolved forward local-label aliases, or dotted references inside another member's index from being published with a successful exit status. These limitations were present in version 1.9.4; later releases add resolution for valid local aliases and nested dotted indexes.
 @item Fails object generation when its table exceeds 16384 distinct expressions, preserving the previous output file instead of publishing an object with invalid expression indexes. Duplicate expressions reuse existing entries even when the table is full. Unsupported internal operators and statements also count as generation errors.
 @end itemize
 
@@ -1941,8 +1942,8 @@ Assembly fails without replacing the previous output file.
 @item unsupported expression in object output (@var{node-type})
 An expression reached object encoding in a form the object format cannot
 represent. Assembly fails and preserves an existing output file. Check for
-excess initializer braces. Dotted references inside another member's index
-are also currently unsupported.
+excess initializer braces. Valid dotted references inside indexes are reduced
+before encoding; invalid member names produce their own source diagnostics.
 
 @item value not allowed in data segment
 Data cannot be initialized in a data segment; the data segment can only specify how many bytes of storage will be needed at runtime.

@@ -73,6 +73,97 @@ class InputHandling(unittest.TestCase):
                 result = self.run_tool('xasm', source)
                 self.assertNotEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_nested_member_indexes_resolve_in_the_callers_scope(self):
+        types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                 '.struc Box\nhead .byte\npoints .Point[2]\ntail .byte\n.ends\n')
+        storage = 'idx .Point\narr .Point[4]\nbox .Box\n'
+        body = ('lda arr[idx.py-idx].py\n.word box.points[idx.py-idx].py\n'
+                '.word arr[box.points[1].py-box-3].px\n'
+                '.word box.points[arr[idx.py-idx].py-arr-2].px\n.word arr[idx.py-idx]\n')
+        for expansion in ('direct', 'alias', 'macro', 'rept', 'proc'):
+            for debug in (False, True):
+                for analysis in (False, True):
+                    with self.subTest(expansion=expansion, debug=debug, analysis=analysis):
+                        use = body
+                        if expansion == 'alias':
+                            use = body.replace('idx.py-idx', 'Index') + 'Index .equ idx.py-idx\n'
+                        elif expansion == 'macro':
+                            use = '.macro Emit\n' + body + '.endm\nEmit\n'
+                        elif expansion == 'rept':
+                            use = '.rept 1\n' + body + '.endm\n'
+                        elif expansion == 'proc':
+                            use = '.proc P\n' + storage + body + '.endp\n'
+                        flags = ('--debug',) if debug else ()
+                        if analysis: flags += ('--listing=listing.json', '--listing-format=json', '--xref=xref.json')
+                        source = types + ('' if expansion == 'proc' else storage) + use
+                        result = self.run_tool('xasm', source, pure_binary=False, arguments=flags)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        (self.root / 'output').rename(self.root / 'unit.o')
+                        result = self.run_tool('xlnk', 'link{file=unit.o,origin=$8000}\n')
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual((self.root / 'output').read_bytes(), bytes(16)
+                                         + bytes.fromhex('AD 05 80 0E 80 04 80 0D 80 04 80'))
+
+    def test_invalid_members_inside_indexes_fail_before_output(self):
+        types = '.struc Point\npx .byte\npy .byte\n.ends\nidx .Point\narr .Point[4]\n'
+        for index, error in (('idx.missing', b"`missing' is not a member"),
+                             ('Nope.py', b"unknown symbol `Nope'"),
+                             ('idx.px.deep', b"member `px' of `idx' is not a structure"),
+                             ('arr[idx.missing].py', b"`missing' is not a member")):
+            for statement in ('lda arr[{}].py', '.word arr[{}].py', '.byte <arr[{}].py'):
+                for alias in (False, True):
+                    for pure in (False, True):
+                        for debug in (False, True):
+                            with self.subTest(index=index, statement=statement, alias=alias, pure=pure, debug=debug):
+                                body = statement.format('Index' if alias else index) + '\n'
+                                if alias: body += 'Index .equ ' + index + '\n'
+                                result = self.run_tool('xasm', types + body, pure_binary=pure,
+                                                       arguments=('--debug',) if debug else ())
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(error, result.stderr)
+                                self.assertNotIn(b'unsupported expression in object output', result.stderr)
+
+    def test_invalid_index_member_does_not_warn_that_its_base_is_unused(self):
+        source = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                  'arr .Point[4]\nlbl: .Point {1,2}\n.word arr[lbl.px].py\n')
+        for pure in (False, True):
+            for debug in (False, True):
+                for analysis in ((), ('--listing=listing.json', '--listing-format=json'),
+                                 ('--xref=xref.json',)):
+                    with self.subTest(pure=pure, debug=debug, analysis=analysis):
+                        result = self.run_tool('xasm', source, pure_binary=pure,
+                                               arguments=analysis + (('--debug',) if debug else ()))
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b"input.asm:7: error: `lbl' is not a structure", result.stderr)
+                        self.assertNotIn(b'warning:', result.stderr)
+
+    def test_nested_member_indexes_keep_external_relocations(self):
+        types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                 '.union Choice\npoints .Point[2]\nraw .byte[4]\n.ends\n')
+        for debug in (False, True):
+            for reverse in (False, True):
+                with self.subTest(debug=debug, reverse=reverse):
+                    flags = ('--debug',) if debug else ()
+                    provider = types + '.dataseg\n.public idx,arr\nidx .Point\narr .Choice\n'
+                    result = self.run_tool('xasm', provider, pure_binary=False, arguments=flags)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    (self.root / 'output').rename(self.root / 'provider.o')
+                    source = (types + '.extrn idx:Point\n.extrn arr:Choice\n'
+                              '.word arr.points[idx.py-idx].py-arr\n'
+                              'lda arr.points[idx.py-idx].py\n.word arr\n')
+                    result = self.run_tool('xasm', source, pure_binary=False, arguments=flags)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    (self.root / 'output').rename(self.root / 'consumer.o')
+                    order = ('provider.o', 'consumer.o') if reverse else ('consumer.o', 'provider.o')
+                    result = self.run_tool('xlnk', 'ram{start=$0200,end=$07FF}\n'
+                        + ''.join(f'link{{file={name},origin=$8000}}\n' for name in order))
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    data = (self.root / 'output').read_bytes()
+                    address = int.from_bytes(data[-2:], 'little')
+                    self.assertGreaterEqual(address, 0x200)
+                    self.assertEqual(data, b'\x03\x00\xad' + (address + 3).to_bytes(2, 'little')
+                                     + address.to_bytes(2, 'little'))
+
     def test_data_label_sort_preserves_zero_page_alignment_and_size_priority(self):
         fields = [('zp_byte', 1, True, 1, 0x21), ('zp_wide', 3, True, 1, 0x22),
                   ('zp_aligned', 4, True, 16, 0x30), ('plain_small', 2, False, 1, 0x25),
@@ -392,13 +483,13 @@ class InputHandling(unittest.TestCase):
                             self.assertEqual(result.returncode, 1, result.stderr.decode())
                             self.assertEqual(result.stderr.count(diagnostic), 2, result.stderr.decode())
 
-    def test_unsupported_object_expressions_never_publish_output(self):
+    def test_object_expression_validation_preserves_output_on_errors(self):
         types = ('.struc S\nfa .byte\nfb .byte\n.ends\n'
                  '.dataseg\ninst .S\narr .S[4]\n.codeseg\n')
         cases = (
             ('.struc P\nitems .byte[3]\n.ends\n.P {{{1,2,3}}}\n', b'STRUC_NODE'),
-            (types + 'lda arr[inst.fa].fb\n', b'DOT_NODE'),
-            (types + '.byte arr[inst.missing].fa\n', b'DOT_NODE'),
+            (types + 'lda arr[inst.fa].fb\n.word inst,arr\n', None),
+            (types + '.byte arr[inst.missing].fa\n', b"`missing' is not a member of `inst'"),
         )
         for source, node_type in cases:
             for debug in (False, True):
@@ -407,8 +498,21 @@ class InputHandling(unittest.TestCase):
                     with self.subTest(source=source, debug=debug, analysis=analysis):
                         result = self.run_tool('xasm', source, pure_binary=False,
                                                arguments=analysis + (('--debug',) if debug else ()))
+                        if node_type is None:
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            (self.root / 'output').rename(self.root / 'unit.o')
+                            result = self.run_tool('xlnk', 'ram{start=$0200,end=$07FF}\n'
+                                                   'link{file=unit.o,origin=$8000}\n')
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            data = (self.root / 'output').read_bytes()
+                            inst = int.from_bytes(data[-4:-2], 'little')
+                            arr = int.from_bytes(data[-2:], 'little')
+                            self.assertGreaterEqual(inst, 0x200)
+                            self.assertEqual(data[:3], b'\xad' + (arr + inst * 2 + 1).to_bytes(2, 'little'))
+                            continue
                         self.assertEqual(result.returncode, 1, result.stderr.decode())
-                        self.assertIn(b'error: unsupported expression in object output', result.stderr)
+                        if node_type == b'STRUC_NODE':
+                            self.assertIn(b'error: unsupported expression in object output', result.stderr)
                         self.assertIn(node_type, result.stderr)
                         self.assertRegex(result.stderr, rb'input\.asm:\d+: error:')
                         # Also reject it when no prior output exists.
