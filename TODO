@@ -19,9 +19,18 @@ Compatibility planning:
   constraint. Plan format/schema versioning where appropriate, migration notes,
   and coordinated updates to Nesrev and other consumers with regression coverage.
   Keep the current formats unchanged until such a change is designed and validated.
+- Aim for one supported structured-listing schema, retaining a version identifier
+  in its output rather than indefinite selectable legacy schemas. Before removing
+  --listing-version, migrate Nesrev and other consumers and decide how object-mode
+  listings should work (v2 currently supports pure binary only). Document the
+  migration and validate consumers together; this plan changes no current format.
 
 Known defects and follow-ups:
 
+- Late word instruction operands outside -32768..65535 still warn and truncate
+  in pure-binary output while the linker rejects them. Decide the policy together
+  with 16-bit address wrapping: existing binaries/listings can cross $FFFF. Late
+  byte operands now have matching assembler/linker range checks.
 - FCEUX ROM export rejects an unevaluable or negative storage count during
   analysis collection, before the writer can supply its diagnostic listing.
   A late negative count can lose the located range error too, leaving only
@@ -31,10 +40,6 @@ Known defects and follow-ups:
   Deferring collection failure also needs safe destination planning: unknown
   size means not all ROM bank paths can be enumerated, and allowing a listing
   can overwrite an NL file that was omitted from the incomplete plan.
-- Late immediate and indirect operands of $100 or more still warn and truncate
-  in pure-binary output while the linker rejects them. For example, at origin
-  zero, lda [Target+$FE],y / Target: nop emits B1 00 EA; the immediate form has
-  the same discrepancy. Final zero-page checks do not cover these modes.
 - An omitted structure-array count that still depends on $ after constant
   substitution uses first-element expansion and cannot become zero in
   pure-binary mode. Object output retains its previous link-time behavior.

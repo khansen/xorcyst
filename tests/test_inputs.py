@@ -773,6 +773,69 @@ class InputHandling(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                     self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex(expected))
 
+    def test_late_binary_operand_ranges_match_linker(self):
+        for template, opcode, width in (
+                ('lda #{}', 0xA9, 1), ('lda [{},x]', 0xA1, 1),
+                ('lda [{}],y', 0xB1, 1)):
+            minimum, maximum = -(1 << (width * 8 - 1)), (1 << (width * 8)) - 1
+            for value in (minimum - 1, minimum, -1, 0, maximum, maximum + 1):
+                for debug in (False, True):
+                    for analysis in (False, True):
+                        for pure in (False, True):
+                            with self.subTest(template=template, value=value, debug=debug,
+                                              analysis=analysis, pure=pure):
+                                flags = ('--debug',) if debug else ()
+                                if analysis:
+                                    flags += ('--listing=listing.json', '--listing-format=json',
+                                              '--listing-version=2' if pure else '--listing-version=1',
+                                              '--xref=xref.json')
+                                (self.root / 'listing.json').unlink(missing_ok=True)
+                                # Label differences survive constant folding. Use a forward
+                                # label too, so this exercises the final writer's range check.
+                                expr = f'Target-Base-{width + 1}+({value})'
+                                source = 'Base: ' + template.format(expr) + '\nTarget: nop\n'
+                                result = self.run_tool('xasm', source, pure_binary=pure, arguments=flags)
+                                if not pure:
+                                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                    (self.root / 'output').rename(self.root / 'unit.o')
+                                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                                if minimum <= value <= maximum:
+                                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                    self.assertEqual(result.stderr, b'')
+                                    self.assertEqual((self.root / 'output').read_bytes(), bytes([opcode])
+                                                     + (value & maximum).to_bytes(width, 'little') + b'\xea')
+                                else:
+                                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                    self.assertIn(f"instruction operand doesn't fit in {width} byte".encode(),
+                                                  result.stderr)
+                                    if pure and analysis:
+                                        self.assertFalse(json.loads((self.root / 'listing.json').read_text())
+                                                         ['binary_generated'])
+
+    def test_late_operand_overflow_in_expansions_preserves_output(self):
+        for instruction in ('lda #Target+$FE', 'lda [Target+$FE,x]', 'lda [Target+$FE],y'):
+            for body in (instruction, '.macro Emit\n' + instruction + '\n.endm\nEmit',
+                         '.rept 1\n' + instruction + '\n.endm'):
+                for debug in (False, True):
+                    with self.subTest(body=body, debug=debug):
+                        result = self.run_tool('xasm', body + '\nTarget: nop\n',
+                                               arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b"instruction operand doesn't fit in 1 byte", result.stderr)
+
+    def test_literal_operand_truncation_remains_unchanged(self):
+        for pure in (False, True):
+            with self.subTest(pure=pure):
+                result = self.run_tool('xasm', 'lda #256\nlda [-129,x]\nlda [$100],y\njmp $10000\n',
+                                       pure_binary=pure)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(result.stderr.count(b'operand out of range; truncated'), 4)
+                if not pure:
+                    (self.root / 'output').rename(self.root / 'unit.o')
+                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('A9 00 A1 7F B1 00 4C 00 00'))
+
     def test_binary_invalid_zero_page_operand_leaves_no_new_output(self):
         (self.root / 'input.asm').write_text('lda Target-3\nTarget: nop\n')
         result = subprocess.run([str(self.tools['xasm']), '--pure-binary', 'input.asm', '-o', 'output'],

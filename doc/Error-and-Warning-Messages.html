@@ -122,8 +122,8 @@ count, including when the count is named or defined after the instance.
 </p>
 </dd>
 <dt>&lsquo;<samp class="samp">instruction operand doesn't fit in 1 byte</samp>&rsquo;</dt>
-<dd><p>A late zero-page operand is outside <code class="code">0..$FF</code> after binary address
-calculation or instruction shortening. Assembly fails without replacing the
+<dd><p>A late byte operand is outside -128&ndash;255, or a zero-page address is outside
+<code class="code">0..$FF</code>, after binary address calculation or instruction shortening. Assembly fails without replacing the
 output file. The assembler does not retry with a wider instruction; force the
 wide form with <code class="code">.w</code> when the mnemonic supports it. For example, at origin
 zero, <code class="code">lda Target-3</code> followed by <code class="code">Target: nop</code> fails after shortening
