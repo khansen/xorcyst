@@ -44,6 +44,11 @@ span:hover a.copiable-link {visibility: visible}
 <h3 class="section"><span>F.1 Assembler Error Messages<a class="copiable-link" href="#Assembler-Error-Messages"> &para;</a></span></h3>
 
 <dl class="table">
+<dt>&lsquo;<samp class="samp">cannot assign to non-constant symbol `<var class="var">identifier</var>'</samp>&rsquo;</dt>
+<dd><p>The <code class="code">=</code> operator can define or replace constants only. Choose a different
+name instead of assigning to a label, procedure, type, macro or data variable.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">cannot expand `<var class="var">identifier</var>'; not a macro</samp>&rsquo;</dt>
 <dd><p>Make sure <var class="var">identifier</var> is a macro and not a label, constant or other type of symbol.
 </p>

@@ -79,6 +79,12 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Unreleased
+
+@itemize
+@item Rejects @code{=} assignments to non-constant symbols with a located error, preserving their original definitions and existing output files. Labels, procedures, types, macros and data variables can no longer silently ignore a replacement or leak its expression. Ordinary constant reassignment remains supported.
+@end itemize
+
 @heading Version 1.9.7
 
 @itemize
@@ -809,7 +815,7 @@ A forward branch consists of one or more (up to eight) consecutive @code{+} (plu
 There are three ways to define equates.
 @itemize
 
-@item With the @code{=} operator. An equate defined this way can be redefined, and it obeys program order.
+@item With the @code{=} operator. An equate defined this way can be redefined, and it obeys program order. The target must be a new identifier or an existing constant; assignment to a label, procedure, type, macro or data variable is an error.
 
 @example
 i = 10
@@ -1771,6 +1777,10 @@ you can achieve the same result from the statement
 @section Assembler Error Messages
 
 @table @samp
+
+@item cannot assign to non-constant symbol `@var{identifier}'
+The @code{=} operator can define or replace constants only. Choose a different
+name instead of assigning to a label, procedure, type, macro or data variable.
 
 @item cannot expand `@var{identifier}'; not a macro
 Make sure @var{identifier} is a macro and not a label, constant or other type of symbol.

@@ -14,11 +14,6 @@
 
 Known defects and follow-ups:
 
-- Assignment with = to a non-constant symbol (label, procedure, type, macro
-  or data variable) is accepted without changing its symbol kind, and the
-  replacement expression can leak. For example, L: nop / L = 5 / lda #L
-  emits EA A9 00 rather than using 5. Reject these assignments explicitly; the
-  constant-reassignment cleanup must not free borrowed statement-tree nodes.
 - FCEUX ROM export rejects an unevaluable or negative storage count during
   analysis collection, before the writer can supply its diagnostic listing.
   A late negative count can lose the located range error too, leaving only
