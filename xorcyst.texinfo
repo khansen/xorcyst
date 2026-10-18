@@ -79,6 +79,12 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Unreleased
+
+@itemize
+@item Rejects late byte instruction operands outside their signed/unsigned range in pure-binary output, matching the linker. This deliberately replaces warning-and-truncation behavior for late immediate and indexed-indirect operands: these must fit -128--255, while zero-page addresses remain 0--255. Existing output is preserved on failure. Literal and word operands retain their existing warnings and truncation; relative branches retain their displacement checks.
+@end itemize
+
 @heading Version 1.9.8
 
 @itemize
@@ -1852,8 +1858,8 @@ count, including when the count is named or defined after the instance.
 Instructions can only be contained in a code segment (after a @code{codeseg} directive).
 
 @item instruction operand doesn't fit in 1 byte
-A late zero-page operand is outside @code{0..$FF} after binary address
-calculation or instruction shortening. Assembly fails without replacing the
+A late byte operand is outside -128--255, or a zero-page address is outside
+@code{0..$FF}, after binary address calculation or instruction shortening. Assembly fails without replacing the
 output file. The assembler does not retry with a wider instruction; force the
 wide form with @code{.w} when the mnemonic supports it. For example, at origin
 zero, @code{lda Target-3} followed by @code{Target: nop} fails after shortening

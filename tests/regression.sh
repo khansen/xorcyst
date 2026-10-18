@@ -1025,7 +1025,7 @@ ZP EQU $80
 Target:
   RTS
   INC Buf
-  LDX #Buf
+  LDX #Buf-$C000
 END
 ASM
 

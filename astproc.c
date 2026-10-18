@@ -5919,10 +5919,10 @@ static int write_instruction(astnode *instr, void *arg, astnode **next)
                      * Literal operands already passed translation's byte
                      * checks, as they do before object encoding. */
                     addressing_mode mode = opcode_addressing_mode(op);
-                    if ((mode == ZEROPAGE_MODE || mode == ZEROPAGE_X_MODE
-                         || mode == ZEROPAGE_Y_MODE)
-                        && !astnode_is_type(LHS(instr), INTEGER_NODE)
-                        && !IS_UNSIGNED_BYTE_VALUE(value)) {
+                    int fits = (mode == ZEROPAGE_MODE || mode == ZEROPAGE_X_MODE
+                                || mode == ZEROPAGE_Y_MODE)
+                        ? IS_UNSIGNED_BYTE_VALUE(value) : IS_BYTE_VALUE(value);
+                    if (!astnode_is_type(LHS(instr), INTEGER_NODE) && !fits) {
                         err(operand->loc, "instruction operand doesn't fit in 1 byte");
                     } else if (!IS_BYTE_VALUE(value)) {
                         warn(operand->loc, "operand out of range; truncated");
