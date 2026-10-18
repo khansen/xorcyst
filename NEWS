@@ -1,3 +1,22 @@
+Version 1.9.7:
+
+- Evaluate $ in cross-reference data expressions at each operand's address,
+  including successive operands in a directive and addresses past $FFFF.
+  Valid programs that previously failed with --xref-data now assemble, and
+  reported emitted values match the binary. Binary and object bytes are
+  unchanged.
+- Free replaced constant definitions on = reassignment, including loops,
+  while preserving captured operand values and original definition locations.
+  Borrowed definitions belonging to other symbol kinds remain untouched.
+- Use unsigned keys when sorting linker data labels, removing undefined
+  signed shifting while preserving allocation priority and linked addresses.
+- Extend regression coverage for reassignment ownership and incomplete
+  analysis: a test-only collector wrapper verifies that the publication guard
+  preserves every existing output even when the binary writer succeeds.
+- Preserve object formats, listing schemas and instruction-record schemas.
+  Remaining limitations are tracked in TODO, including assignments to
+  non-constant symbols and FCEUX ROM diagnostics for unresolved storage.
+
 Version 1.9.6:
 
 - Preserve negative 32-bit object expressions and exported constants on
