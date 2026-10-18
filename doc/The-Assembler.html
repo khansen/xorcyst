@@ -429,6 +429,16 @@ rts
 </pre></div>
 <p>since the branch instruction refers to a local label defined in a different scope (because of the strategic placement of the label <code class="code">barrier</code>).
 </p>
+<p>An alias defined with <code class="code">.equ</code>, <code class="code">.define</code> or <code class="code">=</code> binds any
+<code class="code">@@</code> references in its expression to the local-label scope where that
+definition appears. Using the alias before its definition or from another
+scope does not change that binding. The referenced local label must exist in
+the definition&rsquo;s scope; a label with the same local name at the use site does
+not satisfy it. This deliberately changes version 1.9.7&rsquo;s behavior for later
+uses from another scope, which resolved these references in the use&rsquo;s scope.
+Reassigning an alias with <code class="code">=</code> binds the replacement expression in the
+new assignment&rsquo;s scope.
+</p>
 </div>
 <div class="subsection-level-extent" id="Forward_002fbackward-branches">
 <h4 class="subsection"><span>3.2.7 Forward/backward branches<a class="copiable-link" href="#Forward_002fbackward-branches"> &para;</a></span></h4>

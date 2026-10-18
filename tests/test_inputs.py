@@ -222,6 +222,69 @@ class InputHandling(unittest.TestCase):
                 self.assertEqual([record['additive_terms']['terms'][0]['binding']['definition']['line']
                                   for record in records], [2, 4])
 
+    def test_forward_local_aliases_agree_with_data_and_instruction_analysis(self):
+        for definition in ('Alias .equ @@e-@@s', '.define Alias @@e-@@s', 'Alias = @@e-@@s'):
+            for pure in (False, True):
+                for debug in (False, True):
+                    with self.subTest(definition=definition, pure=pure, debug=debug):
+                        source = (('.org $8000\n' if pure else '') +
+                                  'Begin:\n@@s: .byte 1\n@@e: lda #Alias\n.word Alias\n' + definition + '\n')
+                        stem = f'local-{definition.split()[0]}-{pure}-{debug}'
+                        flags = [f'--xref={stem}.xref', '--xref-data=true', '--xref-include-locals=true',
+                                 f'--listing={stem}.json', '--listing-format=json']
+                        if debug:
+                            flags += ['--debug']
+                        if pure:
+                            flags += [f'--instruction-records-output={stem}.records',
+                                      f'--dependency-manifest={stem}.deps', '--listing-version=2']
+                        result = self.run_tool('xasm', source, {'XASM_TEST_TRACK_NODES': '1'},
+                                               arguments=flags, pure_binary=pure)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertIn(b'AST_NODES_LIVE=0\n', result.stderr)
+                        self.assertNotRegex(result.stderr, rb"`@@[se][^']*' defined but not used")
+                        if not pure:
+                            (self.root / 'output').rename(self.root / 'unit.o')
+                            linked = self.run_tool('xlnk', 'link{file=unit.o,origin=$8000}\n')
+                            self.assertEqual(linked.returncode, 0, linked.stderr.decode())
+                        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('01 A9 01 01 00'))
+                        if pure:
+                            records = json.loads((self.root / (stem + '.records')).read_text())['records']
+                            self.assertEqual([r['operand_value'] for r in records], [1])
+                            self.assertEqual([r['output_offset'] for r in records], [1])
+                            facts = json.loads((self.root / (stem + '.xref')).read_text())
+                            values = [r['emitted_value'] for r in facts['data_directive_references']]
+                            self.assertEqual(values, [1])
+                            self.assertEqual([r['use_output_offset'] for r in facts['data_directive_references']], [3])
+
+    def test_local_alias_symbol_values_match_the_binary_and_text_listing(self):
+        for index, definition in enumerate(('Al .equ @@x', '.define Al @@x', 'Al = @@x')):
+            for cross_scope in (False, True):
+                for debug in (False, True):
+                    with self.subTest(definition=definition, cross_scope=cross_scope, debug=debug):
+                        source = '.org $8000\nFirst:\n.byte 1,2\n@@x: .byte 3\n' + definition + '\n'
+                        if cross_scope:
+                            source += 'Second:\n@@x: .byte 4\n'
+                        source += 'lda Al\n'
+                        stem = f'alias-value-{index}-{cross_scope}-{debug}'
+                        listing = self.root / (stem + '.lst')
+                        xref = self.root / (stem + '.json')
+                        flags = [f'--listing={listing}', f'--xref={xref}', '--xref-instructions=true']
+                        if debug:
+                            flags += ['--debug']
+                        result = self.run_tool('xasm', source, {'XASM_TEST_TRACK_NODES': '1'}, arguments=flags)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertIn(b'AST_NODES_LIVE=0\n', result.stderr)
+                        expected = bytes.fromhex('01 02 03') + (b'\x04' if cross_scope else b'')
+                        self.assertEqual((self.root / 'output').read_bytes(), expected + bytes.fromhex('AD 02 80'))
+                        facts = json.loads(xref.read_text())
+                        symbols = [symbol for symbol in facts['symbols'] if symbol['name'] == 'Al']
+                        # Volatile '=' constants do not have global xref symbol entries.
+                        self.assertEqual(len(symbols), 0 if definition == 'Al = @@x' else 1)
+                        if symbols:
+                            self.assertEqual(symbols[0]['definition']['value'], 0x8002)
+                        self.assertEqual([r['operand_value'] for r in facts['instruction_records']['records']], [0x8002])
+                        self.assertRegex(listing.read_text(), r'(?m)^Al\s+= \$8002\s*$')
+
     def test_forward_label_identities_wait_for_addresses(self):
         expressions = ('Fwd+(L2-L1-1)', '(L2-L1-1)+Fwd', 'Fwd*(L2-L1)',
                        '(L2-L1)*Fwd', 'Fwd/(L2-L1)',
@@ -334,7 +397,6 @@ class InputHandling(unittest.TestCase):
                  '.dataseg\ninst .S\narr .S[4]\n.codeseg\n')
         cases = (
             ('.struc P\nitems .byte[3]\n.ends\n.P {{{1,2,3}}}\n', b'STRUC_NODE'),
-            ('Begin:\n@@s: .byte 1\n@@e: lda #Alias\nAlias .equ @@e-@@s\n', b'LOCAL_ID_NODE'),
             (types + 'lda arr[inst.fa].fb\n', b'DOT_NODE'),
             (types + '.byte arr[inst.missing].fa\n', b'DOT_NODE'),
         )

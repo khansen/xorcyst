@@ -82,6 +82,8 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Binds local-label references in saved @code{.equ}, @code{.define} and @code{=} expressions to the namespace where the alias is defined, including macro expansion namespaces. This fixes forward uses in operands and storage counts and deliberately changes compatibility with version 1.9.7: later uses from another local-label scope now refer to the definition's local label, rather than the use's local label. Such uses can produce different bytes, or fail if the local label is absent from the definition's scope. Repeating an @code{.equ} or @code{.define} in another scope can now warn that its definition differs and retain the first definition. Ordinary @code{=} reassignment remains supported.
+@item Local-label aliases whose values can be resolved now appear in the text listing's symbol table; @code{.equ} and @code{.define} aliases also have values in cross-reference symbol definitions. This includes aliases that already assembled successfully in version 1.9.7.
 @item Rejects @code{=} assignments to non-constant symbols with a located error, preserving their original definitions and existing output files. Labels, procedures, types, macros and data variables can no longer silently ignore a replacement or leak its expression. Ordinary constant reassignment remains supported.
 @end itemize
 
@@ -779,6 +781,16 @@ rts
 ; ...
 @end example
 since the branch instruction refers to a local label defined in a different scope (because of the strategic placement of the label @code{barrier}).
+
+An alias defined with @code{.equ}, @code{.define} or @code{=} binds any
+@code{@@@@} references in its expression to the local-label scope where that
+definition appears. Using the alias before its definition or from another
+scope does not change that binding. The referenced local label must exist in
+the definition's scope; a label with the same local name at the use site does
+not satisfy it. This deliberately changes version 1.9.7's behavior for later
+uses from another scope, which resolved these references in the use's scope.
+Reassigning an alias with @code{=} binds the replacement expression in the
+new assignment's scope.
 
 @subsection Forward/backward branches
 
@@ -1923,8 +1935,8 @@ Assembly fails without replacing the previous output file.
 @item unsupported expression in object output (@var{node-type})
 An expression reached object encoding in a form the object format cannot
 represent. Assembly fails and preserves an existing output file. Check for
-excess initializer braces. Forward aliases containing local labels and dotted
-references inside another member's index are also currently unsupported.
+excess initializer braces. Dotted references inside another member's index
+are also currently unsupported.
 
 @item value not allowed in data segment
 Data cannot be initialized in a data segment; the data segment can only specify how many bytes of storage will be needed at runtime.
