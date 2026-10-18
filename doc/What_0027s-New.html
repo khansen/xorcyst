@@ -38,7 +38,8 @@ ul.mark-bullet {list-style-type: disc}
 <h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">
-<li>Removes undefined signed shifting when the linker sorts data labels for RAM allocation. Zero-page constraints, alignment and size keep their existing priority, with the same linked addresses.
+<li>Frees a constant&rsquo;s previous expression when an <code class="code">=</code> assignment replaces it, including repeated assignments in loops. Values already captured by operands and analysis records keep their existing behavior.
+</li><li>Removes undefined signed shifting when the linker sorts data labels for RAM allocation. Zero-page constraints, alignment and size keep their existing priority, with the same linked addresses.
 </li></ul>
 
 <h3 class="heading" id="Version-1_002e9_002e6"><span>Version 1.9.6<a class="copiable-link" href="#Version-1_002e9_002e6"> &para;</a></span></h3>

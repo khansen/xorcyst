@@ -3206,8 +3206,10 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
     } else {
         /* Symbol is being redefined */
         /* This is OK for ASSIGN equate, simply replace definition */
-        // ### store a list of definitions, otherwise we leak
         expr->loc = e->def->loc;
+        /* Constants own detached definitions. Other symbol kinds may borrow
+           nodes from the statement tree; reassignment must not free those. */
+        if (e->type == CONSTANT_SYMBOL) astnode_finalize(e->def);
         e->def = expr;
     }
     /* The definition keeps the first location; bindings need this one. */
