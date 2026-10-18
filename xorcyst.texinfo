@@ -38,7 +38,7 @@
 @c %**end of header
 
 @copying
-This is the manual for The XORcyst version 1.9.5.
+This is the manual for The XORcyst version 1.9.6.
 
 Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @end copying
@@ -79,7 +79,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
-@heading Unreleased
+@heading Version 1.9.6
 
 @itemize
 @item Avoids crashes while computing addresses for zero-page optimization or late storage counts in expressions such as @code{Fwd+(L2-L1-1)}, where @code{Fwd} is a forward label and the label difference becomes zero. Arithmetic identities now wait for unresolved operands; completed expressions retain their normal bytes and addressing modes. Invalid shifts in these operands report their source error without crashing or replacing output.
