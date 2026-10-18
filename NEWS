@@ -1,3 +1,27 @@
+Version 1.9.8:
+
+- Bind local-label references in saved .equ, .define and = expressions to the
+  definition's scope, including macro namespaces. Forward uses now resolve
+  in operands and storage counts.
+- Deliberate compatibility change: later cross-scope alias uses now refer to
+  the definition's local label, rather than the use site's. They can produce
+  different bytes or fail if the local is absent from the definition's scope.
+  Repeated .equ/.define definitions across scopes can warn and retain the
+  first definition; = reassignment binds its replacement in the new scope.
+- Reject = assignments to non-constant symbols before evaluating the
+  replacement, preserving original definitions and existing output. This
+  deliberately rejects formerly accepted assignments to labels, procedures,
+  types, macros, variables and external symbols. Constant reassignment and
+  enum declarations retain their behavior.
+- Show resolved local-alias values in text symbol tables and, for .equ and
+  .define, in cross-reference symbol definitions.
+- Extend regression coverage for late-storage extents, zero-fill reconstruction
+  and analysis offsets. Version 2 listings already describe that fill; text
+  and version 1 continue omitting storage bytes by design.
+- Preserve binary object formats and listing/instruction-record schemas.
+  Remaining storage-layout limitations and the policy for separately planned
+  future format migrations with Nesrev and other consumers are in TODO.
+
 Version 1.9.7:
 
 - Evaluate $ in cross-reference data expressions at each operand's address,
