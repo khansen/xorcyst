@@ -164,6 +164,93 @@ class InputHandling(unittest.TestCase):
                     self.assertEqual(data, b'\x03\x00\xad' + (address + 3).to_bytes(2, 'little')
                                      + address.to_bytes(2, 'little'))
 
+    def test_binary_procedure_and_variable_addresses_match_linked_objects(self):
+        cases = (
+            (0x8000, 'buf .byte[2]\nlda buf\nsta buf+1\n.word buf\n', '00 00 AD 00 80 8D 01 80 00 80',
+             [0x8000, 0x8001]),
+            (0x8000, 'lda buf\nbuf .byte\n', 'AD 03 80 00', [0x8003]),
+            (0, 'lda buf\nbuf .byte\n', 'A5 02 00', [2]),
+            (0x8000, '.dataseg\nbuf .byte[2]\n.codeseg\nlda buf\nsta buf+1\n.word buf\n',
+             'A5 00 85 01 00 00', [0, 1]),
+            (0x8000, 'jsr Alias\n.proc P\nrts\n.endp\nAlias .equ P\n.word Alias\n',
+             '20 03 80 60 03 80', [0x8003, None]),
+            (0x8000, '.proc Outer\n.proc Inner\nrts\n.endp\njsr Inner\n.endp\njsr Outer\n',
+             '60 20 00 80 20 00 80', [None, 0x8000, 0x8000]),
+            (0x8000, '.struc Point\npx .byte\npy .byte\n.ends\n'
+             'idx .Point\narr .Point[4]\nlda arr[idx.py-idx].py\n.word arr[idx.py-idx].py\n',
+             '00 00 00 00 00 00 00 00 00 00 AD 05 80 05 80', [0x8005]),
+            (0, 'b2 .byte[4]\nlda b2[2]\n', '00 00 00 00 A5 02', [2]),
+            (0, 'words .word[3]\ndwords .dword[2]\n'
+             'lda words[2]\nlda dwords[1],x\nlda #<words[2]\n',
+             '00 ' * 14 + 'A5 04 B5 0A A9 04', [4, 10, 4]),
+            (0x8000, 'words .word[3]\ndwords .dword[2]\n'
+             'lda words[2]\nlda dwords[1],x\nlda #<words[2]\n',
+             '00 ' * 14 + 'AD 04 80 BD 0A 80 A9 04', [0x8004, 0x800A, 4]),
+            (0, '.struc Point\npx .byte\npy .byte\n.ends\n'
+             'idx .Point\narr .Point[4]\nlda arr[1]\nlda arr[1],x\nlda #<arr[1]\n'
+             'lda arr[idx.py-idx]\nlda arr[arr[1].py-arr-2]\nlda arr[idx[1]-idx]\n',
+             '00 ' * 10 + 'A5 04 B5 04 A9 04 A5 04 A5 04 A5 06', [4, 4, 4, 4, 4, 6]),
+        )
+        for case, (origin, body, expected, operands) in enumerate(cases):
+            for pure in (False, True):
+                for debug in (False, True):
+                    for analysis in (('none', 'records', 'xref') if pure else ('none', 'listing')):
+                        with self.subTest(case=case, pure=pure, debug=debug, analysis=analysis):
+                            stem = f'addresses-{case}-{pure}-{debug}-{analysis}'
+                            flags = ('--debug',) if debug else ()
+                            if analysis != 'none':
+                                flags += (f'--listing={stem}.json', '--listing-format=json',
+                                          f'--xref={stem}-xref.json', '--xref-data=true')
+                                if pure:
+                                    flags += ('--listing-version=2',)
+                                    if analysis == 'records':
+                                        flags += (f'--instruction-records-output={stem}-records.json',
+                                                  f'--dependency-manifest={stem}-deps.json')
+                                    else:
+                                        flags += ('--xref-instructions=true',)
+                            result = self.run_tool('xasm', (f'.org {origin}\n' if pure else '') + body,
+                                                   pure_binary=pure, arguments=flags)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            if not pure:
+                                (self.root / 'output').rename(self.root / 'unit.o')
+                                result = self.run_tool('xlnk', 'ram{start=0,end=$07FF}\n'
+                                                       + f'link{{file=unit.o,origin={origin}}}\n')
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            data = (self.root / 'output').read_bytes()
+                            self.assertEqual(data, bytes.fromhex(expected))
+                            if pure and analysis != 'none':
+                                listing = json.loads((self.root / (stem + '.json')).read_text())
+                                self.assertTrue(listing['binary_generated'])
+                                rows = [r for r in listing['records'] if r['emits_bytes']]
+                                reconstructed = b''
+                                for row in rows:
+                                    self.assertEqual(row['output_offset_start'], len(reconstructed))
+                                    reconstructed += (bytes.fromhex(row['fill_byte']) * row['byte_count']
+                                                      if row['fill_byte'] else bytes.fromhex(''.join(row['bytes_hex'])))
+                                self.assertEqual(reconstructed, data)
+                                if analysis == 'records':
+                                    records = json.loads((self.root / (stem + '-records.json')).read_text())['records']
+                                else:
+                                    records = json.loads((self.root / (stem + '-xref.json')).read_text())[
+                                        'instruction_records']['records']
+                                self.assertEqual([r['operand_value'] for r in records], operands)
+                                for record in records:
+                                    offset = record['output_offset']
+                                    self.assertEqual(bytes(record['bytes']), data[offset:offset + record['size']])
+
+    def test_unresolved_external_addresses_still_preserve_binary_output(self):
+        for source in ('.extrn P:proc\njsr P\n', '.extrn buf:byte\nlda buf\n'):
+            for debug in (False, True):
+                for analysis in (False, True):
+                    with self.subTest(source=source, debug=debug, analysis=analysis):
+                        flags = ('--debug',) if debug else ()
+                        if analysis:
+                            flags += ('--listing=listing.json', '--listing-format=json',
+                                      '--xref=xref.json', '--xref-instructions=true')
+                        result = self.run_tool('xasm', source, arguments=flags)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'cannot generate pure binary because', result.stderr)
+
     def test_data_label_sort_preserves_zero_page_alignment_and_size_priority(self):
         fields = [('zp_byte', 1, True, 1, 0x21), ('zp_wide', 3, True, 1, 0x22),
                   ('zp_aligned', 4, True, 16, 0x30), ('plain_small', 2, False, 1, 0x25),
