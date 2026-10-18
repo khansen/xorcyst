@@ -28,9 +28,6 @@ Known defects and follow-ups:
   assembly analysis". Supply the directive's PC to the xref evaluator;
   meanwhile this failure preserves existing outputs instead of publishing
   an unknown emitted value.
-- The linker label-sort key shifts signed integers into the sign bit (SORT_KEY
-  in label_partition). A zero-page data label triggers undefined behavior under
-  UBSan. Use an unsigned key with a comparator that preserves the ordering.
 - Late immediate and indirect operands of $100 or more still warn and truncate
   in pure-binary output while the linker rejects them. For example, at origin
   zero, lda [Target+$FE],y / Target: nop emits B1 00 EA; the immediate form has
