@@ -23,11 +23,6 @@ Known defects and follow-ups:
   Deferring collection failure also needs safe destination planning: unknown
   size means not all ROM bank paths can be enumerated, and allowing a listing
   can overwrite an NL file that was omitted from the incomplete plan.
-- Binary address evaluation can dereference an unresolved operand when applying
-  identities such as x+0, 0+x, x*1, 1*x or x/1. For example, a forward label in
-  lda Fwd+(L2-L1-1) crashes while checking zero-page optimization. Guard the
-  unevaluated operand before cloning it; an invalid shift returning zero can
-  reach the same path after its diagnostic.
 - Data-reference analysis (--xref-data) cannot evaluate the current PC ($),
   so valid input such as L1: nop / .word $-L1 fails with "could not collect
   assembly analysis". Supply the directive's PC to the xref evaluator;
@@ -84,6 +79,12 @@ Known defects and follow-ups:
   validate the copied index before encoding it.
 - A field remainder that becomes zero only at link time is encoded as storage
   and rejected by the linker instead of being omitted.
+- A forward code-label difference used as storage size can assemble in binary
+  mode but fail object link layout with "storage size must evaluate to an
+  integer during layout". For example, .dsb Tail-Head before Head: nop / nop /
+  Tail: rts emits two zero bytes in binary. Listings omit those bytes, even
+  though the binary writer emits them. Resolve late listing extents and
+  support resolvable forward differences during link layout.
 - Data-segment storage counts built from data-segment labels can fail link
   layout with "storage size must evaluate to an integer during layout", even
   when the link script provides a RAM region.
