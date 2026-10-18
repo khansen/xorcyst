@@ -74,10 +74,6 @@ Known defects and follow-ups:
   and byte-size expressions, followed by a range error. Cyclic counts in
   uninitialized structures can also report at both instance and declaration.
 - Union dimensions must be known when the union is declared.
-- Dotted references inside another member reference's index are not fully
-  reduced or validated. Object encoding now rejects these expressions without
-  publishing output, including otherwise valid nested indexes. Reduce and
-  validate the copied index before encoding it.
 - A field remainder that becomes zero only at link time is encoded as storage
   and rejected by the linker instead of being omitted.
 - A forward code-label difference used as storage size can assemble in binary
