@@ -55,10 +55,6 @@ Known defects and follow-ups:
   evaluation time and object size can grow exponentially. Completed integer
   values are cached per evaluation. Sufficiently deep definitions can also
   exhaust the recursive evaluator's stack.
-- Forward aliases containing @@ local labels retain unrenamed names in their
-  stored definitions. Operand uses are rejected by the object encoder; count
-  uses fail with a generic error and false unused-label warnings. Uses after
-  the alias definition work. Resolve the stored local names before use.
 - Repeated cyclic references within one ordinary expression can report once
   per use (e.g. .byte Value+Value), rather than once per expression.
 - Invalid dotted storage counts can report the same error for both the count

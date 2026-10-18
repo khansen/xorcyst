@@ -73,6 +73,94 @@ class Expressions(unittest.TestCase):
         self.assert_output('.byte Alias\nAlias .equ Value\nValue=3\n.byte Alias\nValue=4\n.byte Alias\n',
                            bytes.fromhex('04 03 04'))
 
+    def test_forward_aliases_bind_local_labels_in_saved_definitions(self):
+        for definition in ('Alias .equ @@e-@@s', '.define Alias @@e-@@s',
+                           'Alias = @@e-@@s', 'Alias .equ Mid\nMid .equ @@e-@@s'):
+            with self.subTest(definition=definition):
+                self.assert_output('Begin:\n@@s: .byte 1\n@@e: lda #Alias\n'
+                                   + definition + '\n.word Alias\n', bytes.fromhex('01 A9 01 01 00'))
+        self.assert_output('Begin:\n.word Alias\nAlias .equ @@target\n'
+                           '@@target: nop\n', bytes.fromhex('02 80 EA'))
+
+    def test_local_aliases_keep_definition_scope_across_labels_and_expansions(self):
+        self.assert_output('First:\n@@s: .byte 9\n@@e: .word Alias\n'
+                           'Second:\n@@s: .byte 1,2\n@@e: .word Alias\n'
+                           'Alias .equ @@e-@@s\n', bytes.fromhex('09 02 00 01 02 02 00'))
+        self.assert_output('.macro Emit Name,Count\n@@s: .dsb Count\n'
+                           '@@e: .byte Name\nName .equ @@e-@@s\n.endm\n'
+                           'Emit FirstValue,1\nEmit SecondValue,2\n', bytes.fromhex('00 01 00 00 02'))
+        self.assert_output('.proc P\n@@s: .byte 1\n@@e: lda #Alias\n'
+                           'Alias .equ @@e-@@s\n.endp\n', bytes.fromhex('01 A9 01'))
+
+    def test_local_alias_counts_retain_labels_without_analysis(self):
+        cases = ('.dsb Alias', '.dsw Alias', '.S {}', '.S {{3}}')
+        for body in cases:
+            with self.subTest(body=body):
+                prefix = ('.struc S\nitems .byte[' + ('Alias+1' if body == '.S {{3}}' else 'Alias') + ']\n.ends\n'
+                          'Begin:\n@@s: .byte 1\n@@e: ')
+                expected = bytes.fromhex('01') + (bytes(2) if body == '.dsw Alias'
+                                                 else bytes([3, 0]) if body == '.S {{3}}' else bytes(1))
+                source = prefix + body + '\n.byte $77\nAlias .equ @@e-@@s\n'
+                self.assert_output(source, expected + b'\x77')
+                for pure in (False, True):
+                    result, _ = self.assemble(source, pure)
+                    self.assertNotIn(b"`@@s' defined but not used", result.stderr)
+                    self.assertNotIn(b"`@@e' defined but not used", result.stderr)
+
+    def test_later_local_alias_uses_keep_the_definition_scope(self):
+        # Deliberate compatibility change: 1.9.7 used Second's @@x here.
+        for definition in ('Alias .equ @@x', '.define Alias @@x', 'Alias = @@x'):
+            with self.subTest(definition=definition):
+                self.assert_output('First:\n@@x: .byte 1\n' + definition + '\n'
+                                   'Second:\n@@x: .byte 2\nlda Alias\n',
+                                   bytes.fromhex('01 02 AD 00 80'))
+
+    def test_later_local_alias_uses_cannot_supply_a_missing_definition_local(self):
+        for definition in ('Alias .equ @@x', '.define Alias @@x', 'Alias = @@x'):
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(definition=definition, pure=pure, debug=debug, listing=listing):
+                            source = (('.org $8000\n' if pure else '') + 'First:\n' + definition + '\n'
+                                      'Second:\n@@x: .byte 2\nlda Alias\n')
+                            result, output = self.assemble(source, pure, debug, listing)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b"undefined local label `@@x'", result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+
+    def test_repeated_local_alias_definitions_compare_the_bound_labels(self):
+        for definition in ('Alias .equ @@x', '.define Alias @@x', 'Alias = @@x'):
+            reassignment = definition == 'Alias = @@x'
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(definition=definition, pure=pure, debug=debug, listing=listing):
+                            source = (('.org $8000\n' if pure else '') + 'First:\n@@x: .byte 1\n'
+                                      + definition + '\nSecond:\n@@x: .byte 2\n' + definition + '\nlda Alias\n')
+                            result, output = self.assemble(source, pure, debug, listing)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            warning = b"redefinition of `Alias' is not identical; ignored"
+                            self.assertEqual(result.stderr.count(warning), 0 if reassignment else 1)
+                            expected = bytes.fromhex('01 02 AD 01 80' if reassignment else '01 02 AD 00 80')
+                            self.assertEqual(output.read_bytes() if pure else self.linked(output), expected)
+
+    def test_local_aliases_do_not_cross_namespace_boundaries_or_publish_errors(self):
+        cases = ('.word Alias\nAlias .equ @@missing\n',
+                 '.dsb Alias\nAlias .equ @@missing\n',
+                 'First:\n@@target: nop\nSecond:\n.word Alias\nAlias .equ @@target\n',
+                 'Begin:\n@@s: nop\n.word Alias\nAlias .equ Alias+@@s\n')
+        for source in cases:
+            for pure in (False, True):
+                for debug in (False, True):
+                    for listing in (False, True):
+                        with self.subTest(source=source, pure=pure, debug=debug, listing=listing):
+                            result, output = self.assemble(source, pure, debug, listing, cyclic=True)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b'error:', result.stderr)
+                            self.assertNotIn(b'unknown expression type', result.stderr)
+                            self.assertNotIn(b'syntax error', result.stderr)
+                            self.assertEqual(output.read_bytes(), b'previous output')
+
     def test_explicit_sizeof_captures_known_reassignable_counts(self):
         self.assert_output('Count=1\n.struc S\nhead .byte\nitems .word[Count]\ntail .byte\n.ends\n'
                            '.byte sizeof(S)\nCount=3\n.byte sizeof(S)\n', bytes.fromhex('04 08'))

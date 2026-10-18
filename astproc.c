@@ -3143,6 +3143,23 @@ static int process_storage(astnode *storage, void *arg, astnode **next)
     return 1;
 }
 
+static int globalize_local(astnode *n, void *arg, astnode **next);
+
+/* Equate statements are removed before the first-pass walker visits their
+ * children. Bind local references in the saved expression to the definition's
+ * namespace now; later substitutions must not use the caller's namespace.
+ * Macro expansion has already added its invocation suffix to these names. */
+static astnode *clone_equate_expression(astnode *value, location loc)
+{
+    static const astnodeprocmap map[] = {
+        { LOCAL_ID_NODE, globalize_local },
+        { 0, NULL }
+    };
+    astnode *expr = astnode_clone(value, loc);
+    astproc_walk(expr, NULL, map);
+    return expr;
+}
+
 /**
  * Process EQU node.
  * @param equ Node of type EQU_NODE
@@ -3153,7 +3170,7 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
     symtab_entry *e;
     astnode *id;
     astnode *expr;
-    expr = astnode_clone(astnode_get_child(equ, 1), equ->loc);
+    expr = clone_equate_expression(astnode_get_child(equ, 1), equ->loc);
     expr = reduce_expression_complete(expr, FOLD_PC_YES);
     id = astnode_get_child(equ, 0);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
@@ -3203,7 +3220,7 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
     }
     /* Very similar to EQU, except symbol 1) can be
     redefined and 2) is volatile (see end of proc) */
-    expr = astnode_clone(astnode_get_child(assign, 1), assign->loc);
+    expr = clone_equate_expression(astnode_get_child(assign, 1), assign->loc);
     expr = reduce_expression(expr, FOLD_PC_YES);
     if (e == NULL) {
         /* Symbol is being defined for the first time */
