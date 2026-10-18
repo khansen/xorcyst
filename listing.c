@@ -2921,6 +2921,7 @@ static int find_visible_xref_symbol_index(const xref_build_context *ctx, const c
 
 static int eval_expression_int_with_xref(astnode *expr,
                                          const xref_build_context *ctx,
+                                         int pc,
                                          int *value,
                                          int depth)
 {
@@ -2936,6 +2937,10 @@ static int eval_expression_int_with_xref(astnode *expr,
         *value = expr->integer;
         return 1;
     }
+    if (astnode_is_type(expr, CURRENT_PC_NODE)) {
+        *value = pc;
+        return 1;
+    }
     if (astnode_is_type(expr, IDENTIFIER_NODE)
         || astnode_is_type(expr, LOCAL_ID_NODE)
         || astnode_is_type(expr, FORWARD_BRANCH_NODE)
@@ -2943,7 +2948,7 @@ static int eval_expression_int_with_xref(astnode *expr,
         name = expr->string;
         entry = symtab_lookup(name);
         if (entry != NULL && entry->type == CONSTANT_SYMBOL && entry->def != NULL) {
-            return eval_expression_int(entry->def, value, depth + 1);
+            return eval_expression_int_with_xref(entry->def, ctx, pc, value, depth + 1);
         }
         symbol_index = find_xref_symbol_index(ctx, name);
         if (symbol_index >= 0 && ctx->symbols[symbol_index].has_cpu_address) {
@@ -2953,7 +2958,7 @@ static int eval_expression_int_with_xref(astnode *expr,
         return 0;
     }
     if (!astnode_is_type(expr, ARITHMETIC_NODE)
-        || !eval_expression_int_with_xref(LHS(expr), ctx, &lhs, depth + 1)) {
+        || !eval_expression_int_with_xref(LHS(expr), ctx, pc, &lhs, depth + 1)) {
         return 0;
     }
     switch (expr->oper) {
@@ -2965,7 +2970,7 @@ static int eval_expression_int_with_xref(astnode *expr,
         case BANK_OPERATOR: *value = (lhs >> 16) & 0xFF; return 1;
         default: break;
     }
-    if (!eval_expression_int_with_xref(RHS(expr), ctx, &rhs, depth + 1)) {
+    if (!eval_expression_int_with_xref(RHS(expr), ctx, pc, &rhs, depth + 1)) {
         return 0;
     }
     switch (expr->oper) {
@@ -4820,6 +4825,7 @@ typedef struct tag_xref_target_result {
 
 static int resolve_xref_data_target(const xref_build_context *ctx,
                                     const xref_data_provenance *provenance,
+                                    int pc,
                                     xref_target_result *out)
 {
     astnode *expr;
@@ -4861,7 +4867,7 @@ static int resolve_xref_data_target(const xref_build_context *ctx,
     }
     if (displacement_expr != NULL) {
         if (!expression_is_constant_for_target(displacement_expr, ctx)
-            || !eval_expression_int_with_xref(displacement_expr, ctx, &displacement, 0)) {
+            || !eval_expression_int_with_xref(displacement_expr, ctx, pc, &displacement, 0)) {
             return 0;
         }
         displacement *= sign;
@@ -4904,7 +4910,7 @@ static void emit_xref_data_directive_references(FILE *fp,
         const xref_data_directive_reference *record = &ctx->data_directive_refs[i];
         const xref_data_provenance *provenance = record->provenance;
         xref_target_result target;
-        int target_known = resolve_xref_data_target(ctx, provenance, &target);
+        int target_known = resolve_xref_data_target(ctx, provenance, record->cpu_address, &target);
         int j;
         fprintf(fp, "%s\n    {", i == 0 ? "" : ",");
         fprintf(fp, "\"file\":");
@@ -10055,7 +10061,9 @@ analysis_result *collect_analysis(astnode *root, const analysis_options *options
         for (i = 0; i < ctx->data_directive_ref_count; i++) {
             xref_data_directive_reference *record = &ctx->data_directive_refs[i];
             int value = 0;
-            if (!eval_expression_int_with_xref(record->final_expression, ctx, &value, 0)) {
+            /* Collection is complete: the walk PC is no longer this operand's PC. */
+            if (!eval_expression_int_with_xref(record->final_expression, ctx,
+                                               record->cpu_address, &value, 0)) {
                 ctx->unresolved_values = 1;
                 continue;
             }

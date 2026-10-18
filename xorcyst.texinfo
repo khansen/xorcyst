@@ -82,6 +82,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Evaluates @code{$} in cross-reference data expressions at each operand's address, including successive operands in the same directive. Valid input such as @code{L1: nop / .word $-L1} now assembles with @option{--xref-data}, and the reported emitted values match the binary. Binary and object generation are unchanged.
 @item Frees a constant's previous expression when an @code{=} assignment replaces it, including repeated assignments in loops. Values already captured by operands and analysis records keep their existing behavior.
 @item Removes undefined signed shifting when the linker sorts data labels for RAM allocation. Zero-page constraints, alignment and size keep their existing priority, with the same linked addresses.
 @end itemize

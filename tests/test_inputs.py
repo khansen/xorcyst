@@ -19,7 +19,8 @@ class InputHandling(unittest.TestCase):
         cls.addClassCleanup(build.cleanup)
         cls.tools = {name: Path(build.name) / name for name in ('xasm', 'xlnk')}
         build_tool('xasm', cls.tools['xasm'], 'TEST_INPUT_CFLAGS',
-                   {'symtab.c': 'tests/test_symtab_alloc.c', 'astnode.c': 'tests/test_astnode_alloc.c'})
+                   {'symtab.c': 'tests/test_symtab_alloc.c', 'astnode.c': 'tests/test_astnode_alloc.c',
+                    'listing.c': 'tests/test_listing_values.c'})
         build_tool('xlnk', cls.tools['xlnk'], 'TEST_INPUT_CFLAGS',
                    {'unit.c': 'tests/test_unit_alloc.c', 'hashtab.c': None})
 
@@ -1041,31 +1042,121 @@ class InputHandling(unittest.TestCase):
         self.assertIn('$8001#L2#', (self.root / 'control.0.nl').read_text())
 
     def test_unresolved_analysis_values_preserve_all_outputs(self):
-        # The binary writer understands $, but xref-data does not yet. Deferring
-        # analysis errors must never publish its placeholder value or a new binary.
-        source = '.org $8000\nL1: nop\n.word $-L1\n'
-        plain = self.run_tool('xasm', source)
-        self.assertEqual(plain.returncode, 0, plain.stderr.decode())
-        self.assertEqual((self.root / 'output').read_bytes(), b'\xea\x01\x00')
+        # The writer succeeds on this source. Only the test collector marks a
+        # data value unresolved, so this reaches the pre-rename completeness gate.
+        source = '.org $8000\nBase: nop\n.word Base+1\nlda $10\n'
+        expected = bytes.fromhex('EA 01 80 A5 10')
         for debug in (False, True):
             for combined in (False, True):
                 with self.subTest(debug=debug, combined=combined):
-                    outputs = ('xref.json', 'records.json', 'ram.nl', 'listing.json', 'deps.json')
-                    for filename in outputs:
-                        (self.root / filename).write_bytes(b'previous analysis')
-                    arguments = ['--xref=xref.json', '--xref-data=true']
+                    stem = f'incomplete-{debug}-{combined}'
+                    suffixes = ('.xref', '.records', '.deps', '.ram.nl', '.rom.0.nl', '.listing.json')
+                    arguments = [f'--xref={stem}.xref', '--xref-data=true']
                     if debug:
                         arguments += ['--debug']
                     if combined:
-                        arguments += ['--xref-instructions=true', '--instruction-records-output=records.json',
-                                      '--fceux-nl-ram-output=ram.nl', '--listing=listing.json',
-                                      '--listing-format=json', '--listing-version=2',
-                                      '--dependency-manifest=deps.json']
+                        arguments += ['--xref-instructions=true', f'--instruction-records-output={stem}.records',
+                                      f'--dependency-manifest={stem}.deps', f'--fceux-nl-ram-output={stem}.ram.nl',
+                                      f'--fceux-nl-rom-prefix={stem}.rom.', f'--listing={stem}.listing.json',
+                                      '--listing-format=json', '--listing-version=2']
+                    # Positive control proves both the binary and data analysis
+                    # normally succeed; a blanket collection failure cannot pass.
                     result = self.run_tool('xasm', source, arguments=arguments)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(result.stderr, b'')
+                    self.assertEqual((self.root / 'output').read_bytes(), expected)
+                    facts = json.loads((self.root / (stem + '.xref')).read_text())
+                    self.assertEqual([r['emitted_value'] for r in facts['data_directive_references']], [0x8001])
+                    if combined:
+                        self.assertTrue(all((self.root / (stem + suffix)).exists() for suffix in suffixes))
+                    for suffix in suffixes:
+                        (self.root / (stem + suffix)).write_bytes(b'previous analysis')
+                    result = self.run_tool('xasm', source, {'XASM_TEST_UNRESOLVED_DATA': '1'},
+                                           arguments=arguments)
                     self.assertEqual(result.returncode, 3, result.stderr.decode())
                     self.assertEqual(result.stderr, b'error: could not collect assembly analysis\n')
-                    for filename in outputs:
-                        self.assertEqual((self.root / filename).read_bytes(), b'previous analysis')
+                    for suffix in suffixes:
+                        self.assertEqual((self.root / (stem + suffix)).read_bytes(), b'previous analysis')
+
+    def test_current_pc_data_analysis_uses_each_operand_address(self):
+        mixed = ('Base: nop\n.byte $-Base,$-Base\n.word $-Base,$-Base\n'
+                 '.dword $-Base,$-Base\n.char $-Base,$-Base\n.word Finish-$\nFinish: rts\n')
+        cases = [
+            ('Base: nop\n.word $-Base\n', bytes.fromhex('EA 01 00'), [(1, 2)]),
+            (mixed, bytes.fromhex('EA 01 02 03 00 05 00 07 00 00 00 0B 00 00 00 0F 10 02 00 60'),
+             [(1, 1), (2, 1), (3, 2), (5, 2), (7, 4), (11, 4), (15, 1), (16, 1), (17, 2)]),
+            ('Base: nop\n.macro Emit\n.byte $-Base,$-Base\n.endm\n.rept 2\nEmit\n.endm\n',
+             bytes.fromhex('EA 01 02 03 04'), [(1, 1), (2, 1), (3, 1), (4, 1)]),
+            ('Base: nop\n.word Forward+($-Base),Forward+($-Base)\n'
+             'Finish: rts\nForward .equ Finish-Base\n', bytes.fromhex('EA 06 00 08 00 60'), [(1, 2), (3, 2)]),
+        ]
+        for index, (body, expected, operands) in enumerate(cases):
+            # The last origin crosses $FFFF; PC arithmetic must not wrap early.
+            for origin in (0, 0x8000, 0xFFF8):
+                for debug in (False, True):
+                    source = f'.org {origin}\n' + body
+                    flags = ['--debug'] if debug else []
+                    plain = self.run_tool('xasm', source, arguments=flags)
+                    self.assertEqual(plain.returncode, 0, plain.stderr.decode())
+                    self.assertEqual((self.root / 'output').read_bytes(), expected)
+                    for combined in (False, True):
+                        with self.subTest(case=index, origin=origin, debug=debug, combined=combined):
+                            stem = f'pc-{index}-{origin}-{debug}-{combined}'
+                            arguments = flags + [f'--xref={stem}.xref', '--xref-data=true']
+                            if combined:
+                                arguments += ['--xref-instructions=true',
+                                              f'--instruction-records-output={stem}.records',
+                                              f'--listing={stem}.json', '--listing-format=json',
+                                              '--listing-version=2', f'--dependency-manifest={stem}.deps',
+                                              f'--fceux-nl-ram-output={stem}.ram.nl']
+                                if origin == 0x8000:
+                                    arguments += [f'--fceux-nl-rom-prefix={stem}.rom.']
+                            result = self.run_tool('xasm', source, arguments=arguments)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr, plain.stderr)
+                            self.assertEqual((self.root / 'output').read_bytes(), expected)
+                            facts = json.loads((self.root / (stem + '.xref')).read_text())
+                            refs = facts['data_directive_references']
+                            self.assertEqual([(r['use_output_offset'], r['width_bytes']) for r in refs], operands)
+                            for ref in refs:
+                                offset, width = ref['use_output_offset'], ref['width_bytes']
+                                self.assertEqual(ref['emitted_value'],
+                                                 int.from_bytes(expected[offset:offset + width], 'little'))
+                                self.assertEqual(int(ref['use_cpu_address'], 16), (origin + offset) & 0xFFFF)
+                            if combined:
+                                rows = json.loads((self.root / (stem + '.json')).read_text())['records']
+                                self.assertEqual(b''.join(bytes.fromhex(''.join(r['bytes_hex'])) for r in rows),
+                                                 expected)
+                                records = json.loads((self.root / (stem + '.records')).read_text())['records']
+                                for record in records:
+                                    offset = record['output_offset']
+                                    self.assertEqual(bytes(record['bytes']), expected[offset:offset + record['size']])
+
+    def test_invalid_current_pc_data_expressions_preserve_analysis_outputs(self):
+        for count in (-1, 32, 63, 64):
+            for debug in (False, True):
+                with self.subTest(count=count, debug=debug):
+                    stem = f'pc-invalid-{count}-{debug}'
+                    suffixes = ('.xref', '.records', '.deps', '.ram.nl', '.rom.0.nl')
+                    for suffix in suffixes:
+                        (self.root / (stem + suffix)).write_bytes(b'previous analysis')
+                    arguments = [f'--xref={stem}.xref', '--xref-data=true', '--xref-instructions=true',
+                                 f'--instruction-records-output={stem}.records',
+                                 f'--dependency-manifest={stem}.deps', f'--fceux-nl-ram-output={stem}.ram.nl',
+                                 f'--fceux-nl-rom-prefix={stem}.rom.', f'--listing={stem}.json',
+                                 '--listing-format=json', '--listing-version=2']
+                    if debug:
+                        arguments += ['--debug']
+                    result = self.run_tool('xasm', f'.org $8000\nBase: nop\n.word ($-Base)>>({count})\n',
+                                           arguments=arguments)
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertIn(b'input.asm:3: error: invalid shift count in expression', result.stderr)
+                    for suffix in suffixes:
+                        self.assertEqual((self.root / (stem + suffix)).read_bytes(), b'previous analysis')
+                    rows = json.loads((self.root / (stem + '.json')).read_text())['records']
+                    self.assertTrue(rows)
+                    self.assertTrue(all(not r['binary_generated'] and not r['emits_bytes']
+                                        and not r['bytes_hex'] for r in rows))
 
     def test_invalid_right_shift_counts_preserve_output(self):
         for count in (-1, 32, 63, 64):

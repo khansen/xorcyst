@@ -28,11 +28,6 @@ Known defects and follow-ups:
   Deferring collection failure also needs safe destination planning: unknown
   size means not all ROM bank paths can be enumerated, and allowing a listing
   can overwrite an NL file that was omitted from the incomplete plan.
-- Data-reference analysis (--xref-data) cannot evaluate the current PC ($),
-  so valid input such as L1: nop / .word $-L1 fails with "could not collect
-  assembly analysis". Supply the directive's PC to the xref evaluator;
-  meanwhile this failure preserves existing outputs instead of publishing
-  an unknown emitted value.
 - Late immediate and indirect operands of $100 or more still warn and truncate
   in pure-binary output while the linker rejects them. For example, at origin
   zero, lda [Target+$FE],y / Target: nop emits B1 00 EA; the immediate form has

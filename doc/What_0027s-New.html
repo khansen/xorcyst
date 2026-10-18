@@ -38,7 +38,8 @@ ul.mark-bullet {list-style-type: disc}
 <h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">
-<li>Frees a constant&rsquo;s previous expression when an <code class="code">=</code> assignment replaces it, including repeated assignments in loops. Values already captured by operands and analysis records keep their existing behavior.
+<li>Evaluates <code class="code">$</code> in cross-reference data expressions at each operand&rsquo;s address, including successive operands in the same directive. Valid input such as <code class="code">L1: nop / .word $-L1</code> now assembles with <samp class="option">--xref-data</samp>, and the reported emitted values match the binary. Binary and object generation are unchanged.
+</li><li>Frees a constant&rsquo;s previous expression when an <code class="code">=</code> assignment replaces it, including repeated assignments in loops. Values already captured by operands and analysis records keep their existing behavior.
 </li><li>Removes undefined signed shifting when the linker sorts data labels for RAM allocation. Zero-page constraints, alignment and size keep their existing priority, with the same linked addresses.
 </li></ul>
 
