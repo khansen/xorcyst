@@ -788,36 +788,26 @@ END
         self.assertEqual(targets, ["NOP", "NOP", "RTS", "RTS", "NOP", "NOP"])
         self.assertEqual(len({r["operand_value"] for r in forward}), 6)
 
-    def check_procedure_analysis_failure(self, source, expected_object_bytes):
-        # Pure binary already rejects PROC/VAR address operands. Analysis must
-        # report those same errors without a use-after-free, and preserve output.
-        # Object output resolves these addresses at link time and must stay valid.
+    def check_procedure_analysis_output(self, source, expected_object_bytes):
+        # Flattened procedures/variables retain their kinds but now evaluate
+        # their assigned addresses in binary mode as well as linked objects.
         for debug in (False, True):
             with self.subTest(debug=debug):
-                asm = self.root / 'input.asm'
-                asm.write_text(source)
-                output = self.root / 'output.bin'
-                stderr = None
                 options = ['--debug'] if debug else []
-                for mode in ('plain', 'xref', 'records'):
-                    with self.subTest(mode=mode):
-                        flags = []
-                        if mode == 'xref':
-                            flags = [f'--xref={self.root / "xref.json"}', '--xref-instructions=true']
-                        if mode == 'records':
-                            flags = [f'--instruction-records-output={self.root / "records.json"}',
-                                     f'--dependency-manifest={self.root / "deps.json"}']
-                        output.write_bytes(b'previous output')
-                        result = subprocess.run([str(XASM), '--pure-binary', *options, *flags,
-                                                 str(asm), '-o', str(output)],
-                                                capture_output=True, timeout=10)
-                        self.assertEqual(result.returncode, 1, result.stderr.decode())
-                        self.assertIn(b'operand does not evaluate to literal', result.stderr)
-                        self.assertNotIn(b'AddressSanitizer', result.stderr)
-                        self.assertNotIn(b'runtime error:', result.stderr)
-                        if stderr is None: stderr = result.stderr
-                        self.assertEqual(result.stderr, stderr)
-                        self.assertEqual(output.read_bytes(), b'previous output')
+                (self.root / 'output.bin').unlink(missing_ok=True)
+                records = self.assemble(source, options=options)
+                self.assertEqual((self.root / 'output.bin').read_bytes(), expected_object_bytes)
+                procedure_bindings = 0
+                for record in records:
+                    if record['additive_terms'] is None:
+                        continue
+                    for term in record['additive_terms']['terms']:
+                        if term.get('name') in ('P', 'Forward', 'Empty'):
+                            line = source.splitlines().index('.proc ' + term['name']) + 1
+                            self.assertEqual(self.binding(term), ('procedure', line, None))
+                            procedure_bindings += 1
+                self.assertEqual(procedure_bindings, source.lower().count('jsr '))
+                asm = self.root / 'input.asm'
                 asm.write_text(source.replace('.org $8000\n', ''))
                 objects = []
                 for analysis in (False, True):
@@ -839,14 +829,14 @@ END
                 self.assertEqual(*objects)
 
     def test_procedure_analysis_survives_flattened_member_accesses(self):
-        self.check_procedure_analysis_failure(
+        self.check_procedure_analysis_output(
             '.org $8000\n.struc Point\npx .byte\npy .byte\n.ends\n'
             '.struc Box\nhd .byte\npts .Point[2]\n.ends\n'
             '.proc P\nb .Box\nlda b.pts[1].py\n.dw b.pts[1].px\nrts\n.endp\njsr P\n',
             bytes.fromhex('00 00 00 00 00 AD 04 80 03 80 60 20 00 80'))
 
     def test_forward_recursive_and_empty_procedure_analysis(self):
-        self.check_procedure_analysis_failure(
+        self.check_procedure_analysis_output(
             '.org $8000\njsr Forward\n.proc Empty\n.endp\n'
             '.proc Forward\njsr Forward\njsr Empty\nrts\n.endp\n',
             bytes.fromhex('20 03 80 20 03 80 20 03 80 60'))

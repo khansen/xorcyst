@@ -27,6 +27,11 @@ Compatibility planning:
 
 Known defects and follow-ups:
 
+- Listing v2 can report an absolute addressing_mode for an instruction shortened
+  to zero page during final binary layout, even when its bytes and size are
+  correct. Derive the displayed mode from the emitted opcode.
+- Xref can include member names as phantom global symbols with no definition
+  (for example, px from .word p.px). Keep member names out of global references.
 - Late word instruction operands outside -32768..65535 still warn and truncate
   in pure-binary output while the linker rejects them. Decide the policy together
   with 16-bit address wrapping: existing binaries/listings can cross $FFFF. Late
@@ -92,7 +97,3 @@ Known defects and follow-ups:
   .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
 - Forward strings differ between binary and object output, and exported forward
   constant aliases can still fail object encoding.
-- Pure-binary address evaluation resolves LABEL symbols but not PROC or VAR
-  symbols. Direct calls to procedures and operands using variable declarations
-  can fail with "operand does not evaluate to literal" even though their objects
-  link correctly. Explicit labels in procedure bodies work in both modes.

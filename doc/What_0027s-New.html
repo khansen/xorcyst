@@ -38,7 +38,8 @@ ul.mark-bullet {list-style-type: disc}
 <h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">
-<li>Reduces and validates dotted member accesses inside array indexes, including nested indexes and forward aliases, in the caller&rsquo;s scope. Valid object expressions retain their relocations and invalid members report located diagnostics before publication. Pure-binary procedure and variable addresses remain a separate limitation.
+<li>Restores pure-binary procedure and variable addresses lost in 1.7.0, including forward calls, recursive procedures, data-segment variables and indexed operands. Nested member indexes now also work in pure-binary output. These use the same layout addresses as ordinary labels. Listings and analysis outputs describe these binaries; indexed operands also have their element sizes resolved in instruction analysis. Unresolved external addresses still fail without replacing output.
+</li><li>Reduces and validates dotted member accesses inside array indexes, including nested indexes and forward aliases, in the caller&rsquo;s scope. Valid object expressions retain their relocations and invalid members report located diagnostics before publication.
 </li><li>Rejects late byte instruction operands outside their signed/unsigned range in pure-binary output, matching the linker. This deliberately replaces warning-and-truncation behavior for late immediate and indexed-indirect operands: these must fit -128&ndash;255, while zero-page addresses remain 0&ndash;255. Existing output is preserved on failure. Literal and word operands retain their existing warnings and truncation; relative branches retain their displacement checks.
 </li></ul>
 

@@ -1634,7 +1634,8 @@ static astnode *reduce_index(astnode *expr)
     /* Replace index expression */
     astnode_replace(expr, c);
     astnode_finalize(expr);
-    return c;
+    /* Analysis copies are reduced once, so resolve the generated sizeof now. */
+    return reduce_expression(c, FOLD_PC_NO);
 }
 
 /**
@@ -5680,7 +5681,11 @@ static astnode *eval_expression(astnode *expr)
 
         case IDENTIFIER_NODE: {
             symtab_entry *e = symtab_lookup(expr->ident);
-            if (e != NULL && e->type == LABEL_SYMBOL && (e->flags & ADDR_FLAG))
+            /* Flattened procedure and variable declarations also get label
+             * addresses in the layout pass. Keep their symbol kinds for
+             * type/scope metadata, but evaluate every assigned address. */
+            if (e != NULL && (e->type == LABEL_SYMBOL || e->type == PROC_SYMBOL
+                              || e->type == VAR_SYMBOL) && (e->flags & ADDR_FLAG))
                 return astnode_create_integer(e->address, expr->loc);
         } break;
 
