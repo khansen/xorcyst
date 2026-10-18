@@ -14,6 +14,11 @@
 
 Known defects and follow-ups:
 
+- Assignment with = to a non-constant symbol (label, procedure, type, macro
+  or data variable) is accepted without changing its symbol kind, and the
+  replacement expression can leak. For example, L: nop / L = 5 / lda #L
+  emits EA A9 00 rather than using 5. Reject these assignments explicitly; the
+  constant-reassignment cleanup must not free borrowed statement-tree nodes.
 - FCEUX ROM export rejects an unevaluable or negative storage count during
   analysis collection, before the writer can supply its diagnostic listing.
   A late negative count can lose the located range error too, leaving only
@@ -87,7 +92,6 @@ Known defects and follow-ups:
   when the link script provides a RAM region.
 - A late error in merged storage can point to the preceding storage statement
   instead of the statement that supplied the invalid count.
-- Reassigning an = constant leaks the previous definition.
 - Signed integer overflow in constant folding is undefined (e.g.
   .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
 - Forward strings differ between binary and object output, and exported forward

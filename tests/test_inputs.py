@@ -100,6 +100,98 @@ class InputHandling(unittest.TestCase):
                         self.assertEqual(result.stderr, b'')
                         self.assertEqual((self.root / 'output').read_bytes(), expected)
 
+    def test_constant_reassignments_release_old_definitions_and_keep_captured_values(self):
+        body = ('Value=1\nlda #Value\nValue=Value+2\nlda #Value\n'
+                'Text="old"\n.db Text\nText="new"\n.db Text\n'
+                'Addr=Later\n.word Addr\nAddr=Later+1\n.word Addr\n'
+                'Index=0\n.rept 32\n.db Index\nIndex=Index+1\n.endm\n'
+                'Later: rts\n')
+        expected = bytes.fromhex('A9 01 A9 03') + b'oldnew' + bytes.fromhex('2E 80 2F 80')
+        expected += bytes(range(32)) + b'\x60'
+        for pure in (False, True):
+            for debug in (False, True):
+                for analysis in (False, True):
+                    with self.subTest(pure=pure, debug=debug, analysis=analysis):
+                        flags = ['--debug'] if debug else []
+                        stem = f'reassign-{pure}-{debug}-{analysis}'
+                        if analysis:
+                            flags += [f'--listing={stem}.json', '--listing-format=json',
+                                      f'--xref={stem}.xref', '--xref-data=true']
+                            if pure:
+                                flags += ['--xref-instructions=true',
+                                          f'--instruction-records-output={stem}.records',
+                                          f'--dependency-manifest={stem}.deps']
+                        result = self.run_tool('xasm', ('.org $8000\n' if pure else '') + body,
+                                               {'XASM_TEST_TRACK_NODES': '1'}, pure_binary=pure, arguments=flags)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'AST_NODES_LIVE=0\n')
+                        if not pure:
+                            (self.root / 'output').rename(self.root / 'unit.o')
+                            result = self.run_tool('xlnk', 'link{file=unit.o,origin=$8000}\n')
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual((self.root / 'output').read_bytes(), expected)
+                        if pure and analysis:
+                            records = json.loads((self.root / (stem + '.records')).read_text())['records']
+                            self.assertEqual([r['operand_value'] for r in records], [1, 3, None])
+                            self.assertNotEqual(records[0]['additive_terms'], records[1]['additive_terms'])
+
+    def test_constant_reassignment_cleanup_after_error_and_undef(self):
+        for definition in ('Value=1', 'Value .equ 1', '.define Value 1'):
+            for fail in (False, True):
+                with self.subTest(definition=definition, fail=fail):
+                    source = (definition + '\nValue=2\n.db Value\n.undef Value\n'
+                              'Value=3\nValue=4\n.db Value\n')
+                    if fail:
+                        source += '.error "stop after reassignment"\n'
+                    result = self.run_tool('xasm', source, {'XASM_TEST_TRACK_NODES': '1'})
+                    self.assertEqual(result.returncode, int(fail), result.stderr.decode())
+                    self.assertIn(b'AST_NODES_LIVE=0\n', result.stderr)
+                    if fail:
+                        self.assertIn(b'stop after reassignment', result.stderr)
+                    else:
+                        self.assertEqual((self.root / 'output').read_bytes(), b'\x02\x04')
+
+    def test_reassignment_does_not_free_borrowed_symbol_definitions(self):
+        # Compatibility only: assignment to a non-constant is a tracked defect.
+        # Those paths already leak; keep ASan's access checks, but not LSan here.
+        environment = {'ASAN_OPTIONS': os.environ.get('ASAN_OPTIONS', '') + ':detect_leaks=0'}
+        cases = [('L: nop\nL = 5\nlda #L\n', 0, b'', bytes.fromhex('EA A9 00')),
+                 ('.proc P\nrts\n.endp\nP = 3\njsr P\n', 1,
+                  b'input.asm:5: error: operand does not evaluate to literal\n', None)]
+        for source, status, diagnostic, expected in cases:
+            for debug in (False, True):
+                for analysis in (False, True):
+                    with self.subTest(source=source, debug=debug, analysis=analysis):
+                        flags = ['--debug'] if debug else []
+                        if analysis:
+                            flags += ['--xref=borrowed.json', '--xref-instructions=true']
+                        result = self.run_tool('xasm', source, environment, arguments=flags)
+                        self.assertEqual(result.returncode, status, result.stderr.decode())
+                        self.assertEqual(result.stderr, diagnostic)
+                        if expected is not None:
+                            self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_reassignment_preserves_first_definition_and_current_binding_locations(self):
+        source = '.org $8000\nV .equ 1\nlda #V\nV = 2\nlda #V\n'
+        for debug in (False, True):
+            with self.subTest(debug=debug):
+                xref = self.root / f'locations-{debug}.json'
+                flags = [f'--xref={xref}', '--xref-instructions=true']
+                if debug:
+                    flags += ['--debug']
+                result = self.run_tool('xasm', source, {'XASM_TEST_TRACK_NODES': '1'}, arguments=flags)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(result.stderr, b'AST_NODES_LIVE=0\n')
+                self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('A9 01 A9 02'))
+                facts = json.loads(xref.read_text())
+                symbol = next(symbol for symbol in facts['symbols'] if symbol['name'] == 'V')
+                self.assertEqual(symbol['definition']['line'], 2)
+                self.assertEqual(symbol['definition']['value'], 2)
+                records = facts['instruction_records']['records']
+                self.assertEqual([record['operand_value'] for record in records], [1, 2])
+                self.assertEqual([record['additive_terms']['terms'][0]['binding']['definition']['line']
+                                  for record in records], [2, 4])
+
     def test_forward_label_identities_wait_for_addresses(self):
         expressions = ('Fwd+(L2-L1-1)', '(L2-L1-1)+Fwd', 'Fwd*(L2-L1)',
                        '(L2-L1)*Fwd', 'Fwd/(L2-L1)',
