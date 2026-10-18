@@ -54,6 +54,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_analysis_faults.c \
   tests/test_analysis_symbols.py \
   tests/test_astnode_alloc.c \
+  tests/test_listing_values.c \
   tests/test_backend_performance.py \
   tests/test_backend_work.c \
   tests/test_build_configuration.py \
