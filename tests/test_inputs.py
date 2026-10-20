@@ -73,6 +73,121 @@ class InputHandling(unittest.TestCase):
                 result = self.run_tool('xasm', source)
                 self.assertNotEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_member_names_survive_constant_substitution(self):
+        types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                 '.struc Box\nhead .byte\npoints .Point[3]\ntail .byte\n.ends\n')
+        storage = 'p .Point\nbox .Box\nidx .Point\n'
+        body = ('.word p.py,box.points[py].py,box.points[idx.py-idx].px\n'
+                'lda box.points[py].py\nlda #<box.points[idx.py-idx].px\n.byte py\n')
+        expected = bytes(12) + bytes.fromhex('01 00 06 00 05 00 A5 06 A9 05 01')
+        for definition in ('py .equ 1\npoints .equ 9\npx .equ 4\n',
+                           '.define py 1\n.define points 9\n.define px 4\n',
+                           'py=1\npoints=9\npx=4\n'):
+            for forward in (False, True):
+                for pure in (False, True):
+                    for debug in (False, True):
+                        for analysis in (False, True):
+                            with self.subTest(definition=definition, forward=forward, pure=pure,
+                                              debug=debug, analysis=analysis):
+                                source = types + storage + (body + definition if forward else definition + body)
+                                flags = ('--debug',) if debug else ()
+                                if analysis:
+                                    flags += ('--listing=listing.json', '--listing-format=json',
+                                              '--xref=xref.json', '--xref-data=true')
+                                    if pure:
+                                        flags += ('--listing-version=2', '--xref-instructions=true',
+                                                  '--instruction-records-output=records',
+                                                  '--dependency-manifest=deps')
+                                result = self.run_tool('xasm', source, pure_binary=pure, arguments=flags)
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual(result.stderr, b'')
+                                if pure and analysis:
+                                    records = json.loads((self.root / 'records').read_text())['records']
+                                    self.assertEqual([r['operand_value'] for r in records], [6, 5])
+                                    self.assertEqual([r['bytes'] for r in records], [[0xA5, 6], [0xA9, 5]])
+                                    self.assertEqual([r['referenced_symbols'] for r in records],
+                                                     [['box', 'py'], ['box', 'idx']])
+                                if not pure:
+                                    (self.root / 'output').rename(self.root / 'unit.o')
+                                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual((self.root / 'output').read_bytes(), expected)
+
+    def test_member_constant_collisions_in_aliases_and_expansions(self):
+        prefix = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                  '.union Choice\npoints .Point[3]\nraw .byte[6]\n.ends\n'
+                  'p .Point\nbox .Choice\npy=1\npoints=99\n')
+        bodies = (
+            '.word Alias\nAlias .equ box.points[py].py\n',
+            'Alias .equ box.points[py].py\n.word Alias\n',
+            '.macro Emit\n.word box.points[py].py\n.endm\nEmit\n',
+            '.rept 1\n.word box.points[py].py\n.endm\n',
+            '.proc Emit\n.word box.points[py].py\n.endp\n',
+            '.word box.points[py].py\npy=2\n.word box.points[py].py\n',
+            '.struc Named\ndefined .Point[3]\n.ends\n'
+            'v .Named\n.word v . defined[py].py\n',
+        )
+        suffixes = ('05 00', '05 00', '05 00', '05 00', '05 00', '05 00 07 00',
+                    '00 00 00 00 00 00 0B 00')
+        for body, suffix in zip(bodies, suffixes):
+            for pure in (False, True):
+                for debug in (False, True):
+                    with self.subTest(body=body, pure=pure, debug=debug):
+                        result = self.run_tool('xasm', prefix + body, pure_binary=pure,
+                                               arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        if not pure:
+                            (self.root / 'output').rename(self.root / 'unit.o')
+                            result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual((self.root / 'output').read_bytes(), bytes(8) + bytes.fromhex(suffix))
+        # An unused cyclic global with a member's name is not part of that access.
+        for pure in (False, True):
+            with self.subTest(unused_cycle=True, pure=pure):
+                result = self.run_tool('xasm', '.struc Point\npy .byte\n.ends\n'
+                                       'p .Point\npy .equ py\n.word p.py-p\n', pure_binary=pure)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertNotIn(b'circular', result.stderr)
+        # Previously an identifier-valued global could silently redirect a field
+        # token to another member, even when the written member did not exist.
+        for declaration in ('{name} .equ py', '.define {name} py', '{name}=py'):
+            for member in ('px', 'Other'):
+                for pure in (False, True):
+                    for debug in (False, True):
+                        with self.subTest(declaration=declaration, member=member, pure=pure, debug=debug):
+                            source = ('.struc Point\npx .byte\npy .byte\n.ends\np .Point\n'
+                                      + declaration.format(name=member) + '\n.word p.' + member + '\n')
+                            flags = ('--listing=listing.json', '--listing-format=json',
+                                     '--xref=xref.json', '--xref-data=true') + (('--debug',) if debug else ())
+                            result = self.run_tool('xasm', source, pure_binary=pure, arguments=flags)
+                            if member == 'Other':
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertIn(b"`Other' is not a member of `p'", result.stderr)
+                            else:
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual(result.stderr, b'')
+                                if not pure:
+                                    (self.root / 'output').rename(self.root / 'unit.o')
+                                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                                self.assertEqual((self.root / 'output').read_bytes(), bytes(4))
+
+    def test_invalid_members_are_not_hidden_by_global_constants(self):
+        prefix = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                  '.struc Box\npoints .Point[2]\n.ends\n'
+                  'p .Point\nbox .Box\nmissing=1\npoints=1\npy=1\n')
+        for expression, error in (
+                ('p.missing', b"`missing' is not a member of `p'"),
+                ('box.points[py].missing', b"`missing' is not a member"),
+                ('box.points[p.missing].py', b"`missing' is not a member of `p'")):
+            for pure in (False, True):
+                for debug in (False, True):
+                    with self.subTest(expression=expression, pure=pure, debug=debug):
+                        result = self.run_tool('xasm', prefix + '.word ' + expression + '\n',
+                                               pure_binary=pure, arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(error, result.stderr)
+
     def test_nested_member_indexes_resolve_in_the_callers_scope(self):
         types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
                  '.struc Box\nhead .byte\npoints .Point[2]\ntail .byte\n.ends\n')

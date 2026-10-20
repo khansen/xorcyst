@@ -35,6 +35,12 @@ ul.mark-bullet {list-style-type: disc}
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
 
+<h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
+
+<ul class="itemize mark-bullet">
+<li>Keeps dotted member names in their type&rsquo;s scope when substituting constants. A global <code class="code">.equ</code>, <code class="code">.define</code> or <code class="code">=</code> constant with the same name no longer replaces a field token or causes an assertion abort. Constants and nested member accesses inside array indexes still resolve in the caller&rsquo;s scope, including saved aliases and instruction analysis. Invalid members retain their located diagnostics. This deliberately corrects previously accepted identifier-alias collisions too: <code class="code">px .equ py</code> no longer redirects <code class="code">p.px</code> to <code class="code">p.py</code>, and an alias cannot make a nonexistent member valid. Such programs can emit corrected bytes or now fail with a member diagnostic.
+</li></ul>
+
 <h3 class="heading" id="Version-1_002e9_002e10"><span>Version 1.9.10<a class="copiable-link" href="#Version-1_002e9_002e10"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">

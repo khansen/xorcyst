@@ -1730,16 +1730,17 @@ typedef struct constant_expansion {
  * constant cache. Entries live on the C stack and are popped before returning. */
 static const constant_expansion *active_sizes = NULL;
 
-static astnode *substitute_defines_recursive(astnode *expr, const constant_expansion *parents, constant_cache *cache)
+static astnode *substitute_defines_recursive(astnode *expr, const constant_expansion *parents, constant_cache *cache, int member)
 {
     if (cache->failed) return expr;
     switch (astnode_get_type(expr)) {
         case ARITHMETIC_NODE:
-        substitute_defines_recursive(LHS(expr), parents, cache);
-        substitute_defines_recursive(RHS(expr), parents, cache);
+        substitute_defines_recursive(LHS(expr), parents, cache, 0);
+        substitute_defines_recursive(RHS(expr), parents, cache, 0);
         break;
 
         case IDENTIFIER_NODE: {
+            if (member) break; /* Resolve member names in their type, not as globals. */
             symtab_entry *symbol = symtab_lookup(expr->ident);
             const constant_expansion *seen;
             constant_expansion current = {symbol, parents};
@@ -1763,7 +1764,7 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
                     return zero;
                 }
             }
-            expr = substitute_defines_recursive(substitute_ident(expr), &current, cache);
+            expr = substitute_defines_recursive(substitute_ident(expr), &current, cache, 0);
             expr = fold_constants(expr, FOLD_PC_NO);
             if (err_count != errors_before) cache->failed = 1;
             if (err_count == errors_before && astnode_is_type(expr, INTEGER_NODE))
@@ -1792,7 +1793,7 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
             /* Copied layouts can contain constants or further sizeof uses.
              * Keep the size active until the entire copy has been reduced. */
             if (err_count == errors_before)
-                expr = substitute_defines_recursive(expr, parents, cache);
+                expr = substitute_defines_recursive(expr, parents, cache, 0);
             active_sizes = current.parent;
             if (err_count != errors_before) cache->failed = 1;
             break;
@@ -1821,7 +1822,7 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
                     return replace_constant_value(resolved, 0);
                 }
             }
-            expr = substitute_defines_recursive(resolved, &current, cache);
+            expr = substitute_defines_recursive(resolved, &current, cache, 0);
             expr = fold_constants(expr, FOLD_PC_NO);
             if (err_count != errors_before) cache->failed = 1;
             /* Repeated references to earlier offsets must not expand the
@@ -1840,16 +1841,18 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
         {
             astnode *id = LHS(expr);
             /* defined() inspects the spelling, not a constant's value. */
-            if (!(astnode_is_type(id, IDENTIFIER_NODE) && strcasecmp(id->ident, "defined") == 0)) {
-                substitute_defines_recursive(id, parents, cache);
-                substitute_defines_recursive(RHS(expr), parents, cache);
+            if (member || !(astnode_is_type(id, IDENTIFIER_NODE) && strcasecmp(id->ident, "defined") == 0)) {
+                substitute_defines_recursive(id, parents, cache, member);
+                substitute_defines_recursive(RHS(expr), parents, cache, 0);
             }
         }
         break;
 
         case DOT_NODE:
-        substitute_defines_recursive(LHS(expr), parents, cache);
-        substitute_defines_recursive(RHS(expr), parents, cache);
+        /* A dotted chain keeps member names, including indexed member names.
+         * INDEX arguments are ordinary expressions in the caller's scope. */
+        substitute_defines_recursive(LHS(expr), parents, cache, member);
+        substitute_defines_recursive(RHS(expr), parents, cache, 1);
         break;
 
         default:
@@ -1862,7 +1865,7 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
 static astnode *substitute_defines(astnode *expr)
 {
     constant_cache cache = {NULL, 0, 0, 0};
-    expr = substitute_defines_recursive(expr, NULL, &cache);
+    expr = substitute_defines_recursive(expr, NULL, &cache, 0);
     free(cache.entries);
     /* Do not leave an unexpanded constant that validate_ref would revisit
      * forever after an expansion failure. The diagnostic already failed it. */
