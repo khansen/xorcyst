@@ -1,3 +1,18 @@
+Version 1.9.10:
+
+- Report listing v2 instruction addressing modes from the final opcode.
+  Late zero-page shortening now agrees with the bytes and instruction records.
+  Operandless asl, lsr, rol and ror report accumulator rather than implied.
+- Exclude dotted and scoped member names from global xref references, data
+  references and instruction-record reference lists. Preserve base names and
+  genuine references inside indexes, along with expressions and source locations.
+- Apply the scoped-name rule to enums and records too: Color::Green references
+  Color, while bare Green references Green and retains its enum-member binding.
+  Names used only as scoped members no longer create global xref symbols.
+- Preserve assembled binaries, object files, text listings and v1 listing
+  metadata. No listing, instruction-record or object-format migration is included.
+  Remaining limitations, including tied-reference ordering, are tracked in TODO.
+
 Version 1.9.9:
 
 - Restore pure-binary procedure and variable addresses lost in 1.7.0,

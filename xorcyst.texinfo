@@ -38,7 +38,7 @@
 @c %**end of header
 
 @copying
-This is the manual for The XORcyst version 1.9.9.
+This is the manual for The XORcyst version 1.9.10.
 
 Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @end copying
@@ -79,7 +79,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
-@heading Unreleased
+@heading Version 1.9.10
 
 @itemize
 @item Cross-reference symbol and reference tables, data references and instruction records no longer treat dotted or scoped member names as global symbol references. For example, @code{p.px} references @code{p}, not a separate global @code{px}. This also applies to enum values and record fields: @code{Color::Green} retains @code{Color}, while bare @code{Green} retains @code{Green} and its enum-member binding in instruction terms. A member used only with @code{::} no longer creates its own global xref symbol. References inside member array indexes are retained, including nested member expressions. Written expressions and their source locations are unchanged.
