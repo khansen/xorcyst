@@ -789,14 +789,20 @@ calculation. Late binary storage is kept separate, which can add listing rows
 compared with older versions that merged these statements. Object-mode
 merging and link-time count limitations are unchanged.
 </p>
-<p>Equates are an exception to late PC evaluation: <code class="code">.equ $</code> and <code class="code">= $</code>
-capture the first-pass PC. If earlier storage has an unresolved size, this can
-be a provisional address, even when the final storage count is valid. For
-example, after <code class="code">.byte 1</code> and <code class="code">.dsb Z</code>, an equate can capture 1 when
-<code class="code">Z</code> is defined as 2 later; the final address is 3. This also affects equates
-after late-zero omitted structure arrays. Use a label at the desired position,
-or define storage counts before their use. PC-based equates used as counts
-have already lost their <code class="code">$</code> expression before late validation runs.
+<p>Equates capture <code class="code">$</code> during the first pass. After unresolved storage,
+deferred field padding or user-type storage that has not yet been lowered to
+its byte extent, that position is uncertain: <code class="code">.equ</code>, <code class="code">.define</code> and
+<code class="code">=</code> now report <code class="code">cannot capture $ after unresolved storage; use a label</code>.
+For example, after <code class="code">.byte 1</code> and <code class="code">.dsb Z</code>, an equate used to capture 1
+when a later definition made <code class="code">Z</code> equal to 2 and the final address was 3.
+This is now an error, even if the count becomes known before the equate:
+the first-pass prefix has not been recalculated. Use a label at the desired
+position, or define counts before allocating storage. A literal one-byte
+user type has an already accurate first-pass extent and remains supported.
+The uncertainty belongs to the active segment and persists until an absolute
+<code class="code">.org</code>; <code class="code">.org $+offset</code> cannot restore it. Other first-pass PC uses
+and layout changes such as instruction shortening remain separate limitations
+tracked in <samp class="file">TODO</samp>.
 </p>
 </div>
 <div class="subsection-level-extent" id="Defining-data-of-user_002ddefined-types">

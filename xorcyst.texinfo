@@ -79,6 +79,12 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Unreleased
+
+@itemize
+@item Rejects @code{$} in @code{.equ}, @code{.define} and @code{=} expressions after earlier storage has left the first-pass position uncertain. This deliberately replaces provisional-address captures with a located error in both output modes, preserving existing outputs. Deferred field padding and user-type storage whose byte extent has not been lowered are included. The check is conservative: a later count definition does not recalculate the prefix. Use a label for the final address, or define counts before allocating storage. Code and data segments are tracked separately; an absolute @code{.org} restores a known position, while a PC-relative origin does not.
+@end itemize
+
 @heading Version 1.9.11
 
 @itemize
@@ -1152,14 +1158,20 @@ calculation. Late binary storage is kept separate, which can add listing rows
 compared with older versions that merged these statements. Object-mode
 merging and link-time count limitations are unchanged.
 
-Equates are an exception to late PC evaluation: @code{.equ $} and @code{= $}
-capture the first-pass PC. If earlier storage has an unresolved size, this can
-be a provisional address, even when the final storage count is valid. For
-example, after @code{.byte 1} and @code{.dsb Z}, an equate can capture 1 when
-@code{Z} is defined as 2 later; the final address is 3. This also affects equates
-after late-zero omitted structure arrays. Use a label at the desired position,
-or define storage counts before their use. PC-based equates used as counts
-have already lost their @code{$} expression before late validation runs.
+Equates capture @code{$} during the first pass. After unresolved storage,
+deferred field padding or user-type storage that has not yet been lowered to
+its byte extent, that position is uncertain: @code{.equ}, @code{.define} and
+@code{=} now report @code{cannot capture $ after unresolved storage; use a label}.
+For example, after @code{.byte 1} and @code{.dsb Z}, an equate used to capture 1
+when a later definition made @code{Z} equal to 2 and the final address was 3.
+This is now an error, even if the count becomes known before the equate:
+the first-pass prefix has not been recalculated. Use a label at the desired
+position, or define counts before allocating storage. A literal one-byte
+user type has an already accurate first-pass extent and remains supported.
+The uncertainty belongs to the active segment and persists until an absolute
+@code{.org}; @code{.org $+offset} cannot restore it. Other first-pass PC uses
+and layout changes such as instruction shortening remain separate limitations
+tracked in @file{TODO}.
 
 @subsection Defining data of user-defined types
 
@@ -1815,6 +1827,11 @@ you can achieve the same result from the statement
 @item cannot assign to non-constant symbol `@var{identifier}'
 The @code{=} operator can define or replace constants only. Choose a different
 name instead of assigning to a label, procedure, type, macro or data variable.
+
+@item cannot capture $ after unresolved storage; use a label
+An equate would capture an uncertain first-pass position after deferred storage.
+Use a label for the final address, or define the storage count before allocating
+it. Defining the count later does not recompute the earlier prefix.
 
 @item cannot expand `@var{identifier}'; not a macro
 Make sure @var{identifier} is a macro and not a label, constant or other type of symbol.
