@@ -2582,6 +2582,7 @@ typedef struct tag_xref_data_directive_reference {
 typedef struct tag_xref_ref {
     char *symbol;
     location use_loc;
+    int insertion_index;
     int has_cpu_address;
     int cpu_address;
     int has_output_offset;
@@ -3152,6 +3153,7 @@ static int add_xref_reference(xref_build_context *ctx,
 
     r = &ctx->refs[ctx->ref_count++];
     memset(r, 0, sizeof(*r));
+    r->insertion_index = ctx->ref_count - 1;
     r->symbol = xstrdup(symbol);
     r->use_loc = *use_loc;
     r->has_cpu_address = meta->has_cpu_address;
@@ -3900,6 +3902,7 @@ static int xref_ref_compare(const void *a, const void *b)
 {
     const xref_ref *lhs = (const xref_ref *)a;
     const xref_ref *rhs = (const xref_ref *)b;
+    int cmp;
     if (lhs->has_cpu_address != rhs->has_cpu_address) {
         return rhs->has_cpu_address - lhs->has_cpu_address;
     }
@@ -3915,7 +3918,19 @@ static int xref_ref_compare(const void *a, const void *b)
     if (lhs->has_output_offset && rhs->has_output_offset && lhs->output_offset != rhs->output_offset) {
         return (lhs->output_offset < rhs->output_offset) ? -1 : 1;
     }
-    return strcmp(lhs->symbol, rhs->symbol);
+    cmp = strcmp(lhs->symbol, rhs->symbol);
+    if (cmp != 0) return cmp;
+    /* qsort is not stable. Order tied uses by their published location, then
+     * collection order for repeated expansions at the very same location. */
+    cmp = strcmp(lhs->use_loc.file != NULL ? lhs->use_loc.file : "",
+                 rhs->use_loc.file != NULL ? rhs->use_loc.file : "");
+    if (cmp != 0) return cmp;
+    if (lhs->use_loc.first_line != rhs->use_loc.first_line)
+        return lhs->use_loc.first_line < rhs->use_loc.first_line ? -1 : 1;
+    if (lhs->use_loc.first_column != rhs->use_loc.first_column)
+        return lhs->use_loc.first_column < rhs->use_loc.first_column ? -1 : 1;
+    return (lhs->insertion_index > rhs->insertion_index)
+         - (lhs->insertion_index < rhs->insertion_index);
 }
 
 /* Sorted-key helpers backing the owner index. Owner lookup used to be an

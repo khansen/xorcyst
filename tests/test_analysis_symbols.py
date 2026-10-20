@@ -163,6 +163,59 @@ class AnalysisSymbols(unittest.TestCase):
                         [['Alias']], [['Alias']], {'p', 'box', 'idx', 'Alias'},
                         plain_symbols={'p', 'box', 'idx'} if declaration.startswith('Alias =') else None)
 
+    def test_tied_references_keep_every_use_in_source_order(self):
+        repeated = '+'.join(['u'] * 10)
+        bodies = (f'.word {repeated}\nlda #<({repeated})\n',
+                  f'.rept 2\n.word {repeated}\n.endm\n',
+                  f'.macro Emit\n.word {repeated}\n.endm\nEmit\nEmit\n')
+        for body in bodies:
+            for pure in (False, True):
+                for debug in (False, True):
+                    rows_by_format = {}
+                    for fmt in ('json', 'text', 'csv'):
+                        with self.subTest(body=body, pure=pure, debug=debug, fmt=fmt), tempfile.TemporaryDirectory() as d:
+                            root = Path(d)
+                            (root / 'input.asm').write_text('.public u\nu: nop\n' + body)
+                            flags = (['--pure-binary'] if pure else []) + (['--debug'] if debug else [])
+                            result = subprocess.run([str(XASM), 'input.asm', '-o', 'output',
+                                                     '--xref=xref', f'--xref-format={fmt}', *flags],
+                                                    cwd=root, capture_output=True, timeout=10)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr, b'')
+                            if fmt == 'json':
+                                refs = json.loads((root / 'xref').read_text())['references']
+                                rows = [(r['symbol'], r['file'], r['line'], r['column']) for r in refs]
+                            elif fmt == 'csv':
+                                with (root / 'xref.refs.csv').open() as stream:
+                                    rows = [(r['symbol'], r['file'], int(r['line']), int(r['column']))
+                                            for r in csv.DictReader(stream)]
+                            else:
+                                lines = (root / 'xref').read_text().split('REFERENCES\n')[1].splitlines()
+                                rows = []
+                                for line in lines:
+                                    symbol, loc, *_ = line.split(',')
+                                    file, row, column = loc.rsplit(':', 2)
+                                    rows.append((symbol, file, int(row), int(column)))
+                            self.assertEqual(len(rows), 20)
+                            self.assertTrue(all(r[0] == 'u' for r in rows))
+                            # Each directive has ten uses with the same primary
+                            # address/offset/symbol keys. Preserve duplicates.
+                            for offset in (0, 10):
+                                group = rows[offset:offset + 10]
+                                self.assertEqual(group, sorted(group))
+                                if '.macro' not in body:
+                                    self.assertEqual(len({r[3] for r in group}), 10)
+                            rows_by_format[fmt] = rows
+                            if not pure:
+                                (root / 'link').write_text('link{file=output,origin=0}\n')
+                                result = subprocess.run([str(XLNK), 'link', '-o', 'linked'],
+                                                        cwd=root, capture_output=True, timeout=10)
+                                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            expected = bytes.fromhex('EA 00 00 A9 00') if 'lda' in body else bytes.fromhex('EA 00 00 00 00')
+                            self.assertEqual((root / ('output' if pure else 'linked')).read_bytes(), expected)
+                    self.assertEqual(rows_by_format.get('json'), rows_by_format.get('text'))
+                    self.assertEqual(rows_by_format.get('json'), rows_by_format.get('csv'))
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='xasm-symbols-')
         self.addCleanup(temporary.cleanup)
