@@ -1691,6 +1691,43 @@ static char *copy_data_operand_source(const astnode *data, int operand_index)
     return out;
 }
 
+/* In a.b[i].c, b and c name members, while a and every name in i
+ * are ordinary references. DOT trees are right-nested; an INDEX on a
+ * member carries that role only through its left child. */
+static int is_member_identifier(const astnode *expr)
+{
+    const astnode *parent;
+    while ((parent = expr->parent) != NULL) {
+        switch (astnode_get_type(parent)) {
+            case DOT_NODE:
+            case SCOPE_NODE:
+                if (expr == RHS(parent)) return 1;
+                break;
+            case INDEX_NODE:
+                if (expr == RHS(parent)) return 0;
+                break;
+            default:
+                return 0;
+        }
+        expr = parent;
+    }
+    return 0;
+}
+
+static int expression_has_member_token(const astnode *expr, const char *token,
+                                       size_t token_length)
+{
+    const astnode *child;
+    if (expr == NULL) return 0;
+    if (astnode_is_type(expr, IDENTIFIER_NODE) && is_member_identifier(expr)
+        && strlen(expr->string) == token_length
+        && strncmp(expr->string, token, token_length) == 0) return 1;
+    for (child = expr->first_child; child != NULL; child = child->next_sibling) {
+        if (expression_has_member_token(child, token, token_length)) return 1;
+    }
+    return 0;
+}
+
 static int source_token_is_reference(const xref_data_provenance *provenance,
                                      const char *token,
                                      size_t token_length)
@@ -1704,7 +1741,11 @@ static int source_token_is_reference(const xref_data_provenance *provenance,
         }
     }
     return source_token_matches(token, token_length, "SIZEOF")
-        || source_token_matches(token, token_length, "MASK");
+        || source_token_matches(token, token_length, "MASK")
+        /* Members remain part of the written expression, even though they
+         * no longer belong in referenced_symbols. Preserve source spelling. */
+        || expression_has_member_token(provenance->original_expression,
+                                       token, token_length);
 }
 
 static int source_span_matches_operand(const xref_data_provenance *provenance,
@@ -1783,10 +1824,11 @@ static int collect_provenance_symbols(astnode *expr, xref_data_provenance *p)
     if (expr == NULL) {
         return 1;
     }
-    if (astnode_is_type(expr, IDENTIFIER_NODE)
+    if ((astnode_is_type(expr, IDENTIFIER_NODE)
         || astnode_is_type(expr, LOCAL_ID_NODE)
         || astnode_is_type(expr, FORWARD_BRANCH_NODE)
-        || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
+        || astnode_is_type(expr, BACKWARD_BRANCH_NODE))
+        && !is_member_identifier(expr)) {
         if (!add_provenance_symbol(p, expr->string)) {
             return 0;
         }
@@ -3307,10 +3349,11 @@ static int collect_expr_refs_recursive(astnode *expr, xref_build_context *ctx, c
     if (expr == NULL) {
         return 1;
     }
-    if (astnode_is_type(expr, IDENTIFIER_NODE)
+    if ((astnode_is_type(expr, IDENTIFIER_NODE)
         || astnode_is_type(expr, LOCAL_ID_NODE)
         || astnode_is_type(expr, FORWARD_BRANCH_NODE)
-        || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
+        || astnode_is_type(expr, BACKWARD_BRANCH_NODE))
+        && !is_member_identifier(expr)) {
         if (!add_xref_reference(ctx, expr->string, &expr->loc, meta)) {
             return 0;
         }

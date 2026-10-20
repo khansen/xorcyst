@@ -2,6 +2,7 @@
 """Analysis symbol and scope contracts, independent of debugger exports."""
 import csv
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -9,9 +10,159 @@ import tempfile
 import unittest
 
 XASM = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / 'xasm'
+XLNK = Path(os.environ.get('XLNK', XASM.parent / 'xlnk')).resolve()
 
 
 class AnalysisSymbols(unittest.TestCase):
+    MEMBER_DECLARATIONS = ('.struc Point\npx .byte\npy .byte\n.ends\n'
+                           '.struc Box\npoints .Point[4]\ntail .byte\n.ends\n'
+                           'p .Point {1,2}\nbox .Box {}\nidx .Point {}\n')
+    MEMBER_BYTES = bytes.fromhex('01 02') + bytes(11)
+
+    def check_member_references(self, source, expected, data_refs, record_refs,
+                                symbol_names, data_expressions=None, plain_symbols=None):
+        # Text/CSV have no data-provenance option: folded type names and
+        # volatile aliases are absent there even before this fix.
+        if plain_symbols is None:
+            plain_symbols = symbol_names
+        for pure in (False, True):
+            for debug in (False, True):
+                for fmt in ('json', 'text', 'csv'):
+                    with self.subTest(pure=pure, debug=debug, fmt=fmt), tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory)
+                        (root / 'input.asm').write_text(source)
+                        flags = ['--pure-binary'] if pure else []
+                        if debug:
+                            flags += ['--debug']
+                        if fmt == 'json':
+                            flags += ['--xref-data=true']
+                        if pure and fmt == 'json':
+                            flags += ['--xref-instructions=true', '--instruction-records-output=records',
+                                      '--dependency-manifest=deps']
+                        result = subprocess.run([str(XASM), 'input.asm', '-o', 'output',
+                            '--xref=xref', f'--xref-format={fmt}', *flags],
+                            cwd=root, capture_output=True, timeout=10)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'')
+                        if pure:
+                            binary = (root / 'output').read_bytes()
+                        else:
+                            (root / 'link').write_text('link{file=output,origin=0}\n')
+                            linked = subprocess.run([str(XLNK), 'link', '-o', 'linked'],
+                                                    cwd=root, capture_output=True, timeout=10)
+                            self.assertEqual(linked.returncode, 0, linked.stderr.decode())
+                            binary = (root / 'linked').read_bytes()
+                        self.assertEqual(binary, expected)
+                        if fmt == 'json':
+                            facts = json.loads((root / 'xref').read_text())
+                            self.assertEqual({s['name'] for s in facts['symbols']}, symbol_names)
+                            # Original data operands are collected even after their
+                            # real expressions have folded to offsets or literals.
+                            data = facts['data_directive_references']
+                            self.assertEqual([r['referenced_symbols'] for r in data], data_refs)
+                            if data_expressions is not None:
+                                self.assertEqual([r['expression'] for r in data], data_expressions)
+                            refs = [r for r in facts['references'] if r['opcode'] is None]
+                            self.assertEqual({r['symbol'] for r in refs},
+                                             {name for names in data_refs for name in names})
+                            if pure:
+                                records = facts['instruction_records']['records']
+                                standalone = json.loads((root / 'records').read_text())['records']
+                                self.assertEqual(standalone, records)
+                                self.assertEqual([r['referenced_symbols'] for r in records], record_refs)
+                                for record, names in zip(records, record_refs):
+                                    offset = record['output_offset']
+                                    self.assertEqual(bytes(record['bytes']),
+                                                     binary[offset:offset + record['size']])
+                                    for term in record['additive_terms']['terms']:
+                                        if 'referenced_symbols' in term:
+                                            self.assertTrue(set(term['referenced_symbols']) <= set(names))
+                        elif fmt == 'csv':
+                            with (root / 'xref.symbols.csv').open() as stream:
+                                self.assertEqual({r['name'] for r in csv.DictReader(stream)}, plain_symbols)
+                        else:
+                            table = (root / 'xref').read_text().split('SYMBOLS\n')[1].split('REFERENCES\n')[0]
+                            self.assertEqual({line.split(',')[0] for line in table.splitlines() if line}, plain_symbols)
+
+    def test_member_names_are_not_global_references(self):
+        cases = [
+            ('p.px', 0, ['p']),
+            ('p.py', 1, ['p']),
+            ('box.points[1].py', 5, ['box']),
+            ('box.points[(idx.py-idx)].px', 4, ['box', 'idx']),
+            ('box.points[py].px', 2, ['box', 'py']),
+            ('box.points[box.points[1].py-box].px', 8, ['box']),
+            ('box.points[(py+0)].px', 2, ['box', 'py']),
+            ('Point::py', 1, ['Point']),
+            ('p.py+py', 1, ['p', 'py']),
+        ]
+        for expression, value, refs in cases:
+            with self.subTest(expression=expression):
+                self.check_member_references(
+                    '.public py\npy:\n' + self.MEMBER_DECLARATIONS +
+                    f'.word {expression}\nlda #<{expression}\n',
+                    self.MEMBER_BYTES + value.to_bytes(2, 'little') + bytes((0xA9, value)),
+                    [refs], [refs], {'p', 'box', 'idx', 'py'} | set(refs), [expression],
+                    plain_symbols={'p', 'box', 'idx', 'py'})
+
+    def test_member_names_do_not_add_references_to_same_named_labels(self):
+        source = self.MEMBER_DECLARATIONS + 'px: .byte 9\n.word p.px\n.word px\nlda #<p.px\n'
+        self.check_member_references(source, self.MEMBER_BYTES + bytes.fromhex('09 00 00 0D 00 A9 00'),
+                                     [['p'], ['px']], [['p']], {'p', 'box', 'idx', 'px'},
+                                     ['p.px', 'px'])
+        self.source.write_text(source)
+        facts = self.export(extra=('--xref-data=true',))
+        px_refs = [r for r in facts['references'] if r['symbol'] == 'px']
+        self.assertEqual(len(px_refs), 1)
+        self.assertEqual(px_refs[0]['line'], source.splitlines().index('.word px') + 1)
+        self.assertEqual(px_refs[0]['column'], 7)
+
+    def test_enum_and_record_member_references_remain_scoped(self):
+        enum_source = ('.enum Color\nRed = 1\nGreen\n.ende\n'
+                       '.word Color::Red,Color::Green,Green\n'
+                       'lda #Color::Red\nlda #Color::Green\nlda #Green\n')
+        self.check_member_references(
+            enum_source, bytes.fromhex('01 00 02 00 02 00 A9 01 A9 02 A9 02'),
+            [['Color'], ['Color'], ['Green']], [['Color'], ['Color'], ['Green']],
+            {'Color', 'Green'}, ['Color::Red', 'Color::Green', 'Green'], plain_symbols=set())
+        self.source.write_text(enum_source)
+        facts = self.export(extra=('--xref-data=true', '--xref-instructions=true'))
+        bare_term = facts['instruction_records']['records'][-1]['additive_terms']['terms'][0]
+        self.assertEqual(bare_term['binding']['kind'], 'enum_member')
+        self.assertEqual(bare_term['binding']['enum'], 'Color')
+        self.assertEqual(bare_term['name'], 'Green')
+        self.check_member_references(
+            '.record Flags hi:3,lo:5\n.word mask Flags::hi,mask Flags::lo\n'
+            'lda #mask Flags::hi\nlda #mask Flags::lo\n',
+            bytes.fromhex('E0 00 1F 00 A9 E0 A9 1F'),
+            [['Flags'], ['Flags']], [['Flags'], ['Flags']], {'Flags'},
+            ['MASK Flags::hi', 'MASK Flags::lo'], plain_symbols=set())
+
+    def test_member_references_survive_expansion_and_scopes(self):
+        body = '.word p.py\nlda #<box.points[1].py\n'
+        for wrapper in ('{body}', '.macro Emit\n{body}.endm\nEmit\n',
+                        '.rept 2\n{body}.endm\n', '.proc Routine\n{body}.endp\n'):
+            with self.subTest(wrapper=wrapper):
+                count = 2 if wrapper.startswith('.rept') else 1
+                names = {'p', 'box', 'idx'}
+                if wrapper.startswith('.proc'):
+                    names.add('Routine')
+                self.check_member_references(self.MEMBER_DECLARATIONS + wrapper.format(body=body),
+                    self.MEMBER_BYTES + bytes.fromhex('01 00 A9 05') * count,
+                    [['p']] * count, [['box']] * count, names)
+        # Aliases remain the written references; their member expressions must
+        # still evaluate correctly, before and after the definition.
+        for declaration in ('Alias .equ p.py\n', '.define Alias p.py\n', 'Alias = p.py\n'):
+            for forward in (False, True):
+                if forward and declaration.startswith('Alias ='):
+                    continue
+                with self.subTest(declaration=declaration, forward=forward):
+                    body = '.word Alias\nlda #<Alias\n'
+                    source = self.MEMBER_DECLARATIONS + (body + declaration if forward else declaration + body)
+                    self.check_member_references(source, self.MEMBER_BYTES + bytes.fromhex('01 00 A9 01'),
+                        [['Alias']], [['Alias']], {'p', 'box', 'idx', 'Alias'},
+                        plain_symbols={'p', 'box', 'idx'} if declaration.startswith('Alias =') else None)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='xasm-symbols-')
         self.addCleanup(temporary.cleanup)
