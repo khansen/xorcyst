@@ -13,6 +13,79 @@ XASM = Path(sys.argv.pop(1)).resolve()
 
 
 class ListingOffsets(unittest.TestCase):
+    def test_final_addressing_modes_match_bytes_and_instruction_records(self):
+        # Forward RAM addresses force layout-time shortening, rather than
+        # choosing zero page while translating a literal operand.
+        cases = [
+            ('lda Target', 0xA5, 'zeropage', 0xAD, 'absolute'),
+            ('lda Target,x', 0xB5, 'zeropage_x', 0xBD, 'absolute_x'),
+            ('ldx Target,y', 0xB6, 'zeropage_y', 0xBE, 'absolute_y'),
+            ('sta Target', 0x85, 'zeropage', 0x8D, 'absolute'),
+            ('sta Target,x', 0x95, 'zeropage_x', 0x9D, 'absolute_x'),
+            ('stx Target,y', 0x96, 'zeropage_y', None, 'zeropage_y'),
+            ('inc Target,x', 0xF6, 'zeropage_x', 0xFE, 'absolute_x'),
+            ('lda.w Target', 0xAD, 'absolute', 0xAD, 'absolute'),
+            ('lda Target,y', 0xB9, 'absolute_y', 0xB9, 'absolute_y'),
+            ('jmp Target', 0x4C, 'absolute', 0x4C, 'absolute'),
+            ('jsr Target', 0x20, 'absolute', 0x20, 'absolute'),
+            ('jmp [Target]', 0x6C, 'indirect', 0x6C, 'indirect'),
+            ('lda #<Target', 0xA9, 'immediate', 0xA9, 'immediate'),
+            ('lda [Target,x]', 0xA1, 'preindexed_indirect', None, 'preindexed_indirect'),
+            ('lda [Target],y', 0xB1, 'postindexed_indirect', None, 'postindexed_indirect'),
+        ]
+        for address in (0x10, 0xFF, 0x100):
+            chosen = [c for c in cases if address < 256 or c[3] is not None]
+            body = '\n'.join(c[0] for c in chosen)
+            # Add modes without memory operands and a backward branch.
+            body += '\nHere: nop\nasl a\nbne Here\nasl\nlsr\nrol\nror\n'
+            expected = bytearray()
+            expected_modes, parsed_modes = [], []
+            for _, short_op, short_mode, wide_op, parsed_mode in chosen:
+                mode = short_mode if address < 256 else parsed_mode
+                expected.append(short_op if address < 256 else wide_op)
+                expected.append(address & 255)
+                if mode in ('absolute', 'absolute_x', 'absolute_y', 'indirect'):
+                    expected.append(address >> 8)
+                expected_modes.append(mode)
+                parsed_modes.append(parsed_mode)
+            expected.extend(bytes.fromhex('EA 0A D0 FC 0A 4A 2A 6A'))
+            expected_modes += ['implied', 'accumulator', 'relative'] + ['accumulator'] * 4
+            parsed_modes += ['implied', 'accumulator', 'relative'] + ['implied'] * 4
+            for debug in (False, True):
+                for version in (1, 2):
+                    formats = []
+                    for fmt in ('json', 'ndjson'):
+                        with self.subTest(address=address, debug=debug, version=version, fmt=fmt), tempfile.TemporaryDirectory() as directory:
+                            root = Path(directory)
+                            (root / 'input.asm').write_text('.org $8000\n' + body +
+                                f'.dataseg\n.org ${address:X}\nTarget: .dsb 2\n.codeseg\n')
+                            result = subprocess.run([str(XASM), '--pure-binary', 'input.asm', '-o', 'output.bin',
+                                '--listing=listing', f'--listing-format={fmt}', f'--listing-version={version}',
+                                '--instruction-records-output=records.json', '--dependency-manifest=deps.json',
+                                *(['--debug'] if debug else [])], cwd=root, capture_output=True, timeout=10)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr, b'')
+                            self.assertEqual((root / 'output.bin').read_bytes(), expected)
+                            text = (root / 'listing').read_text()
+                            rows = json.loads(text)['records'] if fmt == 'json' else [json.loads(line) for line in text.splitlines()]
+                            instructions = [r for r in rows if r['addressing_mode'] is not None]
+                            formats.append(instructions)
+                            self.assertEqual([r['addressing_mode'] for r in instructions],
+                                             expected_modes if version == 2 else parsed_modes)
+                            records = json.loads((root / 'records.json').read_text())['records']
+                            self.assertEqual([r['addressing_mode'] for r in records], expected_modes)
+                            self.assertEqual(len(instructions), len(records))
+                            for row, record in zip(instructions, records):
+                                offset = record['output_offset']
+                                data = bytes(record['bytes'])
+                                self.assertEqual(data, expected[offset:offset + len(data)])
+                                self.assertEqual(row['bytes_hex'], [f'{b:02X}' for b in data])
+                                if version == 2:
+                                    self.assertEqual(row['byte_count'], len(data))
+                                    self.assertEqual(row['output_offset_start'], offset)
+                                    self.assertEqual(row['addressing_mode'], record['addressing_mode'])
+                    self.assertEqual(formats[0], formats[1])
+
     def test_version2_numeric_char_data_and_instruction_joins(self):
         declarations = """.struc Text
 letter .char

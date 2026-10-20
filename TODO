@@ -27,9 +27,6 @@ Compatibility planning:
 
 Known defects and follow-ups:
 
-- Listing v2 can report an absolute addressing_mode for an instruction shortened
-  to zero page during final binary layout, even when its bytes and size are
-  correct. Derive the displayed mode from the emitted opcode.
 - Xref can include member names as phantom global symbols with no definition
   (for example, px from .word p.px). Keep member names out of global references.
 - Late word instruction operands outside -32768..65535 still warn and truncate

@@ -801,7 +801,11 @@ static int list_instruction(astnode *instr, void *arg, astnode **next)
     int addr = get_current_pc();
     int count = 0;
     const char *opcode_name = opcode_to_string(op);
-    const char *mode_name = addressing_mode_name(instr->instr.mode);
+    /* V2 describes the emitted instruction, including late zero-page
+     * shortening. V1 retains its historical parsed-mode metadata. */
+    const char *mode_name = addressing_mode_name(current_listing_version == 2
+                                                ? opcode_addressing_mode(op)
+                                                : instr->instr.mode);
 
     (void)arg;
     (void)next;

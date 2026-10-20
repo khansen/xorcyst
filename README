@@ -172,6 +172,9 @@ like `--listing-format`; `--no-warn` suppresses this warning.
 
 Rows retain the source fields (`file`, `line`, `column`, `source_text`),
 `directive_or_opcode`, `addressing_mode`, and `continuation_of_record`.
+For instructions, version 2's `addressing_mode` describes the final opcode,
+including zero-page shortening during layout, and agrees with instruction
+records. Version 1 retains its historical parsed-mode metadata.
 Data and included binaries remain split into rows of at most four bytes;
 the continuation flag marks subsequent rows of the same statement. Labels,
 segment switches, and `.ORG` have zero length. Segment-switch rows describe
