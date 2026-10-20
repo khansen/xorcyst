@@ -340,18 +340,16 @@ class FieldInitializers(unittest.TestCase):
                     if not pure: output = self.link(output)
                     self.assertEqual(output.read_bytes(), bytes.fromhex('ea 00 02 00'))
 
-    def test_pc_equates_after_deferred_storage_document_provisional_values(self):
-        # Known limitation: equates fold $ in pass 1, before deferred sizes
-        # settle. Pin this separately from the label-based workaround; these
-        # provisional equate values are NOT the desired final addresses.
+    def test_pc_equates_after_deferred_storage_require_final_position_labels(self):
+        # Equates cannot safely capture a provisional PC; labels resolve at layout.
         types = ('.struc Inner\nv .byte\nw .byte\n.ends\n.struc S\n'
                  'hd .byte\nitems .Inner[Z]\ntl .byte\n.ends\n')
-        cases = ((types + '.S {$11}\n', 'Z .equ 0\n', b'\x11\0', 4),
-                 (types + 'L1:\nL2:\n.S {$11}\n', 'Z .equ L2-L1\n', b'\x11\0', 4),
+        cases = ((types + '.S {$11}\n', 'Z .equ 0\n', b'\x11\0'),
+                 (types + 'L1:\nL2:\n.S {$11}\n', 'Z .equ L2-L1\n', b'\x11\0'),
                  ('.struc S\nhd .byte\nitems .byte[Z]\ntl .byte\n.ends\n.S {$11}\n',
-                  'Z .equ 3\n', b'\x11' + bytes(4), 2),
-                 ('.byte 1\n.dsb Z\n', 'Z .equ 2\n', b'\1\0\0', 1))
-        for case, (body, definition, prefix, provisional) in enumerate(cases):
+                  'Z .equ 3\n', b'\x11' + bytes(4)),
+                 ('.byte 1\n.dsb Z\n', 'Z .equ 2\n', b'\1\0\0'))
+        for case, (body, definition, prefix) in enumerate(cases):
             for binding in ('.equ $', '= $', 'label'):
                 here = 'Here: .word Here\n' if binding == 'label' else f'Here {binding}\n.word Here\n'
                 for pure in (False, True):
@@ -360,12 +358,18 @@ class FieldInitializers(unittest.TestCase):
                             with self.subTest(case=case, binding=binding, pure=pure, debug=debug, listing=listing):
                                 options = ['--debug'] if debug else []
                                 if listing: options += [f'--listing={self.root}/pc-equ-{case}-{binding}-{pure}-{debug}.txt']
+                                binary = self.root / ("output.bin" if pure else "output.o")
+                                binary.write_bytes(b"previous output")
                                 result, output = self.assemble(body + here + 'Lbl: .word Lbl\n' + definition,
-                                                              pure_binary=pure, options=options, fresh_output=True)
+                                                              pure_binary=pure, options=options)
+                                if binding != "label":
+                                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                    self.assertIn(b"cannot capture $ after unresolved storage; use a label", result.stderr)
+                                    self.assertEqual(output.read_bytes(), b"previous output")
+                                    continue
                                 self.assertEqual(result.returncode, 0, result.stderr.decode())
                                 if not pure: output = self.link(output)
-                                captured = len(prefix) if binding == 'label' else provisional
-                                self.assertEqual(output.read_bytes(), prefix + captured.to_bytes(2, 'little')
+                                self.assertEqual(output.read_bytes(), prefix + len(prefix).to_bytes(2, 'little')
                                                  + (len(prefix) + 2).to_bytes(2, 'little'))
 
     def test_nested_pc_counts_document_object_merging_difference(self):

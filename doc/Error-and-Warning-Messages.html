@@ -49,6 +49,12 @@ span:hover a.copiable-link {visibility: visible}
 name instead of assigning to a label, procedure, type, macro or data variable.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">cannot capture $ after unresolved storage; use a label</samp>&rsquo;</dt>
+<dd><p>An equate would capture an uncertain first-pass position after deferred storage.
+Use a label for the final address, or define the storage count before allocating
+it. Defining the count later does not recompute the earlier prefix.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">cannot expand `<var class="var">identifier</var>'; not a macro</samp>&rsquo;</dt>
 <dd><p>Make sure <var class="var">identifier</var> is a macro and not a label, constant or other type of symbol.
 </p>

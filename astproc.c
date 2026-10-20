@@ -201,9 +201,13 @@ static int finalizing_expressions = 0;
 /* Used when we are outputting pure 6502 binary */
 static int dataseg_pc;
 static int codeseg_pc;
+/* First-pass byte positions stop being reliable after deferred storage.
+ * Keep the segments independent; only an absolute .org starts a known region. */
+static int deferred_pc[2];
 
 #define FOLD_PC_NO  0
 #define FOLD_PC_YES 1
+#define FOLD_PC_EQUATE 2
 
 static astnode *reduce_expression(astnode *expr, int fold_pc);
 static astnode *reduce_expression_complete(astnode *expr, int fold_pc);
@@ -805,6 +809,8 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
     if (expr == NULL) { return NULL; }
     folded = NULL;
     if (fold_pc && astnode_is_type(expr, CURRENT_PC_NODE)) {
+        if (fold_pc == FOLD_PC_EQUATE && deferred_pc[in_dataseg])
+            err(expr->loc, "cannot capture $ after unresolved storage; use a label");
         folded = astnode_create_integer(in_dataseg ? dataseg_pc : codeseg_pc, expr->loc);
         astnode_replace(expr, folded);
         astnode_finalize(expr);
@@ -2883,6 +2889,7 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
     }
     if (!final && (!astnode_is_type(count, INTEGER_NODE)
                    || !astnode_is_type(padding, INTEGER_NODE))) {
+        deferred_pc[in_dataseg] = 1;
         return 1;
     }
     if (astnode_is_type(padding, INTEGER_NODE) && padding->integer == 0
@@ -2920,6 +2927,9 @@ static int process_field_padding(astnode *node, void *arg, astnode **next)
     /* Six-child padding temporarily owns an omitted structure element. */
     if (astnode_get_child(node, 4) != NULL) {
         int errors_before = err_count;
+        /* This container can discard its first element when its late count
+         * becomes zero. Its walked children are only a provisional extent. */
+        deferred_pc[in_dataseg] = 1;
         /* Capture counts already known at this instance, as the remainder
          * does. A later reassignment must not erase an initialized element. */
         reduce_field_count(LHS(node), NULL);
@@ -3126,6 +3136,17 @@ static int process_storage(astnode *storage, void *arg, astnode **next)
     }
     /* Substitute defines and fold constants */
     expr = reduce_expression(expr, FOLD_PC_NO);
+    if (type->datatype == USER_DATATYPE) {
+        symtab_entry *definition = symtab_lookup(LHS(type)->ident);
+        /* User storage is lowered in pass 2. Pass 1 currently counts elements,
+         * so only a known one-byte type has a dependable byte extent here. */
+        if (definition == NULL
+            || ((definition->type == STRUC_SYMBOL || definition->type == UNION_SYMBOL)
+                && (!astnode_is_type(definition->struc.size, INTEGER_NODE)
+                    || definition->struc.size->integer != 1)))
+            deferred_pc[in_dataseg] = 1;
+    }
+    if (!astnode_is_type(expr, INTEGER_NODE)) deferred_pc[in_dataseg] = 1;
     // TODO: Validate range somewhere else than here please... ???
     if (astnode_is_type(expr, INTEGER_NODE)) {
         if ((expr->integer <= 0) || (expr->integer >= 0x10000)) {
@@ -3177,7 +3198,7 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
     astnode *id;
     astnode *expr;
     expr = clone_equate_expression(astnode_get_child(equ, 1), equ->loc);
-    expr = reduce_expression_complete(expr, FOLD_PC_YES);
+    expr = reduce_expression_complete(expr, FOLD_PC_EQUATE);
     id = astnode_get_child(equ, 0);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
     e = symtab_lookup(id->ident);
@@ -3227,7 +3248,7 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
     /* Very similar to EQU, except symbol 1) can be
     redefined and 2) is volatile (see end of proc) */
     expr = clone_equate_expression(astnode_get_child(assign, 1), assign->loc);
-    expr = reduce_expression(expr, FOLD_PC_YES);
+    expr = reduce_expression(expr, FOLD_PC_EQUATE);
     if (e == NULL) {
         /* Symbol is being defined for the first time */
         /* Note that the VOLATILE_FLAG is set */
@@ -3405,7 +3426,10 @@ static int process_org(astnode *org, void *arg, astnode **next)
         err(org->loc, "org directive can only be used when output format is pure 6502 binary");
     } else {
         astnode *addr = astnode_get_child(org, 0);
-        addr = reduce_expression_complete(addr, FOLD_PC_YES);
+        int uses_pc;
+        addr = reduce_expression_complete(addr, FOLD_PC_NO);
+        uses_pc = expression_uses_pc(addr);
+        addr = fold_constants(addr, FOLD_PC_YES);
         if (astnode_is_type(addr, INTEGER_NODE)) {
             /* Range check */
             if ((addr->integer < 0) || (addr->integer >= 0x10000)) {
@@ -3415,6 +3439,7 @@ static int process_org(astnode *org, void *arg, astnode **next)
                     dataseg_pc = addr->integer;
                 else
                     codeseg_pc = addr->integer;
+                if (!uses_pc) deferred_pc[in_dataseg] = 0;
             }
         } else {
             err(org->loc, "org address does not evaluate to literal");
@@ -4883,6 +4908,7 @@ void astproc_first_pass(astnode *root)
     reset_charmap();
     branch_init();
     in_dataseg = 0; /* codeseg is default */
+    deferred_pc[0] = deferred_pc[1] = 0;
     /* Do the walk. */
     astproc_walk(root, NULL, map);
     while (branch_scope_stack != NULL) {

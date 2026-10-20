@@ -73,6 +73,82 @@ class InputHandling(unittest.TestCase):
                 result = self.run_tool('xasm', source)
                 self.assertNotEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_equates_cannot_capture_deferred_storage_positions(self):
+        bodies = (
+            ('.byte 1\n.dsb Count\n', 'Count .equ 2\n'),
+            ('.dsw Count\n', 'Count .equ 2\n'),
+            ('buf .dword[Count]\n', 'Count .equ 2\n'),
+            ('.dataseg\nbuf .char[Count]\n', 'Count .equ 2\n'),
+            ('.struc S\nfa .byte[Count]\n.ends\nv .S\n', 'Count .equ 2\n'),
+            ('.struc S\nfa .word\n.ends\nv .S\n', ''),
+            ('.proc P\n.dsb Count\n.endp\n', 'Count .equ 2\n'),
+            ('.macro Emit\n.dsb Count\n.endm\nEmit\n', 'Count .equ 2\n'),
+            ('.rept 2\n.dsb Count\n.endm\n', 'Count .equ 2\n'),
+            # Resolving a name later does not recompute the first-pass prefix.
+            ('.dsb Count\nCount .equ 2\n', ''),
+        )
+        for prefix, suffix in bodies:
+            for binding in ('Here .equ $', '.define Here $+1', 'Here = $+1'):
+                for pure in (False, True):
+                    for debug in (False, True):
+                        for analysis in (False, True):
+                            with self.subTest(prefix=prefix, binding=binding, pure=pure,
+                                              debug=debug, analysis=analysis):
+                                flags = ['--debug'] if debug else []
+                                if analysis:
+                                    flags += ['--listing=diagnostic.json', '--listing-format=json',
+                                              '--xref=xref.json', '--xref-data=true']
+                                    (self.root / 'xref.json').write_bytes(b'previous analysis')
+                                source = prefix + binding + '\n.codeseg\n.word Here\n' + suffix
+                                result = self.run_tool('xasm', source, pure_binary=pure, arguments=flags)
+                                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                self.assertNotIn(b'syntax error', result.stderr)
+                                self.assertIn(f'input.asm:{prefix.count(chr(10)) + 1}: error: cannot capture $'
+                                              .encode(), result.stderr)
+                                if analysis:
+                                    self.assertEqual((self.root / 'xref.json').read_bytes(), b'previous analysis')
+
+    def test_known_storage_pc_equates_and_segment_isolation(self):
+        cases = (
+            ('Count=2\n.byte 1\n.dsb Count\nHere .equ $\n.word Here\n', '01 00 00 03 00'),
+            ('.dsw 2\nHere = $\n.word Here\n', '00 00 00 00 04 00'),
+            ('.struc S\nfa .byte\n.ends\nv .S\nHere .equ $\n.word Here\n', '00 01 00'),
+            ('.struc S\nfa .byte\nfb .byte\n.ends\n.S {1,2}\nHere .equ $\n.word Here\n', '01 02 02 00'),
+            ('Here .equ $\n.dsb Count\n.word Here\nCount=2\n', '00 00 00 00'),
+            ('.if 0\n.dsb Count\n.endif\nHere .equ $\n.word Here\n', '00 00'),
+            ('.macro Unused\n.dsb Count\n.endm\nHere .equ $\n.word Here\n', '00 00'),
+            ('.dataseg\nbuf .byte[Count]\n.codeseg\nHere .equ $\n.word Here\nCount=2\n', '00 00'),
+            ('.dsb Count\n.dataseg\nHere .equ $\n.codeseg\n.word Here\nCount=2\n', '00 00 00 00'),
+        )
+        for source, expected in cases:
+            for pure in (False, True):
+                for debug in (False, True):
+                    with self.subTest(source=source, pure=pure, debug=debug):
+                        result = self.run_tool('xasm', source, pure_binary=pure,
+                                               arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        if not pure:
+                            (self.root / 'output').rename(self.root / 'unit.o')
+                            result = self.run_tool('xlnk', 'ram{start=$200,end=$7FF}\nlink{file=unit.o,origin=0}\n')
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex(expected))
+
+    def test_absolute_org_restores_known_equate_positions(self):
+        for origin in ('$8000', 'Start'):
+            for debug in (False, True):
+                with self.subTest(origin=origin, debug=debug):
+                    source = ('.dsb Count\nStart .equ $8000\n.org ' + origin
+                              + '\nHere .equ $\n.word Here\nCount .equ 2\n')
+                    result = self.run_tool('xasm', source, arguments=('--debug',) if debug else ())
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('00 00 00 80'))
+        for origin in ('$+2', '$'):
+            with self.subTest(relative_org=origin):
+                result = self.run_tool('xasm', '.dsb Count\n.org ' + origin
+                                       + '\nHere .equ $\n.word Here\nCount=2\n')
+                self.assertEqual(result.returncode, 1, result.stderr.decode())
+                self.assertIn(b'cannot capture $ after unresolved storage', result.stderr)
+
     def test_member_names_survive_constant_substitution(self):
         types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
                  '.struc Box\nhead .byte\npoints .Point[3]\ntail .byte\n.ends\n')

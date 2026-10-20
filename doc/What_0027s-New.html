@@ -35,6 +35,12 @@ ul.mark-bullet {list-style-type: disc}
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Overview.html" rel="next">Overview</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="index.html" rel="prev">The XORcyst Manual</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="chapter" id="What_0027s-New-1"><span>1 What&rsquo;s New<a class="copiable-link" href="#What_0027s-New-1"> &para;</a></span></h2>
 
+<h3 class="heading" id="Unreleased"><span>Unreleased<a class="copiable-link" href="#Unreleased"> &para;</a></span></h3>
+
+<ul class="itemize mark-bullet">
+<li>Rejects <code class="code">$</code> in <code class="code">.equ</code>, <code class="code">.define</code> and <code class="code">=</code> expressions after earlier storage has left the first-pass position uncertain. This deliberately replaces provisional-address captures with a located error in both output modes, preserving existing outputs. Deferred field padding and user-type storage whose byte extent has not been lowered are included. The check is conservative: a later count definition does not recalculate the prefix. Use a label for the final address, or define counts before allocating storage. Code and data segments are tracked separately; an absolute <code class="code">.org</code> restores a known position, while a PC-relative origin does not.
+</li></ul>
+
 <h3 class="heading" id="Version-1_002e9_002e11"><span>Version 1.9.11<a class="copiable-link" href="#Version-1_002e9_002e11"> &para;</a></span></h3>
 
 <ul class="itemize mark-bullet">
