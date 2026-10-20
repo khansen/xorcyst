@@ -234,6 +234,50 @@ int test_write_json_string(const char *length_arg)
     return 0;
 }
 
+int test_xref_reference_order(void)
+{
+    xref_build_context ctx = {0};
+    xref_meta meta = {0};
+    xref_ref original[8];
+    const char *files[] = {"b.asm", "a.asm", "a.asm", "a.asm", "a.asm", NULL, "", "a.asm"};
+    const int lines[] = {1, 20, 2, 2, 2, 9, 9, 1};
+    const int columns[] = {1, 3, 18, 11, 11, 1, 1, 1};
+    const int expected[] = {5, 6, 7, 3, 4, 2, 1, 0};
+    int i, j, shift, result = 1;
+    meta.has_cpu_address = meta.has_output_offset = 1;
+    meta.cpu_address = 0x8000;
+    for (i = 0; i < 8; i++) {
+        location loc = {0};
+        char expression[16];
+        loc.file = files[i];
+        loc.first_line = lines[i];
+        loc.first_column = columns[i];
+        snprintf(expression, sizeof(expression), "use-%d", i);
+        meta.expression = expression;
+        if (!add_xref_reference(&ctx, "Target", &loc, &meta)) goto done;
+    }
+    memcpy(original, ctx.refs, sizeof(original));
+    /* Compare every pair, including exact-location ties, independently of
+     * the platform's qsort behavior. No internal ordinal is set by the test. */
+    for (i = 0; i < 8; i++) {
+        for (j = 0; j < 8; j++) {
+            int cmp = xref_ref_compare(&original[expected[i]], &original[expected[j]]);
+            if ((cmp > 0) - (cmp < 0) != (i > j) - (i < j)) goto done;
+        }
+    }
+    for (shift = 0; shift < 8; shift++) {
+        for (i = 0; i < 8; i++) ctx.refs[i] = original[(15 - i + shift) % 8];
+        qsort(ctx.refs, 8, sizeof(*ctx.refs), xref_ref_compare);
+        for (i = 0; i < 8; i++)
+            if (strcmp(ctx.refs[i].expression, original[expected[i]].expression) != 0) goto done;
+    }
+    result = 0;
+done:
+    if (result) fprintf(stderr, "xref reference tie ordering failed\n");
+    free_xref_context(&ctx);
+    return result;
+}
+
 #else
 #define main assembler_main
 #include "../xasm.c"
@@ -247,6 +291,7 @@ int test_remove_ast_nodes(int count);
 int test_indexed_ast_removal(void);
 int test_ast_splicing(void);
 int test_write_json_string(const char *length_arg);
+int test_xref_reference_order(void);
 
 int main(int argc, char **argv)
 {
@@ -259,6 +304,8 @@ int main(int argc, char **argv)
         result = test_ast_splicing();
     else if (argc == 3 && strcmp(argv[1], "--test-json-string") == 0)
         result = test_write_json_string(argv[2]);
+    else if (argc == 2 && strcmp(argv[1], "--test-xref-reference-order") == 0)
+        result = test_xref_reference_order();
     else
         result = assembler_main(argc, argv);
     fprintf(stderr, "BACKEND_WORK index_nodes=%lu json_calls=%lu\n",

@@ -133,6 +133,15 @@ See XASM_ANALYSIS_FEATURES_GUIDE.md for a worked walkthrough of the analysis
 features above against one example program, with real command output and an
 explanation of what each feature is for.
 
+Cross-reference ties
+--------------------
+
+Xref references retain their address, segment, output-offset and symbol sort
+keys. Ties sort by source filename (bytewise, with a missing filename treated
+as empty), line and column, then collection order for identical locations.
+JSON, text and CSV retain every use, including duplicates. This ordering does
+not change data-reference or instruction-record ordering.
+
 Output completion
 -----------------
 

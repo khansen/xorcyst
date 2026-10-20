@@ -102,6 +102,9 @@ class BackendPerformance(unittest.TestCase):
     def test_ast_splicing_preserves_ownership_and_order(self):
         self.run_measured(['--test-ast-splicing'])
 
+    def test_xref_reference_sort_has_a_total_order_for_tied_uses(self):
+        self.run_measured(['--test-xref-reference-order'])
+
     def test_aggregate_list_work_scales_linearly(self):
         with tempfile.TemporaryDirectory(prefix='xasm-aggregate-work-') as directory:
             root = Path(directory)
