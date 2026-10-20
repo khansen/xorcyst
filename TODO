@@ -31,11 +31,6 @@ Known defects and follow-ups:
   source-location or insertion-order tie-break. qsort may reorder these uses
   when other references are removed, and ordering can differ across platforms.
   Define a deterministic tie-break while preserving every reference and location.
-- A global constant sharing a member name can be substituted into a dotted
-  operand before member validation, causing an assertion abort. For example,
-  declare Point with py .byte, instantiate p .Point, then use
-  py .equ 1 / .word p.py. This also fails in 1.9.9. Keep member identifiers
-  in their type's scope during constant substitution.
 - Late word instruction operands outside -32768..65535 still warn and truncate
   in pure-binary output while the linker rejects them. Decide the policy together
   with 16-bit address wrapping: existing binaries/listings can cross $FFFF. Late
