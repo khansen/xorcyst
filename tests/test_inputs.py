@@ -149,6 +149,24 @@ class InputHandling(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stderr.decode())
                 self.assertIn(b'cannot capture $ after unresolved storage', result.stderr)
 
+    def test_unreducible_org_reports_error_and_preserves_output(self):
+        for definition in ('Constant .equ 1\n', '.define Constant 1\n', 'Constant = 1\n'):
+            source = definition + '.org ^Constant\n.byte $5A\n'
+            for debug in (False, True):
+                for analysis in (False, True):
+                    with self.subTest(definition=definition, debug=debug, analysis=analysis):
+                        flags = ['--debug'] if debug else []
+                        if analysis:
+                            flags += ['--listing=diagnostic.json', '--listing-format=json',
+                                      '--xref=xref.json', '--xref-data=true']
+                            (self.root / 'xref.json').write_bytes(b'previous analysis')
+                        result = self.run_tool('xasm', source, arguments=flags)
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'input.asm:2: error: '
+                                         b'org address does not evaluate to literal\n')
+                        if analysis:
+                            self.assertEqual((self.root / 'xref.json').read_bytes(), b'previous analysis')
+
     def test_member_names_survive_constant_substitution(self):
         types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
                  '.struc Box\nhead .byte\npoints .Point[3]\ntail .byte\n.ends\n')

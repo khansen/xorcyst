@@ -3428,7 +3428,7 @@ static int process_org(astnode *org, void *arg, astnode **next)
         astnode *addr = astnode_get_child(org, 0);
         int uses_pc;
         addr = reduce_expression_complete(addr, FOLD_PC_NO);
-        uses_pc = expression_uses_pc(addr);
+        uses_pc = addr != NULL && expression_uses_pc(addr);
         addr = fold_constants(addr, FOLD_PC_YES);
         if (astnode_is_type(addr, INTEGER_NODE)) {
             /* Range check */
