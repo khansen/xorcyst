@@ -6,7 +6,7 @@ xasm_LDADD = $(LDADD) $(DARWIN_LIBS)
 # Use the *generated* files for normal builds
 xasm_SOURCES = \
   astnode.c astnode.h \
-  astproc.c astproc.h \
+  astproc.c astproc.h expr_int.h \
   charmap.c charmap.h \
   codegen.c codegen.h \
   loc.h objdef.h \
@@ -20,7 +20,7 @@ xasm_SOURCES = \
   my_getopt.c my_getopt.h getopt.h
 
 xlnk_SOURCES = \
-  xlnk.c version.h \
+  xlnk.c version.h expr_int.h \
   output_file.c output_file.h \
   script.c script.h \
   unit.c unit.h \

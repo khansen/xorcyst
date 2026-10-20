@@ -100,6 +100,7 @@
  * contents of the final binary.
  */
 
+#include "expr_int.h"
 #include "version.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -885,58 +886,50 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
             /* If both sides are integer, then result is integer. */
             else if ((lhs_result.type == XASM_INTEGER_CONSTANT) &&
             (rhs_result.type == XASM_INTEGER_CONSTANT)) {
+                int lhs = expr_i32((uint32_t)lhs_result.integer);
+                int rhs = expr_i32((uint32_t)rhs_result.integer);
+                int shifted;
                 result->type = XASM_INTEGER_CONSTANT;
                 /* Perform the proper operation to obtain result. */
                 switch (e->op_expr.operator) {
-                    case XASM_OP_PLUS:   result->integer = lhs_result.integer + rhs_result.integer;  break;
-                    case XASM_OP_MINUS:  result->integer = lhs_result.integer - rhs_result.integer;  break;
-                    case XASM_OP_MUL:    result->integer = lhs_result.integer * rhs_result.integer;  break;
+                    case XASM_OP_PLUS:   result->integer = expr_add(lhs, rhs);  break;
+                    case XASM_OP_MINUS:  result->integer = expr_sub(lhs, rhs);  break;
+                    case XASM_OP_MUL:    result->integer = expr_mul(lhs, rhs);  break;
                     case XASM_OP_DIV:
-                    if (rhs_result.integer == 0) {
+                    if (rhs == 0) {
                         err("division by zero in expression");
                         result->type = -1;
                     } else {
-                        result->integer = lhs_result.integer / rhs_result.integer;
+                        result->integer = expr_div(lhs, rhs);
                     }
                     break;
                     case XASM_OP_MOD:
-                    if (rhs_result.integer == 0) {
+                    if (rhs == 0) {
                         err("modulo by zero in expression");
                         result->type = -1;
                     } else {
-                        result->integer = lhs_result.integer % rhs_result.integer;
+                        result->integer = expr_mod(lhs, rhs);
                     }
                     break;
                     case XASM_OP_SHL:
-                    if (rhs_result.integer < 0 || (size_t)rhs_result.integer >= sizeof(long) * CHAR_BIT) {
-                        err("invalid shift count in expression");
-                        result->type = -1;
-                    } else {
-                        result->integer = (long)((unsigned long)lhs_result.integer << rhs_result.integer);
-                    }
-                    break;
                     case XASM_OP_SHR:
-                    if (rhs_result.integer < 0 || rhs_result.integer >= 32) {
+                    if (!(e->op_expr.operator == XASM_OP_SHL
+                          ? expr_shl(lhs, rhs, &shifted) : expr_shr(lhs, rhs, &shifted))) {
                         err("invalid shift count in expression");
                         result->type = -1;
                     } else {
-                        /* Match xasm's logical 32-bit shift, even when long
-                         * is wider. Keep a zero-shift result signed without
-                         * an out-of-range unsigned-to-signed conversion. */
-                        uint32_t bits = (uint32_t)lhs_result.integer >> rhs_result.integer;
-                        result->integer = (bits & 0x80000000UL)
-                            ? -1L - (long)(0xFFFFFFFFUL - bits) : (long)bits;
+                        result->integer = shifted;
                     }
                     break;
-                    case XASM_OP_AND:    result->integer = lhs_result.integer & rhs_result.integer;  break;
-                    case XASM_OP_OR: result->integer = lhs_result.integer | rhs_result.integer;  break;
-                    case XASM_OP_XOR:    result->integer = lhs_result.integer ^ rhs_result.integer;  break;
-                    case XASM_OP_EQ: result->integer = lhs_result.integer == rhs_result.integer; break;
-                    case XASM_OP_NE: result->integer = lhs_result.integer != rhs_result.integer; break;
-                    case XASM_OP_LT: result->integer = lhs_result.integer < rhs_result.integer;  break;
-                    case XASM_OP_GT: result->integer = lhs_result.integer > rhs_result.integer;  break;
-                    case XASM_OP_LE: result->integer = lhs_result.integer <= rhs_result.integer; break;
-                    case XASM_OP_GE: result->integer = lhs_result.integer >= rhs_result.integer; break;
+                    case XASM_OP_AND:    result->integer = lhs & rhs;  break;
+                    case XASM_OP_OR: result->integer = lhs | rhs;  break;
+                    case XASM_OP_XOR:    result->integer = lhs ^ rhs;  break;
+                    case XASM_OP_EQ: result->integer = lhs == rhs; break;
+                    case XASM_OP_NE: result->integer = lhs != rhs; break;
+                    case XASM_OP_LT: result->integer = lhs < rhs;  break;
+                    case XASM_OP_GT: result->integer = lhs > rhs;  break;
+                    case XASM_OP_LE: result->integer = lhs <= rhs; break;
+                    case XASM_OP_GE: result->integer = lhs >= rhs; break;
                 }
             }
             /* If both sides are string... */
@@ -995,14 +988,15 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
             }
             /* If operand is integer then result is integer. */
             else if (lhs_result.type == XASM_INTEGER_CONSTANT) {
+                int lhs = expr_i32((uint32_t)lhs_result.integer);
                 result->type = XASM_INTEGER_CONSTANT;
                 /* Perform the proper operation to obtain result. */
                 switch (e->op_expr.operator) {
-                    case XASM_OP_NOT:    result->integer = !lhs_result.integer;      break;
-                    case XASM_OP_NEG:    result->integer = ~lhs_result.integer;      break;
-                    case XASM_OP_LO: result->integer = lhs_result.integer & 0xFF;    break;
-                    case XASM_OP_HI: result->integer = (lhs_result.integer >> 8) & 0xFF; break;
-                    case XASM_OP_UMINUS: result->integer = -lhs_result.integer;      break;
+                    case XASM_OP_NOT:    result->integer = !lhs;      break;
+                    case XASM_OP_NEG:    result->integer = ~lhs;      break;
+                    case XASM_OP_LO: result->integer = lhs & 0xFF;    break;
+                    case XASM_OP_HI: result->integer = (lhs >> 8) & 0xFF; break;
+                    case XASM_OP_UMINUS: result->integer = expr_neg(lhs);      break;
                 }
             }
             else {

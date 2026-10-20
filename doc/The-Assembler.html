@@ -362,6 +362,23 @@ Examples of valid identifiers are
 
 <p><code class="code">$</code> can be used in an expression to refer to the address where the current instruction is assembled.
 </p>
+<p>Integer expression results are signed 32-bit values. Addition, subtraction,
+multiplication, unary minus and left shift wrap modulo <code class="code">$100000000</code>;
+the low 32 bits are interpreted in two&rsquo;s complement. For example,
+<code class="code">$7FFFFFFF+1</code> is <code class="code">-2147483648</code>, and <code class="code">-($80000000)</code> is also
+<code class="code">-2147483648</code>. Comparisons use these signed values. Division truncates
+toward zero, and a remainder has the dividend&rsquo;s sign. The exceptional quotient
+<code class="code">$80000000 / -1</code> wraps to <code class="code">$80000000</code>; its remainder is zero.
+Division and remainder by zero are errors. These rules apply equally while
+assembling, linking existing objects, and producing listings or analysis;
+link-time arithmetic does not retain extra bits on hosts with a wider
+<code class="code">long</code>. This specifies expression values, not a 16-bit wrap of the program
+counter or output offsets.
+</p>
+<p><code class="code"><var class="var">value</var> &lt;&lt; <var class="var">count</var></code> shifts the low 32 bits left and discards
+overflow bits. Its count, like the right-shift count, must be in the range
+0&ndash;31.
+</p>
 <p><code class="code"><var class="var">value</var> &gt;&gt; <var class="var">count</var></code> shifts the low 32 bits of <var class="var">value</var> right,
 filling with zeros. The count must be in the range 0&ndash;31. The result is a
 signed 32-bit integer, so shifting by zero preserves a negative value;
