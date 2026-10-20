@@ -84,7 +84,7 @@ xasm --pure-binary --instruction-records-output=instructions.json \
 | `immediate`, `index_register` | Boolean immediate mode and `"X"`, `"Y"`, or null. Postindexed indirection reports Y, not indexing of the pointer bytes. |
 | `operand_form` | `integer_literal`, `symbol`, `expression`, or `none`, classified before folding. Accumulator syntax has no expression. |
 | `expression` | Typed pre-fold expression after macro argument substitution, or null. This is the normalized expression representation; consumers must not parse display strings to recover it. |
-| `referenced_symbols` | Ordered, unique pre-fold symbolic spellings. Not necessarily keys into the filtered final xref symbol table. |
+| `referenced_symbols` | Ordered, unique pre-fold symbolic references. Dotted/scoped member names are excluded; bases and references inside indexes are included. This includes enums: `Color::Green` retains `Color`, while bare `Green` retains `Green`. Not necessarily keys into the filtered final xref symbol table. |
 | `structural_base` | Restricted written base-symbol/displacement/projection relationship, or null; see below. |
 | `operand_value` | Value evaluated from the final operand at this instruction's PC, after assembler reductions/truncations, before branch-relative encoding; null for operandless instructions. |
 | `branch_displacement` | Assembler-computed target minus next instruction address for relative mode, otherwise null. Emitted `bytes` remain authoritative for encoded behavior. |

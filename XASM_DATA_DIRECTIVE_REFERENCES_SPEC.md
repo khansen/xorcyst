@@ -191,7 +191,12 @@ Required fields:
   projection; use a canonical AST rendering when macro location semantics or
   another transformation makes the source slice broader than the operand
 - `referenced_symbols`: identifiers used by the operand, in first-appearance
-  order with duplicates removed
+  order with duplicates removed. Dotted and scoped member names are excluded:
+  `p.px` references `p`, and `p.items[i].px` references `p` and `i`.
+  Type/namespace names in scoped expressions retain their existing treatment.
+  This includes enums and records: `Color::Green` references `Color`, while
+  bare `Green` references `Green`.
+  Member names remain present in the written expression.
 - `emitted_value`: the unsigned integer actually encoded after xasm's existing
   datatype truncation in pure-binary mode; in object mode, the unsigned
   width-normalized value at xasm's current address assignment

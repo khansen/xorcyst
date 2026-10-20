@@ -235,7 +235,7 @@ access or a scoped name, is one term of kind `expression`.
 | `kind` | As above. |
 | `name` | The written name for symbol-like kinds, else absent. Not a stable cross-build ID. |
 | `value` | The term's value, before projection and truncation; see [Capture points](#capture-points). |
-| `referenced_symbols` | For kind `expression`: ordered, unique symbol spellings inside the term. Absent otherwise. |
+| `referenced_symbols` | For kind `expression`: ordered, unique symbolic references inside the term, excluding dotted/scoped member names and retaining bases and index references as in version 1. Absent otherwise. |
 | `binding` | Present for symbol-like kinds, else absent. For `symbol` and `local_symbol`: `kind` (`label`, `constant`, `procedure`, `variable` or `enum_member`) and `definition`, the span of the definition this use assembled (for a procedure, its `.PROC` statement), or null when xasm has no source location (for example a command-line define). An `enum_member` binding also has `enum`, the enumeration's name. Null for anonymous labels. |
 | `source` | The term's parsed span and text. Like version 1 expression spans, it excludes grouping parentheses. |
 
