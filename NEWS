@@ -1,3 +1,21 @@
+Version 1.9.11:
+
+- Preserve dotted member names during constant substitution. Global .equ,
+  .define and = constants no longer replace field tokens or cause assertion
+  aborts. Base expressions and array indexes still resolve in the caller's
+  scope, including nested indexes, aliases and instruction analysis.
+- Deliberate compatibility correction: px .equ py no longer redirects p.px
+  to p.py, and a global alias cannot make a nonexistent member valid.
+  Colliding programs can now emit corrected bytes, fail with a located member
+  diagnostic, or assemble correctly where the global substitution rejected
+  them before. Programs without member-name collisions retain their output.
+- Order tied xref uses by source filename, line, column and collection order
+  after the existing address, segment, output-offset and symbol keys.
+  JSON, text and CSV retain every reference and duplicate in the same order
+  across platforms; only previously unspecified ties change.
+- Preserve listing, instruction-record and object schemas. Remaining
+  limitations and separately planned consumer migrations are tracked in TODO.
+
 Version 1.9.10:
 
 - Report listing v2 instruction addressing modes from the final opcode.
