@@ -888,7 +888,7 @@ static void eval_recursive(xunit *u, xasm_expression *e, xasm_constant *result)
             (rhs_result.type == XASM_INTEGER_CONSTANT)) {
                 int lhs = expr_i32((uint32_t)lhs_result.integer);
                 int rhs = expr_i32((uint32_t)rhs_result.integer);
-                int shifted;
+                int shifted = 0;
                 result->type = XASM_INTEGER_CONSTANT;
                 /* Perform the proper operation to obtain result. */
                 switch (e->op_expr.operator) {
