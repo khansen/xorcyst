@@ -82,6 +82,7 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @heading Unreleased
 
 @itemize
+@item Defines integer expression arithmetic as signed 32-bit values with wrapping results in constant folding, binary evaluation, the linker, listings and analysis. Addition, subtraction, multiplication, unary minus and left shift discard bits above bit 31. Division truncates toward zero; @code{$80000000 / -1} wraps to @code{$80000000}, with remainder zero. Both shift operators require counts 0--31. This removes signed-overflow and invalid-shift undefined behavior. Listings and analysis treat zero-divisor expressions as unevaluable instead of inventing a value of zero. It deliberately changes wide link-time calculations that previously used the host's @code{long} width: for example, @code{($40000000*8)-1} is now @code{-1}, including when its inputs are external symbols or label expressions. Comparisons and range checks use the wrapped signed value. The object encoding is unchanged; these rules also apply when linking older objects.
 @item Rejects @code{$} in @code{.equ}, @code{.define} and @code{=} expressions after earlier storage has left the first-pass position uncertain. This deliberately replaces provisional-address captures with a located error in both output modes, preserving existing outputs. Deferred field padding and user-type storage whose byte extent has not been lowered are included. The check is conservative: a later count definition does not recalculate the prefix. Use a label for the final address, or define counts before allocating storage. Code and data segments are tracked separately; an absolute @code{.org} restores a known position, while a PC-relative origin does not.
 @end itemize
 
@@ -745,6 +746,23 @@ Operands to assembler statements are expressions. An expression can contain any 
 @end itemize
 
 @code{$} can be used in an expression to refer to the address where the current instruction is assembled.
+
+Integer expression results are signed 32-bit values. Addition, subtraction,
+multiplication, unary minus and left shift wrap modulo @code{$100000000};
+the low 32 bits are interpreted in two's complement. For example,
+@code{$7FFFFFFF+1} is @code{-2147483648}, and @code{-($80000000)} is also
+@code{-2147483648}. Comparisons use these signed values. Division truncates
+toward zero, and a remainder has the dividend's sign. The exceptional quotient
+@code{$80000000 / -1} wraps to @code{$80000000}; its remainder is zero.
+Division and remainder by zero are errors. These rules apply equally while
+assembling, linking existing objects, and producing listings or analysis;
+link-time arithmetic does not retain extra bits on hosts with a wider
+@code{long}. This specifies expression values, not a 16-bit wrap of the program
+counter or output offsets.
+
+@code{@var{value} << @var{count}} shifts the low 32 bits left and discards
+overflow bits. Its count, like the right-shift count, must be in the range
+0--31.
 
 @code{@var{value} >> @var{count}} shifts the low 32 bits of @var{value} right,
 filling with zeros. The count must be in the range 0--31. The result is a

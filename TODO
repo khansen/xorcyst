@@ -14,11 +14,23 @@
 
 Compatibility planning:
 
-- Future listing and binary object formats may deliberately break compatibility
-  when the benefits justify it; preserving existing formats is not an absolute
-  constraint. Plan format/schema versioning where appropriate, migration notes,
-  and coordinated updates to Nesrev and other consumers with regression coverage.
-  Keep the current formats unchanged until such a change is designed and validated.
+- XORcyst v2 is a clean-break redesign of the binary object format. No backward
+  compatibility with v1 objects is required: neither reading old objects nor
+  writing a legacy format is a design constraint. Rebuild inputs and migrate
+  consumers together rather than retaining parallel compatibility paths.
+  Design the format around explicit numeric semantics, typed symbols and
+  relocations, and storage extents that can represent zero without count-minus-one
+  tricks. Consider shared expression graphs to avoid exponential tree expansion,
+  and define how layout-dependent expressions are evaluated and validated.
+  Specify a recognizable format/version header, fixed-width encoding and byte
+  order, bounds and resource limits, and rejection of malformed or unsupported
+  inputs. Validate round trips, cross-host output and invalid-input handling.
+  Coordinate Nesrev and other consumer updates, document migration and provide
+  fixtures before release. This is planning only; current v1 fixes retain their
+  object format.
+- Listing formats may also deliberately break compatibility when justified.
+  Plan schema identifiers, migration notes and consumer regression coverage;
+  no format change is part of this planning update.
 - Aim for one supported structured-listing schema, retaining a version identifier
   in its output rather than indefinite selectable legacy schemas. Before removing
   --listing-version, migrate Nesrev and other consumers and decide how object-mode
@@ -88,7 +100,5 @@ Known defects and follow-ups:
   when the link script provides a RAM region.
 - A late error in merged storage can point to the preceding storage statement
   instead of the statement that supplied the invalid count.
-- Signed integer overflow in constant folding is undefined (e.g.
-  .byte ($40000000+$40000000)>>31); sanitizer builds diagnose it.
 - Forward strings differ between binary and object output, and exported forward
   constant aliases can still fail object encoding.

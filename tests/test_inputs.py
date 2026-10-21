@@ -1345,6 +1345,166 @@ class InputHandling(unittest.TestCase):
                     self.assertEqual(result.stderr, b'')
                     self.assertEqual((self.root / 'output').read_bytes(), expected)
 
+    @staticmethod
+    def wrapping_arithmetic_cases():
+        # Explicit boundary answers, shared by the local, relocated and analysis
+        # checks. V is substituted at different stages, never by the test oracle.
+        return (
+            (0x7fffffff, 'V+1', -2147483648),
+            (0x80000000, 'V-1', 2147483647),
+            (0x40000000, 'V*8', 0),
+            (0x80000000, '-V', -2147483648),
+            (0x80000000, 'V/-1', -2147483648),
+            (0x80000000, 'V%-1', 0),
+            (0x80000000, '(V-1)/3', 715827882),
+            (0x80000000, '(V+1)/3', -715827882),
+            (0x80000000, '(V+1)%3', -1),
+            (0x80000000, 'V<<0', -2147483648),
+            (0xffffffff, 'V<<1', -2),
+            (0xffffffff, 'V<<31', -2147483648),
+            (1, 'V<<31', -2147483648),
+            (0x80000000, 'V<<1', 0),
+            (0x80000000, 'V>>0', -2147483648),
+            (0x80000000, 'V>>31', 1),
+            (0x40000000, '(V*8-1)>>1', 2147483647),
+            (0x7fffffff, '(V+1)<0', 1),
+            (0x80000000, '(V-1)>0', 1),
+            (0x40000000, '(V*8)==0', 1),
+            (0x40000000, '(V*8)!=0', 0),
+            (0x80000000, '(-V)<=0', 1),
+            (0x80000000, '(-V)>=0', 0),
+            (0x80000000, '~V', 2147483647),
+            (0x80000000, 'V|1', -2147483647),
+            (0x80000000, 'V^$FFFFFFFF', 2147483647),
+            (0xffffffff, 'V&$80000000', -2147483648),
+            (0x7fffffff, 'V+V+2', 0),
+            (0x80000000, '0-V+V', 0),
+        )
+
+    def test_wrapping_arithmetic_matches_all_evaluation_stages(self):
+        cases = self.wrapping_arithmetic_cases()
+        definitions = ''.join(f'Value{i} .equ ${v:08X}\n' for i, (v, _, _) in enumerate(cases))
+        names = ','.join(f'Value{i}' for i in range(len(cases)))
+        expected = b''.join((v & 0xffffffff).to_bytes(4, 'little') for _, _, v in cases)
+        for debug in (False, True):
+            flags = ('--debug',) if debug else ()
+            for form in ('literal', 'constant', 'label', 'external'):
+                lines = []
+                for i, (v, expression, _) in enumerate(cases):
+                    value = (f'Value{i}' if form in ('constant', 'external') else
+                             f'(L2-L1-1+${v:08X})' if form == 'label' else f'${v:08X}')
+                    lines.append('.dword ' + expression.replace('V', value))
+                prefix = definitions if form == 'constant' else 'L1: nop\nL2:\n' if form == 'label' else ''
+                if form == 'external':
+                    result = self.run_tool('xasm', '.public ' + names + '\n' + definitions,
+                                           pure_binary=False, arguments=flags)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    (self.root / 'output').rename(self.root / 'provider.o')
+                    prefix = f'.extrn {names}:byte\n'
+                source = prefix + '\n'.join(lines) + '\n'
+                answer = (b'\xea' if form == 'label' else b'') + expected
+                for pure in ((False,) if form == 'external' else (True, False)):
+                    with self.subTest(debug=debug, form=form, pure=pure):
+                        result = self.run_tool('xasm', source, pure_binary=pure, arguments=flags)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'')
+                        if pure:
+                            self.assertEqual((self.root / 'output').read_bytes(), answer)
+                            continue
+                        (self.root / 'output').rename(self.root / 'consumer.o')
+                        orders = (('consumer.o',),) if form != 'external' else (
+                            ('provider.o', 'consumer.o'), ('consumer.o', 'provider.o'))
+                        for order in orders:
+                            result = self.run_tool('xlnk', ''.join(
+                                f'link{{file={name}' + (',origin=0' if i == 0 else '') + '}\n'
+                                for i, name in enumerate(order)))
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr, b'')
+                            self.assertEqual((self.root / 'output').read_bytes(), answer)
+
+    def test_wrapping_arithmetic_analysis_matches_binary(self):
+        cases = self.wrapping_arithmetic_cases()
+        source = 'L1: nop\nL2:\n'
+        expected = bytearray(b'\xea')
+        for i, (v, expression, value) in enumerate(cases):
+            expr = expression.replace('V', f'(L2-L1-1+${v:08X})')
+            source += f'Result{i} .equ {expr}\n.dword Result{i}\nlda #<({expr})\n'
+            expected += (value & 0xffffffff).to_bytes(4, 'little') + bytes([0xa9, value & 255])
+        # The additive-term sum itself crosses both signed boundaries.
+        source += 'lda #<(L1+$7FFFFFFF+$7FFFFFFF+2)\nlda #<(L1-$80000000-$80000000)\n'
+        expected += bytes.fromhex('A9 00 A9 00')
+        source += 'UnusedDiv .equ 1/(L2-L2)\nUnusedMod .equ 1%(L2-L2)\n'
+        for debug in (False, True):
+            for fmt, version in (('text', 1), ('json', 1), ('ndjson', 1), ('json', 2), ('ndjson', 2)):
+                with self.subTest(debug=debug, format=fmt, version=version):
+                    flags = ('--debug',) if debug else ()
+                    result = self.run_tool('xasm', source, arguments=(*flags,
+                        '--listing=listing', f'--listing-format={fmt}', f'--listing-version={version}',
+                        '--xref=xref', '--xref-data=true', '--xref-instructions=true',
+                        '--instruction-records-output=records', '--dependency-manifest=deps'))
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(result.stderr, b'')
+                    self.assertEqual((self.root / 'output').read_bytes(), expected)
+                    listing = (self.root / 'listing').read_text()
+                    if fmt == 'text':
+                        rows = [line for line in listing.splitlines()
+                                if re.match(r'^(?:\d{4}| {4})  [0-9A-F]{4}  ', line)]
+                        self.assertEqual(b''.join(bytes.fromhex(line[12:24]) for line in rows), expected)
+                        self.assertRegex(listing, r'(?m)^Result16\s+= \$FFFF$')
+                        self.assertNotRegex(listing, r'(?m)^Unused(?:Div|Mod)\s+=')
+                    else:
+                        rows = (json.loads(listing)['records'] if fmt == 'json' else
+                                [json.loads(line) for line in listing.splitlines()])
+                        self.assertEqual(b''.join(bytes.fromhex(''.join(row['bytes_hex'])) for row in rows), expected)
+                    facts = json.loads((self.root / 'xref').read_text())
+                    symbols = {s['name']: s for s in facts['symbols']}
+                    for name in ('UnusedDiv', 'UnusedMod'):
+                        self.assertIsNone(symbols[name]['definition']['value'])
+                    refs = facts['data_directive_references']
+                    self.assertEqual(len(refs), len(cases))
+                    self.assertEqual([r['emitted_value'] for r in refs], [v & 0xffffffff for _, _, v in cases])
+                    records = json.loads((self.root / 'records').read_text())
+                    self.assertEqual(records, facts['instruction_records'])
+                    self.assertEqual([r['operand_value'] for r in records['records']],
+                                     [None] + [v & 255 for _, _, v in cases] + [0, 0])
+                    for row in records['records']:
+                        offset = row['output_offset']
+                        self.assertEqual(bytes(row['bytes']), expected[offset:offset + row['size']])
+
+    def test_invalid_left_shifts_preserve_outputs_and_diagnostic_listings(self):
+        for count in (-1, 32, 63, 64):
+            for form in ('literal', 'label', 'external'):
+                for template in ('.dword {}', 'lda #({})', 'lda ({})+L1,y'):
+                    with self.subTest(count=count, form=form, template=template):
+                        expression = (f'1<<({count})' if form == 'literal' else
+                                      f'(L2-L1)<<(L2-L1-1+({count}))')
+                        source = 'L1: nop\nL2:\n' + template.format(expression) + '\n'
+                        if form == 'external':
+                            result = self.run_tool('xasm', f'.public Count\nCount .equ {count}\n', pure_binary=False)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            (self.root / 'output').rename(self.root / 'provider.o')
+                            source = '.extrn Count:byte\nL1: nop\n' + template.format('1<<Count') + '\n'
+                            result = self.run_tool('xasm', source, pure_binary=False)
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            (self.root / 'output').rename(self.root / 'consumer.o')
+                            result = self.run_tool('xlnk', 'link{file=provider.o,origin=0}\nlink{file=consumer.o}\n')
+                        else:
+                            for name in ('xref', 'records', 'deps', 'ram.nl'):
+                                (self.root / name).write_bytes(b'previous analysis')
+                            result = self.run_tool('xasm', source, arguments=(
+                                '--listing=listing', '--listing-format=json', '--listing-version=2',
+                                '--xref=xref', '--xref-data=true', '--xref-instructions=true',
+                                '--instruction-records-output=records', '--dependency-manifest=deps',
+                                '--fceux-nl-ram-output=ram.nl'))
+                            for name in ('xref', 'records', 'deps', 'ram.nl'):
+                                self.assertEqual((self.root / name).read_bytes(), b'previous analysis')
+                            for row in json.loads((self.root / 'listing').read_text())['records']:
+                                self.assertFalse(row['binary_generated'])
+                                self.assertFalse(row['emits_bytes'])
+                                self.assertEqual(row['bytes_hex'], [])
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b'invalid shift count in expression', result.stderr)
+
     def test_right_shifts_match_for_folded_relocated_and_external_values(self):
         values = (-2147483648, -2, -1, 0, 255, 16777215, 2147483647)
         counts = (0, 1, 16, 24, 25, 31)
@@ -1809,20 +1969,19 @@ class InputHandling(unittest.TestCase):
                         self.assertEqual((self.root / 'output').read_bytes(), (b'' if external else b'\xea')
                                          + b''.join((value & maximum).to_bytes(width, 'little') for value in values))
 
-    def test_linker_wide_truncation_warning_prints_full_value(self):
-        # The evaluator uses long. Exercise the full diagnostic on hosts where
-        # it can represent a result beyond 32 bits, without overflowing on ILP32.
-        import ctypes
-        if ctypes.sizeof(ctypes.c_long) < 8:
-            self.skipTest('requires a linker with 64-bit long')
+    def test_linker_wraps_wide_intermediates_before_range_checks(self):
         source = 'L1: nop\nL2: .byte (L2-L1+$3FFFFFFF)*8-1\n.word (L2-L1+$3FFFFFFF)*8-1\n'
-        result = self.run_tool('xasm', source, pure_binary=False)
-        self.assertEqual(result.returncode, 0, result.stderr.decode())
-        (self.root / 'output').rename(self.root / 'unit.o')
-        result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
-        self.assertEqual(result.returncode, 0, result.stderr.decode())
-        self.assertEqual(result.stderr.count(b'$1FFFFFFFF out of range; truncated'), 2, result.stderr.decode())
-        self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('EA FF FF FF'))
+        for pure in (True, False):
+            with self.subTest(pure=pure):
+                result = self.run_tool('xasm', source, pure_binary=pure)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(result.stderr, b'')
+                if not pure:
+                    (self.root / 'output').rename(self.root / 'unit.o')
+                    result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(result.stderr, b'')
+                self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('EA FF FF FF'))
 
     def test_signed_storage_comparisons_validate_the_final_count(self):
         for expression, count in (('1+2*((L2-L1+-2)<0)', 3),

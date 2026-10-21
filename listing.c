@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include "expr_int.h"
 #include "listing.h"
 #include "astproc.h"
 #include "symtab.h"
@@ -407,18 +408,6 @@ static const char *get_source_line(const char *filename, int line)
     return source_line_buffer;
 }
 
-/* Match folding, binary evaluation and linking: logical 32-bit right shift,
- * with the signed value preserved for count zero. Analysis may still run
- * after an assembly error, so reject invalid counts before shifting. */
-static int eval_shift_right(int lhs, int rhs, int *value)
-{
-    if (rhs < 0 || rhs >= 32) {
-        return 0;
-    }
-    *value = rhs ? (int)((uint32_t)lhs >> rhs) : lhs;
-    return 1;
-}
-
 static int eval_expression_int(astnode *expr, int *value, int depth)
 {
     int lhs = 0;
@@ -468,7 +457,7 @@ static int eval_expression_int(astnode *expr, int *value, int depth)
                         case NOT_OPERATOR: *value = !lhs; return 1;
                         case LO_OPERATOR: *value = lhs & 0xFF; return 1;
                         case HI_OPERATOR: *value = (lhs >> 8) & 0xFF; return 1;
-                        case UMINUS_OPERATOR: *value = -lhs; return 1;
+                        case UMINUS_OPERATOR: *value = expr_neg(lhs); return 1;
                         case BANK_OPERATOR: *value = (lhs >> 16) & 0xFF; return 1;
                         default: return 0;
                     }
@@ -481,16 +470,20 @@ static int eval_expression_int(astnode *expr, int *value, int depth)
                         return 0;
                     }
                     switch (expr->oper) {
-                        case PLUS_OPERATOR: *value = lhs + rhs; return 1;
-                        case MINUS_OPERATOR: *value = lhs - rhs; return 1;
-                        case MUL_OPERATOR: *value = lhs * rhs; return 1;
-                        case DIV_OPERATOR: *value = (rhs != 0) ? (lhs / rhs) : 0; return 1;
-                        case MOD_OPERATOR: *value = (rhs != 0) ? (lhs % rhs) : 0; return 1;
+                        case PLUS_OPERATOR: *value = expr_add(lhs, rhs); return 1;
+                        case MINUS_OPERATOR: *value = expr_sub(lhs, rhs); return 1;
+                        case MUL_OPERATOR: *value = expr_mul(lhs, rhs); return 1;
+                        case DIV_OPERATOR:
+                            if (rhs == 0) return 0;
+                            *value = expr_div(lhs, rhs); return 1;
+                        case MOD_OPERATOR:
+                            if (rhs == 0) return 0;
+                            *value = expr_mod(lhs, rhs); return 1;
                         case AND_OPERATOR: *value = lhs & rhs; return 1;
                         case OR_OPERATOR: *value = lhs | rhs; return 1;
                         case XOR_OPERATOR: *value = lhs ^ rhs; return 1;
-                        case SHL_OPERATOR: *value = lhs << rhs; return 1;
-                        case SHR_OPERATOR: return eval_shift_right(lhs, rhs, value);
+                        case SHL_OPERATOR: return expr_shl(lhs, rhs, value);
+                        case SHR_OPERATOR: return expr_shr(lhs, rhs, value);
                         case LT_OPERATOR: *value = lhs < rhs; return 1;
                         case GT_OPERATOR: *value = lhs > rhs; return 1;
                         case EQ_OPERATOR: *value = lhs == rhs; return 1;
@@ -3013,7 +3006,7 @@ static int eval_expression_int_with_xref(astnode *expr,
         case NOT_OPERATOR: *value = !lhs; return 1;
         case LO_OPERATOR: *value = lhs & 0xFF; return 1;
         case HI_OPERATOR: *value = (lhs >> 8) & 0xFF; return 1;
-        case UMINUS_OPERATOR: *value = -lhs; return 1;
+        case UMINUS_OPERATOR: *value = expr_neg(lhs); return 1;
         case BANK_OPERATOR: *value = (lhs >> 16) & 0xFF; return 1;
         default: break;
     }
@@ -3021,16 +3014,20 @@ static int eval_expression_int_with_xref(astnode *expr,
         return 0;
     }
     switch (expr->oper) {
-        case PLUS_OPERATOR: *value = lhs + rhs; return 1;
-        case MINUS_OPERATOR: *value = lhs - rhs; return 1;
-        case MUL_OPERATOR: *value = lhs * rhs; return 1;
-        case DIV_OPERATOR: *value = rhs != 0 ? lhs / rhs : 0; return 1;
-        case MOD_OPERATOR: *value = rhs != 0 ? lhs % rhs : 0; return 1;
+        case PLUS_OPERATOR: *value = expr_add(lhs, rhs); return 1;
+        case MINUS_OPERATOR: *value = expr_sub(lhs, rhs); return 1;
+        case MUL_OPERATOR: *value = expr_mul(lhs, rhs); return 1;
+        case DIV_OPERATOR:
+            if (rhs == 0) return 0;
+            *value = expr_div(lhs, rhs); return 1;
+        case MOD_OPERATOR:
+            if (rhs == 0) return 0;
+            *value = expr_mod(lhs, rhs); return 1;
         case AND_OPERATOR: *value = lhs & rhs; return 1;
         case OR_OPERATOR: *value = lhs | rhs; return 1;
         case XOR_OPERATOR: *value = lhs ^ rhs; return 1;
-        case SHL_OPERATOR: *value = lhs << rhs; return 1;
-        case SHR_OPERATOR: return eval_shift_right(lhs, rhs, value);
+        case SHL_OPERATOR: return expr_shl(lhs, rhs, value);
+        case SHR_OPERATOR: return expr_shr(lhs, rhs, value);
         case LT_OPERATOR: *value = lhs < rhs; return 1;
         case GT_OPERATOR: *value = lhs > rhs; return 1;
         case EQ_OPERATOR: *value = lhs == rhs; return 1;
@@ -3553,8 +3550,7 @@ static void report_instruction_term_error(const instruction_provenance *p, const
 static int evaluate_instruction_terms(xref_instr *out)
 {
     const instruction_provenance *p = out->provenance;
-    long sum = 0;
-    int value;
+    int value = 0;
     int i;
     if (p->term_count == 0) return 1;
     out->term_values = (int *)malloc((size_t)p->term_count * sizeof(int));
@@ -3565,9 +3561,9 @@ static int evaluate_instruction_terms(xref_instr *out)
             report_instruction_term_error(p, "operand term does not evaluate to an integer");
             return 0;
         }
-        sum += (long)term->sign * out->term_values[i];
+        value = term->sign < 0 ? expr_sub(value, out->term_values[i])
+                              : expr_add(value, out->term_values[i]);
     }
-    value = (int)sum;
     if (strcmp(p->projection, "low") == 0) {
         value &= 0xFF;
     } else if (strcmp(p->projection, "high") == 0) {

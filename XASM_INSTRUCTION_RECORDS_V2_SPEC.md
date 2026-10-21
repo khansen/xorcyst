@@ -222,6 +222,13 @@ expression into signed terms:
 3. Every other node becomes one term. A single symbol or integer is a
    one-term decomposition.
 
+Term values use the assembler's signed 32-bit expression arithmetic. Sum the
+signed terms modulo 2^32 and interpret the result as signed 32-bit before
+applying the outer projection and any operand truncation. In particular,
+negating a term with value -2147483648 wraps to -2147483648. Consumers must
+not use an unbounded sum as the operand value when intermediate values overflow.
+This changes neither the schema nor the captured source expression tree.
+
 Terms are in source order. Term `kind` mirrors the expression node kind for
 leaves (`symbol`, `local_symbol`, `forward_label`, `backward_label`, `integer`,
 `string`, `current_pc`); any other subtree, such as `SLOT_SIZE * 2`, a member

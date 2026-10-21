@@ -108,6 +108,7 @@
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
+#include "expr_int.h"
 #include "astproc.h"
 
 #include "symtab.h"
@@ -781,16 +782,15 @@ static int expand_macro(astnode *macro, void *arg, astnode **next)
 
 /*---------------------------------------------------------------------------*/
 
-/* Use the same logical 32-bit right shift during folding and address
- * evaluation. A zero shift keeps the signed value; positive shifts clear
- * the sign bit, so their result is representable as an int. */
-static astnode *shift_right(int value, int count, location loc)
+/* Invalid shifts are diagnosed before any host shift is performed. */
+static astnode *shift_integer(int value, int count, int right, location loc)
 {
-    if (count < 0 || count >= 32) {
+    int result;
+    if (!(right ? expr_shr(value, count, &result) : expr_shl(value, count, &result))) {
         err(loc, "invalid shift count in expression");
-        return astnode_create_integer(0, loc);
+        result = 0;
     }
-    return astnode_create_integer(count ? (int)((uint32_t)value >> count) : value, loc);
+    return astnode_create_integer(result, loc);
 }
 
 /**
@@ -843,15 +843,15 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                 (astnode_is_type(rhs, INTEGER_NODE)) ) {
                 /* Both sides are integer literals, so fold. */
                 switch (expr->oper) {
-                    case PLUS_OPERATOR: folded = astnode_create_integer(lhs->integer + rhs->integer, expr->loc);    break;
-                    case MINUS_OPERATOR:    folded = astnode_create_integer(lhs->integer - rhs->integer, expr->loc);    break;
-                    case MUL_OPERATOR:  folded = astnode_create_integer(lhs->integer * rhs->integer, expr->loc);    break;
+                    case PLUS_OPERATOR: folded = astnode_create_integer(expr_add(lhs->integer, rhs->integer), expr->loc);    break;
+                    case MINUS_OPERATOR:    folded = astnode_create_integer(expr_sub(lhs->integer, rhs->integer), expr->loc);    break;
+                    case MUL_OPERATOR:  folded = astnode_create_integer(expr_mul(lhs->integer, rhs->integer), expr->loc);    break;
                     case DIV_OPERATOR:
                         if (rhs->integer == 0) {
                             err(expr->loc, "division by zero in expression");
                             folded = astnode_create_integer(0, expr->loc);
                         } else {
-                            folded = astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
+                            folded = astnode_create_integer(expr_div(lhs->integer, rhs->integer), expr->loc);
                         }
                         break;
                     case MOD_OPERATOR:
@@ -859,22 +859,17 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                             err(expr->loc, "modulo by zero in expression");
                             folded = astnode_create_integer(0, expr->loc);
                         } else {
-                            folded = astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
+                            folded = astnode_create_integer(expr_mod(lhs->integer, rhs->integer), expr->loc);
                         }
                         break;
                     case AND_OPERATOR:  folded = astnode_create_integer(lhs->integer & rhs->integer, expr->loc);    break;
                     case OR_OPERATOR:   folded = astnode_create_integer(lhs->integer | rhs->integer, expr->loc);    break;
                     case XOR_OPERATOR:  folded = astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);    break;
                     case SHL_OPERATOR:
-                        if (rhs->integer < 0 || (size_t)rhs->integer >= sizeof(int) * CHAR_BIT) {
-                            err(expr->loc, "invalid shift count in expression");
-                            folded = astnode_create_integer(0, expr->loc);
-                        } else {
-                            folded = astnode_create_integer((int)((unsigned int)lhs->integer << rhs->integer), expr->loc);
-                        }
+                        folded = shift_integer(lhs->integer, rhs->integer, 0, expr->loc);
                         break;
                     case SHR_OPERATOR:
-                        folded = shift_right(lhs->integer, rhs->integer, expr->loc);
+                        folded = shift_integer(lhs->integer, rhs->integer, 1, expr->loc);
                         break;
                     case LT_OPERATOR:   folded = astnode_create_integer(lhs->integer < rhs->integer, expr->loc);    break;
                     case GT_OPERATOR:   folded = astnode_create_integer(lhs->integer > rhs->integer, expr->loc);    break;
@@ -1020,7 +1015,7 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                     case NOT_OPERATOR:  folded = astnode_create_integer(!lhs->integer, expr->loc);  break;
                     case LO_OPERATOR:   folded = astnode_create_integer(lhs->integer & 0xFF, expr->loc);    break;
                     case HI_OPERATOR:   folded = astnode_create_integer((lhs->integer >> 8) & 0xFF, expr->loc); break;
-                    case UMINUS_OPERATOR:   folded = astnode_create_integer(-lhs->integer, expr->loc);  break;
+                    case UMINUS_OPERATOR:   folded = astnode_create_integer(expr_neg(lhs->integer), expr->loc);  break;
                     default: break;
                 }
                 /* Replace expression by folded one. */
@@ -5612,28 +5607,28 @@ static astnode *eval_arithmetic(const astnode *expr, const astnode *lhs, const a
             && astnode_is_type(rhs, INTEGER_NODE)) {
             /* Both sides are integer literals. */
             switch (expr->oper) {
-                case PLUS_OPERATOR:  return astnode_create_integer(lhs->integer + rhs->integer, expr->loc);
-                case MINUS_OPERATOR: return astnode_create_integer(lhs->integer - rhs->integer, expr->loc);
-                case MUL_OPERATOR:   return astnode_create_integer(lhs->integer * rhs->integer, expr->loc);
+                case PLUS_OPERATOR:  return astnode_create_integer(expr_add(lhs->integer, rhs->integer), expr->loc);
+                case MINUS_OPERATOR: return astnode_create_integer(expr_sub(lhs->integer, rhs->integer), expr->loc);
+                case MUL_OPERATOR:   return astnode_create_integer(expr_mul(lhs->integer, rhs->integer), expr->loc);
                 case DIV_OPERATOR:
                     if (rhs->integer == 0) {
                         err(expr->loc, "division by zero in expression");
                         return astnode_create_integer(0, expr->loc);
                     } else {
-                        return astnode_create_integer(lhs->integer / rhs->integer, expr->loc);
+                        return astnode_create_integer(expr_div(lhs->integer, rhs->integer), expr->loc);
                     }
                 case MOD_OPERATOR:
                     if (rhs->integer == 0) {
                         err(expr->loc, "modulo by zero in expression");
                         return astnode_create_integer(0, expr->loc);
                     } else {
-                        return astnode_create_integer(lhs->integer % rhs->integer, expr->loc);
+                        return astnode_create_integer(expr_mod(lhs->integer, rhs->integer), expr->loc);
                     }
                 case AND_OPERATOR:   return astnode_create_integer(lhs->integer & rhs->integer, expr->loc);
                 case OR_OPERATOR:    return astnode_create_integer(lhs->integer | rhs->integer, expr->loc);
                 case XOR_OPERATOR:   return astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);
-                case SHL_OPERATOR:   return astnode_create_integer(lhs->integer << rhs->integer, expr->loc);
-                case SHR_OPERATOR:   return shift_right(lhs->integer, rhs->integer, expr->loc);
+                case SHL_OPERATOR:   return shift_integer(lhs->integer, rhs->integer, 0, expr->loc);
+                case SHR_OPERATOR:   return shift_integer(lhs->integer, rhs->integer, 1, expr->loc);
                 case LT_OPERATOR:    return astnode_create_integer(lhs->integer < rhs->integer, expr->loc);
                 case GT_OPERATOR:    return astnode_create_integer(lhs->integer > rhs->integer, expr->loc);
                 case EQ_OPERATOR:    return astnode_create_integer(lhs->integer == rhs->integer, expr->loc);
@@ -5679,7 +5674,7 @@ static astnode *eval_arithmetic(const astnode *expr, const astnode *lhs, const a
                 case NOT_OPERATOR:  return astnode_create_integer(!lhs->integer, expr->loc);
                 case LO_OPERATOR:   return astnode_create_integer(lhs->integer & 0xFF, expr->loc);
                 case HI_OPERATOR:   return astnode_create_integer((lhs->integer >> 8) & 0xFF, expr->loc);
-                case UMINUS_OPERATOR: return astnode_create_integer(-lhs->integer, expr->loc);
+                case UMINUS_OPERATOR: return astnode_create_integer(expr_neg(lhs->integer), expr->loc);
                 default: break;
             }
         }
