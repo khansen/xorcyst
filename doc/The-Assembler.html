@@ -817,7 +817,11 @@ the first-pass prefix has not been recalculated. Use a label at the desired
 position, or define counts before allocating storage. A literal one-byte
 user type has an already accurate first-pass extent and remains supported.
 The uncertainty belongs to the active segment and persists until an absolute
-<code class="code">.org</code>; <code class="code">.org $+offset</code> cannot restore it. Other first-pass PC uses
+<code class="code">.org</code>. A PC-relative origin such as <code class="code">.org $+offset</code> is rejected
+while that position is uncertain; otherwise it would capture a provisional
+address just as an equate would. Define storage counts before allocation or
+use an absolute origin. Relative origins at known positions remain valid.
+Other first-pass PC uses
 and layout changes such as instruction shortening remain separate limitations
 tracked in <samp class="file">TODO</samp>.
 </p>

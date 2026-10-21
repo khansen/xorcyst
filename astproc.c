@@ -3424,6 +3424,12 @@ static int process_org(astnode *org, void *arg, astnode **next)
         int uses_pc;
         addr = reduce_expression_complete(addr, FOLD_PC_NO);
         uses_pc = addr != NULL && expression_uses_pc(addr);
+        if (uses_pc && deferred_pc[in_dataseg]) {
+            err(org->loc, "cannot use $ in org after unresolved storage; use an absolute origin");
+            astnode_remove(org);
+            astnode_finalize(org);
+            return 0;
+        }
         addr = fold_constants(addr, FOLD_PC_YES);
         if (astnode_is_type(addr, INTEGER_NODE)) {
             /* Range check */
