@@ -1,3 +1,29 @@
+Version 1.9.12:
+
+- Define integer expression arithmetic consistently as signed 32-bit values
+  with wrapping results in the assembler, linker, listings and analysis.
+  Addition, subtraction, multiplication, unary minus and left shift discard
+  bits above bit 31. Division truncates toward zero; $80000000 / -1 wraps
+  to $80000000, with remainder zero. Shift counts must be 0 through 31.
+  This removes signed-overflow and invalid-shift undefined behavior.
+- Deliberate compatibility change: link-time calculations now wrap at 32 bits
+  instead of using the host's long width. For example, ($40000000*8)-1 is -1,
+  including with external-symbol or label operands. Comparisons and range
+  checks use the wrapped signed value. These rules also apply to older objects;
+  the object encoding is unchanged. Listings and analysis leave zero-divisor
+  expressions unevaluated rather than reporting a fabricated value of zero.
+- Reject $ in .equ, .define and = after storage has left the first-pass
+  position uncertain, instead of capturing a provisional address. Use a label
+  for the final address, or define counts before allocating storage. The check
+  includes deferred field padding and user-type storage and is conservative:
+  defining a count later does not recalculate the preceding layout.
+- Reject PC-relative .org after unresolved storage with a located error,
+  preserving existing outputs. Use an absolute origin or define storage counts
+  before use. Known relative origins remain supported, code and data segments
+  are independent, and an absolute origin restores a known position.
+- Preserve listing, instruction-record and object schemas. Remaining first-pass
+  PC limitations and future format changes are tracked in TODO.
+
 Version 1.9.11:
 
 - Preserve dotted member names during constant substitution. Global .equ,
