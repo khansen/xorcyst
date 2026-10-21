@@ -58,8 +58,9 @@ Known defects and follow-ups:
   The binary remainder evaluates the count after the first element, changing
   some layouts from 1.9.2, which evaluated it at the field start. Constants
   and label differences support late zero counts, including nested layouts.
-- PC equates now reject a first-pass position made uncertain by deferred
-  storage. Other first-pass consumers of $ (conditionals, loops and messages),
+- PC equates and PC-relative .org now reject a first-pass position made
+  uncertain by deferred storage. Other first-pass consumers of $ (conditionals,
+  loops and messages),
   later instruction shortening and reassigned type dimensions still need a
   general final-layout/capture policy. Use labels for final addresses.
   Consider resolving deferred PC equates instead of conservatively rejecting

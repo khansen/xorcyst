@@ -167,6 +167,58 @@ class InputHandling(unittest.TestCase):
                         if analysis:
                             self.assertEqual((self.root / 'xref.json').read_bytes(), b'previous analysis')
 
+    def test_relative_org_rejects_deferred_storage_positions(self):
+        prefixes = (
+            '.byte $EE\n.dsb Count\n',
+            '.byte $EE\n.dsb Count\nCount .equ 2\n',
+            '.dsw Count\n',
+            '.dataseg\nbuf .byte[Count]\n',
+            '.struc S\nfield .word\n.ends\nv .S\n',
+            '.struc S\nfield .byte[Count]\n.ends\n.S {{1}}\n',
+        )
+        message = b'cannot use $ in org after unresolved storage; use an absolute origin'
+        for prefix in prefixes:
+            for origin in ('$', '$+2'):
+                for debug in (False, True):
+                    for analysis in (False, True):
+                        with self.subTest(prefix=prefix, origin=origin, debug=debug, analysis=analysis):
+                            flags = ['--debug'] if debug else []
+                            if analysis:
+                                flags += ['--listing=diagnostic.json', '--listing-format=json',
+                                          '--listing-version=2', '--xref=xref', '--xref-data=true',
+                                          '--instruction-records-output=records', '--dependency-manifest=deps']
+                                for name in ('xref', 'records', 'deps'):
+                                    (self.root / name).write_bytes(b'previous analysis')
+                            suffix = '' if 'Count .equ' in prefix or 'field .word' in prefix else 'Count .equ 2\n'
+                            source = prefix + '.org ' + origin + '\n.codeseg\nL: .word L\n' + suffix
+                            result = self.run_tool('xasm', source, arguments=flags)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(f'input.asm:{prefix.count(chr(10)) + 1}: error: '.encode()
+                                          + message, result.stderr)
+                            self.assertEqual(result.stderr.count(b'error:'), 1, result.stderr.decode())
+                            if analysis:
+                                for name in ('xref', 'records', 'deps'):
+                                    self.assertEqual((self.root / name).read_bytes(), b'previous analysis')
+
+    def test_relative_org_known_positions_and_segment_isolation(self):
+        cases = (
+            ('Count .equ 2\n.byte $EE\n.dsb Count\n.org $+2\nL: .word L\n', 'EE 00 00 05 00'),
+            ('.byte $EE\n.dsb Count\n.org $8000\n.org $+2\nL: .word L\nCount .equ 2\n',
+             'EE 00 00 02 80'),
+            ('.byte $EE\n.dsb Count\nBase .equ $8000\n.org Base\n.org $+2\nL: .word L\nCount .equ 2\n',
+             'EE 00 00 02 80'),
+            ('.dataseg\nbuf .byte[Count]\n.codeseg\n.org $+2\nL: .word L\nCount .equ 2\n', '02 00'),
+            ('.dsb Count\n.dataseg\n.org $+2\nBuf .byte\n.codeseg\n.word Buf\nCount .equ 2\n',
+             '00 00 02 00'),
+        )
+        for source, expected in cases:
+            for debug in (False, True):
+                with self.subTest(source=source, debug=debug):
+                    result = self.run_tool('xasm', source, arguments=('--debug',) if debug else ())
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(result.stderr, b'')
+                    self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex(expected))
+
     def test_member_names_survive_constant_substitution(self):
         types = ('.struc Point\npx .byte\npy .byte\n.ends\n'
                  '.struc Box\nhead .byte\npoints .Point[3]\ntail .byte\n.ends\n')
@@ -1982,6 +2034,30 @@ class InputHandling(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                     self.assertEqual(result.stderr, b'')
                 self.assertEqual((self.root / 'output').read_bytes(), bytes.fromhex('EA FF FF FF'))
+
+    def test_root_products_wrap_before_linker_range_checks(self):
+        # A later operator would re-truncate the operands and conceal a wide
+        # multiply. Keep the product at the root of data and instruction operands.
+        cases = (('(L2-L1+$FFFF)*$10000', 0),
+                 ('(L2-L1+$7FFFFFFE)*$7FFFFFFF', 1),
+                 ('(L2-L1+$80000000)*$80000001', 1))
+        for expression, value in cases:
+            for pure in (True, False):
+                for debug in (False, True):
+                    with self.subTest(expression=expression, pure=pure, debug=debug):
+                        source = (f'L1: nop\nL2: .byte {expression}\n.word {expression}\n'
+                                  f'lda #({expression})\n')
+                        result = self.run_tool('xasm', source, pure_binary=pure,
+                                               arguments=('--debug',) if debug else ())
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(result.stderr, b'')
+                        if not pure:
+                            (self.root / 'output').rename(self.root / 'unit.o')
+                            result = self.run_tool('xlnk', 'link{file=unit.o,origin=0}\n')
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            self.assertEqual(result.stderr, b'')
+                        self.assertEqual((self.root / 'output').read_bytes(),
+                                         bytes([0xEA, value, value, 0, 0xA9, value]))
 
     def test_signed_storage_comparisons_validate_the_final_count(self):
         for expression, count in (('1+2*((L2-L1+-2)<0)', 3),

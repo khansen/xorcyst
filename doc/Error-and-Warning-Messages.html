@@ -59,6 +59,13 @@ it. Defining the count later does not recompute the earlier prefix.
 <dd><p>Make sure <var class="var">identifier</var> is a macro and not a label, constant or other type of symbol.
 </p>
 </dd>
+<dt>&lsquo;<samp class="samp">cannot use $ in org after unresolved storage; use an absolute origin</samp>&rsquo;</dt>
+<dd><p>A PC-relative <code class="code">.org</code> would use an uncertain first-pass position after
+deferred storage. Define the storage count before allocating it or use an
+absolute origin. Defining the count later does not recompute the earlier
+prefix. Only the active code or data segment&rsquo;s uncertainty affects this check.
+</p>
+</dd>
 <dt>&lsquo;<samp class="samp">circular constant definition `<var class="var">identifier</var>'</samp>&rsquo;</dt>
 <dd><p>A constant refers back to itself, directly or through other constants. Break
 the cycle. Forward aliases in data and instruction operands are resolved before
