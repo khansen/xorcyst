@@ -2,6 +2,19 @@ The XORcyst is a set of tools for 6502 software development: the `xasm`
 assembler and `xlnk` linker. This release is version 1.9.12.
 Run `xasm --version` or `xlnk --version` to identify an installed build.
 
+v2 planning
+-----------
+
+The next major workstream is the approved v2 scope/design in
+[XORCYST_V2_DESIGN.md](XORCYST_V2_DESIGN.md). It traces requirements to owner
+decisions, existing Nesrev/game/music workflows and reproduced defects. D0 was
+approved on 2026-10-22, authorizing D1 baseline freezing and contract design.
+Those contracts require review and approval before implementation. v2 must be
+no slower than v1 on large projects, both plain and with listings and analysis enabled,
+and in object assembly/linking. The required game and music builds must retain
+their ROM bytes; d-pad hero 2 is a mandatory acceptance fixture.
+Current formats and behavior are unchanged by this plan.
+
 Build and test
 --------------
 
@@ -249,6 +262,9 @@ The report records output sizes; they may grow for new content, not for
 repetition. A larger regression needs explicit approval, recorded with its
 reason. Specs for new or changed outputs state their expected cost and the
 measurements that confirm it.
+
+Those allowances apply to v1 maintenance. The proposed v2 has the stricter
+per-configuration no-slowdown requirement described in XORCYST_V2_DESIGN.md.
 
 Maintainer builds
 -----------------

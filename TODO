@@ -14,28 +14,43 @@
 
 Compatibility planning:
 
-- XORcyst v2 is a clean-break redesign of the binary object format. No backward
-  compatibility with v1 objects is required: neither reading old objects nor
-  writing a legacy format is a design constraint. Rebuild inputs and migrate
-  consumers together rather than retaining parallel compatibility paths.
-  Design the format around explicit numeric semantics, typed symbols and
-  relocations, and storage extents that can represent zero without count-minus-one
-  tricks. Consider shared expression graphs to avoid exponential tree expansion,
-  and define how layout-dependent expressions are evaluated and validated.
-  Specify a recognizable format/version header, fixed-width encoding and byte
-  order, bounds and resource limits, and rejection of malformed or unsupported
-  inputs. Validate round trips, cross-host output and invalid-input handling.
-  Coordinate Nesrev and other consumer updates, document migration and provide
-  fixtures before release. This is planning only; current v1 fixes retain their
-  object format.
-- Listing formats may also deliberately break compatibility when justified.
-  Plan schema identifiers, migration notes and consumer regression coverage;
-  no format change is part of this planning update.
-- Aim for one supported structured-listing schema, retaining a version identifier
-  in its output rather than indefinite selectable legacy schemas. Before removing
-  --listing-version, migrate Nesrev and other consumers and decide how object-mode
-  listings should work (v2 currently supports pure binary only). Document the
-  migration and validate consumers together; this plan changes no current format.
+- Prioritize the v2 scope/design in XORCYST_V2_DESIGN.md. Requirements
+  must trace to an owner decision, an existing project dependency, or a concrete
+  defect; synthetic probes do not automatically justify new language features.
+  D0 was approved on 2026-10-22; D1 baseline freezing and contract design are
+  authorized. Review and approval of those contracts precede implementation.
+  Keep optional v1 repairs separate. No current formats change in this plan.
+- v2 may replace the object format without reading or writing v1 objects.
+  Use that freedom to remove demonstrated encoding limitations, not to redesign
+  working source binding, placement, or every analysis field. Rebuild objects
+  and coordinate consumer migration at cutover.
+- Aim for one structured-listing schema with an output identifier, not
+  indefinite selectable legacy schemas. Start from existing complete listing
+  version 2 facts and preserve working conventions. Migrate Nesrev before
+  removing --listing-version. The approved scope removes object-mode structured
+  listing/xref exports; retain text listing only through the shared renderer.
+  Listing version 2 currently requires pure binary; that is not a statement
+  about a future XORcyst software version 2. New xlnk analysis is not required.
+- Full forward-string data support is an explicit v2 request: final extents,
+  use-site character maps, existing string operations and matching analysis.
+  The selected v1 policy is consistent rejection of unresolved string data;
+  that narrow repair and exported-alias repairs remain separate work.
+- v2 must be no slower than v1 on large projects such as Metroid, both plain
+  and with listing, xref, records and actual combined Nesrev analysis profiles.
+  Include object-mode xasm, xlnk and full builds of bombsweeper, dpadhero2,
+  ntxdev and the projects under nesdev/music. The selected dpadhero tree is
+  /Users/kenthansen/Dropbox/nesdev/ntxdev/games/dpadhero (build in src), but
+  its full-ROM test is non-blocking while it depends on precompiled v1 song
+  objects. Do not spend work recovering/converting them or supporting v1 objects.
+  Require byte-identical ROMs;
+  the working dpadhero2/src build is a mandatory acceptance gate. Freeze actual
+  source/assets/tools, including local inputs, without changing their trees.
+  Improvement is the goal. The v1 5% plus 20 ms allowance is not a v2 budget;
+  investigate noise and gate each configuration, not an average across modes.
+- The approved v2 scope selects xlnk's relaxation loop on both paths,
+  rejects unresolved PCs in expansion directives and PC-dependent field
+  dimensions, and decides the known binary/link differences in section 3.5.
+  These are approved scope decisions, not changes to the current v1 behavior.
 
 Known defects and follow-ups:
 

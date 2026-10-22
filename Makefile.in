@@ -450,6 +450,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
 
 # Install the current feature documentation alongside the tools.
 dist_doc_DATA = README NEWS xorcyst.texinfo \
+  XORCYST_V2_DESIGN.md \
   XASM_ANALYSIS_FEATURES_GUIDE.md \
   XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md \
   XASM_DEPENDENCY_MANIFEST_SPEC.md \
