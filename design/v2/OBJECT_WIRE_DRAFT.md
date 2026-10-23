@@ -1,6 +1,7 @@
 # D1 object wire layout
 
 Status: **approved by the owner as part of D1 on 2026-10-23.**
+Includes the owner-approved preimplementation erratum in semantic contract §9.
 No runtime implementation is included here. This is the concrete
 wire check following the corrected [semantic contract](../../XORCYST_V2_CONTRACTS.md).
 The numbers below and the independent hex example were reviewed together.
@@ -16,6 +17,8 @@ serialized. Normal objects contain diagnostic locations; source text is optional
 `XOROBJ2\n` is both the discriminator and the format version. Any incompatible
 wire change requires a different magic; there is no implicit product-version
 negotiation or acceptance of unknown extensions.
+The preimplementation withdrawal of unused tags 42–43 in that erratum retains
+this magic and the existing example; no runtime v2 objects used those tags.
 
 The 92-byte header is eight bytes `XOROBJ2\n`, a u32 exact file length, then ten
 pairs `(table_offset, record_count)` in the order below. Offsets are absolute
@@ -84,13 +87,17 @@ Expression operands reference expression indices except where stated:
 | 6 | selected type/extent value | a = extent; convert checked byte size to the existing 32-bit expression value, preserving frontend type capture; never used for deferred label sizeof |
 | 16–20 | unary negate, complement, logical-not, low-byte, high-byte | a = operand |
 | 32–39 | add, subtract, multiply, divide, remainder, shift-left, shift-right, bitwise-and | a,b = operands |
-| 40–43 | bitwise-or, bitwise-xor, logical-and, logical-or | a,b = operands |
+| 40–41 | bitwise-or, bitwise-xor | a,b = operands |
+| 42–43 | reserved; invalid on input | no defined fields or operator semantics |
 | 44–49 | equal, not-equal, less, less-equal, greater, greater-equal | a,b = operands |
 
 `c` is zero for all current operators. Operator meanings, including string
 concatenation/comparison, signed comparisons and wrapping arithmetic, are exactly
 those in the semantic contract. Do not fold `x+0` until x's kind is resolved.
 No literal host addresses or symbol-table slot numbers substitute for references.
+The owner-approved D1 erratum in semantic contract section 9 withdraws logical
+AND/OR: v1 has no source syntax or object operators for them. Tags 42–43 must
+be rejected, not interpreted or renumbered; tags 44–49 remain unchanged.
 `defined`, local/member lookup, masks, macro/conditional expansion and type
 selection and explicit label-size queries are frontend operations; they cannot
 escape as extra object tags. Any pending local operand-kind checks for label
