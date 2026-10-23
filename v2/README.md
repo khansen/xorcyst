@@ -98,7 +98,7 @@ or final cutover. The installed v1 tools remain unchanged. The PR records its
 published head and eventual merge commit; this approval record adds no executable
 change to the reviewed revision.
 
-## I2: isolated layout and encoding (local review candidate)
+## I2: isolated layout and encoding
 
 `layout.h` consumes directly constructed IR; `extent.h` adds checked uint64
 layout quantities to the shared evaluator. They are internal operations, not
@@ -165,7 +165,7 @@ allocation wrappers, as I1 does. `make check`, distribution tests and sanitizer
 CI run both v2 suites. Installed v1 source lists still exclude both modules.
 No project ROM equality, end-to-end v2 performance, source binding, object
 serialization/linker integration or downstream analysis gate is claimed here.
-Complete local independent review before publishing this branch or a PR.
+I2 completed local independent review before publication; see its approval below.
 
 On the local arm64 build the I2 node is 288 bytes (up from the initially reviewed
 192, to keep the two memo closures independent), a reverse edge 8 bytes,
@@ -174,3 +174,19 @@ when used. A 1,000/5,000-instruction shared-operand fixture evaluates 2,805/10,8
 nodes in two walks. The adversarial 100/200-anchor fixture evaluates
 10,899/41,799 nodes in three walks; this is recorded work, not a project timing
 claim. The 200-step cascade takes 202 walks and 40,602 fragment visits.
+
+## I2 approval record
+
+Kent Hansen approved I2 on 2026-10-24 after independent local review reported
+no findings on `35fbb0cd8c9d56f0596028fb10bbe22d504e51fa`. That revision contains
+the reviewed layout/encoding implementation, the owner-approved work-bound
+erratum, and the coverage follow-up for span lowering, epoch rollovers and
+zero-page failed alignment splits. The owner authorized publication as the
+single I2 PR and its CI run.
+
+This approval covers the isolated layout/encoding module and its tests. It does
+not waive PR CI, later implementation reviews, required project ROM/performance
+gates or final cutover. Installed v1 tools remain unchanged. This approval record
+adds no executable change to the reviewed revision; the PR retains that revision
+and this documentation commit. I3 remains the next implementation stage after
+I2's PR workflow is complete.
