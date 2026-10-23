@@ -320,6 +320,7 @@ v2_id v2_string(v2_unit *u, const void *bytes, size_t length, v2_location loc)
 v2_id v2_reference(v2_unit *u, v2_id id, v2_location loc)
 {
     node n = {0};
+    if (!valid_location(u, loc)) return V2_NONE;
     if (id >= u->definition_count) { fail(u, V2_ERROR_REFERENCE, loc); return V2_NONE; }
     n.kind = REFERENCE; n.location = loc; n.left = id;
     return append(u, n);
@@ -328,6 +329,7 @@ v2_id v2_reference(v2_unit *u, v2_id id, v2_location loc)
 v2_id v2_address(v2_unit *u, v2_id id, v2_location loc)
 {
     node n = {0};
+    if (!valid_location(u, loc)) return V2_NONE;
     if (id >= u->anchor_count) { fail(u, V2_ERROR_REFERENCE, loc); return V2_NONE; }
     n.kind = ADDRESS; n.location = loc; n.left = id;
     return append(u, n);
@@ -336,6 +338,7 @@ v2_id v2_address(v2_unit *u, v2_id id, v2_location loc)
 v2_id v2_unary(v2_unit *u, v2_operator op, v2_id operand, v2_location loc)
 {
     node n = {0};
+    if (!valid_location(u, loc)) return V2_NONE;
     if (operand >= u->node_count || op < V2_NEGATE || op > V2_HIGH) {
         fail(u, V2_ERROR_REFERENCE, loc); return V2_NONE;
     }
@@ -346,6 +349,7 @@ v2_id v2_unary(v2_unit *u, v2_operator op, v2_id operand, v2_location loc)
 v2_id v2_binary(v2_unit *u, v2_operator op, v2_id left, v2_id right, v2_location loc)
 {
     node n = {0};
+    if (!valid_location(u, loc)) return V2_NONE;
     if (left >= u->node_count || right >= u->node_count ||
         op < V2_ADD || op > V2_GREATER_EQUAL) {
         fail(u, V2_ERROR_REFERENCE, loc); return V2_NONE;
@@ -425,8 +429,6 @@ static evaluated integer_operation(const node *n, int32_t lhs, int32_t rhs)
     case V2_BIT_AND: result = expr_i32((uint32_t)lhs & (uint32_t)rhs); break;
     case V2_BIT_OR: result = expr_i32((uint32_t)lhs | (uint32_t)rhs); break;
     case V2_BIT_XOR: result = expr_i32((uint32_t)lhs ^ (uint32_t)rhs); break;
-    case V2_LOGICAL_AND: result = lhs && rhs; break;
-    case V2_LOGICAL_OR: result = lhs || rhs; break;
     case V2_EQUAL: result = lhs == rhs; break;
     case V2_NOT_EQUAL: result = lhs != rhs; break;
     case V2_LESS: result = lhs < rhs; break;

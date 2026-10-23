@@ -8,7 +8,7 @@
 extern void test_v2_allocation_failure(size_t);
 extern size_t test_v2_allocation_calls(void);
 extern size_t test_v2_live_allocations(void);
-extern void test_v2_version_rollover(v2_unit *);
+extern void test_v2_version_rollover(v2_unit *, int);
 
 static v2_location loc(v2_id file, uint32_t line)
 {
@@ -209,7 +209,7 @@ static void strings(void)
           CHECK(v2_evaluate(u, sum).value.as.string.bytes == stable);
       }
       CHECK(test_v2_allocation_calls() == allocations);
-      test_v2_version_rollover(u);
+      test_v2_version_rollover(u, 1);
       CHECK(v2_place(u, a, 1, 200)); string_is(u, sum, "A0", 2);
       CHECK(v2_evaluate(u, sum).value.as.string.bytes == stable); }
     v2_unit_destroy(u);
@@ -269,6 +269,111 @@ static void diagnostics(void)
     v2_unit_destroy(u);
 }
 
+static void rollover(void)
+{
+    v2_unit *u = v2_unit_create();
+    v2_id a = v2_anchor(u, v2_no_location());
+    v2_id ref = v2_address(u, a, v2_no_location()), d, root;
+    v2_result r = v2_evaluate(u, ref); /* Cached at layout epoch 1. */
+    CHECK(r.state == V2_DEFERRED && r.dependency_count == 1);
+    test_v2_version_rollover(u, 1); /* Only layout wraps; request must not. */
+    CHECK(v2_place(u, a, 1, 5)); integer_is(u, ref, 5);
+    v2_unit_destroy(u);
+
+    u = v2_unit_create(); d = v2_definition(u, "D", v2_no_location());
+    ref = v2_reference(u, d, v2_no_location());
+    r = v2_evaluate(u, ref); /* Cached at binding epoch 1. */
+    CHECK(r.state == V2_DEFERRED && r.dependency_count == 1);
+    test_v2_version_rollover(u, 0);
+    CHECK(v2_bind(u, d, number(u, 42))); integer_is(u, ref, 42);
+    v2_unit_destroy(u);
+
+    u = v2_unit_create(); d = v2_definition(u, "D", v2_no_location());
+    a = v2_anchor(u, v2_no_location());
+    root = binary(u, V2_ADD, v2_reference(u, d, v2_no_location()),
+                  v2_address(u, a, v2_no_location()));
+    /* The first request sets all node/definition/anchor visit marks to 1.
+     * The second reuses 1 and must clear each kind of old visit mark. */
+    { int i;
+      for (i = 0; i < 2; ++i) {
+          test_v2_version_rollover(u, 2);
+          r = v2_evaluate(u, root);
+          CHECK(r.state == V2_DEFERRED && r.dependency_count == 2);
+          CHECK(has_dependency(r, V2_DEP_DEFINITION, d));
+          CHECK(has_dependency(r, V2_DEP_ANCHOR, a));
+      } }
+    v2_unit_destroy(u);
+}
+
+static void placement_error_order(void)
+{
+    v2_unit *u = v2_unit_create();
+    v2_id f = v2_file(u, "placement-errors.asm"), a = v2_anchor(u, loc(f, 1));
+    v2_id left = v2_binary(u, V2_DIVIDE, number(u, 10),
+                           v2_address(u, a, loc(f, 2)), loc(f, 2));
+    v2_id right = v2_binary(u, V2_SHIFT_LEFT, number(u, 1), number(u, 40), loc(f, 3));
+    v2_id root = binary(u, V2_ADD, left, right);
+    error_is(u, root, V2_ERROR_SHIFT, f, 3);
+    CHECK(v2_place(u, a, 1, 0)); error_is(u, root, V2_ERROR_DIV_ZERO, f, 2);
+    CHECK(v2_place(u, a, 1, 2)); error_is(u, root, V2_ERROR_SHIFT, f, 3);
+    CHECK(v2_place(u, a, 0, 0)); error_is(u, root, V2_ERROR_SHIFT, f, 3);
+    v2_unit_destroy(u);
+}
+
+static void cycle_error_order(void)
+{
+    int placement, resolve_first;
+    for (placement = 0; placement < 2; ++placement) {
+        for (resolve_first = 0; resolve_first < 2; ++resolve_first) {
+            v2_unit *u = v2_unit_create();
+            v2_id f = v2_file(u, "cycle-errors.asm");
+            v2_id d = v2_definition(u, "D", loc(f, 1));
+            v2_id pending = placement ? v2_anchor(u, loc(f, 2)) :
+                                        v2_definition(u, "U", loc(f, 2));
+            v2_id r = v2_reference(u, d, loc(f, 3));
+            v2_id invalid = v2_binary(u, V2_DIVIDE, number(u, 1), number(u, 0), loc(f, 8));
+            v2_id left = placement ? v2_binary(u, V2_DIVIDE, number(u, 1),
+                v2_address(u, pending, loc(f, 8)), loc(f, 8)) :
+                v2_reference(u, pending, loc(f, 4));
+            CHECK(v2_bind(u, d, binary(u, V2_ADD, left, r)));
+            if (!resolve_first) error_is(u, r, V2_ERROR_CYCLE, f, 3);
+            if (placement) CHECK(v2_place(u, pending, 1, 0));
+            else CHECK(v2_bind(u, pending, invalid));
+            /* Binding/placement before the first request and after caching the
+             * cycle must select the same located left-hand error. */
+            error_is(u, r, V2_ERROR_DIV_ZERO, f, 8);
+            error_is(u, r, V2_ERROR_DIV_ZERO, f, 8);
+            v2_unit_destroy(u);
+        }
+    }
+}
+
+static void string_identities(void)
+{
+    int forward, form;
+    for (forward = 0; forward < 2; ++forward) {
+        for (form = 0; form < 3; ++form) {
+            v2_unit *u = v2_unit_create();
+            v2_id f = v2_file(u, "identities.asm");
+            v2_id d = v2_definition(u, "S", loc(f, 1));
+            v2_id str = v2_string(u, "abc", 3, loc(f, 2));
+            v2_id value = forward ? v2_reference(u, d, loc(f, 3)) : str;
+            v2_id one = number(u, 1);
+            v2_operator op = form == 1 ? V2_DIVIDE : V2_MULTIPLY;
+            v2_id root = v2_binary(u, op, form == 2 ? one : value,
+                                  form == 2 ? value : one, loc(f, 4));
+            if (forward) {
+                CHECK(v2_evaluate(u, root).state == V2_DEFERRED);
+                CHECK(v2_bind(u, d, str));
+            }
+            error_is(u, root, V2_ERROR_TYPE, f, 4);
+            integer_is(u, binary(u, op, form == 2 ? one : number(u, 42),
+                                form == 2 ? number(u, 42) : one), 42);
+            v2_unit_destroy(u);
+        }
+    }
+}
+
 static void deep_graphs(void)
 {
     v2_unit *u = v2_unit_create();
@@ -313,6 +418,51 @@ static void limits(void)
     CHECK(v2_string(u, "z", 1, v2_no_location()) == V2_NONE);
     CHECK(v2_unit_error(u).code == V2_ERROR_STRING_LIMIT);
     v2_unit_destroy(u); free(payload);
+}
+
+static void concat_budget(void)
+{
+    v2_unit *u = v2_unit_create();
+    v2_id f = v2_file(u, "budget.asm"), empty = v2_string(u, NULL, 0, loc(f, 1));
+    v2_id five = number(u, 5), root = v2_binary(u, V2_ADD, empty, five, loc(f, 7));
+    unsigned char *payload = malloc(V2_MAX_STRING_BYTES);
+    unsigned i;
+    size_t calls;
+    CHECK(payload); memset(payload, 'x', V2_MAX_STRING_BYTES);
+    for (i = 0; i < V2_MAX_LIVE_STRING_BYTES / V2_MAX_STRING_BYTES; ++i)
+        CHECK(v2_string(u, payload, V2_MAX_STRING_BYTES, loc(f, 2)) != V2_NONE);
+    free(payload);
+    integer_is(u, five, 5); /* Reserve the evaluator's stack before counting. */
+    calls = test_v2_allocation_calls();
+    error_is(u, root, V2_ERROR_STRING_LIMIT, f, 7);
+    CHECK(test_v2_allocation_calls() == calls); /* No excess payload allocation. */
+    CHECK(v2_unit_error(u).code == V2_ERROR_NONE);
+    integer_is(u, five, 5);
+    string_is(u, binary(u, V2_ADD, empty, empty), "", 0);
+    error_is(u, root, V2_ERROR_STRING_LIMIT, f, 7);
+    v2_unit_destroy(u);
+}
+
+static void builder_locations(void)
+{
+    int form, bad_location;
+    for (form = 0; form < 4; ++form) {
+        for (bad_location = 0; bad_location < 2; ++bad_location) {
+            v2_unit *u = v2_unit_create();
+            v2_id f = v2_file(u, "builder.asm"), result;
+            v2_location l = loc(bad_location ? 77 : f, 2);
+            switch (form) {
+            case 0: result = v2_reference(u, V2_NONE, l); break;
+            case 1: result = v2_address(u, V2_NONE, l); break;
+            case 2: result = v2_unary(u, V2_NEGATE, V2_NONE, l); break;
+            default: result = v2_binary(u, V2_ADD, V2_NONE, V2_NONE, l); break;
+            }
+            CHECK(result == V2_NONE);
+            if (bad_location) error_is(u, result, V2_ERROR_LOCATION, V2_NONE, 0);
+            else error_is(u, result, V2_ERROR_REFERENCE, f, 2);
+            v2_unit_destroy(u);
+        }
+    }
 }
 
 static void invalid_builders(void)
@@ -406,9 +556,15 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[1], "strings")) strings();
     else if (!strcmp(argv[1], "dependencies")) dependencies();
     else if (!strcmp(argv[1], "diagnostics")) diagnostics();
+    else if (!strcmp(argv[1], "rollover")) rollover();
+    else if (!strcmp(argv[1], "placement-error-order")) placement_error_order();
+    else if (!strcmp(argv[1], "cycle-error-order")) cycle_error_order();
+    else if (!strcmp(argv[1], "string-identities")) string_identities();
     else if (!strcmp(argv[1], "deep-graphs")) deep_graphs();
     else if (!strcmp(argv[1], "limits")) limits();
+    else if (!strcmp(argv[1], "concat-budget")) concat_budget();
     else if (!strcmp(argv[1], "invalid-builders")) invalid_builders();
+    else if (!strcmp(argv[1], "builder-locations")) builder_locations();
     else if (!strcmp(argv[1], "allocations")) allocations();
     else CHECK(0);
     CHECK(test_v2_live_allocations() == 0);

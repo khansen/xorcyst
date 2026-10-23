@@ -50,12 +50,8 @@ def expected(op, a, b):
         value = a | b
     elif op == 14:
         value = a ^ b
-    elif op == 15:
-        value = bool(a) and bool(b)
-    elif op == 16:
-        value = bool(a) or bool(b)
     else:
-        value = (a == b, a != b, a < b, a <= b, a > b, a >= b)[op - 17]
+        value = (a == b, a != b, a < b, a <= b, a > b, a >= b)[op - 15]
     return f'K {i32(value)}'
 
 
@@ -89,7 +85,7 @@ class V2Values(unittest.TestCase):
                   -1, 0, 1, 2, 7, 31, 32, 127, 255, 256, 65536, 2147483647]
         rng = random.Random(0x584F52)
         cases = []
-        for op in range(23):
+        for op in range(21):
             pairs = [(a, b) for a in bounds for b in (bounds if op >= 5 else [0])]
             pairs += [(rng.randrange(-2**31, 2**31), rng.randrange(-2**31, 2**31))
                       for _ in range(100)]
@@ -114,7 +110,7 @@ class V2Values(unittest.TestCase):
             commands.append(f'i {value}')
             nodes.append(('i', value))
         for _ in range(250):
-            op, x, y = rng.randrange(5, 23), rng.randrange(len(nodes)), rng.randrange(len(nodes))
+            op, x, y = rng.randrange(5, 21), rng.randrange(len(nodes)), rng.randrange(len(nodes))
             commands.append(f'b {op} {x} {y}')
             nodes.append(('b', op, x, y))
         answers = []
@@ -162,14 +158,32 @@ class V2Values(unittest.TestCase):
     def test_cycles_and_cached_errors_keep_locations_and_recheck_dependencies(self):
         self.run_case('diagnostics')
 
+    def test_rollover_rechecks_epoch_one_caches_and_dependency_visits(self):
+        self.run_case('rollover')
+
+    def test_placement_reselects_the_first_error(self):
+        self.run_case('placement-error-order')
+
+    def test_resolved_dependencies_reselect_error_before_a_cached_cycle(self):
+        self.run_case('cycle-error-order')
+
+    def test_integer_identities_do_not_accept_strings(self):
+        self.run_case('string-identities')
+
     def test_deep_and_shared_graphs_do_not_expand_or_use_the_c_stack(self):
         self.run_case('deep-graphs')
 
     def test_string_budgets_fail_before_overallocation(self):
         self.run_case('limits')
 
+    def test_concatenations_obey_the_total_live_string_budget(self):
+        self.run_case('concat-budget')
+
     def test_invalid_builders_fail_closed(self):
         self.run_case('invalid-builders')
+
+    def test_bad_references_cannot_publish_unowned_diagnostic_locations(self):
+        self.run_case('builder-locations')
 
     def test_each_allocation_failure_leaves_a_destroyable_invalid_unit(self):
         self.run_case('allocations')

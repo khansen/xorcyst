@@ -42,7 +42,8 @@ invalidate dependent results, including cached errors. Constant results survive
 unrelated changes. Dependencies are collected once for a requested Deferred root,
 rather than copied into every ancestor. Evaluation visits operands left to right;
 the first Invalid operand wins, while a Deferred left operand does not hide an
-Invalid right operand. Logical operators evaluate both operands.
+Invalid right operand. Binary logical AND/OR are excluded: they have no v1
+syntax or demonstrated project use (D1 erratum in contract section 9).
 
 All integer operations use the existing `expr_int.h` semantics. Strings preserve
 their lengths and embedded zeros. `+` supports concatenation and signed-decimal
@@ -53,7 +54,9 @@ placement is Invalid once its operands resolve; before that it remains Deferred.
 
 Strings are limited to 16 MiB each and 256 MiB of live unique payload per unit.
 Aliases share payloads. Constant concatenations allocate once and remain owned
-until unit destruction. Returned strings and names remain valid until then;
+until unit destruction. Empty strings may have a NULL byte pointer; callers
+must skip byte access and memory/string calls when the length is zero.
+Returned strings and names remain valid until unit destruction;
 the dependency array is borrowed until the next evaluation. The unit is not
 thread-safe. Table growth is checked and there is no 16,384-expression limit.
 
@@ -69,6 +72,15 @@ integer oracle checks all operators through literal, binding and anchor paths.
 A 100,000-level chain and a shared 200-level diamond exercise stack safety and
 memoization without relying on a performance threshold.
 
+Rollover tests retain cached epoch-1 results and dependency visit marks before
+wrapping each counter independently. Separate tests cover first-error selection
+after placement or binding a dependency in a cycle, and the total live string
+budget on concatenation as well as literal construction.
+
 I1 has no end-to-end v2 assembler or linker. The required ROM equality and
 project performance gates therefore remain open for the later stages. Passing
 these unit tests does not certify those gates or authorize cutover.
+I2's measured work bounds must cover node footprint (168 bytes on the reviewed
+64-bit host), invalidation of all binding/placement-dependent caches when the
+corresponding epoch changes, and repeated deferred-dependency walks.
+Complete local independent review before opening or updating an implementation PR.

@@ -61,7 +61,6 @@ typedef enum {
     V2_NEGATE, V2_COMPLEMENT, V2_NOT, V2_LOW, V2_HIGH,
     V2_ADD, V2_SUBTRACT, V2_MULTIPLY, V2_DIVIDE, V2_REMAINDER,
     V2_SHIFT_LEFT, V2_SHIFT_RIGHT, V2_BIT_AND, V2_BIT_OR, V2_BIT_XOR,
-    V2_LOGICAL_AND, V2_LOGICAL_OR,
     V2_EQUAL, V2_NOT_EQUAL, V2_LESS, V2_LESS_EQUAL, V2_GREATER, V2_GREATER_EQUAL
 } v2_operator;
 
@@ -101,7 +100,9 @@ v2_id v2_binary(v2_unit *unit, v2_operator op, v2_id left, v2_id right,
  * results, but not constants. Invalid includes a located diagnostic on every
  * request, including cache hits; callers decide how to report it.
  *
- * Known string bytes and names remain valid until unit destruction. Deferred
+ * Known string bytes and names remain valid until unit destruction. An empty
+ * string may have bytes == NULL; skip byte access and memory/string calls when
+ * its length is zero, including memcpy with a zero count. Deferred
  * dependency arrays remain valid until the next evaluation or destruction.
  * Results are borrowed read-only views, never ownership transfers. The unit is
  * not thread-safe. String values depending on placement are Invalid. */

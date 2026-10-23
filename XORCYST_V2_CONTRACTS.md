@@ -1,7 +1,8 @@
 # XORcyst v2: approved D1 contracts
 
 Status: **D1 approved by Kent Hansen on 2026-10-23 after independent local
-review reported no blockers.** The approval record is in section 8.
+review reported no blockers.** The approval record is in section 8; the
+owner-approved binary-logical-operator erratum is in section 9.
 These contracts implement the decisions in [the approved D0 scope](XORCYST_V2_DESIGN.md),
 merged as `162dacc`. They define interfaces and acceptance cases, not C APIs or
 runtime code. The installed tools remain v1.9.12. The source-only baseline
@@ -98,7 +99,7 @@ and negation; signed comparisons; division truncated toward zero; remainder
 with the dividend's sign; `INT32_MIN / -1 == INT32_MIN` and remainder zero.
 Right shift is logical over 32 bits, including count zero; both shifts require
 0..31. Zero divisors and invalid counts are Invalid. Low/high-byte extraction,
-bitwise operations and logical comparisons keep v1 meanings. Address/file
+bitwise operations, unary logical NOT and comparisons keep v1 meanings. Address/file
 extent bookkeeping uses checked host-independent counters rather than wrapped
 expression arithmetic.
 
@@ -503,6 +504,7 @@ These entries supplement D0 §3.5 and are included in the section 8 D1 approval.
 
 | Case | v1 behavior | D1 disposition |
 | --- | --- | --- |
+| String operands in integer identities: `"abc" * 1`, `"abc" / 1`, `1 * "abc"`, including deferred S in `S * 1` | The three known-string cases emit `61 62 63` in both modes through identity folds. Forward S rejects in pure binary but links to those bytes when S resolves to "abc". | The existing D0 §3.2 kind-before-identity rule rejects these as type errors. This is a deliberate correction in addition to the already recorded `S+0` change, not string multiplication/division support. I1 pins the value-level errors; I3 must test located rejection and output preservation in both source paths, with known and forward strings. No frozen project uses these identities. |
 | `Msg: .char S / .byte sizeof(Msg)` with S defined later as "HELLO", or imported; also `Msg: .char S / S .equ "HELLO" / .byte sizeof(Msg)` | Binary rejects both orders; object linking can emit `48 45 4C 4C 4F 02`. A following label can also have a stale address. | **Owner-selected rejection when still unresolved at sizeof (2026-10-23).** Reject both modes with size unknown for the first order/import. In the second order the length is already known at sizeof: emit `48 45 4C 4C 4F 06` on both paths. This latter correction is explicitly part of D1 review. No link-time label sizeof; ordinary data retains D0's forward-string support. |
 | Data operands in a label-size scan whose kind is unknown at the use, including local aliases of imports | A later local `Value .equ 7` gives `07 02`; a forward local jump table gives `05 00 06 00 05 60 60`. Imported numeric/address operands also link successfully. `K .equ Ext` used in the table gives linked `07 02` with provider Ext=7 whether K is defined before or after the table/sizeof. | **Owner-selected 2026-10-23: preserve local forward operands, reject imports and deferred strings.** Count one element provisionally, then validate local non-string kinds before unit publication; diagnose failures at sizeof. Explicit imports, names that become implicit imports, and local alias chains ending in either reject in both definition orders, even when a provider would supply a number/address. No serialized guard. Data without sizeof is unaffected. |
 | `.label name = expr` (explicit address) | Code honors the address only when linked; data ignores it and can produce a negative allocation extent. The manual documents the form. | **Owner-selected 2026-10-23: reject with a located unsupported-form error in 2.0.** No required frozen project uses it. At implementation, update the Global labels manual syntax and NEWS/release notes, and add a located-rejection/output-preservation test. Ordinary `.label name` and its local type annotation remain supported; no fixed-address wire flag. |
@@ -530,3 +532,18 @@ Installed tools remain v1 through I5. Approval does not waive dpadhero2, the
 other required ROMs, complete Nesrev consumer validation, the no-slowdown gate,
 or the final cutover/release gates. No v2 runtime implementation or release is
 part of this revision.
+
+## 9. D1 erratum: exclude binary logical AND/OR
+
+**Owner-approved 2026-10-23.** Local I1 review established that binary `&&` and
+`||` have no v1 source syntax or object codes and no uses in the 2,887 frozen
+source files. Their inclusion in wire tags 42–43 and the first I1 value API was
+unsupported scope, not an existing expression feature. Kent Hansen approved
+removing them and reopening this part of the D1 contract to reserve those tags.
+
+Remove the two operators from I1. Wire tags 42–43 are reserved and invalid on
+input; preserve all other wire tag numbers. This correction precedes any v2
+runtime object writer or reader and leaves the single 244-byte example
+unchanged. I4 must reject objects carrying either reserved tag. Unary logical
+NOT and the existing bitwise operators remain supported. No new syntax or
+semantics are approved by this erratum; the other D1 decisions and gates stand.

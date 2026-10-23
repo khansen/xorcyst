@@ -40,5 +40,9 @@ static void checked_free(void *p)
 #include "../v2/value.c"
 
 /* Exercise otherwise unreachable version rollover without 2^64 API calls. */
-void test_v2_version_rollover(v2_unit *u)
-{ u->bindings = u->layout = u->request = UINT64_MAX; }
+void test_v2_version_rollover(v2_unit *u, int which)
+{
+    if (which == 0) u->bindings = UINT64_MAX;
+    else if (which == 1) u->layout = UINT64_MAX;
+    else { assert(which == 2); u->request = UINT64_MAX; }
+}

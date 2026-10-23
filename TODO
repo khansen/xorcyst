@@ -19,7 +19,8 @@ Compatibility planning:
   defect; synthetic probes do not automatically justify new language features.
   D0 was approved on 2026-10-22 and D1 on 2026-10-23 after independent review.
   I1's isolated value graph is implemented in v2/value.c and awaits independent
-  review; see v2/README.md. Follow the staged gates one PR at a time.
+  review of its follow-up; see v2/README.md. Complete local independent review
+  before publishing a branch or opening/updating a PR; keep one PR at a time.
   Keep optional v1 repairs separate. No current formats change in this plan.
 - D1's approved contracts and approval record are in XORCYST_V2_CONTRACTS.md. Required ROM
   baselines and Metroid/Zelda analysis captures are frozen; see
