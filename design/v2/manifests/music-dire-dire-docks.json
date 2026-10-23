@@ -1,0 +1,294 @@
+{
+  ".gitignore": {
+    "sha256": "eaa9b8bc3dc745b354a311109c75d8dfa77e3041b58d507efaf069e975cc39d9",
+    "size": 20
+  },
+  "DireDireDocks.nes.orig": {
+    "sha256": "6ef84a02e9d3d546a805fa0136b1ed13311257622c039b8d59475988b7f22520",
+    "size": 24592
+  },
+  "Makefile": {
+    "sha256": "503ce51171af3c9c8f9b5483d51252606bc7eba14adf7257317b32eddb886937",
+    "size": 2924
+  },
+  "adjusted_quiet_x2.dmc": {
+    "sha256": "50ac3db1690e2caeb836b9ea254a061383bc48e3863da6a4925a1b4ad179ca66",
+    "size": 304
+  },
+  "bigfish.bin": {
+    "sha256": "65fb21e5facae1edfcbe69c4bdc5edcaa1cf41b23ced5079f1db1063b6fd35f2",
+    "size": 384
+  },
+  "blooper.bin": {
+    "sha256": "b963e596363abfe3c5095d6bab9df5adec7a9ba877909707bb2fd95696b520e5",
+    "size": 96
+  },
+  "bubble.bin": {
+    "sha256": "5343c1681b3425863d6b983dec7066fc392601f71b383ad29e5bea296712a7a9",
+    "size": 160
+  },
+  "chest.bin": {
+    "sha256": "4ecd59c1acf59a0e2c8e7a286305533af1a4697b615219de057e57f886d5f7d9",
+    "size": 64
+  },
+  "dmcdata.asm": {
+    "sha256": "859e580989b7b342b614cd6885da0eb3b2fa0a1055f176ee2c5135688b43f4b8",
+    "size": 5678
+  },
+  "fish.bin": {
+    "sha256": "b060602ead098792f52c0c72ac4dd9d2f1b448058ea4f2b6df85e968ea76b4a0",
+    "size": 96
+  },
+  "font.bin": {
+    "sha256": "0394addf63505a3046cf82092710c04fa546148e5a2a5f154404b83c978b9a33",
+    "size": 896
+  },
+  "header.bin": {
+    "sha256": "89d0bd6b393cb933a13f64856e110979a188bd9d76b27be706093a50248c6dd3",
+    "size": 16
+  },
+  "heart.bin": {
+    "sha256": "ce8a2873ee8d84dfe396d45f774c7a81cac387a2ef4fa189e8a92a2a82f5b5e4",
+    "size": 192
+  },
+  "instruments.map": {
+    "sha256": "9c73336adf16dd69dc1797837f8cf91a350b6b471b14e470c78e4dc976843dfe",
+    "size": 759
+  },
+  "link.s": {
+    "sha256": "bd0f3568cd8fa20f2a94027967bc1eecb32650b5b6d78ef6e7160d7ae7b7515d",
+    "size": 933
+  },
+  "main.asm": {
+    "sha256": "42471b6cd8f1ae676cccf3b1f1c545e17e6f2530d5523b34e4b740baa382a6a2",
+    "size": 36309
+  },
+  "play_dmc.py": {
+    "sha256": "ccd2732eef60dc5d66576c7b1d6680e475918b7919865c71f7065e694a4a9dc9",
+    "size": 5624
+  },
+  "sawtooth.wav": {
+    "sha256": "b69a6ba2cef72344929e1aad38b5a87caa5697377aab85f084ecb8bc5abc825c",
+    "size": 3572
+  },
+  "scenery.bin": {
+    "sha256": "be86c74b0e2e99054d1f632f1d0b78bcff5a10002189fe08df74767f4e45be8e",
+    "size": 160
+  },
+  "sinus.wav": {
+    "sha256": "2d6a1fe700333237db265e711981b8a23e21d2a806c38de262ce4019ec4c819a",
+    "size": 3572
+  },
+  "snare_1_q.dmc": {
+    "sha256": "e0a6a83aa61983869dd2a5e383ada5ea02fde1d88207f13d47352025f612bfba",
+    "size": 1201
+  },
+  "song.asm": {
+    "sha256": "7ca477760cd96edd9d43893e9ba0f8b52a6906c044b798483064ab2373214b68",
+    "size": 1701
+  },
+  "song.chr": {
+    "sha256": "6a822668cb1a6aea127c89999848d8cd6562ac294a227547b07e9d73c0ee91b9",
+    "size": 8192
+  },
+  "song.tbl": {
+    "sha256": "10c4b60782e300ddf2b179b7392932c180e6ce0cdf4b3f8feb3fa74e14a838c6",
+    "size": 42
+  },
+  "song.xm": {
+    "sha256": "c96a86db0a94f09ee83ddfcd131f2c29d282ccfc2e75e3f07cd3e8fc304e225b",
+    "size": 161929
+  },
+  "songtable.asm": {
+    "sha256": "63834e5d9df8526c5214f714e619e81115078cc82a153b474b229c744faf661d",
+    "size": 92
+  },
+  "square.wav": {
+    "sha256": "f431b303a998614230d1340ac4c093920f8bee3f3b751fdf4ab4fc103b63a8df",
+    "size": 4454
+  },
+  "square2.wav": {
+    "sha256": "1b0dee48f4efe912e687150f4d7cde2b2d6b134f569eebdf317276f5999da10a",
+    "size": 4454
+  },
+  "src/common/bitmasktable.asm": {
+    "sha256": "083dd522fabb82676b092d4e67863bbd6649bc221aa58043b516024dc362a5b2",
+    "size": 389
+  },
+  "src/common/clearram.asm": {
+    "sha256": "e1e4edaca0ff05cd3dd16e6742c008069ee0038cd455f4f059b300668c3de516",
+    "size": 324
+  },
+  "src/common/fixedpoint.h": {
+    "sha256": "c5ee5db6c56d37cc00e71b4106e3a67bd17fbd8eeb679ca605135ce0c952c447",
+    "size": 299
+  },
+  "src/common/int16.h": {
+    "sha256": "6b05d88eea750f4246f128a7a4167e1d78919b83db8ec21dd12569f6dc75c1bc",
+    "size": 92
+  },
+  "src/common/irq.asm": {
+    "sha256": "ecd0be4ade3b6cab9af7f7b544235738a7b1b72a9560f7e57b0c3cb5fa1db246",
+    "size": 606
+  },
+  "src/common/joypad.asm": {
+    "sha256": "0a3d4c9b0b28b0b298eae88ee495a3fe26e13fb694cb26b763aeb0ee4f0a7c8f",
+    "size": 2024
+  },
+  "src/common/joypad.h": {
+    "sha256": "07da6a5d55c85181cebcfffac36ec462efb8d3a89afae6ae2d00a96aed764be0",
+    "size": 764
+  },
+  "src/common/ldc.h": {
+    "sha256": "d6636aebe79b2cbc598557f2c24479aa646681c3bf8873846a919ee0fc27fe64",
+    "size": 88
+  },
+  "src/common/nmi.asm": {
+    "sha256": "8b57742e98fce7525efd164594b7d5eedccedb5edbf8343da05491cf0409a283",
+    "size": 1544
+  },
+  "src/common/palette.asm": {
+    "sha256": "b613e1494b0621ecce01d994cb18a3e80c5b28c89b40add3825028e030896aa6",
+    "size": 2140
+  },
+  "src/common/palette.h": {
+    "sha256": "f78297db38e83d531a8b6524ab8a0e14c6b648842b8a749fc402aecfab40070d",
+    "size": 228
+  },
+  "src/common/ppu.asm": {
+    "sha256": "e6ecd973d9b02b40a6af440b84c6d8ea30029f1e9f4c3c51bf418a095b78f87f",
+    "size": 2794
+  },
+  "src/common/ppu.h": {
+    "sha256": "cd8d2c7f050a88c48466dadeaeb54b8b02bc6638f4fe1a630d30ce8c369f54c9",
+    "size": 3073
+  },
+  "src/common/ppubuffer.asm": {
+    "sha256": "939d851a22b4e4ed2bbcf1550faa3f4ccc7dc8383974b534f784a46b28524871",
+    "size": 1797
+  },
+  "src/common/ppubuffer.h": {
+    "sha256": "8973fdb396d804e36371b65f49210272d450dd3aa913dfc850bf52f0f7c27556",
+    "size": 269
+  },
+  "src/common/ppuwrite.asm": {
+    "sha256": "4169747747caf3700bb409c2dcd10778761835c04467119bf49a21e740f20e16",
+    "size": 3600
+  },
+  "src/common/progbuf.asm": {
+    "sha256": "602ad2e4e53f271240a952a132a2130251824ef5d00a6089ea5c220764cbf683",
+    "size": 608
+  },
+  "src/common/progbuf.h": {
+    "sha256": "298b7b621bf0c0e89bc05a217146a1d9c9a211c821645417ab2423d9c506fce5",
+    "size": 177
+  },
+  "src/common/ptr.h": {
+    "sha256": "7057bdad514f4ec08d3f4ed87a0761516cb968bdbe0a0ee77b69f1a665e4506f",
+    "size": 129
+  },
+  "src/common/reset.asm": {
+    "sha256": "6fa89bd4aa3ea5b8deeb9678dd87b68ce349f0ecb24d68f15deca7a357293dfc",
+    "size": 940
+  },
+  "src/common/sprite.asm": {
+    "sha256": "c402da029f03505931453f805ba6e1273e82d565c4da79d32ebeee5d52686f3b",
+    "size": 845
+  },
+  "src/common/sprite.h": {
+    "sha256": "0937e0f73b9ea2259dc2636a66f7000dd6b25d6ff6d6a579fc6a91e7dd7b7e70",
+    "size": 887
+  },
+  "src/common/tablecall.asm": {
+    "sha256": "000ffed5a27dae28b1bc0db7344df8fbfd33d0a7d95308797e3fbcc22c35678a",
+    "size": 695
+  },
+  "src/common/tablecall.h": {
+    "sha256": "f46bb5b21d9d6c5e3925af6e3ff785fb9d8adb31abb422f001059a1cff3ddde2",
+    "size": 260
+  },
+  "src/common/vectors.asm": {
+    "sha256": "cd5cf57922bcc117d8de47f517f2a015d56146a29345629654d77ef3cede301a",
+    "size": 173
+  },
+  "src/sound/apu.h": {
+    "sha256": "19fe3e97516e17a040dd078ff9c64b1b3fb91e0269aed42165296ebff09da3ab",
+    "size": 2756
+  },
+  "src/sound/dmc.asm": {
+    "sha256": "45734f7a4b95495d3062d3c0ea12dbdffd19065e0736528b0747fd19127d958c",
+    "size": 1948
+  },
+  "src/sound/effect.asm": {
+    "sha256": "3c1536e0671c08c9208e3532be757cc6edbf13183603ea6ca9b2e42e90cb6fd4",
+    "size": 8828
+  },
+  "src/sound/effect.h": {
+    "sha256": "71a944d7cf8c3de8fd671dfd4041f05fc28373ddc5a1fdad990306b18c59a28c",
+    "size": 1392
+  },
+  "src/sound/envelope.asm": {
+    "sha256": "642fc44a6393e0bb7f1a4bfa9428482e9097ce077dff5fa5ee713b53a1c062b6",
+    "size": 3620
+  },
+  "src/sound/envelope.h": {
+    "sha256": "4150d0e64c7dfa61933cbaa62042f5ba1656fe5ea3099f70b2f8e6327fb07ce6",
+    "size": 630
+  },
+  "src/sound/mixer.asm": {
+    "sha256": "f6d4254b8bd52c923a31e5c8ced2e3cb85136fc635d14dbbd1a425f0d2ece489",
+    "size": 6976
+  },
+  "src/sound/mixer.h": {
+    "sha256": "0cb0965a5834bac20e7d3257e8d16d6e8a0a4994f2c685aa0edf79926b41b98f",
+    "size": 526
+  },
+  "src/sound/periodtable.asm": {
+    "sha256": "edbf4ee24a9f20a4816eec95e770a9bee056bf58d97424254a5e77875cb64f63",
+    "size": 984
+  },
+  "src/sound/sequencer.asm": {
+    "sha256": "ecc3030dddf9a1cfdd07ddf28aaa799f30eb3365e14070f364274824e3fa021a",
+    "size": 9896
+  },
+  "src/sound/sequencer.h": {
+    "sha256": "d1e28cfa1f8efa879568261d1a6592333a2fdf4967823bc7b33271eb0ee0eb83",
+    "size": 373
+  },
+  "src/sound/sfx.asm": {
+    "sha256": "82cc0386749b8fd5212b4351ce234cbeceabe9c65b212cac9c033a7fd5fb4143",
+    "size": 2071
+  },
+  "src/sound/sfx.h": {
+    "sha256": "c34dbbcf0d2f23a8e5bd8a662633592b90ace425a9670f1e64134f5b48dd6260",
+    "size": 323
+  },
+  "src/sound/sound.asm": {
+    "sha256": "f375b28976c4333e764bc72683c230b6ad25ad73713cee4955c43b58309b0546",
+    "size": 1563
+  },
+  "src/sound/sound.h": {
+    "sha256": "51428949286e86f68666b4e7a0262fbb019f99a9b124932edd39b84d81c8dbe2",
+    "size": 274
+  },
+  "src/sound/square.h": {
+    "sha256": "2321dacf6e678811027940ade3642c8d86d1de3c562284a71677cc4feda054b8",
+    "size": 172
+  },
+  "src/sound/tonal.asm": {
+    "sha256": "9b4fabd7665b6f6a44cce63cacfc313bcc37251f1326c3a4c67065f25d0c729d",
+    "size": 5506
+  },
+  "src/sound/tonal.h": {
+    "sha256": "50a1e2ec0ec280504f4b752640ca82fad80e2a3e05633fc1706c8db124c7ced2",
+    "size": 285
+  },
+  "src/sound/track.h": {
+    "sha256": "4672f9a3958cb8167ec95ca879e145863d34efbafcf4f5ea092a3a9c4071aa6c",
+    "size": 966
+  },
+  "src/sound/volumetable.asm": {
+    "sha256": "6ef45b36f6f9e3bb06ed43a5d7f7b5eceb1b317f6b0aee67686bf89a3effa465",
+    "size": 1274
+  }
+}

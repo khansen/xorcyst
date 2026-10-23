@@ -1,0 +1,1295 @@
+{
+  "baseline": "v1.9.12",
+  "baseline_commit": "86c1a43d1dfa237facf40d75085e9112e8617a13",
+  "capture_root": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-capture",
+  "capture_sha256": "48861250ee64f16df3658e3a00d0e9b19f3a0e944c2f1668919ca5e19dbe27aa",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "frozen_asset_gate": {
+    "policy": "Minimal child environments; frozen assets; converters forbidden",
+    "report": {
+      "sha256": "5eaccd61551501e36d28d495ee1a8cf8fbb1daed81291d0a2382cd0f8dfb1e30",
+      "size": 80189
+    },
+    "root": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02",
+    "script": {
+      "sha256": "c7bf60c511f6aeae6823bed4c5a7f78401f3a3fa0557f8553bdbe7102f657752",
+      "size": 9193
+    }
+  },
+  "machine": "arm64",
+  "nesrev": {
+    "metroid": {
+      "modes": {
+        "audit": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "ci-data-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "ci-instructions-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "compare": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "coverage": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "data-consumers": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "data-listing-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "fceux": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "index-patterns": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "instructions-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "inventory-instructions-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "json-v2": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "maturity-instructions-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "ndjson-v2": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "pass-prep-instructions-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "plain": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "process-instructions-v1": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "records": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "summary": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "text-listing": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "xref": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "xref-data-owner": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "xref-records": {
+          "binary": {
+            "sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+            "size": 131072
+          },
+          "returncode": 0
+        }
+      },
+      "source": {
+        "sha256": "9bb872dd7b0d619286230b8aade7828a3ac5ec67d3cb843f447bfd1edde873fb",
+        "size": 1952972
+      }
+    },
+    "zelda": {
+      "modes": {
+        "audit": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "ci-data-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "ci-instructions-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "compare": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "coverage": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "data-consumers": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "data-listing-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "fceux": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "index-patterns": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "instructions-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "inventory-instructions-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "json-v2": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "maturity-instructions-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "ndjson-v2": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "pass-prep-instructions-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "plain": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "process-instructions-v1": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "records": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "summary": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "text-listing": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "xref": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "xref-data-owner": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        },
+        "xref-records": {
+          "binary": {
+            "sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+            "size": 131072
+          },
+          "returncode": 0
+        }
+      },
+      "source": {
+        "sha256": "d7ccb14787de91d92001bf0bacfdd3e4fa1a952ea950a9c758a8ca961ed69def",
+        "size": 1175240
+      }
+    }
+  },
+  "nesrev_commit": "260a50bd79a6e4a8a3f4104a3b928aee40d02154",
+  "nesrev_manifest_sha256": "37b25461390ba55373ee0e07d66f4ec64974127262412812d5d7873a36c673ce",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "projects": {
+    "bombsweeper": {
+      "build_directory": ".",
+      "files": 45,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/bombsweeper/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/bombsweeper/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/bombsweeper/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/bombsweeper/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/bombsweeper/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/bombsweeper/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {},
+        "generated_targets": [],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "6627cf5140851587a4818c18e0a937b14ba44a63cf3c267df9cfef8eeb50679d",
+          "size": 5640
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "6627cf5140851587a4818c18e0a937b14ba44a63cf3c267df9cfef8eeb50679d",
+      "md5": "b33782b3b961b6fbb8b4aad3a37e3b7e",
+      "product": "bombswpr.nes",
+      "sha256": "8c08a24ccadce627baaea0c9576f073ff855b7a0edc4369a01ba8371e2fe5dad",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/bombsweeper",
+      "target": "bombswpr.nes"
+    },
+    "dpadhero2": {
+      "build_directory": "src",
+      "files": 321,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/dpadhero2/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/dpadhero2/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/dpadhero2/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/dpadhero2/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/dpadhero2/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/dpadhero2/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "src/songs/break.inc": {
+            "sha256": "37358ee12613325df16b01ae51da425a7100e474539c4bdd6996e8b30f2602ec",
+            "size": 40448
+          },
+          "src/songs/burn.inc": {
+            "sha256": "44543617b131d2e62a88fd4630ed1fae101166f7c361513a9ee2169c8f0aad7e",
+            "size": 39451
+          },
+          "src/songs/count.inc": {
+            "sha256": "f902f43fef3e6d10ff2fec5daf8d1311b3880dd12283536d4155618effceb0e5",
+            "size": 37819
+          },
+          "src/songs/creditwintheme.inc": {
+            "sha256": "1fc377aa3210b98debf9888ee1f605b4ae296d1c082df3bd4510ef6259a37a7e",
+            "size": 707
+          },
+          "src/songs/elevatortheme.inc": {
+            "sha256": "0b4bc571fd38458f255c4b6be99939d27d9298672505c68485404003632362a2",
+            "size": 872
+          },
+          "src/songs/endtheme.inc": {
+            "sha256": "90c6153a3cbddfc1c5780ff13a5568eb6934167263aa929cfef7ac4f8c0a9bc5",
+            "size": 1144
+          },
+          "src/songs/levva.inc": {
+            "sha256": "e024a666852af37272cc525dc1b432257c6fb89d83298397b21a2546b982f220",
+            "size": 35592
+          },
+          "src/songs/misery.inc": {
+            "sha256": "ff92d7fa87f71bca688b9e71cd9260dcba74cea1ddf1b97d6d1f7c2ed89f36e4",
+            "size": 948
+          },
+          "src/songs/mutesong.inc": {
+            "sha256": "757169c8ba6de7c642fe6affb92571895f06e28972cea1b27f44ead8fe9609fc",
+            "size": 623
+          },
+          "src/songs/ocean.inc": {
+            "sha256": "89b9f9174e2c1fd940c535dbd37ef5ea05957380a4731bc7ac345c6d1c520424",
+            "size": 34081
+          },
+          "src/songs/piecewintheme.inc": {
+            "sha256": "bbe45c3eaae2a57393c189a511e31628dad723beabb43349ee091632a4977fa5",
+            "size": 2121
+          },
+          "src/songs/ripepray.inc": {
+            "sha256": "c3e1e8989b850affafc5af51793f0e3e24742054aa75e14c1348199d9a26c698",
+            "size": 49144
+          },
+          "src/songs/smooth.inc": {
+            "sha256": "f2f619dca3f8573a2af84074f2253d16534c09d04191f6b5581f65cfede6ec27",
+            "size": 3172
+          },
+          "src/songs/spacetheme.inc": {
+            "sha256": "3f845e664559901686e319786268aa208de0be9e252985e25ad60a07edf9a0c0",
+            "size": 4044
+          },
+          "src/songs/starstheme.inc": {
+            "sha256": "f37070fe494ad4d9cb463d4295ba62c22757a853da78b3144ba6c4bd3c3f2244",
+            "size": 1183
+          },
+          "src/songs/titletheme.inc": {
+            "sha256": "3ef8c6575739605e9c4eae28fda047b7a1d9ec329f970564bc34f5d38ed0e42f",
+            "size": 10224
+          },
+          "src/songs/versuswintheme.inc": {
+            "sha256": "96a28892a47f891bd6d2049eff131aadf31fa002a19289c9eeefda1239070f58",
+            "size": 2220
+          },
+          "src/targetdata/breaktargets.inc": {
+            "sha256": "97b42c058fdeb11fa260646a7f834cf5265be49293c09c99528ea82e7fe3f6ba",
+            "size": 7914
+          },
+          "src/targetdata/burntargets.inc": {
+            "sha256": "ac8c6bbd54a0608378e24d656d42ebdc0560f7f7cb08d4eae97d597687ac4fa9",
+            "size": 10300
+          },
+          "src/targetdata/counttargets.inc": {
+            "sha256": "33fd087833ee6ceafb61a766b531767e2c796aa6220d1576892077dc3e121822",
+            "size": 10250
+          },
+          "src/targetdata/levvatargets.inc": {
+            "sha256": "b969954955d9560edc627e6862985627197d4c8abe8d6b7a4630cf2288aac194",
+            "size": 12030
+          },
+          "src/targetdata/oceantargets.inc": {
+            "sha256": "8c94411b5fd516622b8aac9dc71e5b0edb5366c401865f82352a52c3ff329585",
+            "size": 12458
+          },
+          "src/targetdata/ripetargets.inc": {
+            "sha256": "6823a19aa874e620af09d33d35b7787ddc94e9e88ceb9a27e2a726d3fd9ee625",
+            "size": 9036
+          }
+        },
+        "generated_targets": [
+          "songs/break.inc",
+          "songs/burn.inc",
+          "songs/count.inc",
+          "songs/creditwintheme.inc",
+          "songs/elevatortheme.inc",
+          "songs/endtheme.inc",
+          "songs/levva.inc",
+          "songs/misery.inc",
+          "songs/mutesong.inc",
+          "songs/ocean.inc",
+          "songs/piecewintheme.inc",
+          "songs/ripepray.inc",
+          "songs/smooth.inc",
+          "songs/spacetheme.inc",
+          "songs/starstheme.inc",
+          "songs/titletheme.inc",
+          "songs/versuswintheme.inc",
+          "targetdata/breaktargets.inc",
+          "targetdata/burntargets.inc",
+          "targetdata/counttargets.inc",
+          "targetdata/levvatargets.inc",
+          "targetdata/oceantargets.inc",
+          "targetdata/ripetargets.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "b73ee1d5bd0b3772c3af60282684d875e6a5c98d4ce7f7948f5f8237afada0a9",
+          "size": 47664
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "57d0534bee0e2656a314ec9be7453a563844448cd0c3967adbd0e2399cc1d412",
+      "md5": "841bfe4ef75d0e274ece167cfbd4b8ee",
+      "product": "build/dpadhero2.nes",
+      "sha256": "ff435b932b5804c92f8a747f7507ddc293ff482c4a2152c46db9c3d4029b884e",
+      "size": 262160,
+      "source": "/Users/kenthansen/dev/github/dpadhero2",
+      "target": "build/dpadhero2.nes"
+    },
+    "music-bob-omb-battlefield": {
+      "build_directory": ".",
+      "files": 67,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-bob-omb-battlefield/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-bob-omb-battlefield/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-bob-omb-battlefield/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-bob-omb-battlefield/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-bob-omb-battlefield/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-bob-omb-battlefield/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "0cf93c57253206324fad39cc33332c552c580931684aea7ac150129af8d1878f",
+            "size": 39183
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "dc88c86d59ac95f86a00148245f9f4de08a631124155185c9c71879ec3be933d",
+          "size": 8703
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "f4c9121387cfbbf048df444c6b88068a0f997ecce05493acadf87a64e7c36d40",
+      "md5": "a6bb993d911f141e0ae931304d65d470",
+      "product": "BobOmbBattlefield.nes",
+      "sha256": "000d7680102d83d4326c44aa47e883acb399a3f00925cf35c935bc851434017f",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/bob-omb-battlefield",
+      "target": "BobOmbBattlefield.nes"
+    },
+    "music-dire-dire-docks": {
+      "build_directory": ".",
+      "files": 73,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-dire-dire-docks/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-dire-dire-docks/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-dire-dire-docks/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-dire-dire-docks/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-dire-dire-docks/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-dire-dire-docks/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "2cdae4237f9e588e93b4b17f2e39fecb3a50dcbba11a490053485a7eb3d52214",
+            "size": 30095
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "62ee5ae1a933cd0b95221ddce260da137d91b39972e1dd4619f0d08944ce8a68",
+          "size": 9446
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "412351e798cdf97203fbe42f9e8b5936f642e0136622bef22c6b9166c94fbf30",
+      "md5": "55f8869b476983b05430bbecf0d1098c",
+      "product": "DireDireDocks.nes",
+      "sha256": "dcd500b50719a97944f225e5b210eb71795200377ee3ee6430b95725129dcf1d",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/dire-dire-docks",
+      "target": "DireDireDocks.nes"
+    },
+    "music-double-dragon-ii-vs-f1": {
+      "build_directory": ".",
+      "files": 60,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-double-dragon-ii-vs-f1/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-double-dragon-ii-vs-f1/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-double-dragon-ii-vs-f1/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-double-dragon-ii-vs-f1/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-double-dragon-ii-vs-f1/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-double-dragon-ii-vs-f1/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "fa69fe551eac0c2353ef1d437ea34bfb11dc737f9c398045716f52128312c775",
+            "size": 10266
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "ee646ef49f58df6465c95479f3e2f377ad3e7a7a19f914f2332770a162c0fadb",
+          "size": 7847
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "95711ffc73f9b53281cbfe3ec9184e3c36f77049d150178468ebb7756386570c",
+      "md5": "66639e866c14568d5c05e664bde100d4",
+      "product": "DoubleDragonIIvsF1.nes",
+      "sha256": "e057cc2b0bbb97ccb722345edb9699515bd006d4d45513803ceb8029fbd8a635",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/double-dragon-ii-vs-f1",
+      "target": "DoubleDragonIIvsF1.nes"
+    },
+    "music-dpadhero3proto": {
+      "build_directory": ".",
+      "files": 84,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-dpadhero3proto/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-dpadhero3proto/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-dpadhero3proto/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-dpadhero3proto/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-dpadhero3proto/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-dpadhero3proto/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "mutesong.inc": {
+            "sha256": "8f3c9605eca98a8934cf18a788ac71bd437bf088308a3ce5d4ef5b68805d3914",
+            "size": 617
+          },
+          "song.inc": {
+            "sha256": "622c6bb33b504615ece199fb3812602522c38dfe8d65284b76cf30e0933e97ce",
+            "size": 15960
+          },
+          "songcues.inc": {
+            "sha256": "57eb881754a6d8e8aeb3b07e561834ec3df069f3dd200d31e732b6b22f7f3f85",
+            "size": 661
+          }
+        },
+        "generated_targets": [
+          "mutesong.inc",
+          "song.inc",
+          "songcues.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "142e9ff3643f72f93a028665463880450c396ba2ad38d81f4eb047943c708685",
+          "size": 11140
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "1e830c2db030ffdd2898ad3142d6fde0030356f94db746d8bafbaa6be4301eed",
+      "md5": "ccac5baadab91f3f7a3f26989666aaa2",
+      "product": "DPadHero3Proto.nes",
+      "sha256": "4d78ccf4e02d394001225f668310a71601ec44804f3298272f13363ce51be504",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/dpadhero3proto",
+      "target": "DPadHero3Proto.nes"
+    },
+    "music-is-it-scary": {
+      "build_directory": ".",
+      "files": 66,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-is-it-scary/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-is-it-scary/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-is-it-scary/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-is-it-scary/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-is-it-scary/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-is-it-scary/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "packchr.chr": {
+            "sha256": "dc20f5fe7813ccf673627ca5834d6d10e96cbe6ed22840bc67f44eaa3283433e",
+            "size": 3152
+          },
+          "packchr.nam": {
+            "sha256": "cfc62a44bbdbe6e1fe9a9165a9340205ef830d1184c159f471df0e1f29d1eafa",
+            "size": 456
+          },
+          "packnam.dat": {
+            "sha256": "f430780c35c45e0fdb2e97c55a7ddd02bb38997d1c0130e31a46c21f40e059cd",
+            "size": 364
+          },
+          "song.inc": {
+            "sha256": "a028e740cf1c5b54a11cc5b53b26247c6a0245bbfb6445f3bf5690900d7ba248",
+            "size": 41849
+          }
+        },
+        "generated_targets": [
+          "packchr.chr",
+          "packchr.nam",
+          "packnam.dat",
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "a01c1c5fae0520852fdcbbcf24e28a0127b8710112153e7a4fa5671bbface42f",
+          "size": 8817
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "053146b45aab09f4b528bd3bf336f9a6945cca5c2f86202a6396dfd08158a099",
+      "md5": "90638d8b56ea946a9fc6bea0afd91497",
+      "product": "IsItScary.nes",
+      "sha256": "1ccda80a1ba6b9fb455ed4b8b0bde7bde283c305d8f2116177ca6258fbc6f958",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/is-it-scary",
+      "target": "IsItScary.nes"
+    },
+    "music-live-and-learn": {
+      "build_directory": ".",
+      "files": 62,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-live-and-learn/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-live-and-learn/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-live-and-learn/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-live-and-learn/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-live-and-learn/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-live-and-learn/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "6598e1bc35538cdb4bd13a82cd1ad6096c8e0ab4f05ff75abe7849803df43a34",
+            "size": 40040
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "a1a07cb184c3f1a846ba4ceefdf36bf86e8575c7b607a36bbd88993359f742a3",
+          "size": 8073
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "b466fd5d1c8e0d6563f78c4890363593d424744e968ce74ac98f364a0c31cd7a",
+      "md5": "f4acd9221c4b3bc4ec68efbbf1f57707",
+      "product": "LiveAndLearn.nes",
+      "sha256": "0b4a111f6eac1f423c628e4a085c7f3423b1b269d22abcd1a3956da8c073b55e",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/live-and-learn",
+      "target": "LiveAndLearn.nes"
+    },
+    "music-mega-jean-trooper": {
+      "build_directory": ".",
+      "files": 61,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-mega-jean-trooper/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-mega-jean-trooper/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-mega-jean-trooper/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-mega-jean-trooper/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-mega-jean-trooper/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-mega-jean-trooper/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "8c514261d2c124c613375703a3d1d5d1778c9a9e4a1904488e9887827bc88946",
+            "size": 34113
+          },
+          "song2.inc": {
+            "sha256": "373adf482015c8d69474a098267a83e534fbac92c7cec70be82699b25842860e",
+            "size": 24076
+          }
+        },
+        "generated_targets": [
+          "song.inc",
+          "song2.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "30063dabee583035d105758ceadce0acbe2953a9d41c421bf4147182c570bc4b",
+          "size": 7958
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "e87df9e63753802752291706e1c1c6fde81b9e6e488ce162124e60f4bddf672d",
+      "md5": "f5cfea9940166e36b204732c28cd63a9",
+      "product": "MegaJeanTrooper.nes",
+      "sha256": "8bfd29c36f409e300e20c911d6830c3d5c79421c1bc00e14e90fdfae273e9acd",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/mega-jean-trooper",
+      "target": "MegaJeanTrooper.nes"
+    },
+    "music-merry-xmas-everybody": {
+      "build_directory": ".",
+      "files": 67,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-merry-xmas-everybody/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-merry-xmas-everybody/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-merry-xmas-everybody/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-merry-xmas-everybody/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-merry-xmas-everybody/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-merry-xmas-everybody/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "4dad7b0021958155e500084ee07d60e8652e856f4b00038f155f5a9ffe8888bc",
+            "size": 24581
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "5097ac36edb1ea615474feee0f9391946030447f7552efcb8e997fc852dba8ab",
+          "size": 8720
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "0cd3208d0d04d7e0320af39ebd873832c4d9e287b3ddb7d3f0abf88c7f3a96cf",
+      "md5": "2164cb93700ac77b7e8fb8ef8b25c383",
+      "product": "MerryXmasEverybody.nes",
+      "sha256": "877ab698e6b4ffaf38850bad90ffe413888cec30b42fe2571d3081acaca72869",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/merry-xmas-everybody",
+      "target": "MerryXmasEverybody.nes"
+    },
+    "music-somewhere-only-we-know": {
+      "build_directory": ".",
+      "files": 60,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-somewhere-only-we-know/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-somewhere-only-we-know/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-somewhere-only-we-know/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-somewhere-only-we-know/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-somewhere-only-we-know/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-somewhere-only-we-know/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "7ca70baf5e7069ec231855d1d70eed71974bb108ed7773a144ab803256d0a4be",
+            "size": 3517
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "781bbc7947ef0ece0ae100e5ebc71dd7aeeefb7b78447d7429238887f6e2f4f6",
+          "size": 7830
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "edaaa23b6808d9373061e4dfc9d98e7eadedaaa92854e7730c44be1d28c5cc32",
+      "md5": "5bd020b544155d04ea6ac543a55d81bd",
+      "product": "WelcomeToParadise.nes",
+      "sha256": "06649156f0a840c1d4c0fa922ebcb9a90bedc148f107f2aec020b2d157eec957",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/somewhere-only-we-know",
+      "target": "WelcomeToParadise.nes"
+    },
+    "music-there-must-be-an-angel": {
+      "build_directory": ".",
+      "files": 61,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-there-must-be-an-angel/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-there-must-be-an-angel/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-there-must-be-an-angel/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-there-must-be-an-angel/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-there-must-be-an-angel/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-there-must-be-an-angel/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "f0f79b3993676921c4345558291b9f55482682bb73bfadc624f5ef0cd7608de5",
+            "size": 22765
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "066120b94834d9438aa935ab4622640f137ff4208bfbeca429306092968877ae",
+          "size": 7953
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "8062e237aeb80af97dc9bec5adb0b5adf754895da5c104dd0973c52036c4ef16",
+      "md5": "70e32a281da506eb93e79c0f3670b0ad",
+      "product": "ThereMustBeAnAngel.nes",
+      "sha256": "27a2ec22531301e1126c1e94216785e9bf352a12757ae9d7883797b5bc8df8ec",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/there-must-be-an-angel",
+      "target": "WelcomeToParadise.nes"
+    },
+    "music-welcome-to-paradise": {
+      "build_directory": ".",
+      "files": 60,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-welcome-to-paradise/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-welcome-to-paradise/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-welcome-to-paradise/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-welcome-to-paradise/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-welcome-to-paradise/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-welcome-to-paradise/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "0dce2e5955d73af74b1bc85fd47ed4ef1a48fa486d0d3cde1bc34e51c717dc28",
+            "size": 31461
+          }
+        },
+        "generated_targets": [
+          "song.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "f0849645ca899e9184fa0b1700ce5503b2098626ea9ef1955f878e1cdf7cd025",
+          "size": 7831
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "8c5f1932454e8cb185edc896efd3bc5eef20a5a342ce223ec61efc43513851d8",
+      "md5": "b7bec420a8ccb8c8820755aa051d727c",
+      "product": "WelcomeToParadise.nes",
+      "sha256": "8079f5f54ec56ae0618b1043c6391e6aaa69a9d6b9e1bc298cf4ff7312ae1dff",
+      "size": 24592,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/welcome-to-paradise",
+      "target": "WelcomeToParadise.nes"
+    },
+    "music-wishmaster": {
+      "build_directory": ".",
+      "files": 64,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-wishmaster/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-wishmaster/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/music-wishmaster/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-wishmaster/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-wishmaster/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/music-wishmaster/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {
+          "song.inc": {
+            "sha256": "e61909b0744894e54f4a4ba097e4fa99dd3bf99e77d6b516c80cc150cb399730",
+            "size": 29733
+          },
+          "song2.inc": {
+            "sha256": "00539b008ff9962907de22557174492c742639c315cd853296056ae84f33be80",
+            "size": 35031
+          }
+        },
+        "generated_targets": [
+          "song.inc",
+          "song2.inc"
+        ],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "db6a61a61ce550c83b3fb7de370eed96c1ab5e69876f0ae3bae9dcfcd772d2e3",
+          "size": 8442
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "5ab299f35aaf8967c189afa7e7684360f8270360a54d8f4debf360b94485868d",
+      "md5": "689e80235343bc0a34e7ae704a75e3b7",
+      "product": "Wishmaster.nes",
+      "sha256": "bf5d36af63744d1c06150136dd485cae00afd559de971da373608ac8cfe3b2df",
+      "size": 40976,
+      "source": "/Users/kenthansen/dev/github/nesdev/music/wishmaster",
+      "target": "Wishmaster.nes"
+    },
+    "ntxdev": {
+      "build_directory": ".",
+      "files": 132,
+      "gate": {
+        "environments": [
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/ntxdev/home",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/ntxdev/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/a/ntxdev/home",
+            "TZ": "UTC"
+          },
+          {
+            "HOME": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/ntxdev/home",
+            "LANG": "POSIX",
+            "LC_ALL": "C",
+            "PATH": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/ntxdev/tools:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TMPDIR": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-22-frozen-assets-02/builds/independent-longer-environment-b/ntxdev/home",
+            "TZ": "UTC"
+          }
+        ],
+        "generated_assets": {},
+        "generated_targets": [],
+        "independent_matching_builds": 2,
+        "inputs_manifest": {
+          "sha256": "bd57710d6b6f94a0464b2130bb6f119eb4a0ec92f9f0d540117032420c9fd3fe",
+          "size": 16230
+        }
+      },
+      "historical_same_environment_builds": 2,
+      "manifest_sha256": "bd57710d6b6f94a0464b2130bb6f119eb4a0ec92f9f0d540117032420c9fd3fe",
+      "md5": "0ac03c2493892df178053ae553d8a6db",
+      "product": "ntxdev.nes",
+      "sha256": "425269feb29e4cad202bec11e4d08b9445b645967b593f86146153af6e7ec6e8",
+      "size": 262160,
+      "source": "/Users/kenthansen/dev/ntxdev",
+      "target": "ntxdev.nes"
+    }
+  },
+  "sizeof_capture": {
+    "cases": 50,
+    "fixed_label_scan": {
+      "sha256": "75ddbfdd6f00ff21d18df0fd791a5c3fd99779b18ddbfe0f6573998a5c43bf78",
+      "size": 147
+    },
+    "report": {
+      "sha256": "1996de6d59ff4e8ec21063a2d79865b2600ed05efc62f097d285283925034089",
+      "size": 146535
+    },
+    "root": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-23-sizeof-boundaries",
+    "runs": 200,
+    "script": {
+      "sha256": "bc4efa1f73e3c32bbe0db4ea9dc81d7e8ec4e33648619cfd7753e1001ffb6ecf",
+      "size": 11200
+    }
+  },
+  "source_archive": {
+    "sha256": "1065c3dcc1d7b18888729ecc20055607b9294c1a18c405bee0b648cf9026ae4f",
+    "size": 3594240
+  },
+  "tools": {
+    "dpadhero2-xm2btn": {
+      "original": "/Users/kenthansen/dev/github/dpadhero2/tools/xm2btn/xm2btn",
+      "sha256": "c2f747f456b53142850f28c2548f4dbe6299816e30b11033b5c7b58c404f9e0a",
+      "size": 54536
+    },
+    "packchr": {
+      "dynamic_libraries": "/usr/local/bin/packchr:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n",
+      "original": "/usr/local/bin/packchr",
+      "sha256": "b8213bb9afbd333dcef4d99d3d13e1ca53e362db8d099b0f7a892d825cbedaa9",
+      "size": 51560
+    },
+    "packnam": {
+      "dynamic_libraries": "/usr/local/bin/packnam:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n",
+      "original": "/usr/local/bin/packnam",
+      "sha256": "a9d1ee330160db886d85e4a95a251e5198b22c52a28cd8eea20f5462949a7910",
+      "size": 51384
+    },
+    "xasm": {
+      "dynamic_libraries": "/Users/kenthansen/dev/github/xorcyst/.v2-baselines/2026-10-22-capture/builds/v1.9.12/xasm:\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n",
+      "original": "/Users/kenthansen/dev/github/xorcyst/.v2-baselines/2026-10-22-capture/builds/v1.9.12/xasm",
+      "sha256": "23f892a059e9fe345c8494c0a4e1336a7647af349312a0ea897d7f1028213894",
+      "size": 496984
+    },
+    "xlnk": {
+      "dynamic_libraries": "/Users/kenthansen/dev/github/xorcyst/.v2-baselines/2026-10-22-capture/builds/v1.9.12/xlnk:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)\n",
+      "original": "/Users/kenthansen/dev/github/xorcyst/.v2-baselines/2026-10-22-capture/builds/v1.9.12/xlnk",
+      "sha256": "a4a1714bec6ffd1f314872ddf561f27999e35ec2af4e87c3845414c9efbc4774",
+      "size": 100056
+    },
+    "xm2btn": {
+      "dynamic_libraries": "/usr/local/bin/xm2btn:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n",
+      "original": "/usr/local/bin/xm2btn",
+      "sha256": "05eebba369291273a0925f79eab199e42d343041c1fc1b486909843ebb2bd106",
+      "size": 53656
+    },
+    "xm2nes": {
+      "dynamic_libraries": "/usr/local/bin/xm2nes:\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n",
+      "original": "/usr/local/bin/xm2nes",
+      "sha256": "ba74f135c1d3a7cc7c63590935f5b5a92d31c2684e55c66ca485aa5da2032548",
+      "size": 70936
+    }
+  },
+  "wire_followup": {
+    "ram_cases": 5,
+    "report": {
+      "sha256": "279d7d7258d920a03d5a486779a16ea485eb5a5a590275e74bb07bf4cfc6587e",
+      "size": 35269
+    },
+    "roms": 15,
+    "root": "/Users/kenthansen/dev/xorcyst-v2-baselines/2026-10-23-wire-review",
+    "script": {
+      "sha256": "2af8a16fe531c712e788a872e6b13fddd376ba9309b839c191c519c503177d5a",
+      "size": 8855
+    },
+    "span_cases": 9,
+    "stable_sort_changed_roms": 14
+  }
+}

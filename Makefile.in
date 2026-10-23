@@ -98,7 +98,8 @@ am__aclocal_m4_deps = $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
-	$(am__configure_deps) $(dist_doc_DATA) $(am__DIST_COMMON)
+	$(am__configure_deps) $(dist_doc_DATA) $(nobase_dist_doc_DATA) \
+	$(am__DIST_COMMON)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -106,7 +107,7 @@ CONFIG_HEADER = config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" \
-	"$(DESTDIR)$(docdir)"
+	"$(DESTDIR)$(docdir)" "$(DESTDIR)$(docdir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_xasm_OBJECTS = astnode.$(OBJEXT) astproc.$(OBJEXT) \
 	charmap.$(OBJEXT) codegen.$(OBJEXT) opcode.$(OBJEXT) \
@@ -195,7 +196,7 @@ am__uninstall_files_from_dir = { \
 man1dir = $(mandir)/man1
 NROFF = nroff
 MANS = $(dist_man1_MANS)
-DATA = $(dist_doc_DATA)
+DATA = $(dist_doc_DATA) $(nobase_dist_doc_DATA)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP) \
 	config.h.in
 # Read a list of newline-separated strings from the standard input,
@@ -451,6 +452,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
 # Install the current feature documentation alongside the tools.
 dist_doc_DATA = README NEWS xorcyst.texinfo \
   XORCYST_V2_DESIGN.md \
+  XORCYST_V2_CONTRACTS.md \
   XASM_ANALYSIS_FEATURES_GUIDE.md \
   XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md \
   XASM_DEPENDENCY_MANIFEST_SPEC.md \
@@ -460,6 +462,12 @@ dist_doc_DATA = README NEWS xorcyst.texinfo \
   XASM_INSTRUCTION_RECORDS_V2_SPEC.md \
   XASM_INSTRUCTION_RECORDS_V3_SPEC.md \
   XASM_REVERSE_ENGINEERING_FEATURES_SPEC.md
+
+
+# Public protocol only; local baseline manifests, scripts and reviewer notes
+# contain owner-specific evidence and are not installed or distributed.
+nobase_dist_doc_DATA = design/v2/PERFORMANCE.md \
+  design/v2/OBJECT_WIRE_DRAFT.md
 
 DISTCHECK_CONFIGURE_FLAGS = --disable-maintainer-mode YACC=: LEX=: HELP2MAN=:
 AM_CFLAGS = -Wall
@@ -675,6 +683,30 @@ uninstall-dist_docDATA:
 	@$(NORMAL_UNINSTALL)
 	@list='$(dist_doc_DATA)'; test -n "$(docdir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(docdir)'; $(am__uninstall_files_from_dir)
+install-nobase_dist_docDATA: $(nobase_dist_doc_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(nobase_dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(docdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(docdir)" || exit 1; \
+	fi; \
+	$(am__nobase_list) | while read dir files; do \
+	  xfiles=; for file in $$files; do \
+	    if test -f "$$file"; then xfiles="$$xfiles $$file"; \
+	    else xfiles="$$xfiles $(srcdir)/$$file"; fi; done; \
+	  test -z "$$xfiles" || { \
+	    test "x$$dir" = x. || { \
+	      echo " $(MKDIR_P) '$(DESTDIR)$(docdir)/$$dir'"; \
+	      $(MKDIR_P) "$(DESTDIR)$(docdir)/$$dir"; }; \
+	    echo " $(INSTALL_DATA) $$xfiles '$(DESTDIR)$(docdir)/$$dir'"; \
+	    $(INSTALL_DATA) $$xfiles "$(DESTDIR)$(docdir)/$$dir" || exit $$?; }; \
+	done
+
+uninstall-nobase_dist_docDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(nobase_dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	$(am__nobase_strip_setup); files=`$(am__nobase_strip)`; \
 	dir='$(DESTDIR)$(docdir)'; $(am__uninstall_files_from_dir)
 
 ID: $(am__tagged_files)
@@ -964,7 +996,7 @@ check-am: all-am
 check: check-am
 all-am: Makefile $(PROGRAMS) $(MANS) $(DATA) config.h
 installdirs:
-	for dir in "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(docdir)"; do \
+	for dir in "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(docdir)" "$(DESTDIR)$(docdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -1038,7 +1070,8 @@ info: info-am
 
 info-am:
 
-install-data-am: install-dist_docDATA install-man
+install-data-am: install-dist_docDATA install-man \
+	install-nobase_dist_docDATA
 
 install-dvi: install-dvi-am
 
@@ -1104,7 +1137,7 @@ ps: ps-am
 ps-am:
 
 uninstall-am: uninstall-binPROGRAMS uninstall-dist_docDATA \
-	uninstall-man
+	uninstall-man uninstall-nobase_dist_docDATA
 
 uninstall-man: uninstall-man1
 
@@ -1123,13 +1156,15 @@ uninstall-man: uninstall-man1
 	install-binPROGRAMS install-data install-data-am \
 	install-dist_docDATA install-dvi install-dvi-am install-exec \
 	install-exec-am install-html install-html-am install-info \
-	install-info-am install-man install-man1 install-pdf \
-	install-pdf-am install-ps install-ps-am install-strip \
-	installcheck installcheck-am installcheck-local installdirs \
+	install-info-am install-man install-man1 \
+	install-nobase_dist_docDATA install-pdf install-pdf-am \
+	install-ps install-ps-am install-strip installcheck \
+	installcheck-am installcheck-local installdirs \
 	maintainer-clean maintainer-clean-generic mostlyclean \
 	mostlyclean-compile mostlyclean-generic pdf pdf-am ps ps-am \
 	tags tags-am uninstall uninstall-am uninstall-binPROGRAMS \
-	uninstall-dist_docDATA uninstall-man uninstall-man1
+	uninstall-dist_docDATA uninstall-man uninstall-man1 \
+	uninstall-nobase_dist_docDATA
 
 .PRECIOUS: Makefile
 

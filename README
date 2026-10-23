@@ -8,12 +8,19 @@ v2 planning
 The next major workstream is the approved v2 scope/design in
 [XORCYST_V2_DESIGN.md](XORCYST_V2_DESIGN.md). It traces requirements to owner
 decisions, existing Nesrev/game/music workflows and reproduced defects. D0 was
-approved on 2026-10-22, authorizing D1 baseline freezing and contract design.
-Those contracts require review and approval before implementation. v2 must be
+approved on 2026-10-22; the independently reviewed D1 contracts and baselines
+were approved on 2026-10-23. Implementation follows the staged gates. v2 must be
 no slower than v1 on large projects, both plain and with listings and analysis enabled,
 and in object assembly/linking. The required game and music builds must retain
 their ROM bytes; d-pad hero 2 is a mandatory acceptance fixture.
 Current formats and behavior are unchanged by this plan.
+
+The approved D1 contract and approval record are in
+[XORCYST_V2_CONTRACTS.md](XORCYST_V2_CONTRACTS.md), with
+`design/v2/BASELINES.md` in the source checkout (not shipped), the
+[performance protocol](design/v2/PERFORMANCE.md) and the
+[object wire layout](design/v2/OBJECT_WIRE_DRAFT.md). The contract gate is
+complete; installed tools stay v1 until the coordinated cutover.
 
 Build and test
 --------------

@@ -1,0 +1,1286 @@
+{
+  ".gitignore": {
+    "sha256": "c12ddba072627e451d6179cb2b16da59dda798361b4a82058b7250f06414a6e6",
+    "size": 82
+  },
+  "manual/images/blueorb.png": {
+    "sha256": "bf9cdaf33122cb21d026d805ace02aaa62a4cbf96b190ca029a6b845d7943f6f",
+    "size": 6255
+  },
+  "manual/images/clock.png": {
+    "sha256": "5a59c834b51006d304d23724437ee1b5ed7fab463b59228da6b130eee47d011d",
+    "size": 1092
+  },
+  "manual/images/controller.png": {
+    "sha256": "a6d16331d7d77eec550968fdc9562075d1e7abfd9e7328300274cc949a79fc69",
+    "size": 20509
+  },
+  "manual/images/coop.png": {
+    "sha256": "922c2539b89681f64c2b393f346b8075b6c3941247be39a74c670fe1ffc2cc25",
+    "size": 28735
+  },
+  "manual/images/fakeskull.png": {
+    "sha256": "4803b92f204eabffd6042f4f54d07900227f06d7a40ae06fa7b279776219fcf0",
+    "size": 1075
+  },
+  "manual/images/game.png": {
+    "sha256": "a7bf6458ddccabae5b28ba9c8d9b33999b38aa3f3f28f62ba664a00600ba0937",
+    "size": 36547
+  },
+  "manual/images/greenorb.png": {
+    "sha256": "d577678e730f8b654e6a6f60dbae496afe324b6009c211bd1cb7c54815ad1313",
+    "size": 1122
+  },
+  "manual/images/logo.png": {
+    "sha256": "533d891c735cff0e2aae95b5e4abaef615cd578803016e4778a9a7705709c88e",
+    "size": 104068
+  },
+  "manual/images/powblock.png": {
+    "sha256": "4b5c8dc7a01caead9f256e5a984031566cb273004cc4a0795b8d559041a08394",
+    "size": 1053
+  },
+  "manual/images/redorb.png": {
+    "sha256": "fdce5f000df132dcc0321d16670a75c68612fe7cd093821368b0c0efa825f4cb",
+    "size": 6268
+  },
+  "manual/images/skull.png": {
+    "sha256": "cd9ae2eb8471864b063306ad33c6d9a175691431c011640209b385d43e5585e7",
+    "size": 6244
+  },
+  "manual/images/star.png": {
+    "sha256": "b7a21b138da69c8bb768f2af9c301a5641c0377a23f78bfc5fa43b145f1a6707",
+    "size": 1058
+  },
+  "manual/images/versus.png": {
+    "sha256": "b35a07052f2f2d0ccbe337aca4ea768f8ed01911aafb3c6fa0556373a75ca8c7",
+    "size": 20126
+  },
+  "manual/images/yelloworb.png": {
+    "sha256": "ec8e89929fd383c8fee627aa14fd0a9d898230e4593713e02459595e68be1ecb",
+    "size": 6247
+  },
+  "manual/index.html": {
+    "sha256": "a048e22896d810113b1236a8c91c063bda6f16b3cc534533ec2279e0ebedec66",
+    "size": 16886
+  },
+  "src/COPYING": {
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "size": 35147
+  },
+  "src/Makefile": {
+    "sha256": "2f7bf16c30908d7a1dfc4a5682d4e906edbd84c08b87bf0ed1161c04fcdae4d5",
+    "size": 2392
+  },
+  "src/ampdisplay.asm": {
+    "sha256": "f6800faaf7f4a9c42717a0c1c98a8422d2c07d180ac14ce4845b17439953bee7",
+    "size": 2881
+  },
+  "src/buttonconfig.asm": {
+    "sha256": "56cb6314695cc83ba1528d01f5d0127f4a54e0eadd2692e39180cfbc7313479e",
+    "size": 6052
+  },
+  "src/challenges.asm": {
+    "sha256": "07b55897eb35267e7718746d29aacec16402c62d385e03f909c425ae8ce98b5d",
+    "size": 9063
+  },
+  "src/common/Makefile.inc": {
+    "sha256": "4d936cb6ca1dbb246bfd4885c4ca1f5eef918b728680792d53fb76f64b4dd6ad",
+    "size": 477
+  },
+  "src/common/bitmasktable.asm": {
+    "sha256": "f2e22de4203f5677cdc0b6e1c42db282d300552fbdfa6c2e75f2f118f26f76ab",
+    "size": 1202
+  },
+  "src/common/clearram.asm": {
+    "sha256": "7b5434a5e746c4f35cdec3779fb502cccce5a1976438b3b697ce58ecbdbdda19",
+    "size": 1137
+  },
+  "src/common/clearwram.asm": {
+    "sha256": "291ee7b9f9ef584449ed064dbdf7c4d54195ae99868650433422351991bb2296",
+    "size": 1423
+  },
+  "src/common/dimension.h": {
+    "sha256": "7d4b0186c83bb8d9f7c4fc4d3b7a6e5ad23a52762081cc44a445aaf4f14993b5",
+    "size": 929
+  },
+  "src/common/fade.asm": {
+    "sha256": "48b33975984bc8555a7a3cc91fc0ae85f6de62d39fc916ded5909fb510faef24",
+    "size": 6881
+  },
+  "src/common/fade.h": {
+    "sha256": "92853680c229bc78f1b49bf38edd37d1d393aec1854c9e8bbde21fbcb0fbb060",
+    "size": 1077
+  },
+  "src/common/fixedpoint.h": {
+    "sha256": "ac68edf5670577928cf1cf0e0c95907aaab38199a8048b770002663739d1d1c7",
+    "size": 1112
+  },
+  "src/common/inesheader.asm": {
+    "sha256": "a8da956ad0f2f00e45fc41541a32905073e67c0bc863e2f4ba5172e1442d6687",
+    "size": 280
+  },
+  "src/common/int16.h": {
+    "sha256": "9684c0a2f4ab6d44dfaf39ceafa6dc533648ac7c04af6c0a03e97e0790703b93",
+    "size": 905
+  },
+  "src/common/irq.asm": {
+    "sha256": "2a330fcceff9a7c354082fbc17cc387a9d07ee5092d18292ae9835e873ad4327",
+    "size": 1419
+  },
+  "src/common/joypad.asm": {
+    "sha256": "bd29bc822a6872fc29aedda8f8426a44409241ba48dee6a3be20b84a610293d7",
+    "size": 2837
+  },
+  "src/common/joypad.h": {
+    "sha256": "272891e9f8947d5e5f2a6ec2f01979c29d8d4ba20a11c71894a6deebd721f41f",
+    "size": 1528
+  },
+  "src/common/ldc.h": {
+    "sha256": "d6636aebe79b2cbc598557f2c24479aa646681c3bf8873846a919ee0fc27fe64",
+    "size": 88
+  },
+  "src/common/nmi.asm": {
+    "sha256": "fba5e7bf601d0650219db2dbb32664f0f7d568752b9a4bbbaf4c9f32c2ae0e9a",
+    "size": 2384
+  },
+  "src/common/palette.asm": {
+    "sha256": "be348b1a194accb58c3f98f77fd52fa6fe68a2631c8dbe358a832dba62b65f3d",
+    "size": 2953
+  },
+  "src/common/palette.h": {
+    "sha256": "9c8559e83943e50ab16c3d94f034c513a9c185b39981920e83cb8a5ac2d03bc8",
+    "size": 936
+  },
+  "src/common/point.h": {
+    "sha256": "b20ddc5e0d5ea18e898b1f78a847ceba8d8f714c448812ab783550a3fc5cd3c1",
+    "size": 1094
+  },
+  "src/common/ppu.asm": {
+    "sha256": "261c834d9435fbd4e2e25c3cd8d42c69d30ace77e38635b9d048e0731a434ff9",
+    "size": 3607
+  },
+  "src/common/ppu.h": {
+    "sha256": "9a53e8bf5accc4744f018a7cdb5f9c96c6e193cfc2d7cda4fdb44e1cd5421dd5",
+    "size": 3886
+  },
+  "src/common/ppubuffer.asm": {
+    "sha256": "3f2dbcaafb206418e29f5a68adce0e1fba2731926557396416f1194ca6a9c84b",
+    "size": 2610
+  },
+  "src/common/ppubuffer.h": {
+    "sha256": "ebf31021c2b9e549a5501afe107d501f30d1f0116746f5bf43d98f8086b116bf",
+    "size": 977
+  },
+  "src/common/ppuwrite.asm": {
+    "sha256": "38e171b9a0651e94c3df07acbeb6fa125228a90852af9689238a3d915a8be292",
+    "size": 4413
+  },
+  "src/common/ptr.h": {
+    "sha256": "5436f1afa737c330abd8d1290ac4091603abc97c0686f0fec93f5b02118bc20a",
+    "size": 942
+  },
+  "src/common/reset.asm": {
+    "sha256": "70355aeef56df88e7862ab4695378d2e946a698b6ebf0c7629a010e824d3549a",
+    "size": 1207
+  },
+  "src/common/sprite.asm": {
+    "sha256": "282d7eec035f1bf513d0fed15be79d52e863a087be66807ff7b711a47f37bf07",
+    "size": 1658
+  },
+  "src/common/sprite.h": {
+    "sha256": "45e9d6093db8292c28d23493d94039c8eae9d8b1f1b98fce8e880d0d03efc0e1",
+    "size": 1700
+  },
+  "src/common/tablecall.asm": {
+    "sha256": "c11a029e6db838062ab938ed49c6a054774293eb690c9c01da791d9ca974ea6e",
+    "size": 1508
+  },
+  "src/common/tablecall.h": {
+    "sha256": "2c470ce17d12db1481e01e49dddecf8edcbe8ebb2c084fac94c7c711d958c5c8",
+    "size": 1073
+  },
+  "src/common/timer.asm": {
+    "sha256": "5598392b569357f514c97b9892734fc03b266ad4dd40a7593d722be0e637ead6",
+    "size": 3725
+  },
+  "src/common/timer.h": {
+    "sha256": "753f74f32ae9b7d4e45c854bbfb9214bd1aa6aae086642b923a37aae8c95cb38",
+    "size": 962
+  },
+  "src/common/vectors.asm": {
+    "sha256": "3b61f63b9a1db6b125c8e67cf4f1a693dc2dc6d83783d333eb3075ab4ef26067",
+    "size": 986
+  },
+  "src/creditwin.asm": {
+    "sha256": "08e16f01bb6f3f70c57df02bae6b72c764a9cadba66b2e3c45b7fff0d83fd256",
+    "size": 6955
+  },
+  "src/cutscene.asm": {
+    "sha256": "6cf4e543efb1ea0a1e14431c00979e1c756107a67bc4861695e441a73e58b1ce",
+    "size": 4194
+  },
+  "src/data/ouch.dmc": {
+    "sha256": "018eff821ad56a90680e7353a8429f38e022aca329439aff721a4872f6c6e440",
+    "size": 176
+  },
+  "src/data/pausemenu.tbl": {
+    "sha256": "dc0739aa1f8495f6b667741ffb457efac077a1b2e90c041a11103826428d2ffc",
+    "size": 60
+  },
+  "src/difficultyselect.asm": {
+    "sha256": "9aa98afb46ee69fbe2d8fc32df5c0baec16bfbae493d51eb91a5a4875d653bd4",
+    "size": 5124
+  },
+  "src/dmcdata.asm": {
+    "sha256": "150e752aa1488ca41a7e268ff3827064d3b0ea526f4afb52e469ee3883b64a9b",
+    "size": 5372
+  },
+  "src/font.tbl": {
+    "sha256": "f1e29bdc04773595104a2750b86be33e894f3f9f0035c4439bd38052dde00b3b",
+    "size": 100
+  },
+  "src/game.asm": {
+    "sha256": "23c8b92dbff363b850bf5ce40d793e45058cba48f07a2eed495da23d8193400c",
+    "size": 76571
+  },
+  "src/gameinfo.asm": {
+    "sha256": "990227574922e0b33d02a5cd897ea13b99ac96f00a9dda62ba727b8ffd1926b8",
+    "size": 6421
+  },
+  "src/gameover.asm": {
+    "sha256": "aad6a0d1014d5b62ac1da346f405dec965fe70c8b42e38b8636f69afccdbc55c",
+    "size": 5066
+  },
+  "src/gameselect.asm": {
+    "sha256": "ee1580bd5bfa0f58018f28f5bdf6d1618f8457e9454055f331f89a87cf32b8b9",
+    "size": 10725
+  },
+  "src/gamestats.asm": {
+    "sha256": "33ade441aa7eafd36f88a891ebdc35ef2f1fb3b596bda0261ef641312b9df42c",
+    "size": 4951
+  },
+  "src/gameuidata.asm": {
+    "sha256": "49b8e0c9be7a35832e8de26d48b712315a43afb814aee7cfe2171ff7f170c3c4",
+    "size": 1728
+  },
+  "src/graphics/audience.dat": {
+    "sha256": "02313ea5fd9079daf323164eb2c9c66517c21fecc2aab5d844dd02c5b959aca3",
+    "size": 288
+  },
+  "src/graphics/board3d-30x6.chr": {
+    "sha256": "13f77caafb9b9a4f00ef32740977dc7b78c7a8ceb7fb654b162ef49ea64a08ae",
+    "size": 2880
+  },
+  "src/graphics/board3d-32x6-v2.chr": {
+    "sha256": "d4feb2605be97a13de3d739ddb6800796da4352af35e70f938bc95f4197911e4",
+    "size": 3072
+  },
+  "src/graphics/board3d-32x6-v3.chr": {
+    "sha256": "4c04c347fe635c710e65b97b8fc86c80615bd87ca4c861951e2c7a0e864b2697",
+    "size": 3072
+  },
+  "src/graphics/board3d-32x6-v4.chr": {
+    "sha256": "75edc440af37ea08e062804be263d2efff1910978b39ff9889a0410fd1702bdc",
+    "size": 3072
+  },
+  "src/graphics/board3d-32x6.chr": {
+    "sha256": "ff71e01be92f0f5ebcf5f5703f64e2b877a45a099115323520ebe424e33f2b2a",
+    "size": 3072
+  },
+  "src/graphics/board3d-packed.chr": {
+    "sha256": "5092cd18d8bcd657772e1ba0512a4c458be112bf046776d4d399105bc5c26344",
+    "size": 1536
+  },
+  "src/graphics/board3d.dat": {
+    "sha256": "39c5f42ad0224b3755b7882f69e72a040db5c6a3412cdd24e124032eb2e81ee4",
+    "size": 214
+  },
+  "src/graphics/brickwall-32x30.chr": {
+    "sha256": "2847802f5132a6fd12e4ed490dd06bd473b06ca359e5b3e60eed4b8fdac83737",
+    "size": 15360
+  },
+  "src/graphics/buttons-16x2.chr": {
+    "sha256": "76367c25341f23befda6d4b210e11d8be98b68e65e6421c1d40e0b7e511b5530",
+    "size": 512
+  },
+  "src/graphics/challenges-32x30-v2.chr": {
+    "sha256": "6dc515dfeddca7d68e2b1ebab8ea837ce2b0a7aa4d50656e0dc6e4433a63e138",
+    "size": 15360
+  },
+  "src/graphics/challenges-32x30-v3-packed.chr": {
+    "sha256": "e7c4597c09fa752dbe6ba14d45620acf60700318aef33e5153e9633c3b642781",
+    "size": 1952
+  },
+  "src/graphics/challenges-32x30-v3.chr": {
+    "sha256": "91372e2e8a3519e2e7992bc37a1f23a0de9832ce34383e604ce986a5d8890f6d",
+    "size": 15360
+  },
+  "src/graphics/challenges-32x30.chr": {
+    "sha256": "2847802f5132a6fd12e4ed490dd06bd473b06ca359e5b3e60eed4b8fdac83737",
+    "size": 15360
+  },
+  "src/graphics/challenges-bg.chr": {
+    "sha256": "d28bac4302534b33111a00dde53f612d73c53d010c2667bf21855ec43192e50b",
+    "size": 4096
+  },
+  "src/graphics/challenges-bg.dat": {
+    "sha256": "b37937b00f172151f89a3eafe9b96031ada7c2a862e4f06d25b3dd6a0a23af0a",
+    "size": 630
+  },
+  "src/graphics/completedpad.chr": {
+    "sha256": "7b04d67d43518be82fff32876ca7dfd8d27d4ba2d9463e3668446e7841fb59fa",
+    "size": 2048
+  },
+  "src/graphics/completedpad.dat": {
+    "sha256": "c9aeca050f002a4b764c089cbf95b77677ac210c76771d45b65767ad67c68f2d",
+    "size": 141
+  },
+  "src/graphics/continuequit-10x10-packed.chr": {
+    "sha256": "434b97a296af5cb36bb89c34acb6d13e5945002fcc387de73bdd55641589b943",
+    "size": 880
+  },
+  "src/graphics/continuequit-10x10.chr": {
+    "sha256": "137655994ed9c32be39582aa3796d78e4806995ab37e99f07aeb4e656c69f56d",
+    "size": 1600
+  },
+  "src/graphics/continuequit-12x13.chr": {
+    "sha256": "9a7f0e68c48b1b7e1fd8136ee7d1e790489187fc5aea15e8853a784a0f6405d5",
+    "size": 2496
+  },
+  "src/graphics/continuequit.dat": {
+    "sha256": "b8a1d3cac3a33824976afc1e37a7ae206aa882d86c63e532b49e8f90c517abe3",
+    "size": 104
+  },
+  "src/graphics/cutscene.chr": {
+    "sha256": "c9c6bc37e8f5fb71f6efb0a9acba9cd04a8c98ece5cf964207ee65223c2b3aa5",
+    "size": 2048
+  },
+  "src/graphics/difficultyselect-32x30-v2.chr": {
+    "sha256": "d5c985306d29e7e33a9a783a124cb13d19d87ddb753e5862d312560514e44649",
+    "size": 15360
+  },
+  "src/graphics/difficultyselect-32x30.chr": {
+    "sha256": "021db98b2b6f33aa94dc5a0b0c407476948b63fa48a7ce054e9228a1a59b124d",
+    "size": 15360
+  },
+  "src/graphics/difficultyselect-bg.chr": {
+    "sha256": "8e966ba9daeb90ebd91b4d9114af5e51c364cf73a5b4f837c223f14859928190",
+    "size": 4096
+  },
+  "src/graphics/difficultyselect-bg.dat": {
+    "sha256": "bb59404719c877ffc18eda51b8aa4574ab9930fd64ff0b08c7fc40f23815294e",
+    "size": 400
+  },
+  "src/graphics/dpad.dat": {
+    "sha256": "031b9a6400181b726722a874925c3e45e19a188cd26b0234619d72acdd7882e9",
+    "size": 183
+  },
+  "src/graphics/dpad3d-packed.chr": {
+    "sha256": "1d9ee7b0d28111a08bad9b9b6dae6a6c1039f926785a8fb866b7d3f47225867e",
+    "size": 1184
+  },
+  "src/graphics/dpad3d.chr": {
+    "sha256": "1eb9310ea101f0f074ec1a0aa993a9f4ca691dd2fc24074ad174af24b6f5d5da",
+    "size": 2560
+  },
+  "src/graphics/dpad3d.dat": {
+    "sha256": "93f343f8ec6f06743e9b48205419dc4c76bf611431c2c0468d1ce9d3e5ab6a9e",
+    "size": 152
+  },
+  "src/graphics/eq-8x8.chr": {
+    "sha256": "0a323890e9b07fa3ae552dca53ffd892cfc5528ac063b78b0bffb744e5acb7c8",
+    "size": 1024
+  },
+  "src/graphics/game.chr": {
+    "sha256": "22b812fe048e589111a7f578e0b06483de34e88ddc766b5403a0c5e255764c20",
+    "size": 8192
+  },
+  "src/graphics/gameover-2-bg.chr": {
+    "sha256": "66071f95af69a86467e395b91c5e6657a1f2c875d946a8ec020fba6dd90d9ec6",
+    "size": 4096
+  },
+  "src/graphics/gameover-32x30-2.chr": {
+    "sha256": "33ce92d586195adb0e54488cea612da0a96dca6b16969b0ed05389e0891db229",
+    "size": 15360
+  },
+  "src/graphics/gameover-32x30-v2.chr": {
+    "sha256": "9aca4d0ccbe0659fa93597e3729006c384a9179de664a10da5d6528b22b911f6",
+    "size": 15360
+  },
+  "src/graphics/gameover-32x30-v3.chr": {
+    "sha256": "fee3622c5d39543e4666b4ef80364d773690101ec100e325d23964a5ded99a61",
+    "size": 15360
+  },
+  "src/graphics/gameover-32x30-v4.chr": {
+    "sha256": "46dd460bec4b67aab7e15ad4401aef7b61c0bbb32533ebda1748089e8b2eaaa5",
+    "size": 15360
+  },
+  "src/graphics/gameover-32x30.chr": {
+    "sha256": "5c435bb51f872f47e5b9efd21e8c8c7f779b60bb424790e4ba667cfa13c8d710",
+    "size": 15360
+  },
+  "src/graphics/gameover-8x12.chr": {
+    "sha256": "7134ae153e56c6eae84ba338ca1cbfbd856368cd25d0a00e85bfa14343f00b14",
+    "size": 1536
+  },
+  "src/graphics/gameover-bg.chr": {
+    "sha256": "e30023d661035a17f55ceedd50331f308ad7d0b476ea0b54537cd5f94d217114",
+    "size": 4096
+  },
+  "src/graphics/gameover.dat": {
+    "sha256": "00b3006d5a07b5fcac032c7703812c6fa0cb5830d9bdeeca579a542de33ea26d",
+    "size": 120
+  },
+  "src/graphics/gameselect-bg.chr": {
+    "sha256": "250a55117420dabbf40ae57e782994d92802590b00f4ccc5a42f1c0223d2c2d2",
+    "size": 4096
+  },
+  "src/graphics/gameselect-bg.dat": {
+    "sha256": "a51cb08057295c3f20d6515fe3257bad59e88b067b5354c38814b4acafe35bc2",
+    "size": 812
+  },
+  "src/graphics/graveyard-32x16.chr": {
+    "sha256": "65ab80a4702ccb88de3694e4789b482669c6b6225e178d179a66b74a9bb9d40c",
+    "size": 8192
+  },
+  "src/graphics/graveyard.dat": {
+    "sha256": "c03dcedb89e8ee6ccff45b927bc0bcad3939bac562bee8f96edb5d76c4a1ee8d",
+    "size": 419
+  },
+  "src/graphics/guitar-fender-8x8.chr": {
+    "sha256": "91fe2252a4b4734f555d6ffa5da28657229f03791b94ae381a0b25e0d7e1369a",
+    "size": 1024
+  },
+  "src/graphics/guitar-lespaul-8x8.chr": {
+    "sha256": "10fb4ac914bb40c39d66f8a8a5e05f126bd5c08567ea8619cadf036d3e309d40",
+    "size": 1024
+  },
+  "src/graphics/guitar-vortex-8x8-packed.chr": {
+    "sha256": "9019847a9c378fd4a03a048cc1ce5057187893815264652883e5b49341dafd39",
+    "size": 464
+  },
+  "src/graphics/guitar-vortex-8x8.chr": {
+    "sha256": "e3d45976fef465824fb71e0ca98adb72a761dce433e4f97c0b7aa1e06c822a4e",
+    "size": 1024
+  },
+  "src/graphics/guitar-vortex-8x8.nam": {
+    "sha256": "d0ecd73bc3fd4e24010e5c0a8df5fb6df067f781a4b1698e8e555f59da304733",
+    "size": 64
+  },
+  "src/graphics/guitar-vortex.dat": {
+    "sha256": "73f22d052e36e8a1797565b5b849de65fd60bd304c7aa3a9249a7fc54de32312",
+    "size": 85
+  },
+  "src/graphics/heading-dpadawan-16x4.chr": {
+    "sha256": "5ae718b4864da891cffd3196e7f607956c67490ce2f45b4153ae0dd2149bd384",
+    "size": 1024
+  },
+  "src/graphics/heading-pad2dabone-16x4.chr": {
+    "sha256": "fbce23ded488ae79c771767948e2b749f096cb7a2a2e1d1ba536c3bf454f33bc",
+    "size": 1024
+  },
+  "src/graphics/heading-padophile-16x4.chr": {
+    "sha256": "4fbc2cf72355a1671b8d96280b404ad067db3c2a96409b07b1b51bdcf075d4a5",
+    "size": 1024
+  },
+  "src/graphics/heading-padstothenads-16x4.chr": {
+    "sha256": "d4160504aed2c31a8e2982efe08ec31f49e5704077cc208597501b3897515724",
+    "size": 1024
+  },
+  "src/graphics/heading-rockstar-16x4-packed.chr": {
+    "sha256": "e372efa4b46bb8e028997537076f03fabaa41395c0710a795d6f227b0ba1a6ee",
+    "size": 528
+  },
+  "src/graphics/heading-rockstar-16x4.chr": {
+    "sha256": "6d0a4fbba232608ff66cffd73eadb61c0413ceb7fbd2175bed71b7e996e463ab",
+    "size": 1024
+  },
+  "src/graphics/heading-rockstar.dat": {
+    "sha256": "861759f8eee5b435679146b3ccc87f11aab1dbe5e90a59beb1b4cfaf9ae3fde6",
+    "size": 46
+  },
+  "src/graphics/kentando-16x10.chr": {
+    "sha256": "c5860ca56f575bbe848e6f888d6def603b0ed27290ed04b145a96109441f5b60",
+    "size": 2560
+  },
+  "src/graphics/kentando-bg.chr": {
+    "sha256": "b5962efcc0672b83ea97813864d6b61ecdc3bcfb4047e772dcadd6bb1111a6f0",
+    "size": 4096
+  },
+  "src/graphics/lanes-packed.chr": {
+    "sha256": "4e396231a750219f31a520497cd19b70e98b0e962dda1828425a5a9ccfed08f6",
+    "size": 208
+  },
+  "src/graphics/lanes-uncompressed-20x16.chr": {
+    "sha256": "78107f458da7dec6ccae80899946f7736ad4d8af578ba79cdb2da076b3e220e2",
+    "size": 5120
+  },
+  "src/graphics/lanes-uncompressed-22x18.chr": {
+    "sha256": "07aed3feeb7a7e46e446c6a5cabb532ffe3ed5271e128f8ceb3c6120d0730e3b",
+    "size": 6336
+  },
+  "src/graphics/lanes-uncompressed-24x20.chr": {
+    "sha256": "1b0c6e7d398fef50b8592a3fce63530fdb59a89a16a871704db79a1eaeedd404",
+    "size": 7680
+  },
+  "src/graphics/lanes-uncompressed-32x22.chr": {
+    "sha256": "52c7d6a19700b676c24114bbf6aa66e33ca29a146b72c317a372cf59cf073a93",
+    "size": 11264
+  },
+  "src/graphics/lanes.dat": {
+    "sha256": "02d95d195c7aceed729b170bae6573c3d5550b1bd9ef2c5fcd720d1c06744f4c",
+    "size": 260
+  },
+  "src/graphics/leftpipe-4x6.chr": {
+    "sha256": "6b5f26cc1d3be3dc0ccc87e0c905b5926570619d02d05765f57d97dda5771389",
+    "size": 384
+  },
+  "src/graphics/leftpipe.dat": {
+    "sha256": "9e6c3bf83dd5a9f6e984c68e9c6e67ab08bb28762decffd3bf6b10f12c243ef7",
+    "size": 33
+  },
+  "src/graphics/logosmall-6x4.chr": {
+    "sha256": "210c72408314c46351f6ddf62cd1cff8eff06a0ec4da2cfc6beecbed6efa0c96",
+    "size": 384
+  },
+  "src/graphics/logosmall-6x4.nam": {
+    "sha256": "185390e5e13ab7c435cb913b0591287d5ee84d4999c900cb501bfa4f8bc88067",
+    "size": 24
+  },
+  "src/graphics/logosmall-packed.chr": {
+    "sha256": "ee0272848496dd7c6dae50cfa9306fd6ee9e29337dd2e64475085566f4498e6e",
+    "size": 256
+  },
+  "src/graphics/logosmall.dat": {
+    "sha256": "75b4dd6f0cd46e8d2cb588e0010fdc55f1e20cc34191231f4cda648b0b249e1b",
+    "size": 34
+  },
+  "src/graphics/magazine-32x30.chr": {
+    "sha256": "c6492c738f27970ae0fa7a02d032b03babe69d5cfd8a01f5a45ecd34591c2cb2",
+    "size": 15360
+  },
+  "src/graphics/magazine-bg.chr": {
+    "sha256": "2aae95461750fc8b38b0ea2088cf5ec0859e9cacb4b8c76a18d71c27f5afe2a9",
+    "size": 4096
+  },
+  "src/graphics/magazine-bg.dat": {
+    "sha256": "f0d9e8d10c6e2a19b6641c77c0e4ace7731c41fb102f25a9357dfeea230a286f",
+    "size": 575
+  },
+  "src/graphics/menu-bg-32x30.chr": {
+    "sha256": "e8813f15acf3893301ccc6ea6faecf00bcb7e0ea865f4bd6727a497ad507aa9b",
+    "size": 15360
+  },
+  "src/graphics/meter-10x1.chr": {
+    "sha256": "de1465ebf71c29ffe74557ce845c95acb308ef13abe44da45ad1ba3e10a7cfe3",
+    "size": 160
+  },
+  "src/graphics/moonpad-32x16.chr": {
+    "sha256": "de85b6cf179a6dbe06e01d7b00a4fe403afb6bf46f007f2416ea82132f9f3f68",
+    "size": 8192
+  },
+  "src/graphics/pad-16x8.chr": {
+    "sha256": "cb80703ae602a7a9d09671fc15cd07efc06d85ce6164f7bcba8bc099449d5b3b",
+    "size": 2048
+  },
+  "src/graphics/padpad.dat": {
+    "sha256": "4337ef89ddd01a94271bfc0697d6cba3f4cd5a4de623f1341650834750af58be",
+    "size": 214
+  },
+  "src/graphics/padpieces-12x6.chr": {
+    "sha256": "2548b38af408f86932ef88193a60182c648edf3eafb966772b3389c213031ba2",
+    "size": 1152
+  },
+  "src/graphics/paperfont.chr": {
+    "sha256": "2389e31f3a4e63781db2c61acc516fa90ff1810fd070bb2046c544929460d381",
+    "size": 1024
+  },
+  "src/graphics/questionblock-4x4.chr": {
+    "sha256": "9a6bc364618b3c2715db34e36450669df465cd54ddaa09818fd7b1f4884d97ef",
+    "size": 256
+  },
+  "src/graphics/rightpipe-4x5.chr": {
+    "sha256": "2063b29704b2f7d2944d7eb8b7887f4aaaf67aa095e41cf202a6fce4a23bac39",
+    "size": 320
+  },
+  "src/graphics/rightpipe-4x6.chr": {
+    "sha256": "cf8811c4a5688c9fb34c0e477bb53f2aeeb4486b4ee8bb68ca300d23a300eeaf",
+    "size": 384
+  },
+  "src/graphics/rightpipe.dat": {
+    "sha256": "11fb53dcbdc1f1833dca50b4e92051a70ea48460643e12f7bb46213d85fc71c4",
+    "size": 36
+  },
+  "src/graphics/rockface-sick-4x4-packed.chr": {
+    "sha256": "000610962f69400e0b8e927f355f260a86a7a43a03391dcfd2c20c285029e498",
+    "size": 256
+  },
+  "src/graphics/rockface-sick-4x4.chr": {
+    "sha256": "000610962f69400e0b8e927f355f260a86a7a43a03391dcfd2c20c285029e498",
+    "size": 256
+  },
+  "src/graphics/rockface-sick-4x4.nam": {
+    "sha256": "d4f376ea1200f6ee38e9d24177b882cf10532899277b7eb4b6e68fa13eeaf5fe",
+    "size": 16
+  },
+  "src/graphics/rockface-sick.dat": {
+    "sha256": "d01ea2515fb6876012a3028b892c767ad30b3e5ca0b126d2aa1b2f2b099158dc",
+    "size": 28
+  },
+  "src/graphics/rockface-spr-v2.chr.orig": {
+    "sha256": "4634d334100dc15acd766f35757e418b5c15c28ee954e2876e02b44dcae0264e",
+    "size": 4096
+  },
+  "src/graphics/rockface-spr.chr": {
+    "sha256": "8f0a35acd7eb1a9c0fd6cf6821fe48c82554944a285573dd1edc1a30f6a53913",
+    "size": 4096
+  },
+  "src/graphics/rockface-spr.chr.orig": {
+    "sha256": "980f3a8cfb4e8f2c60381ef0793a9606426fde437016293317759f5bf418a11a",
+    "size": 4096
+  },
+  "src/graphics/rocklife-normal-4x4.chr": {
+    "sha256": "953dfa4553ecafd067842e4c398ed99e9bd675d75eb959a1728808484eab2ae1",
+    "size": 256
+  },
+  "src/graphics/skymoon-32x10.chr": {
+    "sha256": "2de8e6d7098db921a217e86f35ab108ec4b47af09c50cdfcc2016d61a42e50f9",
+    "size": 5120
+  },
+  "src/graphics/skymoon.dat": {
+    "sha256": "86c83444797084ad00de24346e34a31f7352f26c200e50a7becc4d5a357f1c5c",
+    "size": 129
+  },
+  "src/graphics/songselect-bg-uncompressed-v1.chr": {
+    "sha256": "daa44e425ecd95b21c21633a7e6327f518447649ed2de4516016e9364ad32168",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v10.chr": {
+    "sha256": "cb695637beae06825049b20a5351626882e4d9208a11d7f45982708daf4d18ac",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v11.chr": {
+    "sha256": "b67f3d5b7052be44172bfaf16ec49cb5957ae766e504be0f30666e3709f04897",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v2.chr": {
+    "sha256": "4a72ef25467ffb1f16b5f59c94858cc5051ffab15176f7ed2dae9a281358473f",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v3.chr": {
+    "sha256": "db00f740884056dcd251ff14a587904001560556fa679897139adc48a7ed3c7b",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v4.chr": {
+    "sha256": "846403442e8d9e812e431268a51a8cc3e4858d4fce480b03523ca48c35996b7a",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v5.chr": {
+    "sha256": "990502c7b68823699aa14b90f0a1459a34d14b2c4a0141017656469044e5aff4",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v6.chr": {
+    "sha256": "2bacc490c6fd3d0331fd6ee6b719ffb44b6d33924d18e40206a4ff5802fda11b",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v7.chr": {
+    "sha256": "72c52ea4cef025bdc6b5811f1cb7fc2c5fad9b5c2d6b9fa1ac4ef79dc363222d",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v8.chr": {
+    "sha256": "12eff0eb55858bfb8c447f975ea7677f435039d618ffd433dad9d62983de453f",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed-v9.chr": {
+    "sha256": "6e0893af64a5dfc3cf935c2957e4571e868988bb544f684bc6416a080e8af22f",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg-uncompressed.chr": {
+    "sha256": "bb4241b0c65d4ec37742526a406a0e5bd7c113e70b480b4c8ecb9d910deea5c8",
+    "size": 15360
+  },
+  "src/graphics/songselect-bg.chr": {
+    "sha256": "49470165309d0f5e776ec096e825be48cc5ca93dac2c08fe74570a98dd35dddd",
+    "size": 4096
+  },
+  "src/graphics/songselect-bg.dat": {
+    "sha256": "26f937dc5f96d2bce5fca47914cb6af0834b8540da182ffeed6fe5397f1bad67",
+    "size": 924
+  },
+  "src/graphics/songselect-spr.chr": {
+    "sha256": "85195fbe4e3abc74224e295840cd3d70499499510e9a3cfaf544a40401600e04",
+    "size": 4096
+  },
+  "src/graphics/stats-32x30-v2.chr": {
+    "sha256": "2847802f5132a6fd12e4ed490dd06bd473b06ca359e5b3e60eed4b8fdac83737",
+    "size": 15360
+  },
+  "src/graphics/stats-32x30-v3.chr": {
+    "sha256": "037283691356b1258c686ddd53e712591949735fac784610a006585014b38545",
+    "size": 15360
+  },
+  "src/graphics/stats-32x30.chr": {
+    "sha256": "fcb31df205facfa18a787faaad8c89b6a11be95c33e8741f1d629197df58c467",
+    "size": 15360
+  },
+  "src/graphics/stats-bg.chr": {
+    "sha256": "f10a77b94e80bcbcfe80ccfa6d8705638c076dc13e953103630da22a8152ce04",
+    "size": 4096
+  },
+  "src/graphics/stats-bg.dat": {
+    "sha256": "4965b3913075dd6a4ae8e54b43cb558721cf569e9be9019f43669824fd7ba1c2",
+    "size": 777
+  },
+  "src/graphics/title-bg-uncompressed-v2.chr": {
+    "sha256": "741f3d908e17eb8b00f2a903806e67b3d73ffe71d0469bd0f946115bbd51487f",
+    "size": 15360
+  },
+  "src/graphics/title-bg-uncompressed-v3.chr": {
+    "sha256": "f90f31b4dcf6183212048508cfe1feeb949a0925722606845be766a928ef2e4d",
+    "size": 15360
+  },
+  "src/graphics/title-bg-uncompressed-v4.chr": {
+    "sha256": "4450845547626baa295c0989b58a93e2519017da8ee7e4120ab2dcb30c45ec80",
+    "size": 15360
+  },
+  "src/graphics/title-bg-uncompressed.chr": {
+    "sha256": "bc81e70e8d3c5caf41a77fb3cea0ef8f96c034156f11f54d0efeee3afcaf36f9",
+    "size": 15360
+  },
+  "src/graphics/title-bg.chr": {
+    "sha256": "a27adb5c80d3809648e54533e3d96778e99b4d326abc90d447e48b07bff2f3d7",
+    "size": 4096
+  },
+  "src/graphics/title-bg.dat": {
+    "sha256": "f90a1e81ee6fc35445641c8f6fb03d3523ca497bb45f449d15490588943dbfe4",
+    "size": 405
+  },
+  "src/graphics/title-people-16x4-packed.chr": {
+    "sha256": "f168aac4b14fed9885ee9cbef311cfa47d42940506b1649ae651a43ae77cf560",
+    "size": 1024
+  },
+  "src/graphics/title-people-16x4.chr": {
+    "sha256": "f3a808f17bd14a43c2b3219ca94562ebd220050f31761313293e14f63fc210b9",
+    "size": 1024
+  },
+  "src/graphics/title-people-16x4.nam": {
+    "sha256": "61ff57fb853fe83cd44f150e7dbe3591542809f7a7c9959b90177893ffc11399",
+    "size": 64
+  },
+  "src/graphics/title-people.dat": {
+    "sha256": "c09fa262e85fbb18cc830d792cd960e496954a23409db4065f78e9d7ea104549",
+    "size": 76
+  },
+  "src/graphics/title-rollingstone-16x4-packed.chr": {
+    "sha256": "6e20531265754e91e4b9ddac32ca812cd2e974f553578d85b6caf9f3e2cdcb25",
+    "size": 784
+  },
+  "src/graphics/title-rollingstone-16x4.chr": {
+    "sha256": "6d8a88456cb3a552534445086765d7ff70fa75f7f302b2bf0522ad803f965c7e",
+    "size": 1024
+  },
+  "src/graphics/title-rollingstone.dat": {
+    "sha256": "f95bf63ee320d7db5f4d7c6e2d294116c5ab9e2fd465c930264d5447e0dfb842",
+    "size": 74
+  },
+  "src/graphics/title-spr.chr": {
+    "sha256": "19dea3d631f5cf01989c887ef1514484d78ba3d8ed57359c636adab8af12386f",
+    "size": 4096
+  },
+  "src/graphics/title-time-16x4-packed.chr": {
+    "sha256": "4b50a4a3929433ade5ce313a14d911b9c4235f51ca75fcc885f0de55848cfb25",
+    "size": 1024
+  },
+  "src/graphics/title-time-16x4.chr": {
+    "sha256": "0ee94b10bfdc307d20dc926840ad7e2d7c643f58aefd25a3a654ea1c6883ab71",
+    "size": 1024
+  },
+  "src/graphics/title-time-16x4.nam": {
+    "sha256": "65cc96065b293a6a2b56a8d78ab3297ca94b44e893ad121bc63921ef88ec6d56",
+    "size": 64
+  },
+  "src/graphics/title-time.dat": {
+    "sha256": "f3d7bcd099e3647ce7071355321c1c28c282414c6503b1a18be2f46fbd3ef26e",
+    "size": 76
+  },
+  "src/graphics/titlelogo-26x17.chr": {
+    "sha256": "9af5a09118fd61c0db6ac93435b5055923c87ff11919603a5952923cbb54a53f",
+    "size": 7072
+  },
+  "src/graphics/titlelogo-packed.chr": {
+    "sha256": "d5a0469739d6a18e13bd33b87e4bc03680c851f7eef9935cb108e199d0a9c4b3",
+    "size": 3968
+  },
+  "src/graphics/titlelogo.dat": {
+    "sha256": "99f31f262fb6e9ef06557c6b2a737407b63d566fdf8291f48cec8ff568f402a9",
+    "size": 357
+  },
+  "src/graphics/vu-8x8.chr": {
+    "sha256": "5fb7439d9cf919d947fa40844a085d1a51627f60e156586848f0ac9fcc532a5b",
+    "size": 1024
+  },
+  "src/graphics/vu.dat": {
+    "sha256": "af62404db7c79099afb99d228778073634b0f69b892fdb3252816808cd430e9a",
+    "size": 79
+  },
+  "src/ines.hdr": {
+    "sha256": "7bbddbbcfac612a420c7c6398342b9083554769e1563e37d733042408a9b1827",
+    "size": 16
+  },
+  "src/link.s": {
+    "sha256": "47c02ec1b2644968cf8e4077639a301018ae6fe471e6e673ae554e49d3fde076",
+    "size": 3234
+  },
+  "src/main.asm": {
+    "sha256": "5d1e9df5942fca275a38fa06d96df81495f4bde2651ac9ca03ec0dad18c4e7e1",
+    "size": 1207
+  },
+  "src/maincycletable.asm": {
+    "sha256": "f1c8c5b06da7294f3de78088b9ea0058262ea3bc5984e3388abc67af7b0da43d",
+    "size": 2399
+  },
+  "src/mmc/mmc3.asm": {
+    "sha256": "081c07bdb6e13b5af83a53e39c811d9c857386ff4ea8eda373637210e42b7005",
+    "size": 1526
+  },
+  "src/mmc/mmc3.h": {
+    "sha256": "88cc0e23c4d419b3969837ded97c200235ff71a43a73117b0e00b98acedced9e",
+    "size": 1463
+  },
+  "src/multiply.asm": {
+    "sha256": "f2e59c224ada217a330940db68d21a85ebe39d2227cb8bc54dafbd4ecbadac65",
+    "size": 1499
+  },
+  "src/parallax.asm": {
+    "sha256": "3f031cb744ba6e9f20ff26bc58607a41bff9a89ed4e0bb770682c03ef406b12b",
+    "size": 4851
+  },
+  "src/piecewin.asm": {
+    "sha256": "cb8f9826bdd99ce404d664904efee7e90e7a06856027ecf355b4a1cbfa6b1162",
+    "size": 4707
+  },
+  "src/player.h": {
+    "sha256": "d15d0bf7b49a94628e0dfa98054607dc20654edbd93a84fbff38dedc48e98bdc",
+    "size": 1770
+  },
+  "src/sfxdata.asm": {
+    "sha256": "efc1be499d72a9429f42c2eb097953992e3550470431a668b19f54199e762620",
+    "size": 3888
+  },
+  "src/songs/Makefile.inc": {
+    "sha256": "31b98d549a1c850087540fb75963b41669fbcd42facdfc926240b11106a04daf",
+    "size": 825
+  },
+  "src/songs/break-instruments.map": {
+    "sha256": "80a52d2681380117ac602a4fd5ec9a5f5f9936cc32ffc0ed113d6c6df47ad63e",
+    "size": 434
+  },
+  "src/songs/break.asm": {
+    "sha256": "cb064a4d692ec93f27ec4e721af84b49bb2dbf13174b5c2203ff06d4de8f7e46",
+    "size": 1995
+  },
+  "src/songs/break.xm": {
+    "sha256": "f73492dccd31b3f9d01391c1ccafcb05a9c53c7b0127e5d56d11209d3fbdf241",
+    "size": 112262
+  },
+  "src/songs/burn-instruments.map": {
+    "sha256": "e547c505c7d9253426edff13307ba1acc06f637f530560c9fd4df2c94b86af07",
+    "size": 434
+  },
+  "src/songs/burn.asm": {
+    "sha256": "5170d21930880b418449d0d871f253acaddcfaa5e1465dcab3286b3a951de47e",
+    "size": 1995
+  },
+  "src/songs/burn.xm": {
+    "sha256": "a70eebb633f91a36f8c51c1fdca4854305e748e05265165add4ae596f0d82058",
+    "size": 110972
+  },
+  "src/songs/count-instruments.map": {
+    "sha256": "76f3d545e50862e37e1df27ed699ca81bbf6831a6bfb23e3ef75229d95ce0873",
+    "size": 504
+  },
+  "src/songs/count.asm": {
+    "sha256": "18f798e9be583fcc833496a948562a2aa41c0d87e562e60833978ecc4a506f4b",
+    "size": 2117
+  },
+  "src/songs/count.xm": {
+    "sha256": "723f0567be625ff744e0dde39dcba0c03f1cc24da59248bc5026113545b86d50",
+    "size": 104302
+  },
+  "src/songs/creditwintheme-instruments.map": {
+    "sha256": "7e76717e36b4cdb507796e3ea0bbc20ff123ed15ddcfb8c82edc019d993f65dc",
+    "size": 35
+  },
+  "src/songs/creditwintheme.asm": {
+    "sha256": "b6544777babaf478c45733223fe6c34d767834f2235fa49e622400d4e5beb63b",
+    "size": 913
+  },
+  "src/songs/creditwintheme.xm": {
+    "sha256": "e25dd9ec9a4506cf3a65f85c785dcc9837d0680ee9e6a6d5d4c75f6e004562c4",
+    "size": 88399
+  },
+  "src/songs/elevatortheme-instruments.map": {
+    "sha256": "0c35bdcea166755b12602f940a7ad189b9a2ef6dc1dfd396f3362a2c43ab6131",
+    "size": 105
+  },
+  "src/songs/elevatortheme.asm": {
+    "sha256": "4d144c573a5b868df9300606cc2f1b9ee7c60fb1bac3a5033946fd309abc28f8",
+    "size": 1156
+  },
+  "src/songs/elevatortheme.xm": {
+    "sha256": "d24916454e809a8e70c6d68fc26906b2801efe31cc11c29ade487c53a70c90be",
+    "size": 78682
+  },
+  "src/songs/endtheme-instruments.map": {
+    "sha256": "ae033d0edf5cc45dc2bd2e536ad8833a182661a40a389eb58f8821817cd68d7d",
+    "size": 35
+  },
+  "src/songs/endtheme.asm": {
+    "sha256": "dc26564c5d34b145968471edd131665a3a3d058b738d7e63626b4091cee363de",
+    "size": 895
+  },
+  "src/songs/endtheme.xm": {
+    "sha256": "cc60faf9004547bba555d70039b867074edba45bbe2c3eea743e5e592c91a89a",
+    "size": 90392
+  },
+  "src/songs/levva-instruments.map": {
+    "sha256": "80a52d2681380117ac602a4fd5ec9a5f5f9936cc32ffc0ed113d6c6df47ad63e",
+    "size": 434
+  },
+  "src/songs/levva.asm": {
+    "sha256": "7ea4a1c977d6b943701592561e502e0159f25b5d6b41cf451bcbba6206358338",
+    "size": 1998
+  },
+  "src/songs/levva.xm": {
+    "sha256": "e1e64dbc45111034df1944cb2998a32dfbfd2d15a6746b4642683bb98e52c55f",
+    "size": 111380
+  },
+  "src/songs/misery-instruments.map": {
+    "sha256": "76f3d545e50862e37e1df27ed699ca81bbf6831a6bfb23e3ef75229d95ce0873",
+    "size": 504
+  },
+  "src/songs/misery.asm": {
+    "sha256": "46636586463a76ec93820ab94dc8c69e1101e7921919a435681448c38067d7e9",
+    "size": 2120
+  },
+  "src/songs/misery.xm": {
+    "sha256": "57ee8447da7f9c599f40604b1ab984d1c64b55b671be153bbb471dc5f2467d0b",
+    "size": 78614
+  },
+  "src/songs/mutesong-instruments.map": {
+    "sha256": "914f12ce0c7932bd1019d9044fdda0ae6db84de574f1b3a7de5374fc2b391dcc",
+    "size": 494
+  },
+  "src/songs/mutesong.asm": {
+    "sha256": "3743a0c1e1b63e6bffd8f677f5b54ec9545ef655cd43db7f5c6f2b9201677c12",
+    "size": 799
+  },
+  "src/songs/mutesong.xm": {
+    "sha256": "04101a3b28440414cc716e734aaf6f827d8ac03742844e2527976405804109b0",
+    "size": 127316
+  },
+  "src/songs/ocean-instruments.map": {
+    "sha256": "80a52d2681380117ac602a4fd5ec9a5f5f9936cc32ffc0ed113d6c6df47ad63e",
+    "size": 434
+  },
+  "src/songs/ocean.asm": {
+    "sha256": "b9653d3d4eff94ffa7e5703f0136757e3ba623c8c7f26a6966148475cb1fb34f",
+    "size": 1998
+  },
+  "src/songs/ocean.xm": {
+    "sha256": "5030c9dda3aaeb1accee4bd8aa4108f8a3312b3e7850bb218ffd96a04ae36ea6",
+    "size": 113418
+  },
+  "src/songs/piecewintheme-instruments.map": {
+    "sha256": "e547c505c7d9253426edff13307ba1acc06f637f530560c9fd4df2c94b86af07",
+    "size": 434
+  },
+  "src/songs/piecewintheme.asm": {
+    "sha256": "fb08d8cec0d4c7338c09c5e844fef58025cfa2de76243e1d0afd3114f3defafb",
+    "size": 2019
+  },
+  "src/songs/piecewintheme.xm": {
+    "sha256": "b56ad510c42f60878e2bd529ae6498b0526f972615a4565c42f389b970248776",
+    "size": 88944
+  },
+  "src/songs/ripepray-instruments.map": {
+    "sha256": "e547c505c7d9253426edff13307ba1acc06f637f530560c9fd4df2c94b86af07",
+    "size": 434
+  },
+  "src/songs/ripepray.asm": {
+    "sha256": "f281654e5d2888e1d8179b2c6d04493dcef9da0782aa8dcf933511b29b601d4b",
+    "size": 2004
+  },
+  "src/songs/ripepray.xm": {
+    "sha256": "bcdf94b2e9ff7e435276fe6ad729b01ae7d1c7d378a71916b6d378a9df15d604",
+    "size": 114999
+  },
+  "src/songs/smooth-instruments.map": {
+    "sha256": "89b75d1240811c606cddf97b4b56ca9acaf52d68951cd173e4bc1659d9d6db0c",
+    "size": 398
+  },
+  "src/songs/smooth.asm": {
+    "sha256": "c8eee9e96434dc56b330014c8abacb4e6ac236a68e1b582add39a2e7b334f35b",
+    "size": 1796
+  },
+  "src/songs/smooth.xm": {
+    "sha256": "90b1a052e5185f3586015e176617339d6d3af251c01423a77923064ab929e36e",
+    "size": 79928
+  },
+  "src/songs/spacetheme-instruments.map": {
+    "sha256": "80a52d2681380117ac602a4fd5ec9a5f5f9936cc32ffc0ed113d6c6df47ad63e",
+    "size": 434
+  },
+  "src/songs/spacetheme.asm": {
+    "sha256": "be255dfd9e75439d000682fecb59a112039bbd27381dd4f4905d609d984dc78d",
+    "size": 2010
+  },
+  "src/songs/spacetheme.xm": {
+    "sha256": "2819831bcffa96255d1a013244a3c75d73423e0d41d05ea907f0ff4070837fd0",
+    "size": 90179
+  },
+  "src/songs/starstheme-instruments.map": {
+    "sha256": "7e76717e36b4cdb507796e3ea0bbc20ff123ed15ddcfb8c82edc019d993f65dc",
+    "size": 35
+  },
+  "src/songs/starstheme.asm": {
+    "sha256": "a7c107b777841f71a69b172ba932ec63b47033a723d2b388385f22d28962550c",
+    "size": 901
+  },
+  "src/songs/starstheme.xm": {
+    "sha256": "890c2f79e9dfc1c9b4e38ea325b94842ed25f75eafb24e169bacbe6a3cda6d4d",
+    "size": 88630
+  },
+  "src/songs/titletheme-instruments.map": {
+    "sha256": "e547c505c7d9253426edff13307ba1acc06f637f530560c9fd4df2c94b86af07",
+    "size": 434
+  },
+  "src/songs/titletheme.asm": {
+    "sha256": "5dc2a3c7a0a46e639d1938166d6d912f28cd4c055d88d0ab672bf4b9316957d4",
+    "size": 2013
+  },
+  "src/songs/titletheme.xm": {
+    "sha256": "fd8ecec8ee149cc1bac16ac07bfe89471e879ce7b563e984aa9ed1aef2846192",
+    "size": 92830
+  },
+  "src/songs/versuswintheme-instruments.map": {
+    "sha256": "80a52d2681380117ac602a4fd5ec9a5f5f9936cc32ffc0ed113d6c6df47ad63e",
+    "size": 434
+  },
+  "src/songs/versuswintheme.asm": {
+    "sha256": "5b7ecb814a74ea4ff7e7bb7a103d62a7813ab87a526b31276ececca28a51d8f8",
+    "size": 2022
+  },
+  "src/songs/versuswintheme.xm": {
+    "sha256": "45209c2b8678ae7d128479b8fd0a91a287cacc2965644ad3b4d6409d567f3bda",
+    "size": 88889
+  },
+  "src/songselect.asm": {
+    "sha256": "c95d00ab61d702d2180825927bf0fb5e26aeb37c30e2aa2416f4f51a23624643",
+    "size": 22647
+  },
+  "src/songselectdata.asm": {
+    "sha256": "3b5a42b94551aa5a7e0949624ba5a178c07577772f994f29b6c5123f7ab44759",
+    "size": 1011
+  },
+  "src/songtable.asm": {
+    "sha256": "d2730ac3d59cb9fa2eb1a145af6d696a89c456e5f880405a8ffbd6082decc590",
+    "size": 1610
+  },
+  "src/sound/Makefile.inc": {
+    "sha256": "5f98cb4033f9637ce16cb520e2a2455297fa5ea620792c7996eca2671f8b3268",
+    "size": 421
+  },
+  "src/sound/apu.h": {
+    "sha256": "3dd2a258670a04b9f6a472cf53e41e83bd09c1cec12c4cd6a6e7c8e0555c59e6",
+    "size": 3569
+  },
+  "src/sound/dmc.asm": {
+    "sha256": "33039ba381a0b81eb7f07d1e6dfc2f4b53697835af951ff6de317eab24a2f708",
+    "size": 2761
+  },
+  "src/sound/effect.asm": {
+    "sha256": "df30851ac7c50a0320bb0429d7fef468780d5479ac47272479570865a44360a0",
+    "size": 9377
+  },
+  "src/sound/effect.h": {
+    "sha256": "744056d3b022275aac39a58fa534f2a5f03e64cd296cd3b3ed2f75cb103a4c2a",
+    "size": 2205
+  },
+  "src/sound/envelope.asm": {
+    "sha256": "c1c4e48bd2bda10a359874ad62ed8eedc921da95ad873a8e7e6234a3f7e87785",
+    "size": 4794
+  },
+  "src/sound/envelope.h": {
+    "sha256": "8221a928f6ac10e53f99255fcac102e3b7538adb4426f86bceec2686b2e124a6",
+    "size": 1426
+  },
+  "src/sound/mixer.asm": {
+    "sha256": "8a933d7b30c808f6f9afa979f3b771bf855598cfc6876cf84b03ffd22362a7f5",
+    "size": 7400
+  },
+  "src/sound/mixer.h": {
+    "sha256": "b6a7388c90f109e0d7fdc1b161464c7c5ec8a3cfbf79411a3bb1f19016895f2e",
+    "size": 1339
+  },
+  "src/sound/periodtable.asm": {
+    "sha256": "a44ddf3091f0fa3016e371ea36ef596ebb25824b399b5088ceb96e95ab08b6d4",
+    "size": 1797
+  },
+  "src/sound/sequencer.asm": {
+    "sha256": "91355cf62a92d207c8f8caa584ca1945cef33483ef4b84cbf63c97de207a9ee9",
+    "size": 10704
+  },
+  "src/sound/sequencer.h": {
+    "sha256": "c3c231a3302d7050040329264cf8845514d942632c001a732c6bdb6574709dc6",
+    "size": 1081
+  },
+  "src/sound/sfx.asm": {
+    "sha256": "5e81b87059f234c0a7fce52a22c7da214809a902a8881dd7c2f9e7a7034a9adf",
+    "size": 2884
+  },
+  "src/sound/sfx.h": {
+    "sha256": "e4db6f58b291774d4245c0470df9dbdb4488f0ae12d5daf1884053da18c34dd1",
+    "size": 1136
+  },
+  "src/sound/sound.asm": {
+    "sha256": "1113d83b3592d0cc5bce2a8808a9402affcee3d0d3a4e43b5c49e5900291cec0",
+    "size": 2690
+  },
+  "src/sound/sound.h": {
+    "sha256": "816c05744ab6b6936c8e7e814f1b55f6e1d4a2b7592ccb7006ab03a84941337c",
+    "size": 982
+  },
+  "src/sound/square.h": {
+    "sha256": "6300362f893d7a20819417430e2654eb3fd968be35ba8dd7cb7e2031d12bd60a",
+    "size": 985
+  },
+  "src/sound/tonal.asm": {
+    "sha256": "e56d76ace6a98ba9f82124718b17f9d519d2b8ca0d53f5d3a4746e716c0b841c",
+    "size": 6471
+  },
+  "src/sound/tonal.h": {
+    "sha256": "29caf9e3e8985e0d8d9e0ae9c2d41e369c02e2ef084f10daf853db794dad7e0d",
+    "size": 1098
+  },
+  "src/sound/track.h": {
+    "sha256": "2cd84f6ac50c19ca9025d321fc6afef60e5dec83a9f14d3187e83f65093a558d",
+    "size": 1779
+  },
+  "src/sound/volumetable.asm": {
+    "sha256": "789506aa663a5f576dd877f3c3abad0854a70aec2e429b50dfb01c387fa62c5b",
+    "size": 2087
+  },
+  "src/starfield.asm": {
+    "sha256": "c4bdc78c273f9a6fa0746e5b598de397836bad2a0e9a80394d4207c9a19ef049",
+    "size": 5152
+  },
+  "src/target.h": {
+    "sha256": "ec0de5807a537f6f6637dd17356ee1fd5ef5631e5f997f5b830c6596bdf35fe6",
+    "size": 1565
+  },
+  "src/targetdata/Makefile.inc": {
+    "sha256": "523f7ae07206c78bf5655fa3e1a2dc5de9de220136a47b14e27ed656c2331518",
+    "size": 497
+  },
+  "src/targetdata/breaktargets.asm": {
+    "sha256": "6d3870dc0403ba9fe6255271390402f1c106f62f16028f499effb61b20dc0bc6",
+    "size": 833
+  },
+  "src/targetdata/breaktargets.xm": {
+    "sha256": "d420a80ac0d6126a12f26b5c850b617b36e0c652f501c7d0c3946a0b4c967f5c",
+    "size": 114905
+  },
+  "src/targetdata/burntargets.asm": {
+    "sha256": "ffa16d4134ffe0c453a2e4c2180ece86e5acf44e22d87c335f6017b1d8ee5bc4",
+    "size": 829
+  },
+  "src/targetdata/burntargets.xm": {
+    "sha256": "4d5c0cd01b1ba384dacff81660636705d91917f53ab1d18316598c67f3160280",
+    "size": 114484
+  },
+  "src/targetdata/counttargets.asm": {
+    "sha256": "8968756eaf92c37ce1b54603ca8cabe7cdca695a4f0681d414edb1e4033f9999",
+    "size": 833
+  },
+  "src/targetdata/counttargets.xm": {
+    "sha256": "ff5781b60c0c51a88605cbca9c742f5126cfc72597109366326bf508a73033e9",
+    "size": 108093
+  },
+  "src/targetdata/levvatargets.asm": {
+    "sha256": "a361e9ac361d32f4575d4dac9c2bec3d8dbc8ced10597d8bcef919a46387a871",
+    "size": 833
+  },
+  "src/targetdata/levvatargets.xm": {
+    "sha256": "3398fb33fd186f0d11a3b245f25355f86133cd5a41b50e2acd871b395732765f",
+    "size": 117308
+  },
+  "src/targetdata/oceantargets.asm": {
+    "sha256": "473671aa8666f2b4fe0d88cabdc29814812adc64aead2eb6d3e2ce0e163890cd",
+    "size": 833
+  },
+  "src/targetdata/oceantargets.xm": {
+    "sha256": "5b672721b0b6773a967b50f28c06cff34b624653f1686ed34b529a0b8c8fd14d",
+    "size": 120002
+  },
+  "src/targetdata/ripetargets.asm": {
+    "sha256": "3e832f1124985aad5a4be3b14ac5cda229d7c7eefc7153ad39d50ab5994fb3f7",
+    "size": 829
+  },
+  "src/targetdata/ripetargets.xm": {
+    "sha256": "638d954d780c575d0d6eaae90168b7cee24d14d1d90ac91ac587c8f37ab6a69f",
+    "size": 119071
+  },
+  "src/targetdatatable.asm": {
+    "sha256": "12a8668d0826793cd5aebc6634125397e44fd84297344300d872cf6a6ee95125",
+    "size": 1985
+  },
+  "src/theend.asm": {
+    "sha256": "e86461250fab8a5cb8951bd8bae732375faa305ab7dab2efadd58952aa589bda",
+    "size": 19611
+  },
+  "src/title.asm": {
+    "sha256": "03f1c9c658549da122d26c825d7e488eba99b6af4837da4d6a941b402c88af62",
+    "size": 7507
+  },
+  "src/versuswin.asm": {
+    "sha256": "746c716dc84aafa50e47419102a07359d719caf32e7c31bdc2333a28dd27426b",
+    "size": 4139
+  },
+  "tools/analyze_play_timing.md": {
+    "sha256": "17d2fcc29f1d7b8a314a569d459704a93f9b92e732f307ab93229f3311be408c",
+    "size": 1953
+  },
+  "tools/analyze_play_timing.py": {
+    "sha256": "a4199220c6576df0b59ca72d0b48558f7ab216205131d7fff6c4cf46ba3f1bbb",
+    "size": 22214
+  },
+  "tools/xm2btn/Makefile": {
+    "sha256": "5e462f3d1749cff3e06f4d67f104cec75dc1699128a8876a74aba816638dfc9d",
+    "size": 514
+  },
+  "tools/xm2btn/main.c": {
+    "sha256": "2ac6c444a0d283d1b038d0f899460b34fe7c7211c53148e25b8b50d78763a24f",
+    "size": 6861
+  },
+  "tools/xm2btn/xm.c": {
+    "sha256": "f03b718c076ec6d98469eb487e2c881647553c5cb9e71502f4fec4a6b04dec78",
+    "size": 6656
+  },
+  "tools/xm2btn/xm.h": {
+    "sha256": "a6ccc7a2924d8cc28d655f19b25aa4adb4d009f03866bb82aae7b1165ad7ea26",
+    "size": 1862
+  },
+  "tools/xm2btn/xm2btn": {
+    "sha256": "c2f747f456b53142850f28c2548f4dbe6299816e30b11033b5c7b58c404f9e0a",
+    "size": 54536
+  },
+  "tools/xm2btn/xm2btn.c": {
+    "sha256": "aa5bfb7120e5966b3db6514f612b4d78d03bd569d5cad976733aa374dc1535e8",
+    "size": 13723
+  },
+  "tools/xm2btn/xm2btn.h": {
+    "sha256": "788d43c2ce73e48fe7f384b6f4d4e93e84ba726d7cee24d7e760b2ddb4ceda64",
+    "size": 895
+  }
+}

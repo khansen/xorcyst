@@ -17,9 +17,18 @@ Compatibility planning:
 - Prioritize the v2 scope/design in XORCYST_V2_DESIGN.md. Requirements
   must trace to an owner decision, an existing project dependency, or a concrete
   defect; synthetic probes do not automatically justify new language features.
-  D0 was approved on 2026-10-22; D1 baseline freezing and contract design are
-  authorized. Review and approval of those contracts precede implementation.
+  D0 was approved on 2026-10-22 and D1 on 2026-10-23 after independent review.
+  Next is I1, following the staged implementation gates one PR at a time.
   Keep optional v1 repairs separate. No current formats change in this plan.
+- D1's approved contracts and approval record are in XORCYST_V2_CONTRACTS.md. Required ROM
+  baselines and Metroid/Zelda analysis captures are frozen; see
+  design/v2/BASELINES.md. Semantics, the no-slowdown measurement rule and the
+  concrete object encoding are reviewed and approved; retain their gates
+  throughout implementation.
+  Freeze converter outputs for gate builds: Wishmaster xm2nes output varies
+  with the environment. Keep baseline archives outside the repository.
+  The owner chose median <= 1.000 with no regression confirmed in an independent
+  session; see design/v2/PERFORMANCE.md for the full decision rule.
 - v2 may replace the object format without reading or writing v1 objects.
   Use that freedom to remove demonstrated encoding limitations, not to redesign
   working source binding, placement, or every analysis field. Rebuild objects

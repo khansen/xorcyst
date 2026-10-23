@@ -1,0 +1,80 @@
+{
+  "positive_control": [
+    {
+      "line": 2,
+      "kind": "type-body",
+      "text": "fa .byte[$+1]"
+    },
+    {
+      "line": 4,
+      "kind": "expansion",
+      "text": ".if $ == 2"
+    }
+  ],
+  "projects": {
+    "nesrev": {
+      "files": 2,
+      "hits": []
+    },
+    "bombsweeper": {
+      "files": 4,
+      "hits": []
+    },
+    "dpadhero2": {
+      "files": 134,
+      "hits": []
+    },
+    "music-bob-omb-battlefield": {
+      "files": 50,
+      "hits": []
+    },
+    "music-dire-dire-docks": {
+      "files": 50,
+      "hits": []
+    },
+    "music-double-dragon-ii-vs-f1": {
+      "files": 50,
+      "hits": []
+    },
+    "music-dpadhero3proto": {
+      "files": 59,
+      "hits": []
+    },
+    "music-is-it-scary": {
+      "files": 50,
+      "hits": []
+    },
+    "music-live-and-learn": {
+      "files": 49,
+      "hits": []
+    },
+    "music-mega-jean-trooper": {
+      "files": 51,
+      "hits": []
+    },
+    "music-merry-xmas-everybody": {
+      "files": 50,
+      "hits": []
+    },
+    "music-somewhere-only-we-know": {
+      "files": 49,
+      "hits": []
+    },
+    "music-there-must-be-an-angel": {
+      "files": 49,
+      "hits": []
+    },
+    "music-welcome-to-paradise": {
+      "files": 49,
+      "hits": []
+    },
+    "music-wishmaster": {
+      "files": 52,
+      "hits": []
+    },
+    "ntxdev": {
+      "files": 118,
+      "hits": []
+    }
+  }
+}
