@@ -510,7 +510,7 @@ static int allocation_scenario(void)
     if (v2_unit_error(u).code) goto done;
     CHECK(result.state == V2_DEFERRED && result.dependency_count == 80);
     for (i = 0; i < 40; ++i) {
-        CHECK(v2_place(u, anchors[i], 1, i));
+        if (!v2_place(u, anchors[i], 1, i)) goto done;
         if (!v2_bind(u, definitions[i], number(u, i))) goto done;
     }
     integer_is(u, root, 1560);

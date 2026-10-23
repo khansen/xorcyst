@@ -214,6 +214,11 @@ Table order is v1's label order within that unit's expanded data stream (the ord
 allocate, concatenate the RAM tables in unit link order. Source/input order only
 builds this initial array; it is **not a stable tie key**. Use the exact v1
 permutation below, then v1's first-fit allocator. Equal keys may reorder.
+Preserve the allocator's failed alignment splits too: check the original block's
+size and zero-page eligibility, split off alignment padding when the alignment
+point is strictly inside the block, and recheck the remaining block. Keep both
+pieces even if the aligned remainder cannot fit this object. An alignment point
+at the exclusive block end is not a placement, even for a zero-size label.
 
 `alignment_exponent=0` means no explicit alignment requirement; 1..15 encodes an
 explicit power-of-two alignment. `zeropage` is 0/1. For the sort key, v1 uses an

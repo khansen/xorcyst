@@ -388,7 +388,7 @@ dist_man1_MANS = man1/xasm.1 man1/xlnk.1
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
 EXTRA_DIST = parser.y scanner.l parser.h \
-  v2/value.c v2/value.h v2/README.md \
+  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h v2/README.md \
   man1/xasm.h2m man1/xlnk.h2m \
   tests/coverage_directives_control.asm \
   tests/coverage_directives_layout.asm \
@@ -434,6 +434,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_symtab_alloc.c \
   tests/test_unit_alloc.c \
   tests/test_v2_alloc.c tests/test_v2_values.c tests/test_v2_values.py \
+  tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c \
   tests/test_xlnk_io_faults.c \
   tests/tool_test_support.py \
   tests/verify_fceux_projects.py \

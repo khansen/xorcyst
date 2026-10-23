@@ -80,9 +80,9 @@ budget on concatenation as well as literal construction.
 I1 has no end-to-end v2 assembler or linker. The required ROM equality and
 project performance gates therefore remain open for the later stages. Passing
 these unit tests does not certify those gates or authorize cutover.
-I2's measured work bounds must cover node footprint (168 bytes on the reviewed
-64-bit host), invalidation of all binding/placement-dependent caches when the
-corresponding epoch changes, and repeated deferred-dependency walks.
+The I1 baseline used 168 bytes per node on the reviewed 64-bit host and
+invalidated all placement-dependent caches at each placement epoch change.
+I2 must measure those costs and repeated deferred-dependency walks.
 Complete local independent review before opening or updating an implementation PR.
 
 ## I1 approval record
@@ -97,3 +97,80 @@ PR CI, the later implementation reviews, required project ROM/performance gates
 or final cutover. The installed v1 tools remain unchanged. The PR records its
 published head and eventual merge commit; this approval record adds no executable
 change to the reviewed revision.
+
+## I2: isolated layout and encoding (local review candidate)
+
+`layout.h` consumes directly constructed IR; `extent.h` adds checked uint64
+layout quantities to the shared evaluator. They are internal operations, not
+new source-language operators or wire tags. Counts, sums, repeated extents,
+field remainders, bounds and counted string lengths keep their checks before
+coalescing. Zero repetition skips an absent inner element. An explicit extent
+to integer conversion projects the low 32 bits only after checking the extent.
+
+One layout borrows a live value unit, captures raw/copy bytes and character maps,
+and runs once. Bind definitions before running. Each statement/operand has its
+own PC anchor. Source lowering must supply captured identities, checked storage
+constraints, RAM source spans and early-truncation flags; it must complete
+`sizeof(label)` itself. I2 does not implement that frontend or accept source
+files. Code-anchor differences in one contiguous run use shared intervening
+extent sums only for extent queries. Ordinary operands keep their original
+subtraction of placed addresses, including previous-walk forward values. Bound
+aliases are followed; arbitrary algebra/equation solving is not added. Origin
+changes, banks and dynamic padding separate runs.
+
+Link RAM objects arrive in unit order and v1 emitted-label order. The exact
+last-pivot quicksort permutation is retained before first-fit allocation;
+alignment holes stay usable, including splits made before discovering that an
+aligned remainder cannot fit. Zero-size labels cannot use a block's exclusive
+end. Binary RAM uses source-order cursor markers,
+including data origins and earlier code/RAM dependencies. Its alignment and
+zero-page annotations do not introduce padding or placement constraints, as
+in v1. Code constants and available RAM values select widths before placement;
+every subsequent source-order walk can irreversibly narrow an instruction.
+Walks stop when nothing shortens, followed by final operand/extent validation.
+The approved seven narrowing controls and a 200-candidate cascade are tested.
+
+Final snapshots carry fragment kind, location, address, output offset/length,
+bank, final opcode, operand value and warning status. Their extents cover every
+output byte, including automatic bank padding. Encoding uses these validated
+facts and captured values. Failed construction/layout/validation/copy checking
+exposes neither bytes nor facts. Captured copy files are compared byte-for-byte
+before the snapshot becomes available. The module never opens an output file;
+filesystem staging/rename and analysis renderers remain integration work.
+
+Checked prefix expressions supply code and source-RAM addresses only during
+extent evaluation. Ordinary operands still use currently placed anchors; future
+addresses are not made available early to the narrowing loop. This lets an
+acyclic forward count resolve through its dependencies, and reports a real
+self-dependent count as a cycle. The two query modes have separate memo entries
+and dependency closures; a query cannot overwrite the other mode's descendants.
+Cycle diagnostics are reused only within the current request, so the first
+repeated edge does not depend on earlier queries. Finished concatenations own
+one immutable buffer until unit destruction, even if a cache is recomputed.
+Final validation checks extents against the facts already used for placement.
+
+The evaluator now invalidates cached ancestors through reverse edges when an
+anchor changes, preserving unrelated cached results. Extent nodes and ordinary
+expressions share the iterative evaluator and cycle detection. Span rewriting
+is a construction-time lowering step; it clears dependent caches and retains
+pure completed values and shared graph nodes. Bindings remain immutable once
+selected. Work counters
+report evaluations, invalidation edges and deferred-dependency walks. See the
+owner-approved contract section 10: repeated shared dependencies can require
+superlinear work within a walk. Tests bound that adversarial case and check
+that unrelated placements do not re-evaluate a shared operand at every use.
+
+Run `python3 tests/test_v2_layout.py`. Its harness uses the real modules with
+allocation wrappers, as I1 does. `make check`, distribution tests and sanitizer
+CI run both v2 suites. Installed v1 source lists still exclude both modules.
+No project ROM equality, end-to-end v2 performance, source binding, object
+serialization/linker integration or downstream analysis gate is claimed here.
+Complete local independent review before publishing this branch or a PR.
+
+On the local arm64 build the I2 node is 288 bytes (up from the initially reviewed
+192, to keep the two memo closures independent), a reverse edge 8 bytes,
+a fragment 136 bytes and a final fact 56 bytes. Character maps allocate only
+when used. A 1,000/5,000-instruction shared-operand fixture evaluates 2,805/10,805
+nodes in two walks. The adversarial 100/200-anchor fixture evaluates
+10,899/41,799 nodes in three walks; this is recorded work, not a project timing
+claim. The 200-step cascade takes 202 walks and 40,602 fragment visits.
