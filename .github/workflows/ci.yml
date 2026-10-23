@@ -53,6 +53,7 @@ jobs:
       TEST_LINKER_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_ASSEMBLER_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_INPUT_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
+      TEST_V2_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -71,6 +72,8 @@ jobs:
           python3 tests/test_output_failures.py
           python3 tests/test_linker_outputs.py
           python3 tests/test_inputs.py
+      - name: Check isolated v2 values and ownership
+        run: python3 tests/test_v2_values.py
       - name: Check procedure instruction-analysis lifetimes
         run: |
           python3 - <<'PYTOOLS'
