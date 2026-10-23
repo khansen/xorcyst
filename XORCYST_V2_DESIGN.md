@@ -1,17 +1,21 @@
 # XORcyst v2: approved scope and design
 
-Status: **D0 approved by the owner on 2026-10-22. D1 baseline freezing and
-contract design are authorized; implementation still requires contract review
-and approval.** The current release is v1.9.12.
+Status: **D0 approved by the owner on 2026-10-22; D1 contracts and baselines
+approved on 2026-10-23 after independent review.** The current release is v1.9.12.
 
 Independent review found speculative scope and incompatible layout rules in
 the initial design. This approved scope addresses demonstrated project needs
 and states the compatibility decisions explicitly. Independent review and
 owner approval are distinct; the approval record is in section 8.
 
-**Gate:** D0 review and owner approval are complete. Review and approve the D1
-contracts before implementation. Merging this document does not authorize
-implementation. Installed `xasm`/`xlnk` stay v1 until cutover.
+**Gate:** D0 and D1 review and owner approval are complete. Implementation
+follows the sequence in section 7 after the approved D1 revision is merged.
+Installed `xasm`/`xlnk` stay v1 until cutover.
+
+D1 work and its approval record are in the
+[contracts](XORCYST_V2_CONTRACTS.md) and
+`design/v2/BASELINES.md` in the source checkout (not shipped). D1 approval
+supplements the historical D0 approval without waiving implementation gates.
 
 ## 1. Where the requirements come from
 
@@ -294,6 +298,14 @@ mode-specific validation/placement policies. They do not require separate
 arithmetic or serialization implementations. All other known cases above have
 a stated common value or rejection, rather than an unspecified parity promise.
 
+The subsequent D1 clarification ledger in `XORCYST_V2_CONTRACTS.md` records the
+owner's 2026-10-23 choices: reject `sizeof(label)` over unresolved string data
+or imports, preserve forward local integer/address operands with an assembler
+kind check, and reject explicit-address `.label`. The ledger also records the
+correction when a string becomes known before the sizeof use. These remain
+included in the completed D1 review and approval, separate from the original
+D0 approval; implementation follows the staged gates.
+
 ## 4. Object and analysis contracts: minimum change
 
 The new object format is permitted to be a clean break (R7). Specify only the
@@ -504,13 +516,13 @@ avoid work for unrequested analysis.
 
 ## 7. Review gates and sequence
 
-This revision records D0 approval and authorizes D1. Implementation stages
-remain gated on review and approval of the resulting contracts:
+The approval records cover D0 and D1. Implementation proceeds through the
+following stages after the approved D1 revision is merged:
 
 | Stage | Work | Evidence before advancing |
 | --- | --- | --- |
 | D0 | Approve this scope and its explicit decisions. | Complete: independent review followed by explicit owner approval on 2026-10-22. |
-| D1 | Define minimum IR/layout/object/listing contracts and baseline fixtures. | Review fragment/fixup semantics before freezing wire layouts; establish the project baselines in section 5.1 and agree the performance protocol before implementation. |
+| D1 | Define minimum IR/layout/object/listing contracts and baseline fixtures. | Complete: independent semantic/wire review, frozen project baselines and performance protocol, followed by explicit owner approval on 2026-10-23; see contract section 8. |
 | I1 | Shared values and owned dependencies. | Existing arithmetic, binding, cycle, lifetime and analysis regressions; no new language semantics hidden in the representation. |
 | I2 | Layout/encoding using directly constructed fixtures. | RAM/fixed-width selection, banks, counts, address updates and range behavior independently checked; measured work bounds. |
 | I3 | Existing frontend into an isolated direct-binary target. | Actual project bytes/diagnostics and plain-mode performance versus v1; no installed-tool replacement. |

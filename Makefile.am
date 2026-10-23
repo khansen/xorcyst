@@ -96,6 +96,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
 # Install the current feature documentation alongside the tools.
 dist_doc_DATA = README NEWS xorcyst.texinfo \
   XORCYST_V2_DESIGN.md \
+  XORCYST_V2_CONTRACTS.md \
   XASM_ANALYSIS_FEATURES_GUIDE.md \
   XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md \
   XASM_DEPENDENCY_MANIFEST_SPEC.md \
@@ -105,6 +106,11 @@ dist_doc_DATA = README NEWS xorcyst.texinfo \
   XASM_INSTRUCTION_RECORDS_V2_SPEC.md \
   XASM_INSTRUCTION_RECORDS_V3_SPEC.md \
   XASM_REVERSE_ENGINEERING_FEATURES_SPEC.md
+
+# Public protocol only; local baseline manifests, scripts and reviewer notes
+# contain owner-specific evidence and are not installed or distributed.
+nobase_dist_doc_DATA = design/v2/PERFORMANCE.md \
+  design/v2/OBJECT_WIRE_DRAFT.md
 
 # Use the build-tree tools even when distcheck builds outside the source tree.
 check-local:

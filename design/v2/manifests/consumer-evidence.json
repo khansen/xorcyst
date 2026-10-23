@@ -1,0 +1,1578 @@
+{
+  "AGENTS_CORRIDOR_THROUGHPUT_PLAN.md": {
+    "sha256": "76462061fce0a32a69bd8a3e3d15e5ea41ff4d9f3e3f7e03bdebf1e434ae8f22",
+    "size": 17017
+  },
+  "AGENTS_SEMANTIC_CLAIMS_PLAN.md": {
+    "sha256": "77cc9f55d92bb5572022b8eb6e2c7c4a13d14898aafe9838022991e8630b2e85",
+    "size": 13638
+  },
+  "AGENT_REVIEW_PROTOCOL_SPEC.md": {
+    "sha256": "940b61fa1199b49138fc97343784cba6d21210e10861dbf74a70855c42634458",
+    "size": 46236
+  },
+  "ANALYSIS_BUNDLE_SPEC.md": {
+    "sha256": "3cde95be59885c5c67f2910c16da8fc176939f675127a443e2de1b6e2a091751",
+    "size": 10387
+  },
+  "NESREV_INLINE_CALL_RECOVERY_SPEC.md": {
+    "sha256": "9c3075eca9691396605ea91e39b8da2aeaed688c40932d12b56232e033370d98",
+    "size": 16754
+  },
+  "NESREV_STRUCTURED_ANALYSIS_MIGRATION_PLAN.md": {
+    "sha256": "262d3c8dd07a8e6a54e1e5589f9be3e88551acdbe6fe1397d738e399059061a9",
+    "size": 69887
+  },
+  "POINTER_TABLE_BODY_SPEC.md": {
+    "sha256": "ca621cb718f794ef2954699067da8f2436f20d03b3c4f5d55d08a6de599559a6",
+    "size": 4028
+  },
+  "PROCESS_FRICTION_MONITOR_SPEC.md": {
+    "sha256": "13651e4f8dd6a9d8b74718a8e3e883f3e89c6b3069f43691b13c630214b6ef83",
+    "size": 68690
+  },
+  "PROCESS_IMPROVEMENT_PLAN.md": {
+    "sha256": "57aa6e74ac276f06fe13565c7ab105760a5c94224e0e17ac697f94fb855c32dc",
+    "size": 163829
+  },
+  "PROJECT_CI_PERFORMANCE_PLAN.md": {
+    "sha256": "07fb81e17cd398bd4e19dec1173c9f71503700ee17288b97553957a52809f438",
+    "size": 26932
+  },
+  "PROJECT_EXPERIMENT_SPEC.md": {
+    "sha256": "111ec65535d56fdc5c56e0be551dfb787c4c941050c519c4e4dd9e0d1bd49a4f",
+    "size": 64642
+  },
+  "PROJECT_MATURITY_DEBT_RETIREMENT_PLAN.md": {
+    "sha256": "3fd8cac2ff9741af1d25376cb5c7c96c270e12bee104d28be22ac93cf607dcb5",
+    "size": 14608
+  },
+  "PROJECT_PASS_REVIEW_PACKET_SPEC.md": {
+    "sha256": "cca2aba75aeb4cfb589f6738577c3c494a6112c60774ea74aa54b0835f873696",
+    "size": 19675
+  },
+  "PROOF_DEBT_SIGNALS_SPEC.md": {
+    "sha256": "124274220e7848a4d3feb2cb8115aef67dacbdb18df482db528e383dcae712a6",
+    "size": 39138
+  },
+  "REFERENCE_COVERAGE_CYCLE_SPEC.md": {
+    "sha256": "88aea339b70f75c17ace61db4beaa54cdc52b4032e47de99a0394ee31ad0d668",
+    "size": 10072
+  },
+  "UNIVERSAL_PROJECT_GATES_MIGRATION_PLAN.md": {
+    "sha256": "62eccaa61c986ac5bf3df1852d5f058ac47900f5c49432c95ae4be0627f9ff6e",
+    "size": 32526
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/assembly.log": {
+    "sha256": "05200e533af38d86973e100cc0e941207c3fe7ba97313d5d20706c65ce4a4c32",
+    "size": 415
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/bundle.json": {
+    "sha256": "89e844a7b16c6691e6b128f7f25c263636bf5734e77ab5c1b57338685844f334",
+    "size": 4220
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/context.json": {
+    "sha256": "0f8aadda8b3b7c3a77befa75b37e570b65d7a9c8547452c259e52655958223e7",
+    "size": 700
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/data_consumers.json": {
+    "sha256": "1f5b3a5402bc710d4e6189e3466bb583fb45ec3e478fec3ef959f8ac953aff2c",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/dependencies.json": {
+    "sha256": "5cc1b9b5b981de246b5fba31a3bf7fc6471629a106fe51ca018e5bf9b6b0035c",
+    "size": 1704
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/fixture.asm": {
+    "sha256": "a1fd87356e0d00c7e397447ccdf3ce10be63cf3a59e903991759537a03bb1e19",
+    "size": 301
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/instruction-facts.json": {
+    "sha256": "eef911a2b846235c07a88f509621f88cbb31b715e2c81fb3f47f2b1697625f9a",
+    "size": 3933
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/instructions.json": {
+    "sha256": "fe7cf4f998fc6128f34cc216a2286a5b7f23fb1c43bf139e1cb051ba847a130a",
+    "size": 9580
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/legacy.log": {
+    "sha256": "def2d683fa8086ed28f6bddce34584d9380cdc2dc1c3a2e9ea3feb87b231fbdc",
+    "size": 342
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/listing.json": {
+    "sha256": "efe191307f33d7d1534ea4d8fc731b5289a9c6bd1ca4d3445ce635e7bca0ffc7",
+    "size": 8777
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_accumulator_clobber/xref_with_data.json": {
+    "sha256": "e1f3b9972bc0a47ed900c3d47070a31b686448c326764cc4c5f9fb9a33007bc7",
+    "size": 2340
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/assembly.log": {
+    "sha256": "1b0a9b91f504c4bd736d04f7df7f260b633b4ef3b4d33c7680621772d5f1ff1d",
+    "size": 412
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/bundle.json": {
+    "sha256": "05fddfbf6ecc49827e4aa5fe9eeaf09fb31aa14375e6d496c796beae80b0d138",
+    "size": 4201
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/context.json": {
+    "sha256": "e438a6f296d822d97c86c6c217af8273565c21e596625522a5ad47c99e0895ae",
+    "size": 696
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/data_consumers.json": {
+    "sha256": "aace6a3f6e4463bda1609e0054473609b0d205c4fd7ffe3f771e95d2a005188a",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/dependencies.json": {
+    "sha256": "39a6bb2fe9d7c20213d9b44d68d3e25a71482a020fd5a68c3b8e3d754662dbf7",
+    "size": 1695
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/fixture.asm": {
+    "sha256": "cd0c742e02e2dc53716e06fa700e18aa7b58ac452120b7250dccd00c4feabc7a",
+    "size": 294
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/instruction-facts.json": {
+    "sha256": "710f8d2829950fe1062a6b47d6afa7eba0f4d0380f78928fadf76416dc501898",
+    "size": 2922
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/instructions.json": {
+    "sha256": "8512b6e3a2bfacb889204d6f63b0530500ea7a5376879a83e94c47ab7be1e508",
+    "size": 7162
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/legacy.log": {
+    "sha256": "735ecc3ceca648531c99c268b2368eae854ab1f01272caa0d7adedddc70d322c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/listing.json": {
+    "sha256": "5c7addea860bfc0ade021ce2c63b02f0e550eb0c939494655dfab4269ae43383",
+    "size": 7985
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_comment_only_deref/xref_with_data.json": {
+    "sha256": "0a338840c36fd3d37b67d15b6c7b0bfffb34207edbfac4c1bd02cd037e7e1708",
+    "size": 2332
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/assembly.log": {
+    "sha256": "cd2ee439f03e4becd730a7fce45d6ada01fd15fdb46ca5d7b97f8b8422c222f2",
+    "size": 409
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/bundle.json": {
+    "sha256": "58ce5e97dbf678cf0551ad5d8a0a80d51d5f478275b2f786107a5610f5a6d062",
+    "size": 4182
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/context.json": {
+    "sha256": "dd45fbe280e25ad8151428279971a8bf043b058f244858886a7c35aa637a9ca4",
+    "size": 692
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/data_consumers.json": {
+    "sha256": "0f2bd5270e30bb2aa4de01eca8d874f74b05e1368f7d70fce9a57b1b28810849",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/dependencies.json": {
+    "sha256": "060d46de4942deac8b91e993a6fad0881b700b8c832f8d660bddc9642a6b3953",
+    "size": 1686
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/fixture.asm": {
+    "sha256": "0cb8516c69b059a7f1363e59eb98a1e604a4b2914ce8c5273ee0399458e8492c",
+    "size": 292
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/instruction-facts.json": {
+    "sha256": "69f648988a75824ea6677c81235bb9fd1d4de958ff6ee0218041f186d08982c5",
+    "size": 3580
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/instructions.json": {
+    "sha256": "5e50c2cfc75c66e6d8ac93c3dd33c952f776f6226c54ba4863b292ab18ddc0f2",
+    "size": 8584
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/legacy.log": {
+    "sha256": "735ecc3ceca648531c99c268b2368eae854ab1f01272caa0d7adedddc70d322c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/listing.json": {
+    "sha256": "3a6ce04ed702edc45df9a4ec4b09aed95433bba108ac3b8f9a904265894d4c4d",
+    "size": 8365
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_different_indices/xref_with_data.json": {
+    "sha256": "b0a4f53ca04ec8333e394aca725bee458c13755c0c8b3d4593bb8c2edfee10a2",
+    "size": 2324
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/assembly.log": {
+    "sha256": "83c2e93eca80b11924659b6da726fa96636f8319502219469ad17f3c80bccb54",
+    "size": 397
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/bundle.json": {
+    "sha256": "626a83a4fcef0b556513583c3ee212e65944779cbdb441d61005ab3f2d5808ea",
+    "size": 4106
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/context.json": {
+    "sha256": "e1772d6116121e4e7775e69a81d8b92c5b838452472343e31d06b8f14d51b745",
+    "size": 676
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/data_consumers.json": {
+    "sha256": "0f2bd5270e30bb2aa4de01eca8d874f74b05e1368f7d70fce9a57b1b28810849",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/dependencies.json": {
+    "sha256": "2d69e5c99b1a15e3c6c6cf4c332b5bf225da0ac8e1d8ad18cc4ef3ab375821aa",
+    "size": 1650
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/fixture.asm": {
+    "sha256": "3cf52a6947f81ba0aeff24d447a104ac3ca6f604e5d94655393885ef92935989",
+    "size": 298
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/instruction-facts.json": {
+    "sha256": "98166afee1bd54bde8c3286720a960916a960f1820936394cb4d13fa91865bba",
+    "size": 3925
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/instructions.json": {
+    "sha256": "3dbbf7936d56550ec65982b29d3334bfdbb7eb2217968407d2917f574500c0b9",
+    "size": 9202
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/legacy.log": {
+    "sha256": "9d7b0132590f4e240a4606d7a5ea9e209ca3ba2d17a8da7e182cdb226cbbf5a0",
+    "size": 342
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/listing.json": {
+    "sha256": "1032ae6f0e797354f727ca599e4edcaa51572763f5ab87c61e381213234a4ad9",
+    "size": 8622
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_index_clobber/xref_with_data.json": {
+    "sha256": "d2fc130c526ec31f71c88c2e2a116209f00bc96dbf9005b5fd55c8b5a2d384a5",
+    "size": 2292
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/assembly.log": {
+    "sha256": "ddb2884f944aeb9d2ae676c803aeca9297db367ceca3a43bc73d1814950a50a5",
+    "size": 549
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/bundle.json": {
+    "sha256": "d3f4d22c24cc17d9a93e1a039c3af76a6699a003d372c010a3c165fa22851f6a",
+    "size": 4201
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/context.json": {
+    "sha256": "da3b850b563b291da61305b723415af0453fa612db8310f6cf9cfe0525514d0a",
+    "size": 696
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/data_consumers.json": {
+    "sha256": "0f2bd5270e30bb2aa4de01eca8d874f74b05e1368f7d70fce9a57b1b28810849",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/dependencies.json": {
+    "sha256": "460715092f142d8836797896e0362d592d6d878d260fd13e9c02003d71c8c4b0",
+    "size": 1695
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/fixture.asm": {
+    "sha256": "52c24cdbc129bd36f8ef4e918d31c4a17cf6d5d73616f2a7f5f72d0723a78253",
+    "size": 294
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/instruction-facts.json": {
+    "sha256": "2f8e0e55a7f41f0721910ed7cb9d32d46c8cdd0c3eb6cb749cef4de506323d0e",
+    "size": 3582
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/instructions.json": {
+    "sha256": "4c7aafdcae0b90b61deaae21e5493f4ab0fb33d0a003cb23c21eb49df5390edb",
+    "size": 8589
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/legacy.log": {
+    "sha256": "9d7b0132590f4e240a4606d7a5ea9e209ca3ba2d17a8da7e182cdb226cbbf5a0",
+    "size": 342
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/listing.json": {
+    "sha256": "0e0558b5360e0acbb3f7f4910a93e929481d36e4bd88c76f0e03afba9e0cec7d",
+    "size": 8388
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_non_zp_destination/xref_with_data.json": {
+    "sha256": "5864904b4618ea33961e550ff8c896539c95e7e8cd5693981d8a9990fba37187",
+    "size": 2333
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/assembly.log": {
+    "sha256": "fe17146f1bc224ff9abbd66831ff8778ecabfb824fd22ecea995ce6c12cb0bb0",
+    "size": 409
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/bundle.json": {
+    "sha256": "f3e12c6ce8e695b7b306a8110d3b66ab69843e8388d4f07dffa52f55d1f4cbda",
+    "size": 4183
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/context.json": {
+    "sha256": "9c9cd014b57c94769345d76a4f9630cbbf4a5b34ed74956dbb30ef808b053d71",
+    "size": 692
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/data_consumers.json": {
+    "sha256": "0ed0f4bd83d00269bff557886dfc33223a3d468b093af697665c2c7d7624fce9",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/dependencies.json": {
+    "sha256": "58a831941bf9150048bedc31d3ac69a8506234c7b48c08320206f60aff78a9c7",
+    "size": 1686
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/fixture.asm": {
+    "sha256": "3eb33566149752d085f316014efc9482b2167e20a65bdb8ef5e84c179d5b3602",
+    "size": 343
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/instruction-facts.json": {
+    "sha256": "396b134c6b9eb0d4ee9ef3bd8920a1ff89ab71ddb0ef1b7081c030eba24e2234",
+    "size": 5023
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/instructions.json": {
+    "sha256": "8dfc956d0eabb6458433bb0f1640b1178a90d9ccdbaf6a2af3ea1aaaa46faa8f",
+    "size": 12673
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/legacy.log": {
+    "sha256": "49bfe64a7f2bb923198878450bcdd38f256b560fdd8f4ed4b6751ffb3c87e00c",
+    "size": 342
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/listing.json": {
+    "sha256": "486de4e7684e9208947b47b133a90c05e04a3315f478ad456b7e8195ae637a43",
+    "size": 9491
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_pointer_overwrite/xref_with_data.json": {
+    "sha256": "307532cd5a42aeaed275870e009ef5b60ceffe3cbbc39d19b5da748de7b4e3a3",
+    "size": 2324
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/assembly.log": {
+    "sha256": "3a26a6ef8a11ed039da0238b3c78647a2b14e28c5fbedeb317ace692f4593595",
+    "size": 382
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/bundle.json": {
+    "sha256": "f4912cce443042eb18dd4ffe6f1e7661b3e0ac5a44fd10ea540ff9fe3606a29a",
+    "size": 4011
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/context.json": {
+    "sha256": "309a2fcbffa331e101c7457462936ed50e7d73413e12e231bb089f2994d75cc8",
+    "size": 656
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/data_consumers.json": {
+    "sha256": "79ab351c06195cf9b74df7a83c4d89516ce41ee3cc620c348e27c46b0af0d8e9",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/dependencies.json": {
+    "sha256": "f9725c5b2365aed3d6a559d7402b0877f00720690593b6209778871ed4535738",
+    "size": 1605
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/fixture.asm": {
+    "sha256": "ccee5f431572d99075fed731bf5aab0b9522117ffcacfc5fa23bb358c28ee4c1",
+    "size": 292
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/instruction-facts.json": {
+    "sha256": "0edc07f47dee686e504a3dffe1f7235af9c43585b2116f3823c9906ba24e7cff",
+    "size": 3571
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/instructions.json": {
+    "sha256": "8f945c744898d87e70296390b5ac399a54a1540aa501039b82c13190a7ce8383",
+    "size": 8573
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/legacy.log": {
+    "sha256": "562956a004623947c0ec34d72ffd6fb5f85752043f50b387d831f07380e6a52e",
+    "size": 342
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/listing.json": {
+    "sha256": "f741e7d7c7b85caa835a2cd15e8605589b70378273d0e14894161c0ff633ac9d",
+    "size": 8152
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_positive/xref_with_data.json": {
+    "sha256": "da4b1ca5d1a94c82b719b930a036c92a5ef46987f256cfa527a9a6a9554e56e1",
+    "size": 2252
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/assembly.log": {
+    "sha256": "31cabf5a85968f9723b5198982b11d7cee0184936e81033c7f2eae3cbb1afad3",
+    "size": 415
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/bundle.json": {
+    "sha256": "0e89ef3bd85ee8a672f3b52f2a35640a64e22636746c26ad0e682ac3c631865c",
+    "size": 4220
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/context.json": {
+    "sha256": "303225cc4eace47ad05f056bd87449c5679f9aa28f52cf7e7a05cd065ca20d2e",
+    "size": 700
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/data_consumers.json": {
+    "sha256": "0f2bd5270e30bb2aa4de01eca8d874f74b05e1368f7d70fce9a57b1b28810849",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/dependencies.json": {
+    "sha256": "52dfdc7ab6fe716b7c0b736fe264b00d79fdb67d8555de0652a2b720e6622799",
+    "size": 1704
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/fixture.asm": {
+    "sha256": "d8ec28741cf714c36086b777865b34dc406f1e53f3128f9f3b94fea323c13502",
+    "size": 298
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/instruction-facts.json": {
+    "sha256": "a10281bb831bae53a627c54535c2cab35212434155fd81926c10b4a7fd942d98",
+    "size": 3924
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/instructions.json": {
+    "sha256": "17a6e61459f2d271f752e9f831f4835132540a9f9f88633f73da849ffbcc791f",
+    "size": 9201
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/legacy.log": {
+    "sha256": "9d7b0132590f4e240a4606d7a5ea9e209ca3ba2d17a8da7e182cdb226cbbf5a0",
+    "size": 342
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/listing.json": {
+    "sha256": "0c3d6fe714e1a98330ec1ba71f75c80ae606008e25cd5f647ebd11fac4e73908",
+    "size": 8767
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/block_unconnected_routine/xref_with_data.json": {
+    "sha256": "0fbe7d881c265ff18ef560f98fdc03462d48ab479ff3db9e3f74b57f7b8cb8b3",
+    "size": 2340
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/assembly.log": {
+    "sha256": "ee374bc314ea453b7fac8bb877ea92276956071de05e81e7493c25c1cb00e147",
+    "size": 281
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/bundle.json": {
+    "sha256": "aa355db2f627bb2ad589304779702ff8cb6c578f7078bd41837a716fb6e1a8d6",
+    "size": 4202
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/context.json": {
+    "sha256": "fc595c4d5216adad589e306fd12df17f30a836c66813fb01744c1d7ed73c5e3b",
+    "size": 696
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/data_consumers.json": {
+    "sha256": "2951d6e99d06b2bf4cc9ce35b26c2beddabb0060e1f7bf2866e1328e5482bd61",
+    "size": 1087
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/dependencies.json": {
+    "sha256": "92cf98cd3e60b31b52c5d9b7fbbd7ff4c29c7be5b5cc65e0236e4e3934fca6c5",
+    "size": 1695
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/fixture.asm": {
+    "sha256": "f1cb0da387788dfc08e22c7a7a54fa4501efc0d580a416793b69834c48081e88",
+    "size": 331
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/index_patterns.json": {
+    "sha256": "d39ceb49d67e29eef9696f2c780e41f795b9ff4f076d30702fa04d178795e2c7",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/instruction-facts.json": {
+    "sha256": "eadd8e98e9a4711197fd69ac1bd2b5d1946e6cb8af38da64bb476e2a93294671",
+    "size": 3993
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/instructions.json": {
+    "sha256": "31c2aaab042e3b794a85848a1147bec406c9cdeaecad716578d9a6ea07279e18",
+    "size": 9987
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/legacy.log": {
+    "sha256": "8932b9ec687a4b3840f8bc9856e8e91624c59ae99bde8f2cc55552297654a0bb",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/listing.json": {
+    "sha256": "46af152e755fc7bdaa91d206b4f90396cb6cf3bb6ebd4f270da8948ad7b0242b",
+    "size": 7727
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_accumulator_clobber/xref_with_data.json": {
+    "sha256": "706e00581c4f30e69a2be6c3cde6b953c36b1f046c9d008717a8502b71c087f3",
+    "size": 2919
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/assembly.log": {
+    "sha256": "152dbc0d382c24a5c11e59797b12a8ce80c548bf658bfa8f8cf598e0304974e8",
+    "size": 271
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/bundle.json": {
+    "sha256": "bbdb75b10ab84db2f03bbcab3bf9e01b8f9178e60fbf98850cec3059818ff75c",
+    "size": 4108
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/context.json": {
+    "sha256": "3f69c21b259ffcab54de0682a3605199932736710d0f44f332070aa98ed5d72f",
+    "size": 676
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/data_consumers.json": {
+    "sha256": "29d8f2b6902969fff3d00741ca8c61cbb8eddfd7f901f732527daf5c768ee070",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/dependencies.json": {
+    "sha256": "7003e3d48a899f8cc7bd80f19784e54d8e04089a2e0c01c4a1fa26bc3e311d48",
+    "size": 1650
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/fixture.asm": {
+    "sha256": "4c6f8ae4c5afaede565ce6aefaaea4080952b58731649b2e4f56dd270262dc2f",
+    "size": 418
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/instruction-facts.json": {
+    "sha256": "149ece37d13658cbd84435bd88ce3124419b29ac9e61102b7bf8304d9f4bc6eb",
+    "size": 5854
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/instructions.json": {
+    "sha256": "3a917f617114e71155679106f14ede59cf0826b3473290a2e634c98cddabcaeb",
+    "size": 14506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/legacy.log": {
+    "sha256": "428a5b31459d4cf4daa1428b23a325596c4952988d188ec36082b7e76657e91e",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/listing.json": {
+    "sha256": "2ad984b69c6e72161edaf9bba6073d37f4f46a499d24b67166d6388a9de39551",
+    "size": 9824
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_callee_clobber/xref_with_data.json": {
+    "sha256": "6adfc53bd461dc2953b45c700f22318010976ebc4d38c60da005bac840dd6074",
+    "size": 3486
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/assembly.log": {
+    "sha256": "4e322cda6ae24d1c5e78c1ed87fe3c42efe686064f04fda1cab5088c60ca3f24",
+    "size": 277
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/bundle.json": {
+    "sha256": "2f05b42c369c332c8f25bb80f86f18a7926a9986ff77dae2e055cf3dc1ec5a69",
+    "size": 4164
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/context.json": {
+    "sha256": "f77e6b2d22d36ffbf0072bede7e10fd46fb584a5ac4c57889f5caa5c031e1ec7",
+    "size": 688
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/dependencies.json": {
+    "sha256": "b0a1c1593720c45fa14c72db9aefcff9843662c5ce6b0b6ff467370248357cc7",
+    "size": 1677
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/fixture.asm": {
+    "sha256": "969e4e148104452d1be6daaa9b65b2dd59948670ec8373cf69f796aa3dd36990",
+    "size": 347
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/instruction-facts.json": {
+    "sha256": "11f6c6ebd6413e8d50e3533cf2e4b95c13191db53c8027a6581a6b4e4545badf",
+    "size": 3624
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/instructions.json": {
+    "sha256": "851969971502a30e5e6786736a706be119e1a322e51f173c0a35749f21f49054",
+    "size": 8964
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/legacy.log": {
+    "sha256": "da887ad2f515e0820f003130a6f98424dffde92657d7facf9b59bc754773046c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/listing.json": {
+    "sha256": "5745bc9f35aec9735c68c1206c5a94bdca4cfd255054d2615b1982197a28bdee",
+    "size": 7314
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_destination_alias/xref_with_data.json": {
+    "sha256": "54827c212be9f1791ee8201b53d7dbf4734a01ed3c0f8b44f482349309b8e482",
+    "size": 3158
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/assembly.log": {
+    "sha256": "d8c3e8e11bab55f755a5d92c5d8794ce4a9e4ecdf8904126695ce5184fcd70b7",
+    "size": 277
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/bundle.json": {
+    "sha256": "36aee70b3874db6be88fea86bc66c6c850d710bf63f8a1acf6e97b3cfd3cf0f8",
+    "size": 4164
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/context.json": {
+    "sha256": "ca08648de0bedbc54c9bb4933f74289262bf16ac809592d9de2451f18aaa62d6",
+    "size": 688
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/dependencies.json": {
+    "sha256": "070a31357ea115663c4b1f9a608630e890bc2dfb9c512f6b514fe56cbdb31254",
+    "size": 1677
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/fixture.asm": {
+    "sha256": "ceb8f6b3a26fe481794ad55add60fe55e7de6d8a8c777b299d8c695b70e88fff",
+    "size": 293
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/instruction-facts.json": {
+    "sha256": "fd62e95b975592281151e5a6fe3c0d1b102aee9da155c09f7c8dc16d8538c8bf",
+    "size": 3546
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/instructions.json": {
+    "sha256": "0b0b4402176b8f2f9f8ac6fe3157940e5431d4a5db7023ebf692e6b5d6b4a5be",
+    "size": 8274
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/legacy.log": {
+    "sha256": "da887ad2f515e0820f003130a6f98424dffde92657d7facf9b59bc754773046c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/listing.json": {
+    "sha256": "2a7e4f5fc72cc5caffb4289171fd6e27e69142383bc1210587d0f251502f0d0a",
+    "size": 7288
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_direct_numeric_zp/xref_with_data.json": {
+    "sha256": "36cf029f21e62340a607a8942e09d99705ebb45c862cf2f609ae5ae9085343fe",
+    "size": 2901
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/assembly.log": {
+    "sha256": "1342752fe4f526a8275cb681d5ba1f07eb2d0b1dc4588f93fd677d56b74d03be",
+    "size": 271
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/bundle.json": {
+    "sha256": "a2d734b3b91dcbb6d723cfe8dbe16d2d5c8f21814cb83009fcea6cc263e953b2",
+    "size": 4107
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/context.json": {
+    "sha256": "1fdc373cbc765ccb88c67cb762cf3dec63b8bb4db2737bd4ebab95772897fe50",
+    "size": 676
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/data_consumers.json": {
+    "sha256": "8a5b63998c409df3cbcab15f1fdeac7a4277678a69da1009b367bf40174ba9b9",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/dependencies.json": {
+    "sha256": "95fa4b34f75710f8a5ac4272588c84b04f03002350a075de6e872932ef90523f",
+    "size": 1650
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/fixture.asm": {
+    "sha256": "f20c108d58e4261125942e5cf2112370f0a811c6255e135a0834d1b50c471e19",
+    "size": 337
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/instruction-facts.json": {
+    "sha256": "b3e4b03c82a058b4698b81d590cea9c78a4c433a2b1bbd8e27da1974cab1f50b",
+    "size": 2968
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/instructions.json": {
+    "sha256": "fc65bc9c2c61dce484423dd649221b04e09a5d19a4958fd5a1a110a435ebb564",
+    "size": 7546
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/legacy.log": {
+    "sha256": "2ac4b63e88fc05acb80203fae0a3522b93d4b4fb02deea5d90060674f5972c49",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/listing.json": {
+    "sha256": "39f85d5964cfa620eb664cedc4c66bbc787a9e2f7731d0bb1a293d3458c66d84",
+    "size": 6864
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inactive_deref/xref_with_data.json": {
+    "sha256": "28befbf1b30e06a42ab1d52b931f5feb4c479556dc750d33450023d37adf0f00",
+    "size": 2874
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/assembly.log": {
+    "sha256": "9f1658fc73f3011cf944434ee8503e72c0705958fbcefed3161ef380b23831e2",
+    "size": 267
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/bundle.json": {
+    "sha256": "2ffc899d9a6bef2ed5bcca864365a75b79eb91620757417d0e926b68e97ae4ee",
+    "size": 4069
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/context.json": {
+    "sha256": "99b100a118f49baa9a15132c2a3f63d770d397899a65af0eca6a37a69b66481a",
+    "size": 668
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/dependencies.json": {
+    "sha256": "13d827dc520947d29672199ea051ac818e1c3403cae53e794b4a61627fb9cee2",
+    "size": 1632
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/fixture.asm": {
+    "sha256": "49362abc3b523bbd7476e523b0b5424d405c273231c28755f8cdb7ed38bd44b9",
+    "size": 318
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/instruction-facts.json": {
+    "sha256": "cd66cbbd27e28017339771fd7cdc7d38f8ec71a555dedbeec356ed9e889c22a1",
+    "size": 3624
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/instructions.json": {
+    "sha256": "e9ed571d2ab396f815e55d114f7bf8f83f4ec076b1d0a0571e1690c8db310b97",
+    "size": 8965
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/legacy.log": {
+    "sha256": "da887ad2f515e0820f003130a6f98424dffde92657d7facf9b59bc754773046c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/listing.json": {
+    "sha256": "6e845829f60a875aad3c1f2d5e4ac8c0896740e9616d046440667e500ce1a965",
+    "size": 7236
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_inline_owner/xref_with_data.json": {
+    "sha256": "d97fbac4eb5282de863eb2e7fd663e1344c17c2670260dec1f4659f650f584d7",
+    "size": 2856
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/assembly.log": {
+    "sha256": "2091ea52444cf8552fcea0966b9276b81dd7bf4b7ac0b9641e7e73a7b7063701",
+    "size": 265
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/bundle.json": {
+    "sha256": "94058785e1259ad4935f841ddd40855dc28abc6c09d93c433de358dd529e7e00",
+    "size": 4047
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/context.json": {
+    "sha256": "1655a6c63f187d159aac20a20c44c38034b7d71bc0d65297e52a30a2a7f2b785",
+    "size": 664
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/data_consumers.json": {
+    "sha256": "595ff4653915270507c586f812218745a1f9c32fe696d62d693d4edd16f6d249",
+    "size": 404
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/dependencies.json": {
+    "sha256": "041bd3289495a4a883eb6f46b95bc521ea1cbfd29b533eecf351d71b15e81084",
+    "size": 1623
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/fixture.asm": {
+    "sha256": "f0d025367b7aa87af2ac0a1d30f0ee7a6cee2d277dc0f0cff881b3ea69388294",
+    "size": 296
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/index_patterns.json": {
+    "sha256": "3fbbd4c6d76130399b0c79cdf41758669224a91e05b7b216953f0c9728750865",
+    "size": 4
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/instruction-facts.json": {
+    "sha256": "897a777d44460ca394f44c21deaa6d49bbb6d4a136f725d1ae3d477e6c6f6dda",
+    "size": 3608
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/instructions.json": {
+    "sha256": "e39fdb7185f08ee10236fedb5749903b9e52eccbddc01ce16b212cbbb5cba592",
+    "size": 8744
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/legacy.log": {
+    "sha256": "c0d2c5249a5be21505745b7588013be3eac3b85dc6317b53317603554521f18a",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/listing.json": {
+    "sha256": "7fec3aa1987139edd1ba0e710425d94eaa5236fb15f0544530f14fc3a4146249",
+    "size": 7153
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_local_label/xref_with_data.json": {
+    "sha256": "036da5d825eacaba53a9890979adb881dc6bd33223511de99ed67c76d037c708",
+    "size": 1484
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/assembly.log": {
+    "sha256": "3bde2e6ae4ad1efab7805645b0196b462ef3c864198a2dc56eb176d7f287c5d8",
+    "size": 281
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/bundle.json": {
+    "sha256": "bb5a7a1bfc491a6ed07f3f0b74bcf710d669dc7b0e2e23926010a2601830e3b0",
+    "size": 4202
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/context.json": {
+    "sha256": "efde878a985cbf6a6b8982d1c7d296581bf21bf6c8029d34eb01758638cc310d",
+    "size": 696
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/dependencies.json": {
+    "sha256": "8f275423605f02254310d98c9ee546e3a5b7b0920363eaa3f2ec62a705de3d24",
+    "size": 1695
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/fixture.asm": {
+    "sha256": "506e7f0085df5c8d8fd237b5a2e678bb791bdac0edc58153a332867193c87fb8",
+    "size": 320
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/instruction-facts.json": {
+    "sha256": "4162e7fa3ca6487d555b5dfea8f583cec85a3f25abb1dc34b5d019e0d9077ad9",
+    "size": 3624
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/instructions.json": {
+    "sha256": "e4e56fec7fa5d5f733490483402a06d30688f5ed201df81655ec4c57f5babd27",
+    "size": 8972
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/legacy.log": {
+    "sha256": "da887ad2f515e0820f003130a6f98424dffde92657d7facf9b59bc754773046c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/listing.json": {
+    "sha256": "a705c61bfa2e8f277dc906f8c0535e73272cb687ccf4e94dcfb5ba8f7af3c419",
+    "size": 7355
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_lowercase_mnemonics/xref_with_data.json": {
+    "sha256": "0cbfc60e975b8dbe32ab9b1daf3774530e39dbae4ecb45f890ab6da6fa23083e",
+    "size": 2919
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/assembly.log": {
+    "sha256": "3a14b0312508e7eb11d2fc9e6073d13a3c04475965eb30efe06e06e76d10a0c0",
+    "size": 279
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/bundle.json": {
+    "sha256": "b37b69563c9a088e5df9f83e17e90423ffb1bc275d1c2a52499e9a6ff3c3b673",
+    "size": 4183
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/context.json": {
+    "sha256": "3b59b1dc5ef49c7fb0a43860c94db50c38062a447b506a30157a524a32f16f20",
+    "size": 692
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/dependencies.json": {
+    "sha256": "8fa5ea890821984a81aa3889f42ec7c89c2c318e113a7c9b0ea2778e57bf025f",
+    "size": 1686
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/fixture.asm": {
+    "sha256": "357b432cf318aa812f10f17dc781f7d9c70b9f6443f18d581792b87f92c87367",
+    "size": 320
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/instruction-facts.json": {
+    "sha256": "c4544a9fa2df6cbcf898c40e52c5f8db52832e78c9adf5231d9e672bebcfc06b",
+    "size": 3624
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/instructions.json": {
+    "sha256": "b548ea5d67087ba53977069cc17fcf602725e833d18c2f8f63087bdcec4b849d",
+    "size": 8971
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/legacy.log": {
+    "sha256": "013a02d763babfd219852c126f26c1cdcb3d5924eacd222b542d633e15015000",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/listing.json": {
+    "sha256": "0713d36d7345becd38626aa79791ec8d8b5bb633eae163fd813c806b68ec6f5e",
+    "size": 7335
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_nonadjacent_halves/xref_with_data.json": {
+    "sha256": "f1ab45419d14e5cd08a841d5fd550ec494ff7e09b2aa438d681a17e5596c80be",
+    "size": 2910
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/assembly.log": {
+    "sha256": "92cf6e6cfcff29c4f8318ad232ce9caa711462c0a2b783706dc6af391254644e",
+    "size": 277
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/bundle.json": {
+    "sha256": "4eb5755a2fd6a68b9a1e9b21880530190b41aecd829652cf67c15f5e53d9926e",
+    "size": 4165
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/context.json": {
+    "sha256": "394721f4a213772cbcbfbc3f21a7ecb7c5ba3e83a491a83dc79635fa56bcc67c",
+    "size": 688
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/data_consumers.json": {
+    "sha256": "51025febf4eba3c02aa9a822d62648b90c3cfae7e4c18e05b7e0f90e41ed76e2",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/dependencies.json": {
+    "sha256": "056bcb1ce3bad6156f4ace31a2ca0df7f9373282dac7970bff5f1c776f24dcb6",
+    "size": 1677
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/fixture.asm": {
+    "sha256": "6c31cbc92b457e68e1ede1d96f762046a9d9bf7309777141b529e0d5897f83ab",
+    "size": 376
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/instruction-facts.json": {
+    "sha256": "b2b7973fdabde939b64d02228492591f983716f65fcfc14b1822a10011fcebe0",
+    "size": 5464
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/instructions.json": {
+    "sha256": "82cce719513b378708e7ab51638e810c7a72645959e36099252915e115040aaa",
+    "size": 13642
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/legacy.log": {
+    "sha256": "b84b0a3003b1385d66684621e4a89b07c76401dea21fa287b48c357dd7ba6651",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/listing.json": {
+    "sha256": "676cdd137936e9b319f41d9f3adfef3d1520ce675360f4f2c92c0ae269662d14",
+    "size": 8809
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_pointer_overwrite/xref_with_data.json": {
+    "sha256": "a0a16c868ee71893e103fab61bab19752aa8bec5d0a6f41ce706a517ebb1482a",
+    "size": 2901
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/assembly.log": {
+    "sha256": "28442f8f4ce4bbb277040706a77482845fe406bed507ad7ba2a416269abef31a",
+    "size": 259
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/bundle.json": {
+    "sha256": "cb1c8bdcb65da4054c2fc0002e95e85831a5c5a091fda894f2a25a01377be4b5",
+    "size": 3993
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/context.json": {
+    "sha256": "f2f22e3b8ae401dce76e9749b62bc63430ab978db37bf68f82ad2a8c3591a19f",
+    "size": 652
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/dependencies.json": {
+    "sha256": "86c291bf857866372db4978279b9d913ce19253562d46548d7e52cf6b187d7ba",
+    "size": 1596
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/fixture.asm": {
+    "sha256": "8030b32fe57069549ee896fa311eb538c77ecc8d79e3203daf5585cbd46ffd35",
+    "size": 320
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/instruction-facts.json": {
+    "sha256": "4162e7fa3ca6487d555b5dfea8f583cec85a3f25abb1dc34b5d019e0d9077ad9",
+    "size": 3624
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/instructions.json": {
+    "sha256": "a3fd181d9254cb3887e7b9a98510ba72ebf516e3cdf5fce409e4698a5d738744",
+    "size": 8961
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/legacy.log": {
+    "sha256": "013a02d763babfd219852c126f26c1cdcb3d5924eacd222b542d633e15015000",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/listing.json": {
+    "sha256": "5b7c4a5873070683b91ba4056409a7b433c61fd5658205bf67578ce4f238bdd1",
+    "size": 7135
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_positive/xref_with_data.json": {
+    "sha256": "5f5e7be79af2cfd99bbb43c19c036f8030e3047ab3e2376c5b311072f5f4b266",
+    "size": 2820
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/assembly.log": {
+    "sha256": "c95f9600bfd103976e680c093dc5a4a5fa1302d9a4d32c2fe992adfca37b15d5",
+    "size": 273
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/bundle.json": {
+    "sha256": "8d8c67e743eb19fe12f4dde6c5f79eaf5f412b0a4b91cf314478fc48283dd553",
+    "size": 4126
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/context.json": {
+    "sha256": "e6a323366afadeea375d7bd18abe2b60e783d30483169870911d61877d42b447",
+    "size": 680
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/data_consumers.json": {
+    "sha256": "31b50ef271b248576de081e1d0a6ea8cb2337fc5054dd36c637775adea8358a8",
+    "size": 1494
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/dependencies.json": {
+    "sha256": "57151067d9cceb9ff3060c427fabb666e92999f70ae997f941106c9697e75722",
+    "size": 1659
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/fixture.asm": {
+    "sha256": "7041d34afa8d197c2bfd08d2779a4d3ca5a3346714cf0b6fb2bd62e26d984309",
+    "size": 423
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/instruction-facts.json": {
+    "sha256": "4ac581d12d48c5a2f01db686873eef1cd92e92d72451244bfea981fd79ce41de",
+    "size": 3622
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/instructions.json": {
+    "sha256": "072c3881c82f524c093eef57c384a49ebd0e9ddae25faee2f4303a467e8fdfd2",
+    "size": 8966
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/legacy.log": {
+    "sha256": "1563d7b3e9746be3b8a1db95d09c873f0975612711571f604464906fcea03443",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/listing.json": {
+    "sha256": "515154dd8423fa96078f764500114e1198a86558ff0a9379d315e714e48a5dde",
+    "size": 9343
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_redefined_label/xref_with_data.json": {
+    "sha256": "194ffae25d84cfaaab750cc3354908bd1928faec0c8af017ea1e544a1a4815e3",
+    "size": 2883
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/assembly.log": {
+    "sha256": "e08e607c8297ec7cb98e46fa3bf79d5ac2c21b566d3ede1110ac2476f27c6104",
+    "size": 273
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/bundle.json": {
+    "sha256": "5982f93ef63f7e53ade02dd5a7027d6de97dc75b0c714ee43aa9d4acdba71880",
+    "size": 4126
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/context.json": {
+    "sha256": "46032bc18c28cb4ef14d5e5c1cb021ccbb40899516f2354d8b310cf97d84d2d3",
+    "size": 680
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/dependencies.json": {
+    "sha256": "e6a20e370ab118a51c4f5d5ca26d359c9798664a6e891971428705e6effa36e9",
+    "size": 1659
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/fixture.asm": {
+    "sha256": "05963a36d7fd0675d756aaaeb3a51cacf357a365b3fe7d2d5d2ec426c2277b43",
+    "size": 298
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/instruction-facts.json": {
+    "sha256": "dbbd0febd575c82bf92dbedd270687d130de986f8b874f3e0b53234be3897eeb",
+    "size": 3610
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/instructions.json": {
+    "sha256": "c2fa9e57382e7dbb3cd41dbd7490ad2be331f0bb676d6cb49c757937038ad195",
+    "size": 8856
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/legacy.log": {
+    "sha256": "da887ad2f515e0820f003130a6f98424dffde92657d7facf9b59bc754773046c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/listing.json": {
+    "sha256": "715e1a4a1955f7686f34ff332b40e9b224d5f3d997ab9d8c1cd4436ccf7b1ed3",
+    "size": 7261
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_semantic_rename/xref_with_data.json": {
+    "sha256": "b271a6fc81681b667db6c8dc8c988547f48da20a3693b73d703f74bf7440c5ed",
+    "size": 2875
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/assembly.log": {
+    "sha256": "4f495adf675119eb426aec60f97e7b63f0a40ac66f1d17bb8b5a49a5b2cf164f",
+    "size": 279
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/bundle.json": {
+    "sha256": "5fc7a2fac9132e2e68d67c6d84b3310c6457e890d583c70ef789844b75326f6c",
+    "size": 4183
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/context.json": {
+    "sha256": "c6ecd3007d802c8da804a5c17be5e18aa4a5546769537a05e66709a4ab2135a3",
+    "size": 692
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/data_consumers.json": {
+    "sha256": "7f2950f0120c987123c842ae15b28f24580950997511ce181098cfc515fc2fcb",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/dependencies.json": {
+    "sha256": "c551a1b59e441617b0598b8a450a05bfc5df17fe60182beec85c88857f0bb13a",
+    "size": 1686
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/fixture.asm": {
+    "sha256": "16b310a209b8e33082e433dad6a86ab3751ee7bdedd7631ba551a18e1bcb1a33",
+    "size": 359
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/instruction-facts.json": {
+    "sha256": "1425b3cefbde9c739a02d62df02c63e5aadac7790f11a10cb9fd1cb370fec2c9",
+    "size": 3614
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/instructions.json": {
+    "sha256": "8f324cae692afeeef0fc9722463fe1f27e4514a33547dd951ca02924e88b37ce",
+    "size": 8878
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/legacy.log": {
+    "sha256": "da887ad2f515e0820f003130a6f98424dffde92657d7facf9b59bc754773046c",
+    "size": 189
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/listing.json": {
+    "sha256": "9b19c689aacaf168061c03e138cfab0f7b705cdcfa941a27b005887763b2f4b5",
+    "size": 7323
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_source_alias_chain/xref_with_data.json": {
+    "sha256": "3f507721733d94e4ec32730b020c2d6c1822294b5cc0d9bf830e29562c597a5f",
+    "size": 3415
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/assembly.log": {
+    "sha256": "5ac76588df8e16e25ad433cda7899a2b852249e4bb3aa0c31d77c97543b9bcb3",
+    "size": 427
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/bundle.json": {
+    "sha256": "66c388a5ad9fb9279923ecf285336238c71083a5601cec344205cf1d4f6c0fbd",
+    "size": 4202
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/context.json": {
+    "sha256": "8cc42f42ae16e194ea206d424a5e5c4948af42e2229722762b99cc359532249a",
+    "size": 696
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/data_consumers.json": {
+    "sha256": "94219890d606ef271ccb71b67e0ffeffb13e892e3260dc86362213af95d89168",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/dependencies.json": {
+    "sha256": "bca2e9ec81ae6b244133378ecd744881145bc7eca501aee15551313ef6de561a",
+    "size": 1695
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/fixture.asm": {
+    "sha256": "c6dc4493b81662d02703e9279cf7c0dbff8ebed03a3c4efa9c3698b154e337d4",
+    "size": 345
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/index_patterns.json": {
+    "sha256": "0242604c313dc6b8c487ae8e51e9fd4bcb71a0c07dafd2ec187628f5c574c863",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/instruction-facts.json": {
+    "sha256": "7490e912368f3a5fb330453e44d1a114b158945d9c7653d96147c4b1da148141",
+    "size": 3987
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/instructions.json": {
+    "sha256": "0d6e244853d5e69ca3aa1e03e4b71eac3af2eb62737bbe6f771e4c852bb41fa2",
+    "size": 9599
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/legacy.log": {
+    "sha256": "0f73c715ef21b66921a588630885c29795e626fcf592ae9b19c762aa8708ebb9",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/listing.json": {
+    "sha256": "e0f67f760ea32644647a9398cb4967f2ba4ab05815ffffc179d2c0d50013f391",
+    "size": 8095
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unconnected_routine/xref_with_data.json": {
+    "sha256": "705c0384a1387f099ce1361b4bfde13cb932339f3909dfbea5863fd468bb3a05",
+    "size": 3192
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/assembly.log": {
+    "sha256": "5f257b0867305d31c5d7889371e6960ac6d9f28acfb1d33d60eb0610c1e5eefd",
+    "size": 277
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/bundle.json": {
+    "sha256": "4e72b1f82233847929c495fe2e347a01537afe38bd5d5435845fc35ae4b8052c",
+    "size": 4164
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/context.json": {
+    "sha256": "68561d9acd48a2951a9dc61d35f439e2025fa1399fb76dcbe546c74c7cf0b0a0",
+    "size": 688
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/data_consumers.json": {
+    "sha256": "284c970422d4d6c070655c192a86337a0ea013c500f666d8f007f474999e9801",
+    "size": 1088
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/dependencies.json": {
+    "sha256": "eaa045d3f85778bda7fe4f1f1c6f75693ab1f25afe064b2b5be3de0e30748874",
+    "size": 1677
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/fixture.asm": {
+    "sha256": "e24e0fc319ae58ab3012de7a20e96c8ead80cc19f16b9527ed2a132a009da7f4",
+    "size": 326
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/index_patterns.json": {
+    "sha256": "0bd9ab5fb4942a021186c1090e61fcd2d1648265f98843d94649fb21560e6005",
+    "size": 506
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/instruction-facts.json": {
+    "sha256": "85d2686d3befe73e986024a0275d9cc953ddb4d9e59321c299d3ba63e5e791ed",
+    "size": 3981
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/instructions.json": {
+    "sha256": "2d65cc58eaac9e2ca20c5daaef61227e1d8e8408b8a0b939a54b3c09feff06db",
+    "size": 9596
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/legacy.log": {
+    "sha256": "0f73c715ef21b66921a588630885c29795e626fcf592ae9b19c762aa8708ebb9",
+    "size": 354
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/listing.json": {
+    "sha256": "5dd1af48c2bd8f6c680447116b70f78843c6601ea80c6e922c58909e32c3e939",
+    "size": 7673
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/fixtures/pair_unreachable_loads/xref_with_data.json": {
+    "sha256": "d3530a0c54ecb4a5feb3bdac4fe1cd78a54b3d60b75dea75a13cfd58e7a54fd0",
+    "size": 2901
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/assembly.log": {
+    "sha256": "8c7e282d456640a9fa443f1d36af40045cb047bb567005f68a5f5c9f77d0020c",
+    "size": 469
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/bundle.json": {
+    "sha256": "30a99ebd6836ad644664593a91c285cc150d8aa1fadd74c3c64027a1a294e2e5",
+    "size": 4564
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/context.json": {
+    "sha256": "6150118244b100011a332d250826555cd6faab326d998dd4cfd4594902587f7e",
+    "size": 772
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/data_consumers.json": {
+    "sha256": "26504e6dac25454c2f04f51d12773748c4c3919c69e7d0629515afbd56d652f0",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/dependencies.json": {
+    "sha256": "621f9c843627b2d80b15f88e6fc90e3f2e980567106ae4a0267cbd799a52fb03",
+    "size": 1866
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/fixture.asm": {
+    "sha256": "621f7c036f3ba59a7238e086df0e3c8e15c8b93758b36b1f11404f3efa29f319",
+    "size": 335
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/index_patterns.json": {
+    "sha256": "358790af9133512bc8859d5fc1f5ce30b342019c235b49f84809f6ff0e420ea4",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/instructions.json": {
+    "sha256": "e3e939c243accd73dee9b4639a09bf98773eb77786ffcf69b0c2252eb564b615",
+    "size": 12196
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/listing.json": {
+    "sha256": "49d16232182782d60731adfed555c61391f804734400d9e7825d97198700b424",
+    "size": 10371
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_balanced_index/xref_with_data.json": {
+    "sha256": "6aa13b9e88a9e22dcb373af346d21b4e84886f5b42b3e6f551180a59d4d9f962",
+    "size": 2484
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/assembly.log": {
+    "sha256": "4f457400b5343faed4b02abaddfba59d22f376465b5ffd33a604baa312013a40",
+    "size": 466
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/bundle.json": {
+    "sha256": "6d0087e6460b0f2a7baf24c6acb5cf61428fe834e531e0cbcdc032028b4a0e1b",
+    "size": 4545
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/context.json": {
+    "sha256": "9876cb82dee5d40f66c7d0733990d2915c1b560db0ffaa089acc89ac1994e727",
+    "size": 768
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/data_consumers.json": {
+    "sha256": "26504e6dac25454c2f04f51d12773748c4c3919c69e7d0629515afbd56d652f0",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/dependencies.json": {
+    "sha256": "c6202ca0374e50bb89a34e9934fc3fe469fb384920e32accf708873c5c7b784c",
+    "size": 1857
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/fixture.asm": {
+    "sha256": "7c8df817d2feb07c5f2a01eba5da533b76448819e5402a4ee51c829297f2c189",
+    "size": 335
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/index_patterns.json": {
+    "sha256": "358790af9133512bc8859d5fc1f5ce30b342019c235b49f84809f6ff0e420ea4",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/instructions.json": {
+    "sha256": "d2618a4af0bc735fbbcafe063f647fe988599b160e44673cb4118cd2da4d4858",
+    "size": 12195
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/listing.json": {
+    "sha256": "b2733c771f6ff79f6a90003b4c270d6dcd9b7f535ae5fc0f2d982d25c9b7532f",
+    "size": 10344
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_finite_shifted_index/xref_with_data.json": {
+    "sha256": "e0b370034fd02cf2f3b1496b16f36ae64b462822295049e9921918cf88c86ccb",
+    "size": 2476
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/assembly.log": {
+    "sha256": "6d6c5a8396e23992ec65070afd47b57f9701a7a1625fd9dbba49adccd7ddc6d6",
+    "size": 469
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/bundle.json": {
+    "sha256": "8b79e1e14c9ec94d398d530547589f72b58489e7fb10e5eb54ee78b2e00aa4af",
+    "size": 4564
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/context.json": {
+    "sha256": "3e6445a799768da8567b4ed31f3cf342a112edec8489c884d7030a51b8061fb4",
+    "size": 772
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/data_consumers.json": {
+    "sha256": "0ed0f4bd83d00269bff557886dfc33223a3d468b093af697665c2c7d7624fce9",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/dependencies.json": {
+    "sha256": "2a99cdcede6d7aac479055a4b19c96d592ffa77b9ee17b63158434ca3c1d3278",
+    "size": 1866
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/fixture.asm": {
+    "sha256": "197c5b484eba1b1260bd94d7102b4d4383697a1b0f4d5a04251cff17a0d95304",
+    "size": 335
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/instructions.json": {
+    "sha256": "80e1ddddc6cdf5af768aa1c3b2d770e9f39cdaceb34c62e2e1977b31df9febcc",
+    "size": 11990
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/listing.json": {
+    "sha256": "2da095273e6f86107959ed963e55f2b8f135c1f8ddf0db1e278cceb5d64782c6",
+    "size": 10744
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index/xref_with_data.json": {
+    "sha256": "ba9ccfdf91eb75fed54dc9394d97d253c629e5ad199f16625bed36f2c3ae42d5",
+    "size": 2484
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/assembly.log": {
+    "sha256": "4c2c97a531fceb9ac394c0ab1d3ea79827c4e6754bd485321b85b4c4852b229e",
+    "size": 490
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/bundle.json": {
+    "sha256": "7da523eed7e03b90ce8265548c5c8109f750e58c59ee2d173ea6a5ac9c105bd0",
+    "size": 4697
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/context.json": {
+    "sha256": "a48374ca047918fe4e3239eef2b23b93e53454e4f3823a757a75881c0cb95333",
+    "size": 800
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/data_consumers.json": {
+    "sha256": "0ed0f4bd83d00269bff557886dfc33223a3d468b093af697665c2c7d7624fce9",
+    "size": 905
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/dependencies.json": {
+    "sha256": "aa2d15b452dd3b13b6638c861d068d9d2e9918284d367c630471449d72b9b0aa",
+    "size": 1929
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/fixture.asm": {
+    "sha256": "a5e8f35ec2301775bac8e0425e84a0d157a728bec0acb0d6fb8e9aca2a8815bb",
+    "size": 334
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/index_patterns.json": {
+    "sha256": "9e88fcb03a6c0869bb00b3e4bb84f2a9afe41dc963c503577c23d5ed1d6daa07",
+    "size": 200
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/instructions.json": {
+    "sha256": "39fd18c44f8996ed8fe96a110d3637c1f44f7de07cc6f2d3bf6accf9a65f29ee",
+    "size": 11984
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/listing.json": {
+    "sha256": "e56632f664aa25d4276ebe5b48d692a9f8610d6c56c60e7b683988f574bccfc1",
+    "size": 10939
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/block_varying_pointer_index_prefix/xref_with_data.json": {
+    "sha256": "340ddc17a0723c65ef487b0bba0ccfd278383b877ab8b2ca684618d67277c976",
+    "size": 2540
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/assembly.log": {
+    "sha256": "7de88b7d7d6c4231386c64f6444ace2eb6ede4e7bc8d660792c3ad9ae5756920",
+    "size": 301
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/bundle.json": {
+    "sha256": "4e76c61dc21f1ca1dbbbc67103345243826019dccb6fc28e5d13d829410c6acb",
+    "size": 4393
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/context.json": {
+    "sha256": "574381ce303bb7ea1ec2aadbbd08d0fbd4d5ed0405c40c517ccec0b099f3f907",
+    "size": 736
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/data_consumers.json": {
+    "sha256": "5cbcbec9af1669f3f1996653cec103702d74add45ac71510883058e2cc52a2fb",
+    "size": 1044
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/dependencies.json": {
+    "sha256": "3d65c336103aa6179f12ef0db7c5ce1a79287bdfed416819c7fb87590efdefe0",
+    "size": 1785
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/fixture.asm": {
+    "sha256": "13f16033e53cb88994870f57adb039ab476d6ec5a12e89bb4d15d0eabaa1c7f4",
+    "size": 372
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/index_patterns.json": {
+    "sha256": "176b7a8f5d1f0d74a5b8947c704f29fd782d1a7c39fe20b6cc3dccbbd25a42b0",
+    "size": 608
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/instructions.json": {
+    "sha256": "ad4ad7de1b5b73d52bc5f17a63c39a2a255339651596b10d1d946a15e9e367fa",
+    "size": 13417
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/listing.json": {
+    "sha256": "b5a08be211d01c622d6a5910af5c2e1f3bef3159f933bb05f68f4b7d49f12d8d",
+    "size": 9822
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index/xref_with_data.json": {
+    "sha256": "634981591c3caaa4281e5665e33b9fb183d7dce21f43ee04d13b33fa0d33f9cd",
+    "size": 3010
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/assembly.log": {
+    "sha256": "55f18fc320440490e88d2ff8b51d9aefef77b13d5afe8e8d520521da26170a8a",
+    "size": 315
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/bundle.json": {
+    "sha256": "594b1dfed23ea1f5168a2f6446918959082c1962a7b875fc1b7215822cddf874",
+    "size": 4527
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/context.json": {
+    "sha256": "454709039cff4a0b54210720b1342086a16df89c6c2fb1e7f0bf3e61e192c584",
+    "size": 764
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/data_consumers.json": {
+    "sha256": "5cbcbec9af1669f3f1996653cec103702d74add45ac71510883058e2cc52a2fb",
+    "size": 1044
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/dependencies.json": {
+    "sha256": "1ea3a4e25e841f40f60f957caf7ae33e7a2685892f0d544eeb20961760ccc6ba",
+    "size": 1848
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/fixture.asm": {
+    "sha256": "e1cac1309e70dcc5fd0895ec72e5ca37e9f33a5c890d18197cb46dd6297aa091",
+    "size": 371
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/index_patterns.json": {
+    "sha256": "02ee8045186d0fc2ff2b14099f228bcaef4341be0a5a714cb53af2f8e49a0046",
+    "size": 606
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/instructions.json": {
+    "sha256": "05baaeedaeb4dce18fa66d763bdc7c52d56a563f415bef9e687729e690b96784",
+    "size": 13411
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/listing.json": {
+    "sha256": "076fd6c8fc6f9ac3f8a242fba74f15ad4e1a3a2c64a365c6f89191518ce7f10e",
+    "size": 10003
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/project.conf": {
+    "sha256": "b3edb8470f472de562f86e09c1e4b27b750d45090b5cc706afcce275b955a6f2",
+    "size": 16
+  },
+  "projects/embedded_pointer_audit/2026-10-03/review-followup/fixtures/pair_varying_index_prefix/xref_with_data.json": {
+    "sha256": "ec6793877ba0ebe07cd553a4dcc95f100d8d4cec6d3fc8c199c742c0d628a64d",
+    "size": 3073
+  }
+}

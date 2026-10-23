@@ -1,0 +1,1241 @@
+{
+  "gate_report": {
+    "sha256": "5eaccd61551501e36d28d495ee1a8cf8fbb1daed81291d0a2382cd0f8dfb1e30",
+    "size": 80189
+  },
+  "ram": {
+    "one-unit": {
+      "bytes": "10 00 1A 00 11 00 16 00 12 00 1C 00 1E 00 13 00 18 00 14 00 15 00",
+      "commands": [
+        {
+          "argv": [
+            "${CAPTURE}/tools/xasm",
+            "0.asm",
+            "-o",
+            "0.o"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        {
+          "argv": [
+            "${CAPTURE}/tools/xlnk",
+            "link.s",
+            "-o",
+            "out.bin"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        }
+      ],
+      "input_order": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "permutation": [
+        0,
+        2,
+        4,
+        7,
+        9,
+        10,
+        3,
+        8,
+        1,
+        5,
+        6
+      ],
+      "sizes": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        4,
+        1,
+        2,
+        1,
+        1
+      ],
+      "sources": {
+        "0": ".dataseg\nram0 .byte[1]\nram1 .byte[2]\nram2 .byte[1]\nram3 .byte[2]\nram4 .byte[1]\nram5 .byte[2]\nram6 .byte[4]\nram7 .byte[1]\nram8 .byte[2]\nram9 .byte[1]\nram10 .byte[1]\n.codeseg\n.word ram0,ram1,ram2,ram3,ram4,ram5,ram6,ram7,ram8,ram9,ram10\n"
+      },
+      "stable_bytes": "10 00 16 00 11 00 18 00 12 00 1A 00 1E 00 13 00 1C 00 14 00 15 00"
+    },
+    "ram-span": {
+      "assemble": {
+        "argv": [
+          "${CAPTURE}/tools/xasm",
+          "in.asm",
+          "-o",
+          "in.o"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "bytes": "11 10",
+      "expected": "11 10",
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "out.bin"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "source": ".dataseg\naa .byte\n.dsb 3\nbb .byte\n.codeseg\n.byte aa,bb\n"
+    },
+    "ram-zero": {
+      "assemble": {
+        "argv": [
+          "${CAPTURE}/tools/xasm",
+          "in.asm",
+          "-o",
+          "in.o"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "bytes": "10 10 11",
+      "expected": "10 10 11",
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "out.bin"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "source": ".dataseg\nbuf:\naa .byte\nbb .byte\n.codeseg\n.byte buf,aa,bb\n"
+    },
+    "reversed-units": {
+      "bytes": "1C 00 1E 00 10 00 16 00 11 00 12 00 13 00 18 00 14 00 1A 00 15 00",
+      "commands": [
+        {
+          "argv": [
+            "${CAPTURE}/tools/xasm",
+            "0.asm",
+            "-o",
+            "0.o"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        {
+          "argv": [
+            "${CAPTURE}/tools/xasm",
+            "1.asm",
+            "-o",
+            "1.o"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        {
+          "argv": [
+            "${CAPTURE}/tools/xlnk",
+            "link.s",
+            "-o",
+            "out.bin"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        }
+      ],
+      "input_order": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "permutation": [
+        7,
+        9,
+        10,
+        0,
+        2,
+        4,
+        8,
+        1,
+        3,
+        5,
+        6
+      ],
+      "sizes": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        4,
+        1,
+        2,
+        1,
+        1
+      ],
+      "sources": {
+        "0": ".dataseg\nram5 .byte[2]\nram6 .byte[4]\nram7 .byte[1]\nram8 .byte[2]\nram9 .byte[1]\nram10 .byte[1]\n.codeseg\n.word ram5,ram6,ram7,ram8,ram9,ram10\n",
+        "1": ".dataseg\nram0 .byte[1]\nram1 .byte[2]\nram2 .byte[1]\nram3 .byte[2]\nram4 .byte[1]\n.codeseg\n.word ram0,ram1,ram2,ram3,ram4\n"
+      },
+      "stable_bytes": "16 00 1E 00 10 00 18 00 11 00 12 00 13 00 1A 00 14 00 1C 00 15 00"
+    },
+    "split-units": {
+      "bytes": "10 00 1A 00 11 00 16 00 12 00 1C 00 1E 00 13 00 18 00 14 00 15 00",
+      "commands": [
+        {
+          "argv": [
+            "${CAPTURE}/tools/xasm",
+            "0.asm",
+            "-o",
+            "0.o"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        {
+          "argv": [
+            "${CAPTURE}/tools/xasm",
+            "1.asm",
+            "-o",
+            "1.o"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        {
+          "argv": [
+            "${CAPTURE}/tools/xlnk",
+            "link.s",
+            "-o",
+            "out.bin"
+          ],
+          "returncode": 0,
+          "stderr": "",
+          "stdout": ""
+        }
+      ],
+      "input_order": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "permutation": [
+        0,
+        2,
+        4,
+        7,
+        9,
+        10,
+        3,
+        8,
+        1,
+        5,
+        6
+      ],
+      "sizes": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        4,
+        1,
+        2,
+        1,
+        1
+      ],
+      "sources": {
+        "0": ".dataseg\nram0 .byte[1]\nram1 .byte[2]\nram2 .byte[1]\nram3 .byte[2]\nram4 .byte[1]\n.codeseg\n.word ram0,ram1,ram2,ram3,ram4\n",
+        "1": ".dataseg\nram5 .byte[2]\nram6 .byte[4]\nram7 .byte[1]\nram8 .byte[2]\nram9 .byte[1]\nram10 .byte[1]\n.codeseg\n.word ram5,ram6,ram7,ram8,ram9,ram10\n"
+      },
+      "stable_bytes": "10 00 16 00 11 00 18 00 12 00 1A 00 1E 00 13 00 1C 00 14 00 15 00"
+    }
+  },
+  "roms": {
+    "bombsweeper": {
+      "baseline": {
+        "sha256": "8c08a24ccadce627baaea0c9576f073ff855b7a0edc4369a01ba8371e2fe5dad",
+        "size": 24592
+      },
+      "different_bytes": 0,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "bombswpr.s",
+          "-o",
+          "bombswpr.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "8c08a24ccadce627baaea0c9576f073ff855b7a0edc4369a01ba8371e2fe5dad",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "bombswpr.s",
+          "-o",
+          "bombswpr.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "dpadhero2": {
+      "baseline": {
+        "sha256": "ff435b932b5804c92f8a747f7507ddc293ff482c4a2152c46db9c3d4029b884e",
+        "size": 262160
+      },
+      "different_bytes": 1031,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "build/dpadhero2.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "3432c79afb345c46d36886e713e9b1732950f5cba016abbebe57d702d6edb0b7",
+        "size": 262160
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "build/dpadhero2.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-bob-omb-battlefield": {
+      "baseline": {
+        "sha256": "000d7680102d83d4326c44aa47e883acb399a3f00925cf35c935bc851434017f",
+        "size": 24592
+      },
+      "different_bytes": 161,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "BobOmbBattlefield.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "f99f13b9874db5801435c4826718f72bf47c7b9854b9a048a1d6cdf039e2f2c9",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "BobOmbBattlefield.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-dire-dire-docks": {
+      "baseline": {
+        "sha256": "dcd500b50719a97944f225e5b210eb71795200377ee3ee6430b95725129dcf1d",
+        "size": 24592
+      },
+      "different_bytes": 160,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "DireDireDocks.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "3943ef9f4c026b75b70fc5910b8f81dee4c7d4b0df97e77f2db794cbd497d90c",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "DireDireDocks.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-double-dragon-ii-vs-f1": {
+      "baseline": {
+        "sha256": "e057cc2b0bbb97ccb722345edb9699515bd006d4d45513803ceb8029fbd8a635",
+        "size": 24592
+      },
+      "different_bytes": 216,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "DoubleDragonIIvsF1.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "4e760a7ff217556a2b52f167438d16dbdb3aec46e8ed351de0f151a745437af6",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "DoubleDragonIIvsF1.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-dpadhero3proto": {
+      "baseline": {
+        "sha256": "4d78ccf4e02d394001225f668310a71601ec44804f3298272f13363ce51be504",
+        "size": 24592
+      },
+      "different_bytes": 9053,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "DPadHero3Proto.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "9bfa6414e62d6e9758bfc824e22e19052aba7ccbe5b11662926c15ac93c4031e",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "DPadHero3Proto.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-is-it-scary": {
+      "baseline": {
+        "sha256": "1ccda80a1ba6b9fb455ed4b8b0bde7bde283c305d8f2116177ca6258fbc6f958",
+        "size": 24592
+      },
+      "different_bytes": 344,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "IsItScary.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "e0280eeab0224647c65ed3adb87eef15c3fe662a39d0be9292b46bb0618d89ec",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "IsItScary.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-live-and-learn": {
+      "baseline": {
+        "sha256": "0b4a111f6eac1f423c628e4a085c7f3423b1b269d22abcd1a3956da8c073b55e",
+        "size": 24592
+      },
+      "different_bytes": 328,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "LiveAndLearn.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "4c0b42432186803689f4ef35c327c621799befc8430a6392c19f3283c09e7d5c",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "LiveAndLearn.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-mega-jean-trooper": {
+      "baseline": {
+        "sha256": "8bfd29c36f409e300e20c911d6830c3d5c79421c1bc00e14e90fdfae273e9acd",
+        "size": 24592
+      },
+      "different_bytes": 71,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "MegaJeanTrooper.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "41f00c7a23c12347650aaaea9fd1d3675aa40bbf9f29d5f86c1845b120354806",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "MegaJeanTrooper.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-merry-xmas-everybody": {
+      "baseline": {
+        "sha256": "877ab698e6b4ffaf38850bad90ffe413888cec30b42fe2571d3081acaca72869",
+        "size": 24592
+      },
+      "different_bytes": 216,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "MerryXmasEverybody.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "e0c17ae1532521b2dd3f55442b1c543f3cf4c2010395af24fa0d6f55731845a5",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "MerryXmasEverybody.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-somewhere-only-we-know": {
+      "baseline": {
+        "sha256": "06649156f0a840c1d4c0fa922ebcb9a90bedc148f107f2aec020b2d157eec957",
+        "size": 24592
+      },
+      "different_bytes": 70,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "WelcomeToParadise.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "aed3326873b808640a5832be9e831c99e3f66454c6a6e71e7b6be765f568c09e",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "WelcomeToParadise.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-there-must-be-an-angel": {
+      "baseline": {
+        "sha256": "27a2ec22531301e1126c1e94216785e9bf352a12757ae9d7883797b5bc8df8ec",
+        "size": 24592
+      },
+      "different_bytes": 293,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "ThereMustBeAnAngel.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "e31a1a3f592234da79605f97774603091b3f66e87eda3df6252ef6bcb6da82d4",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "ThereMustBeAnAngel.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-welcome-to-paradise": {
+      "baseline": {
+        "sha256": "8079f5f54ec56ae0618b1043c6391e6aaa69a9d6b9e1bc298cf4ff7312ae1dff",
+        "size": 24592
+      },
+      "different_bytes": 70,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "WelcomeToParadise.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "f0aff78068704cdaf5abe6e7628050507f46bfc52e10ec322154fdd73699fb64",
+        "size": 24592
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "WelcomeToParadise.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "music-wishmaster": {
+      "baseline": {
+        "sha256": "bf5d36af63744d1c06150136dd485cae00afd559de971da373608ac8cfe3b2df",
+        "size": 40976
+      },
+      "different_bytes": 71,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "link.s",
+          "-o",
+          "Wishmaster.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "3d0468cd47b2aa008fd08dada807ba54504c3fede8d4953b0c130de5aa0480f5",
+        "size": 40976
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "link.s",
+          "-o",
+          "Wishmaster.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "ntxdev": {
+      "baseline": {
+        "sha256": "425269feb29e4cad202bec11e4d08b9445b645967b593f86146153af6e7ec6e8",
+        "size": 262160
+      },
+      "different_bytes": 10735,
+      "link": {
+        "argv": [
+          "${CAPTURE}/tools/xlnk",
+          "ntxdev.s",
+          "-o",
+          "ntxdev.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "stable": {
+        "sha256": "8eda604180e3c9a9f7ca477532821982c0b9ae3bfaa51b6a50fdb4b0dac32d3d",
+        "size": 262160
+      },
+      "stable_link": {
+        "argv": [
+          "${STABLE_LINKER}",
+          "ntxdev.s",
+          "-o",
+          "ntxdev.nes"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    }
+  },
+  "spans": {
+    "adjacent-labels": {
+      "expected": "01 02 03 03 03",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:2: warning: `Second' defined but not used\nin.asm:3: warning: `Out' defined but not used\nin.asm:1: warning: `First' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 03 03",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:2: warning: `Second' defined but not used\nin.asm:3: warning: `Out' defined but not used\nin.asm:1: warning: `First' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 03 03",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "First:\nSecond: .db 1,2,3\nOut: .byte sizeof(First),sizeof(Second)\n"
+    },
+    "anonymous-boundary": {
+      "expected": "01 02 03 04 03",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:4: warning: `Out' defined but not used\nin.asm:2: warning: `+' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:4: warning: `Out' defined but not used\nin.asm:2: warning: `+' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "Tbl: .db 1,2,3\n+\n.db 4\nOut: .byte sizeof(Tbl)\n"
+    },
+    "global-boundary": {
+      "expected": "01 02 03 04 03",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\nin.asm:2: warning: `Next' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\nin.asm:2: warning: `Next' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "Tbl: .db 1,2,3\nNext: .db 4\nOut: .byte sizeof(Tbl)\n"
+    },
+    "instruction-boundary": {
+      "expected": "01 02 03 EA 03",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 EA 03",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 EA 03",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "Tbl: .db 1,2,3\nnop\nOut: .byte sizeof(Tbl)\n"
+    },
+    "local-boundary": {
+      "expected": "01 02 03 04 03",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\nin.asm:2: warning: `@@x' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\nin.asm:2: warning: `@@x' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "Tbl: .db 1,2,3\n@@x: .db 4\nOut: .byte sizeof(Tbl)\n"
+    },
+    "procedure-boundary": {
+      "expected": "01 02 03 04 03",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:2: warning: `Tbl' defined but not used\nin.asm:6: warning: `Out' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:2: warning: `Tbl' defined but not used\nin.asm:6: warning: `Out' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 03",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": ".public Next\nTbl: .db 1,2,3\n.proc Next\n.db 4\n.endp\nOut: .byte sizeof(Tbl)\n"
+    },
+    "self-value-width": {
+      "expected": "48 45 4C 4C 4F 06",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Msg' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "48 45 4C 4C 4F 06",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Msg' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "48 45 4C 4C 4F 06",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "Msg: .char \"HELLO\"\n.byte sizeof(Msg)\n"
+    },
+    "storage-and-data": {
+      "expected": "00 00 09 03",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:3: warning: `Out' defined but not used\nin.asm:1: warning: `Buf' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "00 00 09 03",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:3: warning: `Out' defined but not used\nin.asm:1: warning: `Buf' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "00 00 09 03",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "Buf: .dsb 2\n.db 9\nOut: .byte sizeof(Buf)\n"
+    },
+    "unlabelled-data": {
+      "expected": "01 02 03 04 04",
+      "runs": [
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.bin",
+              "--pure-binary"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 04",
+          "mode": "binary"
+        },
+        {
+          "assemble": {
+            "argv": [
+              "${CAPTURE}/tools/xasm",
+              "in.asm",
+              "-o",
+              "out.o"
+            ],
+            "returncode": 0,
+            "stderr": "in.asm:1: warning: `Tbl' defined but not used\nin.asm:3: warning: `Out' defined but not used\n",
+            "stdout": ""
+          },
+          "bytes": "01 02 03 04 04",
+          "link": {
+            "argv": [
+              "${CAPTURE}/tools/xlnk",
+              "link.s",
+              "-o",
+              "out.bin"
+            ],
+            "returncode": 0,
+            "stderr": "",
+            "stdout": ""
+          },
+          "mode": "linked"
+        }
+      ],
+      "source": "Tbl: .db 1,2,3\n.db 4\nOut: .byte sizeof(Tbl)\n"
+    }
+  },
+  "stable_linker": {
+    "sha256": "dd2900a86de6e6d6c5fdccf5b9eeb7c149a3055100de286cf1a446f1f480b97a",
+    "size": 100680
+  },
+  "tools": {
+    "xasm": {
+      "sha256": "23f892a059e9fe345c8494c0a4e1336a7647af349312a0ea897d7f1028213894",
+      "size": 496984
+    },
+    "xlnk": {
+      "sha256": "a4a1714bec6ffd1f314872ddf561f27999e35ec2af4e87c3845414c9efbc4774",
+      "size": 100056
+    }
+  }
+}
