@@ -84,3 +84,16 @@ I2's measured work bounds must cover node footprint (168 bytes on the reviewed
 64-bit host), invalidation of all binding/placement-dependent caches when the
 corresponding epoch changes, and repeated deferred-dependency walks.
 Complete local independent review before opening or updating an implementation PR.
+
+## I1 approval record
+
+Kent Hansen approved I1 on 2026-10-23 after independent local review reported
+no blockers on `f21cde93cd94b1d9200f0c061ad1d4ab9e3fc954`. That revision includes
+the owner-approved D1 operator erratum and the reviewed coverage/API follow-up.
+The owner authorized publication as the single I1 PR and its CI run.
+
+This approval covers the isolated value graph and its tests. It does not waive
+PR CI, the later implementation reviews, required project ROM/performance gates
+or final cutover. The installed v1 tools remain unchanged. The PR records its
+published head and eventual merge commit; this approval record adds no executable
+change to the reviewed revision.
