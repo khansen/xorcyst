@@ -1,12 +1,14 @@
 # I3 local validation
 
-Status: independent local review cleared `7ffb2ac` with no defects or blockers;
-I3 owner approval is pending. This follow-up changes only the source test,
-TODO and this report to cover the optional `.exitm` tombstone case. The owner explicitly approved rejecting
+Status: independent local review cleared runtime at `7ffb2ac` and the
+test/documentation follow-up at `dc45658` with no findings or blockers.
+Kent Hansen approved `dc45658181a755175658bb60ce3c1b38da1dfec2` on 2026-10-24
+for publication as the single I3 PR and CI. See `v2/README.md` for the approval
+record. The owner explicitly approved rejecting
 self-sized strings on 2026-10-24; the contract ledger and NEWS now record that
 separate compatibility decision. B1–B4, N1, S1/R1, F1, U1, A1, L1 and the preceding
 memory changes were cleared by the prior independent reviews. Parent: `2083c7a768bc3ad141dc4eb70a1ed96f21a15f11`
-(reviewed I2, PR #98). This record does not approve publication or cutover.
+(reviewed I2, PR #98). CI and the later implementation/cutover gates remain open.
 
 ## Coverage follow-up to the cleared review
 

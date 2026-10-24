@@ -191,7 +191,7 @@ adds no executable change to the reviewed revision; the PR retains that revision
 and this documentation commit. I3 remains the next implementation stage after
 I2's PR workflow is complete.
 
-## I3: isolated source frontend (local review pending)
+## I3: isolated source frontend
 
 `make xasm-v2` builds a non-installed prototype. Invoke it with
 `xasm-v2 --pure-binary input.asm -o output.bin`. It accepts the existing source
@@ -302,7 +302,22 @@ The adapter currently uses private AST bookkeeping fields while analysis is
 explicitly disabled. I5 must capture source provenance independently before
 enabling those output modes; the prototype does not claim analysis support.
 
-I3 still needs local independent review and owner approval before publication.
+I3 completed local independent review and received owner approval; see below.
 Object/link ROM gates (including dpadhero2), listing/analysis migration and their
 performance configurations belong to I4/I5. They are not waived by the plain
 prototype, and the installed-tool cutover remains I6.
+
+## I3 approval record
+
+Kent Hansen approved I3 on 2026-10-24 after independent local review reported
+no findings or blockers on `dc45658181a755175658bb60ce3c1b38da1dfec2`. Its runtime
+is identical to the independently cleared `7ffb2ac`; the final follow-up adds
+the `.exitm` tombstone regression control and updates the validation record.
+The owner authorized publication as the single I3 PR and its CI run.
+
+This approval covers the isolated direct-binary source frontend, its reviewed
+representation changes, tests and recorded compatibility decisions. It does
+not waive PR CI, later reviews, required object/link ROM gates (including
+dpadhero2), analysis/bundle performance or final cutover. Installed v1 tools
+remain unchanged. This approval record adds no executable change; the PR
+retains the reviewed revision and this documentation commit.

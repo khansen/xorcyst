@@ -24,7 +24,7 @@ Compatibility planning:
   Independent local review cleared I2's runtime at 92b5243 and coverage at
   35fbb0c with no findings. The owner approved I2 on 2026-10-24 for publication
   as one PR and CI; see v2/README.md. Later project and cutover gates stay open.
-  I2 merged as PR #98 (2083c7a). I3 now has an unpublished direct-binary
+  I2 merged as PR #98 (2083c7a). I3 now has an isolated direct-binary
   source prototype, source controls and a plain-project benchmark harness.
   Its review follow-up fixes declaration identity across .undef, nested-macro
   binding and RAM truncation warnings. Source-time sizeof/PC width assumptions
@@ -41,9 +41,10 @@ Compatibility planning:
   and NEWS record that compatibility choice independently of reassignment.
   Unprocessed user-typed initializers that are flattened/freed leave an unbound
   guard and give a located size-unknown error. No guard retains an AST statement.
-  Independent local review cleared I3 at 7ffb2ac with no defects or blockers.
-  The coverage follow-up adds .exitm tombstone controls without runtime changes;
-  owner approval is still required before its PR. The owner permits a memory
+  Independent local review cleared I3's runtime at 7ffb2ac and its .exitm
+  coverage follow-up at dc45658 with no findings or blockers. The owner approved
+  I3 on 2026-10-24 for publication as one PR and CI; see v2/README.md.
+  The owner permits a memory
   increase below 30% over matched v1; all no-slowdown and later analysis gates still apply.
   Object/link and analysis/consumer gates remain I4/I5 work.
   The owner-approved work-bound correction is in contract section 10; the
