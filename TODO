@@ -20,6 +20,12 @@ Compatibility planning:
   D0 was approved on 2026-10-22 and D1 on 2026-10-23 after independent review.
   I1's isolated value graph in v2/value.c received owner approval on 2026-10-23
   after local independent review found no blockers; see v2/README.md.
+  I2 layout/encoding is implemented with direct-IR tests and local validation.
+  Independent local review cleared I2's runtime at 92b5243 and coverage at
+  35fbb0c with no findings. The owner approved I2 on 2026-10-24 for publication
+  as one PR and CI; see v2/README.md. Later project and cutover gates stay open.
+  The owner-approved work-bound correction is in contract section 10; the
+  project no-slowdown and byte-exact ROM gates are unchanged.
   Complete local independent review before publishing a branch or opening/updating
   a PR; keep one PR at a time.
   Keep optional v1 repairs separate. No current formats change in this plan.

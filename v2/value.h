@@ -20,12 +20,12 @@ typedef struct {
 } v2_location;
 
 typedef enum { V2_KNOWN, V2_DEFERRED, V2_INVALID } v2_state;
-typedef enum { V2_INTEGER, V2_STRING } v2_value_kind;
+typedef enum { V2_INTEGER, V2_STRING, V2_EXTENT } v2_value_kind;
 typedef enum {
     V2_ERROR_NONE, V2_ERROR_MEMORY, V2_ERROR_REFERENCE, V2_ERROR_LOCATION,
     V2_ERROR_REBIND, V2_ERROR_TYPE, V2_ERROR_CYCLE, V2_ERROR_DIV_ZERO,
     V2_ERROR_MOD_ZERO, V2_ERROR_SHIFT, V2_ERROR_STRING_LIMIT,
-    V2_ERROR_LAYOUT_STRING
+    V2_ERROR_LAYOUT_STRING, V2_ERROR_EXTENT
 } v2_error;
 
 typedef struct {
@@ -43,6 +43,7 @@ typedef struct {
     v2_value_kind kind;
     union {
         int32_t integer;
+        uint64_t extent;
         struct { const unsigned char *bytes; size_t length; } string;
     } as;
 } v2_value;
@@ -65,6 +66,8 @@ typedef enum {
 } v2_operator;
 
 typedef struct v2_unit v2_unit;
+typedef struct { uint64_t evaluated_nodes, dependency_visits, invalidation_edges; } v2_work;
+v2_work v2_work_done(const v2_unit *unit);
 
 v2_location v2_no_location(void);
 v2_unit *v2_unit_create(void);

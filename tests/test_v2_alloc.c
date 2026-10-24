@@ -46,3 +46,22 @@ void test_v2_version_rollover(v2_unit *u, int which)
     else if (which == 1) u->layout = UINT64_MAX;
     else { assert(which == 2); u->request = UINT64_MAX; }
 }
+
+/* Independent-query oracle: never shipped in the value module. */
+void test_v2_clear_memos(v2_unit *u)
+{
+    size_t i;
+    for (i = 0; i < u->node_count; ++i)
+        u->nodes[i].memo[0].cached = u->nodes[i].memo[1].cached = 0;
+}
+
+size_t test_v2_node_count(v2_unit *u) { return u->node_count; }
+
+/* Pin the contract's no-span-lowering barriers, including cases where crossing
+ * a barrier happens to compute the same number but loses the required graph. */
+size_t test_v2_span_nodes(v2_unit *u)
+{
+    size_t i, count = 0;
+    for (i = 0; i < u->node_count; ++i) count += u->nodes[i].kind == SPAN;
+    return count;
+}

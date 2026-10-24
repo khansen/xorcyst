@@ -360,8 +360,19 @@ must not reuse a value after an address it depends on changes within that walk.
 Implementations may use dependency versions or invalidate conservatively;
 the minimum contract is correctness, not an obligatory cache framework.
 
-With fixed resolved extents, work is bounded by O((C+2) × (fragments + reachable
-expression edges)); independently known widths incur no candidate trials.
+With fixed resolved extents, the fragment walks are bounded by O((C+2) ×
+fragments). Expression work additionally includes edges revisited after a
+binding or depended-on anchor changes, plus walks collecting unresolved
+leaves. Shared expressions must remain shared and unrelated placement updates
+must not discard their memoized values. There is no universal linear bound
+per walk for arbitrary shared operands under this in-place update order:
+measure evaluated nodes, invalidation edges and dependency visits as well as
+walks/fragments. Pin both an ordinary shared-operand case and an adversarial
+many-anchor case with explicit work budgets. Independently known widths incur
+no candidate trials. This corrects the earlier O((C+2) × (fragments + reachable
+expression edges)) claim; section 10 records the owner's approval. It does not
+relax the required project no-slowdown gate.
+
 Dependent extents must resolve through the acyclic extent graph for each walk,
 not create a second unbounded retry loop. If no width changes but required facts
 remain Deferred or final extents disagree, fail at the dependency's location.
@@ -373,8 +384,12 @@ existing literal/early truncation behavior and warning policy. Late zero-page
 operands must fit 0..255; byte immediate/indirect operands fit -128..255, and
 relative displacements -128..127. Late word-instruction operands retain binary
 warn/truncate versus link rejection outside -32768..65535. `.byte`/`.word` data
-warn and truncate on both paths. Keep v1's pure-binary PC wrapping and linker's
-64K check: D0 did not authorize a new address-space policy.
+warn and truncate on both paths. Keep v1's binary address-space policy and the
+linker's 64K check: binary PC/label values themselves remain unwrapped past
+$FFFF, while 16-bit emission/display truncates under the existing range policy.
+For example `.org $FFFF / .byte $EA / Here: .dword Here, $` gives
+`EA 00 00 01 00 04 00 01 00`. The earlier phrase “PC wrapping” did not mean
+wrapping anchors at 16 bits; D0 did not authorize that byte change.
 
 The exact five D0 §3.4 controls and both first-walk controls below are mandatory. In particular the $FA example
 stays wide for L, the $F6 cascade gains its second shortening, and `lda T-3`
@@ -513,6 +528,13 @@ The independent local reviewer cleared the scan rules, ledger and wire changes
 with no blockers. No v1 behavior is changed by this document. The source
 inventory and v1 observations are in the local evidence.
 
+I2 also pins the already specified signed branch range: v1 pure binary wrongly
+accepts a late +128 displacement (`bne Target / .dsb 128 / Target: nop`) and
+emits `D0 80`, whereas xlnk rejects it. The shared -128..127 rule above rejects
+this incorrect binary too; I3 must preserve the located error/output gate in
+its source tests. This records a consequence of the approved branch policy,
+not a wider relaxation of operand ranges.
+
 ## 8. D1 approval record
 
 **D1 approved by Kent Hansen on 2026-10-23.** After independent local review
@@ -547,3 +569,19 @@ runtime object writer or reader and leaves the single 244-byte example
 unchanged. I4 must reject objects carrying either reserved tag. Unary logical
 NOT and the existing bitwise operators remain supported. No new syntax or
 semantics are approved by this erratum; the other D1 decisions and gates stand.
+
+## 10. D1 erratum: account for repeated expression work
+
+**Owner-approved 2026-10-23.** I2's direct-IR probe constructs a shared operand
+from 100 or 200 code anchors, using it at each instruction while those anchors
+change in the mandated in-place walk. The initial implementation measured
+10,800 / 41,600 evaluated nodes respectively. The earlier universal linear
+per-walk expression bound was too strong. Kent Hansen approved correcting it
+to account for actually revisited expression edges, retaining the strict
+project performance gates and adding an adversarial regression fixture.
+
+This changes neither evaluation order nor source semantics. I2 reports work
+counters and tests bounded examples; I3–I5 must still demonstrate no slowdown
+on every required project/configuration under `design/v2/PERFORMANCE.md`.
+A synthetic counter test is not a substitute for Metroid, Nesrev analysis,
+dpadhero2 or the other frozen project gates.
