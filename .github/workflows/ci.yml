@@ -72,10 +72,11 @@ jobs:
           python3 tests/test_output_failures.py
           python3 tests/test_linker_outputs.py
           python3 tests/test_inputs.py
-      - name: Check isolated v2 values and layout
+      - name: Check isolated v2 values, layout and frontend
         run: |
           python3 tests/test_v2_values.py
           python3 tests/test_v2_layout.py
+          python3 tests/test_v2_frontend.py
       - name: Check procedure instruction-analysis lifetimes
         run: |
           python3 - <<'PYTOOLS'

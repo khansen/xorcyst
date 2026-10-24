@@ -234,6 +234,9 @@ enum tag_astnode_type {
     PUSH_BRANCH_SCOPE_NODE,
     POP_BRANCH_SCOPE_NODE,
     TOMBSTONE_NODE,
+#ifdef XORCYST_V2_FRONTEND
+    V2_REFERENCE_NODE, /* prototype-only owned expression ID; never serialized */
+#endif
     FIELD_PADDING_NODE /* internal: count, bytes, field name, minimum; omitted arrays
                           additionally retain element and remainder lists */
 };
@@ -352,8 +355,16 @@ struct tag_astnode {
     };
     int flags;
     unsigned long analysis_origin_id;
+#ifdef XORCYST_V2_FRONTEND
+    /* I3 rejects analysis outputs. Keep the mandatory diagnostic span without
+     * a second per-node rich-provenance span. The source_loc view only keeps
+     * unused v1 renderer code compilable; I5 must capture original provenance
+     * separately before enabling those renderers. */
+    union { location loc; location source_loc; };
+#else
     location loc;   /* File location where node was parsed */
     location source_loc; /* Parsed span, retained when expansion changes loc. */
+#endif
     struct tag_astnode *prev_sibling;
     struct tag_astnode *next_sibling;
     struct tag_astnode *first_child;

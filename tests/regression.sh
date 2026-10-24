@@ -4803,5 +4803,6 @@ python3 "$ROOT_DIR/tests/test_build_configuration.py"
 python3 "$ROOT_DIR/tests/test_v2_values.py"
 
 python3 "$ROOT_DIR/tests/test_v2_layout.py"
+python3 "$ROOT_DIR/tests/test_v2_frontend.py"
 
 echo "All regression tests passed"

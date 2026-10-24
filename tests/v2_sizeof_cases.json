@@ -1,0 +1,264 @@
+{
+  "origin": "D1 design/v2/sizeof-capture-observations.json; approved v2 expectations",
+  "cases": [
+    {
+      "id": "ram-adjacent",
+      "source": ".dataseg\np1:\np2:\n.dsb 2\np3 .byte\n.codeseg\nlda #sizeof(p1)\n",
+      "bytes": "A9 02"
+    },
+    {
+      "id": "ram-interrupted",
+      "source": ".dataseg\nbuf:\n.dsb 2\n.codeseg\nlda #sizeof(buf)\n.dataseg\n.dsb 3\nnxt .byte\n",
+      "bytes": "A9 02"
+    },
+    {
+      "id": "forward-label",
+      "source": ".byte sizeof(Tbl)\nTbl: .db 1,2,3\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "forward-count",
+      "source": "Buf: .dsb N\n.byte sizeof(Buf)\nN .equ 3\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "imported-count",
+      "source": ".extrn N : byte\nBuf: .dsb N\n.byte sizeof(Buf)\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "known-count",
+      "source": "N .equ 3\nBuf: .dsb N\n.byte sizeof(Buf)\n",
+      "bytes": "00 00 00 04"
+    },
+    {
+      "id": "known-string",
+      "source": "Msg: .char \"HELLO\"\n.byte sizeof(Msg)\n",
+      "bytes": "48 45 4C 4C 4F 06"
+    },
+    {
+      "id": "known-equ-string",
+      "source": "S .equ \"HELLO\"\nMsg: .char S\n.byte sizeof(Msg)\n",
+      "bytes": "48 45 4C 4C 4F 06"
+    },
+    {
+      "id": "known-define-string",
+      "source": ".define S \"HELLO\"\nMsg: .char S\n.byte sizeof(Msg)\n",
+      "bytes": "48 45 4C 4C 4F 06"
+    },
+    {
+      "id": "wide-string",
+      "source": "Msg: .word \"AB\"\n.byte sizeof(Msg)\n",
+      "bytes": "41 00 42 00 05"
+    },
+    {
+      "id": "forward-string",
+      "source": "Msg: .char S\n.byte sizeof(Msg)\nS .equ \"HELLO\"\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "forward-string-after",
+      "source": "Msg: .char S\nAfter: .byte sizeof(Msg),After\nS .equ \"HELLO\"\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "imported-string",
+      "source": ".extrn S : byte\nMsg: .char S\n.byte sizeof(Msg)\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "forward-number-kind",
+      "source": "Msg: .byte Value\n.byte sizeof(Msg)\nValue .equ 7\n",
+      "bytes": "07 02"
+    },
+    {
+      "id": "imported-number-kind",
+      "source": ".extrn Value : byte\nMsg: .byte Value\n.byte sizeof(Msg)\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "string-defined-before-sizeof",
+      "source": "Msg: .char S\nS .equ \"HELLO\"\n.byte sizeof(Msg)\n",
+      "bytes": "48 45 4C 4C 4F 06"
+    },
+    {
+      "id": "forward-pointer-table",
+      "source": "Tbl: .dw H1,H2\n.byte sizeof(Tbl)\nH1: rts\nH2: rts\n",
+      "bytes": "05 00 06 00 05 60 60"
+    },
+    {
+      "id": "forward-pointer-lowbyte",
+      "source": "Tbl: .db <H,>H\n.byte sizeof(Tbl)\nH: rts\n",
+      "bytes": "03 00 03 60"
+    },
+    {
+      "id": "imported-pointer-table",
+      "source": ".extrn H : proc\nTbl: .dw H\n.byte sizeof(Tbl)\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "implicit-import-pointer-table",
+      "source": "Tbl: .dw H\n.byte sizeof(Tbl)\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "local-alias-of-import-before",
+      "source": ".extrn Ext : byte\nK .equ Ext\nTbl: .db K\n.byte sizeof(Tbl)\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "local-alias-of-import-after",
+      "source": ".extrn Ext : byte\nTbl: .db K\n.byte sizeof(Tbl)\nK .equ Ext\n",
+      "error": "is unknown"
+    },
+    {
+      "id": "middle-equ",
+      "source": "Tbl: .db 1,2\nK .equ 5\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-assign",
+      "source": "Tbl: .db 1,2\nK = 5\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-define",
+      "source": "Tbl: .db 1,2\n.define K 5\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-undef",
+      "source": "Tbl: .db 1,2\n.define K 5\n.undef K\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-extrn",
+      "source": "Tbl: .db 1,2\n.extrn K : byte\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-message",
+      "source": "Tbl: .db 1,2\n.message \"m\"\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-warning",
+      "source": "Tbl: .db 1,2\n.warning \"w\"\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-macro-definition",
+      "source": "Tbl: .db 1,2\n.macro M\n.db 9\n.endm\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-if",
+      "source": "Tbl: .db 1,2\n.if 1\n.db 3\n.endif\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-ifdef",
+      "source": "Tbl: .db 1,2\n.define K 1\n.ifdef K\n.db 3\n.endif\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-if-false",
+      "source": "Tbl: .db 1,2\n.if 0\n.db 9\n.endif\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 04"
+    },
+    {
+      "id": "middle-ifndef",
+      "source": "Tbl: .db 1,2\n.ifndef Missing\n.db 4\n.endif\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 04 03 05"
+    },
+    {
+      "id": "middle-else",
+      "source": "Tbl: .db 1,2\n.if 0\n.db 9\n.else\n.db 4\n.endif\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 04 03 05"
+    },
+    {
+      "id": "middle-elif",
+      "source": "Tbl: .db 1,2\n.if 0\n.db 9\n.elif 1\n.db 4\n.else\n.db 8\n.endif\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 04 03 05"
+    },
+    {
+      "id": "middle-rept",
+      "source": "Tbl: .db 1,2\n.rept 2\n.db 3\n.endm\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 03 05"
+    },
+    {
+      "id": "middle-while",
+      "source": "Tbl: .db 1,2\nI = 0\n.while I < 2\n.db 3\nI = I+1\n.endm\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 03 05"
+    },
+    {
+      "id": "middle-do-until",
+      "source": "Tbl: .db 1,2\nI = 0\n.do\n.db 4\nI = I+1\n.until I == 2\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 04 04 03 06"
+    },
+    {
+      "id": "middle-macro-call",
+      "source": "Tbl: .db 1,2\n.macro M\n.db 9\n.endm\nM\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 09 03 05"
+    },
+    {
+      "id": "middle-public",
+      "source": "Tbl: .db 1,2\n.public Tbl\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 02"
+    },
+    {
+      "id": "middle-struc",
+      "source": "Tbl: .db 1,2\n.struc S\nf .byte\n.ends\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 02"
+    },
+    {
+      "id": "middle-union",
+      "source": "Tbl: .db 1,2\n.union U\nf .byte\n.ends\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 02"
+    },
+    {
+      "id": "middle-record",
+      "source": "Tbl: .db 1,2\n.record R hi:3,lo:5\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 02"
+    },
+    {
+      "id": "middle-enum",
+      "source": "Tbl: .db 1,2\n.enum E\nK\n.ende\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 02"
+    },
+    {
+      "id": "middle-label",
+      "source": "Tbl: .db 1,2\n.label Other\n.db 3\n.byte sizeof(Tbl)\n",
+      "bytes": "01 02 03 02"
+    },
+    {
+      "id": "middle-include-data",
+      "source": "Tbl: .db 1,2\n.include \"part.asm\"\n.db 3\n.byte sizeof(Tbl)\n",
+      "files": {
+        "part.asm": ".db 9\n"
+      },
+      "bytes": "01 02 09 03 02"
+    },
+    {
+      "id": "middle-incbin",
+      "source": "Tbl: .db 1,2\n.incbin \"part.bin\"\n.db 3\n.byte sizeof(Tbl)\n",
+      "hex_files": {
+        "part.bin": "07 08"
+      },
+      "bytes": "01 02 07 08 03 02"
+    },
+    {
+      "id": "middle-charmap",
+      "source": "Tbl: .db 1,2\n.charmap \"m.txt\"\n.db 3\n.byte sizeof(Tbl)\n",
+      "files": {
+        "m.txt": "A=1\n"
+      },
+      "bytes": "01 02 03 02"
+    },
+    {
+      "id": "middle-align-data",
+      "source": ".dataseg\nbuf: .dsb 2\n.align buf 2\n.dsb 1\n.codeseg\nlda #sizeof(buf)\n",
+      "bytes": "A9 02"
+    }
+  ]
+}

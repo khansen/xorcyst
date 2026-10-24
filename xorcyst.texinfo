@@ -79,6 +79,14 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
+@heading Development prototype (not an installed release)
+
+An explicit @code{make xasm-v2} builds the isolated, non-installed v2 direct-binary prototype. It supports plain @code{--pure-binary} output; objects, listings and analysis remain later implementation stages. The installed @code{xasm} and @code{xlnk} continue to use v1. The prototype applies the approved v2 contracts: forward string data and use-site character maps, acyclic late storage spans, fixed-point instruction narrowing, and kind checks before integer identities. It rejects explicit-address @code{.label} declarations, @code{$} in type bodies, and expansion-time @code{$} when preceding layout is unresolved. Its assembler-time @code{sizeof(label)} checks local forward kinds and rejects imported or still-deferred string extents. The source checkout's @file{v2/README.md} describes validation and the remaining review, project and consumer gates.
+
+The prototype deliberately uses the known final source-time @code{$}: after @code{lda $10} it is 2 instead of v1's provisional 3. Conditional expansion and @code{.equ}, @code{.define} or @code{=} captures can therefore change. Unresolved instruction or data widths reject these captures with a located error. Every string operand in @code{.char} uses the captured map: with H mapped to 1 and I to 0, @code{.char "HI","HI"} emits @code{01 00 01 00}, whereas v1 leaves the second string unmapped. Numeric operands still bypass the map.
+
+The prototype also rejects a @code{sizeof(label)} use when a forward data operand's final kind or string length differs from what that scan counted. Reassignment or @code{.undef} can therefore make a v1-accepted program fail with a located size-unknown error. Numeric changes, same-length strings and values already captured at the data line remain valid; the captured size is never silently recomputed.
+
 @heading Version 1.9.12
 
 @itemize
@@ -776,6 +784,8 @@ is @code{$7FFFFFFF}, not @code{-1}.
 
 @code{sizeof(@var{symbol})} gets the size of @var{symbol} in bytes.
 
+In the non-installed v2 prototype, label sizes are captured by the source-time scan. An operand unresolved at its data line is checked again before output: its final kind and string length must match the contribution counted by @code{sizeof}. Otherwise the original @code{sizeof} use reports size unknown. This does not change the installed v1 tool.
+
 When both operands to an operator are strings, the semantics are as follows: @var{str1} + @var{str2} concatenates; the relational operators perform string comparison; and all other operators are invalid. When one operand is a string and the other is an integer, the integer is implicitly converted to a string and concatenated with the string operand to produce a string as result.
 
 @subsection Global labels
@@ -792,7 +802,9 @@ There are two ways to define a global label.
 .label @var{identifier} @emph{[= @var{address}]} @emph{[ : @var{type}]}
 @end example
 
-The absolute address of the label can be specified. If no address is given, the address is the current Program Counter.
+The absolute address of the label can be specified in v1. If no address is given, the address is the current Program Counter.
+
+The non-installed v2 prototype rejects @code{.label name = address}, including an explicit @code{= $}, with a located error. Use an equate for a fixed address. Ordinary @code{.label name} remains supported. This corrects v1's inconsistent handling of explicit label addresses and does not change the installed v1 tool.
 
 The type of data that the label addresses can also be specified. The valid type specifiers are @code{byte}, @code{word}, @code{dword}, or an identifier, which must be the name of a user-defined type.
 

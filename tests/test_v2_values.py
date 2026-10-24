@@ -149,6 +149,9 @@ class V2Values(unittest.TestCase):
     def test_captured_definitions_and_forward_bindings_have_distinct_ids(self):
         self.run_case('bindings')
 
+    def test_anchor_inspection_checks_ids_without_evaluating_prefixes(self):
+        self.run_case('anchor-inspection')
+
     def test_string_kinds_concatenation_comparisons_and_lifetimes(self):
         self.run_case('strings')
 

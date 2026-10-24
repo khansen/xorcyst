@@ -1,8 +1,8 @@
 # I1: shared values and owned dependencies
 
 This module implements the value/ownership stage of the approved
-[D1 contracts](../XORCYST_V2_CONTRACTS.md), sections 1 and 2. It is built by
-the test harness only. Installed `xasm` and `xlnk` still use v1; their source
+[D1 contracts](../XORCYST_V2_CONTRACTS.md), sections 1 and 2. Initially built only by
+the test harness, it is also used by the isolated I3 target below. Installed `xasm` and `xlnk` still use v1; their source
 lists do not include this module. I1 does not introduce a parser, placement
 algorithm, object reader/writer, analysis renderer or command-line option.
 
@@ -190,3 +190,119 @@ gates or final cutover. Installed v1 tools remain unchanged. This approval recor
 adds no executable change to the reviewed revision; the PR retains that revision
 and this documentation commit. I3 remains the next implementation stage after
 I2's PR workflow is complete.
+
+## I3: isolated source frontend (local review pending)
+
+`make xasm-v2` builds a non-installed prototype. Invoke it with
+`xasm-v2 --pure-binary input.asm -o output.bin`. It accepts the existing source
+syntax, includes, macros, conditionals, command-line definitions and debug
+option. Object output, listings, analysis, debugger exports, comparison and
+manifests are rejected explicitly in this stage. Installed `xasm`/`xlnk` remain
+v1. The prototype has no object reader and cannot consume old objects.
+
+`frontend.c` compiles the existing parser/expansion implementation with
+`XORCYST_V2_FRONTEND`; the normal target does not define that macro. The adapter
+reuses structural lowering and source binding, then builds the owned value
+and layout units. Constant captures use shared definition IDs, including
+forward aliases, rather than recursively copying alias trees. Assignment and
+`.undef` generations retain the approved v1 rules. An alias waiting for a type
+or member declaration retains an owned structural expression until it can be
+lowered; later reassignment cannot change that captured expression. Character
+maps are copied at each `.char` use. Literal data is coalesced between anchors, while dynamic
+operands keep their own fixups and `$` anchors.
+
+Label/procedure/variable declarations retain their own source identity when
+`.undef` removes their symbol. Uses still resolve by v1's final-name rules;
+retired declarations keep their emitted data without placing the replacement's
+anchor. AST clones preserve only the explicit-address rejection marker, not
+transient macro-local binding flags.
+
+Source-time size decisions recheck those bindings too. `sizeof(label)` keeps a
+kind and string-length guard for nonliteral data operands, including currently
+defined labels and forward names that are known at the sizeof use. Each guard
+records the contribution counted by that scan. An owned pending list, addressed
+by a handle on the native statement, binds guards by walking the live tree at
+the end of pass 1. This captures both the data-line binding and the completed
+renaming of anonymous `+`/`-` references, even when the statement had already
+been reduced at the sizeof use. No guard retains a statement pointer or assumes
+it survives pass 1. This includes operands following sizeof in the same statement. A later
+reassignment changing its kind or string length rejects at the original use;
+numeric changes and same-length strings remain valid.
+A source-time `$` use records which preceding data operands were assumed to
+remain numeric. After final-name binding, a replacement string invalidates
+that assumption at the original size/PC use. PC guards are segment-local;
+an absolute origin starts a new prefix without discarding earlier uses' checks.
+Their borrowed operands are checked and released before second-pass rewriting.
+Data operands use the same local-label namespace as the ordinary first-pass
+walk, resolved before testing widths, so backward `@@` labels do not falsely
+defer a following source-time PC. End-of-pass guard capture also sees the renamed
+`@@` operands following sizeof on its own statement. Forward local names still
+follow the conservative unknown-width rule for source-time PC uses.
+
+A scan reaching an unprocessed user-typed initializer cannot bind that guard:
+pass 1 replaces and frees the initializer while flattening it. The unbound
+guard gives a located size-unknown error at the sizeof use, preserving the
+earlier conservative rejection. An aggregate processed before the scan remains
+supported. Pending handles are not inherited by AST clones. The capture walk
+runs only when a native statement has pending guards.
+
+During a label-size scan, another operand containing `sizeof` of that same
+data run contributes one element without recursively evaluating the size again.
+Leading labels separated only by internal markers share that run; their scans
+have the same first data/storage node. Unrelated label sizes still reduce
+normally, including when used to construct strings. This comparison is local
+to the scan and retains no new AST pointers after it returns.
+The ordinary data pass still evaluates each use at its own source position.
+The entire operand retains a numeric-kind guard, including the scan's own
+operand: concatenating a string with `sizeof` must not silently enlarge it.
+Storage counts and type dimensions still use the existing cycle checks.
+The owner explicitly approved rejection of self-sized strings on 2026-10-24;
+the contract ledger and NEWS record the v1 compatibility change separately
+from the reassignment rule.
+
+The plain prototype compacts fully literal data after source-time size checks,
+releases lowered operands immediately, stores immutable instruction integers
+directly in their fixups, and inspects anchors without allocating temporary
+value nodes. Its AST stores the diagnostic span once. Original analysis
+provenance must be captured separately before I5 enables renderers; this stage
+does not claim analysis support or waive that stage's memory/performance gates.
+
+Every invocation destroys the parser AST and symbol table before calling v2
+layout and emission. Final bytes come only from the validated I2 snapshot.
+The prototype retains atomic output staging and protects all opened source,
+binary-include and charmap inputs from output aliases. It does not read source
+locations again to render analysis, so it needs no diagnostic-reader path walk.
+
+The source controls cover the approved changes: fixed-point instruction
+narrowing; forward strings and use-site character maps; integer-kind checks
+before identities; acyclic late storage spans; rejection of provisional `$`
+in expansion, type-body `$`, and explicit-address `.label`; and assembler-time
+`sizeof(label)` with local forward-kind validation. The 50 reviewed D1 sizeof
+cases are included as source fixtures, alongside macro-exit, macro-label and
+redundant-segment boundaries. No new source operators are added.
+
+Project profiling led to representation optimizations in I2: fixed
+instruction and integer-data extents share synthetic width literals and avoid
+unnecessary mutable nodes; fixed
+stretches of a prefix accumulate as checked offsets; and prefix/span graphs
+are built only when checked extents need them. Span lowering visits only the
+graph reachable from extent roots. Ordinary operands still use placed addresses
+in walk order. Direct-IR controls, cache differentials, allocation injection
+and sanitizer tests apply to these changes as well as the new source suite.
+
+Run `python3 tests/test_v2_frontend.py` or `make check`. The new suite honors
+`TEST_V2_CFLAGS` and runs in the Linux sanitizer CI job after publication.
+`tests/perf_v2_frontend.py` implements the plain Metroid/Zelda paired timing
+protocol using separately built release executables and the frozen D1 inputs.
+It checks every output and diagnostic stream, records raw timing/RSS samples,
+and reports the prescribed bootstrap intervals. Timing runs are outside
+`make check`; use an idle machine and retain each session independently.
+
+The adapter currently uses private AST bookkeeping fields while analysis is
+explicitly disabled. I5 must capture source provenance independently before
+enabling those output modes; the prototype does not claim analysis support.
+
+I3 still needs local independent review and owner approval before publication.
+Object/link ROM gates (including dpadhero2), listing/analysis migration and their
+performance configurations belong to I4/I5. They are not waived by the plain
+prototype, and the installed-tool cutover remains I6.

@@ -325,6 +325,15 @@ static void limits(int which)
     } else if (which == 11) {
         v2_id a = anchor();
         v2_layout_instruction(l, V2_NONE, 0xad, address(a), 1, 0, loc); mark(a); nop();
+    } else if (which == 18) {
+        nop();
+        loc.line = loc.end_line = 9;
+        v2_layout_instruction(l, V2_NONE, 0xa9, num(256), 0, 0, loc);
+    } else if (which == 19) {
+        v2_location bad = loc;
+        nop();
+        bad.file = 99;
+        v2_layout_instruction(l, V2_NONE, 0xea, V2_NONE, 0, 0, bad);
     } else if (which == 17) {
         v2_location bad = loc; bad.file = 99;
         v2_layout_origin(l, 0x10000, bad);
@@ -482,6 +491,7 @@ static int allocation_sample(void)
         v2_layout_raw(layout, "xx", 2, at);
         v2_layout_mark(layout, tail, at);
     }
+    v2_reserve_expressions(values, 1000);
     ok = v2_layout_run(layout);
     if (!ok) {
         size_t n;
@@ -508,6 +518,46 @@ static void allocations(void)
     }
     printf("%zu %zu\n", value_calls, layout_calls);
 }
+static v2_id rooted_span_value(void *context, v2_id left, v2_id right, v2_location at)
+{
+    unsigned *calls = context;
+    (void)left; (void)right;
+    ++*calls;
+    return v2_integer(u, 12, at);
+}
+static void rooted_spans(void)
+{
+    v2_id a = anchor(), b = anchor(), c = anchor(), d = anchor(), pc = anchor();
+    v2_id selected = op(V2_SUBTRACT, address(a), address(b));
+    v2_id ordinary = op(V2_SUBTRACT, address(c), address(d));
+    v2_id definition = v2_definition(u, "extent alias", loc);
+    v2_id root;
+    unsigned calls = 0;
+    assert(v2_bind(u, definition, selected));
+    assert(v2_extent_anchor(u, pc, v2_reference(u, definition, loc)));
+    root = v2_extent_count(u, address(pc), 1, 100, loc);
+    assert(v2_lower_extent_spans(u, &root, 1, rooted_span_value, &calls));
+    assert(calls == 1 && test_v2_span_nodes(u) == 1);
+    assert(v2_place(u, a, 1, 10) && v2_place(u, b, 1, 2));
+    assert(v2_place(u, c, 1, 20) && v2_place(u, d, 1, 4));
+    assert(v2_reserve_expressions(u, 1000));
+    assert(v2_evaluate(u, selected).value.as.integer == 8);
+    assert(v2_evaluate_extent(u, root).value.as.extent == 12);
+    assert(v2_evaluate_extent(u, ordinary).value.as.integer == 16);
+    assert(v2_lower_extent_spans(u, NULL, 0, rooted_span_value, &calls));
+    assert(calls == 1);
+    root = V2_NONE;
+    assert(!v2_lower_extent_spans(u, &root, 1, rooted_span_value, &calls));
+    assert(v2_unit_error(u).code == V2_ERROR_REFERENCE);
+    v2_layout_destroy(l); v2_unit_destroy(u);
+    assert(!test_v2_live_allocations());
+    u = v2_unit_create();
+    assert(u && !v2_reserve_expressions(u, SIZE_MAX));
+    assert(v2_unit_error(u).code == V2_ERROR_MEMORY);
+    v2_unit_destroy(u);
+    assert(!test_v2_live_allocations());
+    puts("rooted spans: OK");
+}
 extern void test_layout_cache(void);
 int main(int argc, char **argv)
 {
@@ -518,6 +568,7 @@ int main(int argc, char **argv)
     }
     if (!strcmp(argv[1], "allocations")) { assert(argc == 5); allocation_copy = argv[4]; allocations(); return 0; }
     begin(atoi(argv[2])); which = argc > 3 ? atoi(argv[3]) : 0;
+    if (!strcmp(argv[1], "rooted-spans")) { rooted_spans(); return 0; }
     if (!strcmp(argv[1], "controls")) controls(which);
     else if (!strcmp(argv[1], "spans")) spans(which);
     else if (!strcmp(argv[1], "extents")) extents();
@@ -543,6 +594,17 @@ int main(int argc, char **argv)
         v2_id operand = width == 1 ? V2_NONE : num(width == 3 ? 0x1234 :
             (((unsigned)which & 0x1fu) == 0x10u ? 129 : 127));
         v2_layout_instruction(l, V2_NONE, (unsigned char)which, operand, 1, 0, loc);
+    }
+    else if (!strcmp(argv[1], "literal") || !strcmp(argv[1], "expression-literal")) {
+        int32_t value;
+        assert(argc == 7);
+        value = (int32_t)strtoll(argv[4], NULL, 0);
+        if (!strcmp(argv[1], "literal"))
+            v2_layout_literal_instruction(l, V2_NONE, (unsigned char)which, value,
+                                          atoi(argv[5]), atoi(argv[6]), loc);
+        else
+            v2_layout_instruction(l, V2_NONE, (unsigned char)which, num(value),
+                                  atoi(argv[5]), atoi(argv[6]), loc);
     }
     else if (!strcmp(argv[1], "range")) {
         assert(argc == 6);

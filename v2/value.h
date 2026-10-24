@@ -72,6 +72,9 @@ v2_work v2_work_done(const v2_unit *unit);
 v2_location v2_no_location(void);
 v2_unit *v2_unit_create(void);
 void v2_unit_destroy(v2_unit *unit);
+/* Optional capacity hint for a known batch of incoming expressions. Creates
+ * no IDs and changes no values; allocation failure poisons the builder. */
+int v2_reserve_expressions(v2_unit *unit, size_t additional);
 v2_diagnostic v2_unit_error(const v2_unit *unit);
 const char *v2_error_message(v2_error error);
 
@@ -90,6 +93,10 @@ const char *v2_definition_name(const v2_unit *unit, v2_id definition);
 int v2_bind(v2_unit *unit, v2_id definition, v2_id expression);
 v2_id v2_anchor(v2_unit *unit, v2_location location);
 int v2_place(v2_unit *unit, v2_id anchor, int known, int32_t value);
+/* Inspect/validate a placement without adding a throwaway expression node.
+ * Output pointers are optional; this does not evaluate an extent prefix. */
+int v2_anchor_value(v2_unit *unit, v2_id anchor, int *known, int32_t *value,
+                    v2_location location);
 
 v2_id v2_integer(v2_unit *unit, int32_t value, v2_location location);
 v2_id v2_string(v2_unit *unit, const void *bytes, size_t length, v2_location location);
