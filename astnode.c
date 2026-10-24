@@ -191,6 +191,9 @@ const char *instr_mnemonic_to_string(instr_mnemonic im)
 const char *astnode_type_to_string(astnode_type at) {
     switch (at) {
         case NULL_NODE:     return "NULL_NODE";
+#ifdef XORCYST_V2_FRONTEND
+        case V2_REFERENCE_NODE: return "V2_REFERENCE_NODE";
+#endif
         case INTEGER_NODE:  return "INTEGER_NODE";
         case STRING_NODE:   return "STRING_NODE";
         case IDENTIFIER_NODE:   return "IDENTIFIER_NODE";
@@ -414,8 +417,10 @@ astnode *astnode_create(astnode_type type, location loc)
     if (n != NULL) {
         n->type = type;
         n->loc = loc;
+#ifndef XORCYST_V2_FRONTEND
         n->source_loc = loc;
         if (loc.source_file != NULL) n->source_loc.file = loc.source_file;
+#endif
     }
     return n;
 }
@@ -848,8 +853,15 @@ astnode *astnode_clone(const astnode *n, location loc)
         default:
         c->param = n->param;
     }
+#ifdef XORCYST_V2_FRONTEND
+    /* Only the explicit-address declaration marker survives cloning. v1
+     * deliberately drops transient binding flags such as don't-globalize. */
+    c->flags = n->flags & 0x10000;
+#endif
     c->analysis_origin_id = n->analysis_origin_id;
+#ifndef XORCYST_V2_FRONTEND
     c->source_loc = n->source_loc;
+#endif
     /* Clone children (TODO: OPTIMIZE THIS) */
     for (n_c=n->first_child; n_c != NULL; n_c=n_c->next_sibling) {
         astnode_add_child(c, astnode_clone(n_c, loc));
@@ -872,6 +884,9 @@ int astnode_equal(const astnode *n1, const astnode *n2)
     switch (astnode_get_type(n1)) {
         case ARITHMETIC_NODE:   if (n1->oper != n2->oper) return 0; break;
         case INTEGER_NODE:  if (n1->integer != n2->integer) return 0;   break;
+#ifdef XORCYST_V2_FRONTEND
+        case V2_REFERENCE_NODE: if (n1->param != n2->param) return 0; break;
+#endif
         case STRING_NODE:   if (strcmp(n1->string, n2->string)) return 0;   break;
         case IDENTIFIER_NODE:   if (strcmp(n1->ident, n2->ident)) return 0; break;
         case LOCAL_ID_NODE: if (strcmp(n1->ident, n2->ident)) return 0; break;
@@ -1484,6 +1499,9 @@ astnode *astnode_create_label(const char *s, astnode *addr, astnode *type, locat
     if (n->label != NULL) {
         strcpy(n->label, s);
     }
+#ifdef XORCYST_V2_FRONTEND
+    if (addr != NULL) n->flags |= 0x10000; /* explicit-address .label */
+#endif
     /* Two children: Datatype and address */
     if (addr == NULL) {
         addr = astnode_create_pc(loc);

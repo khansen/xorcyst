@@ -1,3 +1,33 @@
+Development prototype (not an installed v2 release):
+
+- Add the explicit, non-installed xasm-v2 target for plain pure-binary assembly.
+  It uses the existing source frontend and the owned v2 value/layout backend.
+  Installed xasm/xlnk, v1 objects and analysis formats remain unchanged.
+- Apply the approved v2 source rules: forward string data and use-site character
+  maps, acyclic late storage spans, and fixed-point narrowing on the binary path.
+  Strings are resolved before integer identities: S+0 concatenates when S is a
+  string; string *1, /1 and 1* operands are rejected.
+- Reject explicit-address .label name = address with a located error; use an
+  equate for a fixed address. Ordinary .label name remains supported. Also reject
+  $ in type bodies and expansion-time $ when preceding layout is unresolved.
+- Keep sizeof(label) at source evaluation time, with the approved local-forward
+  kind checks and rejection of imported or still-deferred string extents.
+  If a forward data operand's kind or string length changes after sizeof counts
+  it, reject at the sizeof use instead of publishing a stale size. This can
+  reject v1-accepted programs using reassignment or .undef; numeric changes,
+  same-length strings and values captured at the data line remain valid.
+  These changes belong only to the prototype until review and staged cutover.
+- Reject strings built from the containing label's own sizeof with a located
+  size-unknown error, even without reassignment or .undef. For example,
+  Tbl: .db sizeof(Tbl)+"A" no longer emits "1A" with a stale one-byte size.
+  Numeric sizeof operands and strings using unrelated label sizes remain valid.
+  This deliberate v2 change preserves existing outputs when assembly fails.
+- Source-time $ now uses a known final PC: after lda $10 it is 2, not v1's
+  provisional 3. This can change conditional expansion and .equ/.define/=
+  captures. Unresolved instruction or data widths instead give a located error.
+- Map every string operand in .char with the captured map. For H=1, I=0,
+  .char "HI","HI" emits 01 00 01 00; v1 left the second string unmapped.
+
 Version 1.9.12:
 
 - Define integer expression arithmetic consistently as signed 32-bit values

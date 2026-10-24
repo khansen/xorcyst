@@ -1,5 +1,7 @@
 ## Makefile.am -- Process this file with automake to produce Makefile.in
 
+AUTOMAKE_OPTIONS = subdir-objects
+
 bin_PROGRAMS = xasm xlnk
 xasm_LDADD = $(LDADD) $(DARWIN_LIBS)
 
@@ -18,6 +20,26 @@ xasm_SOURCES = \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
   xasm.c xasm.h version.h \
   my_getopt.c my_getopt.h getopt.h
+
+# Isolated I3 prototype: build explicitly or during check; never install it.
+check_PROGRAMS = xasm-v2
+xasm_v2_CPPFLAGS = $(AM_CPPFLAGS) -DXORCYST_V2_FRONTEND
+xasm_v2_LDADD = $(LDADD) $(DARWIN_LIBS)
+xasm_v2_SOURCES = \
+  astnode.c astnode.h \
+  v2/frontend.c v2/frontend.h astproc.h expr_int.h \
+  charmap.c charmap.h \
+  codegen.c codegen.h \
+  loc.h objdef.h \
+  opcode.c opcode.h \
+  parser.c scanner.c \
+  symtab.c symtab.h \
+  listing.c listing.h fceux_nl.c fceux_nl.h \
+  output_file.c output_file.h \
+  dependencies.c dependencies.h sha256.c sha256.h utf8.h \
+  xasm.c xasm.h version.h \
+  my_getopt.c my_getopt.h getopt.h \
+  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h
 
 xlnk_SOURCES = \
   xlnk.c version.h expr_int.h \
@@ -79,7 +101,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_symtab_alloc.c \
   tests/test_unit_alloc.c \
   tests/test_v2_alloc.c tests/test_v2_values.c tests/test_v2_values.py \
-  tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c \
+  tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c tests/test_v2_frontend.py tests/perf_v2_frontend.py tests/v2_sizeof_cases.json \
   tests/test_xlnk_io_faults.c \
   tests/tool_test_support.py \
   tests/verify_fceux_projects.py \

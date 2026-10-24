@@ -140,6 +140,16 @@ static int valid_location(v2_unit *u, v2_location loc)
     return 0;
 }
 
+int v2_reserve_expressions(v2_unit *u, size_t additional)
+{
+    if (additional > SIZE_MAX - u->node_count) {
+        fail(u, V2_ERROR_MEMORY, v2_no_location()); return 0;
+    }
+    u->nodes = grow(u, u->nodes, &u->node_capacity, u->node_count + additional,
+                    sizeof(*u->nodes), v2_no_location());
+    return u->error.code == V2_ERROR_NONE;
+}
+
 static char *copy_name(v2_unit *u, const char *name, v2_location loc)
 {
     size_t length;
@@ -430,6 +440,15 @@ v2_id v2_reference(v2_unit *u, v2_id id, v2_location loc)
     return append(u, n);
 }
 
+int v2_anchor_value(v2_unit *u, v2_id id, int *known, int32_t *value, v2_location loc)
+{
+    if (!valid_location(u, loc)) return 0;
+    if (id >= u->anchor_count) { fail(u, V2_ERROR_REFERENCE, loc); return 0; }
+    if (known) *known = u->anchors[id].known;
+    if (value) *value = u->anchors[id].value;
+    return 1;
+}
+
 v2_id v2_address(v2_unit *u, v2_id id, v2_location loc)
 {
     node n = {0};
@@ -532,14 +551,15 @@ static v2_id address_leaf(const v2_unit *u, v2_id id)
     }
     return V2_NONE;
 }
-int v2_lower_spans(v2_unit *u, v2_span_lowerer lower, void *context)
+static int lower_spans(v2_unit *u, const unsigned char *reachable,
+                       v2_span_lowerer lower, void *context)
 {
     size_t i, count = u->node_count;
     int changed = 0;
     for (i = 0; i < count && u->error.code == V2_ERROR_NONE; ++i) {
         node n = u->nodes[i];
         v2_id left, right, replacement;
-        if (n.kind != BINARY || n.op != V2_SUBTRACT) continue;
+        if ((reachable && !reachable[i]) || n.kind != BINARY || n.op != V2_SUBTRACT) continue;
         left = address_leaf(u, n.left); right = address_leaf(u, n.right);
         if (left == V2_NONE || right == V2_NONE) continue;
         replacement = lower(context, left, right, n.location);
@@ -570,6 +590,64 @@ int v2_lower_spans(v2_unit *u, v2_span_lowerer lower, void *context)
         for (i = 0; i < u->node_count; ++i) if (!node_parents(u, (v2_id)i)) break;
     }
     return u->error.code == V2_ERROR_NONE;
+}
+
+int v2_lower_spans(v2_unit *u, v2_span_lowerer lower, void *context)
+{
+    return lower_spans(u, NULL, lower, context);
+}
+
+int v2_lower_extent_spans(v2_unit *u, const v2_id *roots, size_t count,
+                          v2_span_lowerer lower, void *context)
+{
+    unsigned char *reachable;
+    v2_id *todo;
+    size_t i, queued = 0;
+    int result;
+    if (u->error.code) return 0;
+    if (!count) return 1;
+    if (!roots || u->node_count > SIZE_MAX / sizeof(*todo)) {
+        fail(u, V2_ERROR_REFERENCE, v2_no_location()); return 0;
+    }
+    reachable = calloc(u->node_count, 1);
+    todo = malloc(u->node_count * sizeof(*todo));
+    if (!reachable || !todo) {
+        free(reachable); free(todo);
+        fail(u, V2_ERROR_MEMORY, v2_no_location()); return 0;
+    }
+    for (i = 0; i < count; ++i) {
+        v2_id root = roots[i];
+        if (root >= u->node_count) {
+            fail(u, V2_ERROR_REFERENCE, v2_no_location()); break;
+        }
+        if (!reachable[root]) { reachable[root] = 1; todo[queued++] = root; }
+    }
+    while (queued && !u->error.code) {
+        const node *n = &u->nodes[todo[--queued]];
+        v2_id children[3];
+        size_t child_count = 0, c;
+        switch (n->kind) {
+        case REFERENCE: children[child_count++] = u->definitions[n->left].expression; break;
+        case ADDRESS: children[child_count++] = u->anchors[n->left].extent_expression; break;
+        case SPAN: children[child_count++] = n->span;
+            /* fall through */
+        case BINARY: case EXTENT_SUM: case EXTENT_REPEAT: case EXTENT_REMAINDER:
+            children[child_count++] = n->right;
+            /* fall through */
+        case UNARY: case EXTENT_COUNT: case EXTENT_BOUND: case EXTENT_STRING: case EXTENT_INTEGER:
+            children[child_count++] = n->left; break;
+        default: break;
+        }
+        for (c = 0; c < child_count; ++c) {
+            v2_id child = children[c];
+            if (child != V2_NONE && !reachable[child]) {
+                reachable[child] = 1; todo[queued++] = child;
+            }
+        }
+    }
+    result = lower_spans(u, reachable, lower, context);
+    free(todo); free(reachable);
+    return result;
 }
 
 static evaluated known(int32_t value)

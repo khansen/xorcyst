@@ -62,6 +62,11 @@ v2_id v2_layout_data(v2_layout *, v2_id pc, v2_id expression, unsigned width,
 v2_id v2_layout_instruction(v2_layout *, v2_id pc, unsigned char opcode,
                              v2_id operand, int force_wide, int early_truncated,
                              v2_location);
+/* Equivalent to a literal integer expression, stored directly in the operand
+ * fixup to avoid a full dependency/cache node for a value that cannot change. */
+v2_id v2_layout_literal_instruction(v2_layout *, v2_id pc, unsigned char opcode,
+                                     int32_t operand, int force_wide, int early_truncated,
+                                     v2_location);
 v2_id v2_layout_storage(v2_layout *, v2_id pc, v2_id checked_extent, v2_location);
 typedef enum { V2_PAD_SIZE, V2_PAD_ORIGIN, V2_PAD_BANK_OFFSET } v2_pad_kind;
 v2_id v2_layout_pad(v2_layout *, v2_pad_kind, uint32_t value, v2_location);

@@ -807,10 +807,21 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
     astnode *lhs;
     astnode *rhs;
     if (expr == NULL) { return NULL; }
+#ifdef XORCYST_V2_FRONTEND
+    if (expr->type == V2_REFERENCE_NODE) return frontend_fold_reference(expr);
+    if (expr->type == STRING_NODE) frontend_string_value(expr);
+#endif
     folded = NULL;
     if (fold_pc && astnode_is_type(expr, CURRENT_PC_NODE)) {
+#ifdef XORCYST_V2_FRONTEND
+        if (deferred_pc[in_dataseg])
+            err(expr->loc, "cannot use $ before final layout; use a label or an absolute value");
+        else
+            frontend_capture_pc(expr->loc);
+#else
         if (fold_pc == FOLD_PC_EQUATE && deferred_pc[in_dataseg])
             err(expr->loc, "cannot capture $ after unresolved storage; use a label");
+#endif
         folded = astnode_create_integer(in_dataseg ? dataseg_pc : codeseg_pc, expr->loc);
         astnode_replace(expr, folded);
         astnode_finalize(expr);
@@ -820,6 +831,11 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
         /* Fold operands recursively */
         lhs = fold_constants(LHS(expr), fold_pc);
         rhs = fold_constants(RHS(expr), fold_pc);
+#ifdef XORCYST_V2_FRONTEND
+        if ((astnode_is_type(lhs, STRING_NODE) && (rhs == NULL || astnode_is_literal(rhs)))
+            || (astnode_is_type(rhs, STRING_NODE) && astnode_is_literal(lhs)))
+            return frontend_string_fold(expr);
+#endif
         switch (expr->oper) {
             /* Binary ops */
             case PLUS_OPERATOR:
@@ -961,6 +977,7 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                 astnode_finalize(expr);
                 return folded;
             }
+#ifndef XORCYST_V2_FRONTEND
             /* Use some mathematical identities... */
             else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 0))
                 && (expr->oper == PLUS_OPERATOR)) {
@@ -995,6 +1012,7 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                 astnode_finalize(expr);
                 return lhs;
             }
+#endif
             else {
                 /* No chance of folding this one. */
             }
@@ -1095,6 +1113,9 @@ static int datatype_elem_size(astnode *d_type)
  */
 static astnode *sizeof_label_data(astnode *def, astnode *expr)
 {
+#ifdef XORCYST_V2_FRONTEND
+    return frontend_sizeof_label(def, expr);
+#endif
     astnode *curr = def->next_sibling;
     int total_bytes = 0;
     int found_data = 0;
@@ -1747,6 +1768,12 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
             constant_expansion current = {symbol, parents};
             int value, errors_before = err_count;
             if (symbol == NULL || symbol->type != CONSTANT_SYMBOL) break;
+#ifdef XORCYST_V2_FRONTEND
+            {
+                astnode *captured = frontend_capture_constant(expr, symbol);
+                if (captured != NULL) return captured;
+            }
+#endif
             if (astnode_is_type(symbol->def, INTEGER_NODE)) return substitute_ident(expr);
             if (cached_constant(cache, symbol, &value)) {
                 reference_constant(expr, symbol);
@@ -2542,6 +2569,16 @@ static int process_instruction(astnode *instr, void *arg, astnode **next)
             return 0;
         }
         op = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
+#ifdef XORCYST_V2_FRONTEND
+        if (op != 0xff && !instr->instr.mnemonic.wide
+            && opcode_zp_equiv(op, instr->instr.mode) != 0xff) {
+            expr = LHS(instr);
+            if (astnode_is_type(expr, INTEGER_NODE)) {
+                if (expr->integer >= 0 && expr->integer <= 255)
+                    op = opcode_zp_equiv(op, instr->instr.mode);
+            } else deferred_pc[0] = 1;
+        }
+#endif
         if (op != 0xFF) {
             codeseg_pc += opcode_length(op);
         } else {
@@ -2620,6 +2657,9 @@ static int process_undef(astnode *undef, void *arg, astnode **next)
 {
     astnode *id = LHS(undef);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
+#ifdef XORCYST_V2_FRONTEND
+    ++binding_epoch;
+#endif
     symtab_remove(id->ident);
     astnode_remove(undef);
     astnode_finalize(undef);
@@ -2682,6 +2722,9 @@ static int process_data(astnode *data, void *arg, astnode **next)
             return 0;
         }
     }
+#ifdef XORCYST_V2_FRONTEND
+    return frontend_data(data);
+#endif
     if (data_analysis_hook != NULL && !data_analysis_hook(data)) {
         err(data->loc, "could not preserve data-directive analysis provenance");
         return 0;
@@ -2803,6 +2846,9 @@ static astnode *reduce_field_count(astnode *expr, const field_count_definition *
  * binary address pass or linker, but reject expressions neither can evaluate. */
 static int valid_storage_expression(const astnode *expr)
 {
+#ifdef XORCYST_V2_FRONTEND
+    if (expr->type == V2_REFERENCE_NODE) return 1;
+#endif
     symtab_entry *symbol;
     switch (astnode_get_type(expr)) {
         case INTEGER_NODE:
@@ -3106,6 +3152,9 @@ static int process_storage(astnode *storage, void *arg, astnode **next)
     astnode *new_expr;
     type = LHS(storage);
     expr = RHS(storage);
+#ifdef XORCYST_V2_FRONTEND
+    if (type->datatype != USER_DATATYPE) return frontend_storage(storage);
+#endif
     /* If not BYTE_DATATYPE, multiply by word/dword-size */
     switch (type->datatype) {
         case CHAR_DATATYPE:
@@ -3189,6 +3238,9 @@ static astnode *clone_equate_expression(astnode *value, location loc)
  */
 static int process_equ(astnode *equ, void *arg, astnode **next)
 {
+#ifdef XORCYST_V2_FRONTEND
+    ++binding_epoch;
+#endif
     symtab_entry *e;
     astnode *id;
     astnode *expr;
@@ -3224,6 +3276,9 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
  */
 static int process_assign(astnode *assign, void *arg, astnode **next)
 {
+#ifdef XORCYST_V2_FRONTEND
+    ++binding_epoch;
+#endif
     symtab_entry *e;
     astnode *id;
     astnode *expr;
@@ -3441,6 +3496,9 @@ static int process_org(astnode *org, void *arg, astnode **next)
                 else
                     codeseg_pc = addr->integer;
                 if (!uses_pc) deferred_pc[in_dataseg] = 0;
+#ifdef XORCYST_V2_FRONTEND
+                if (!uses_pc) frontend_reset_pc();
+#endif
             }
         } else {
             err(org->loc, "org address does not evaluate to literal");
@@ -3647,6 +3705,12 @@ static int enter_label(astnode *label, void *arg, astnode **next)
 {
     symtab_entry *e;
     astnode *addr;
+#ifdef XORCYST_V2_FRONTEND
+    if (label->flags & 0x10000) {
+        err(label->loc, "explicit-address .label is not supported; use an equate");
+        return 0;
+    }
+#endif
     e = symtab_lookup(label->ident);
     if (e) {
         if (!(e->flags & EXTRN_FLAG) || (e->type != LABEL_SYMBOL)) {
@@ -3697,7 +3761,10 @@ static int enter_var(astnode *var, void *arg, astnode **next)
         warn(var->loc, "zeropage modifier has no effect in code segment");
         var->modifiers &= ~ZEROPAGE_FLAG;
     }
-    enter_owned_symbol(id->ident, VAR_SYMBOL, astnode_clone(RHS(var), var->loc), (in_dataseg ? DATA_FLAG : 0) | var->modifiers | symbol_modifiers);
+    e = enter_owned_symbol(id->ident, VAR_SYMBOL, astnode_clone(RHS(var), var->loc), (in_dataseg ? DATA_FLAG : 0) | var->modifiers | symbol_modifiers);
+#ifdef XORCYST_V2_FRONTEND
+    if (e != NULL) e->source_label = id;
+#endif
     return 1;
 }
 
@@ -3731,6 +3798,9 @@ static int enter_proc(astnode *proc, void *arg, astnode **next)
     /* Enter it! RHS(proc) is the list of procedure statements */
     e = symtab_enter(id->ident, PROC_SYMBOL, RHS(proc), (in_dataseg ? DATA_FLAG : 0) );
     if (e != NULL) {
+#ifdef XORCYST_V2_FRONTEND
+        e->source_label = id;
+#endif
         /* Keep the declaration span when flattening replaces the body list. */
         e->assignment_loc = proc->loc;
         e->has_assignment_loc = 1;
@@ -3871,11 +3941,17 @@ astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list
  */
 static int enter_struc(astnode *struc_def, void *arg, astnode **next)
 {
+#ifdef XORCYST_V2_FRONTEND
+    ++binding_epoch;
+#endif
     ordered_field_list **plist;
     symtab_entry *se;
     astnode *c;
     astnode *offset;
     astnode *struc_id = LHS(struc_def);
+#ifdef XORCYST_V2_FRONTEND
+    if (frontend_type_pc(struc_def)) return 0;
+#endif
     assert(astnode_is_type(struc_id, IDENTIFIER_NODE));
     se = symtab_enter(struc_id->ident, STRUC_SYMBOL, struc_def, 0);
     if (se == NULL) {
@@ -4008,8 +4084,14 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
  */
 static int enter_union(astnode *union_def, void *arg, astnode **next)
 {
+#ifdef XORCYST_V2_FRONTEND
+    ++binding_epoch;
+#endif
     symtab_entry *se;
     astnode *union_id = astnode_get_child(union_def, 0);
+#ifdef XORCYST_V2_FRONTEND
+    if (frontend_type_pc(union_def)) return 0;
+#endif
     assert(astnode_is_type(union_id, IDENTIFIER_NODE));
     if (astnode_is_type(union_id, NULL_NODE)) {
         err(union_def->loc, "anonymous union not allowed in global scope");
@@ -4035,6 +4117,9 @@ static int enter_union(astnode *union_def, void *arg, astnode **next)
  */
 static int enter_enum(astnode *enum_def, void *arg, astnode **next)
 {
+#ifdef XORCYST_V2_FRONTEND
+    ++binding_epoch;
+#endif
     symtab_entry *member;
     astnode *c;
     astnode *id;
@@ -4095,6 +4180,9 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
  */
 static int enter_record(astnode *record_def, void *arg, astnode **next)
 {
+#ifdef XORCYST_V2_FRONTEND
+    ++binding_epoch;
+#endif
     ordered_field_list **plist;
     astnode *c;
     astnode *field_id;

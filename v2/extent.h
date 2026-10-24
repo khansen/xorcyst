@@ -28,4 +28,9 @@ v2_id v2_extent_integer(v2_unit *, v2_id extent, v2_location);
  * expression nodes; callbacks may append nodes. No caller-owned state retained. */
 typedef v2_id (*v2_span_lowerer)(void *, v2_id left, v2_id right, v2_location);
 int v2_lower_spans(v2_unit *, v2_span_lowerer, void *);
+/* Layout only needs lowering reachable from checked extents. Ordinary data and
+ * instruction differences do not require a span tree. Roots are borrowed for
+ * this call; the walk follows bound definitions and extent anchor prefixes. */
+int v2_lower_extent_spans(v2_unit *, const v2_id *roots, size_t count,
+                          v2_span_lowerer, void *);
 #endif

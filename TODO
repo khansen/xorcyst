@@ -24,11 +24,40 @@ Compatibility planning:
   Independent local review cleared I2's runtime at 92b5243 and coverage at
   35fbb0c with no findings. The owner approved I2 on 2026-10-24 for publication
   as one PR and CI; see v2/README.md. Later project and cutover gates stay open.
+  I2 merged as PR #98 (2083c7a). I3 now has an isolated direct-binary
+  source prototype, source controls and a plain-project benchmark harness.
+  Its review follow-up fixes declaration identity across .undef, nested-macro
+  binding and RAM truncation warnings. Source-time sizeof/PC width assumptions
+  are also rechecked when final-name binding changes an operand's kind or
+  string length. Backward local labels keep their fixed data width. The S1/R1
+  follow-up includes the owner-approved sizeof reassignment clarification.
+  Size guards bind the actual data-line capture by walking surviving native
+  statements after pass 1, including operands later in the sizeof use's own
+  statement and anonymous +/- references whose renaming finishes later.
+  Repeated sizeof operands count their integer width without re-entering the
+  same scan; their complete expressions still undergo the kind check.
+  Leading labels that share a data run share this rule. The owner explicitly
+  approved rejecting self-sized strings on 2026-10-24; the contract ledger
+  and NEWS record that compatibility choice independently of reassignment.
+  Unprocessed user-typed initializers that are flattened/freed leave an unbound
+  guard and give a located size-unknown error. No guard retains an AST statement.
+  Independent local review cleared I3's runtime at 7ffb2ac and its .exitm
+  coverage follow-up at dc45658 with no findings or blockers. The owner approved
+  I3 on 2026-10-24 for publication as one PR and CI; see v2/README.md.
+  The owner permits a memory
+  increase below 30% over matched v1; all no-slowdown and later analysis gates still apply.
+  Object/link and analysis/consumer gates remain I4/I5 work.
   The owner-approved work-bound correction is in contract section 10; the
   project no-slowdown and byte-exact ROM gates are unchanged.
   Complete local independent review before publishing a branch or opening/updating
   a PR; keep one PR at a time.
   Keep optional v1 repairs separate. No current formats change in this plan.
+- Optional I3 follow-ups: very long shared-label sizeof runs repeatedly scan
+  their leading labels (cubic work in synthetic cases); collect those labels
+  once per scan if this becomes a measured project cost. The reviewed 800/1600
+  label cases took about 0.41/6.6 seconds, versus v1's 0.015/0.04 seconds;
+  neither Metroid nor Zelda uses sizeof. Multiple sizeof guards can also print
+  the same size-unknown error repeatedly. Both remain non-blocking review notes.
 - D1's approved contracts and approval record are in XORCYST_V2_CONTRACTS.md. Required ROM
   baselines and Metroid/Zelda analysis captures are frozen; see
   design/v2/BASELINES.md. Semantics, the no-slowdown measurement rule and the

@@ -1,4 +1,5 @@
 #include "v2/value.h"
+#include "v2/extent.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -142,6 +143,34 @@ static void ownership(void)
     v2_unit_destroy(u);
     integer_is(other, other_r, 77);
     v2_unit_destroy(other);
+}
+
+static void anchor_inspection(void)
+{
+    v2_unit *u = v2_unit_create();
+    v2_location at = v2_no_location();
+    v2_id a = v2_anchor(u, at), expr = v2_address(u, a, at);
+    int known = -1;
+    int32_t value = -1;
+    CHECK(v2_anchor_value(u, a, &known, &value, at) && !known);
+    CHECK(v2_extent_anchor(u, a, number(u, 99)));
+    CHECK(v2_evaluate_extent(u, expr).value.as.integer == 99);
+    CHECK(v2_anchor_value(u, a, &known, NULL, at) && !known);
+    CHECK(v2_place(u, a, 1, 42));
+    CHECK(v2_anchor_value(u, a, &known, &value, at) && known && value == 42);
+    CHECK(v2_anchor_value(u, a, NULL, NULL, at));
+    CHECK(v2_place(u, a, 0, 0));
+    CHECK(v2_anchor_value(u, a, &known, NULL, at) && !known);
+    CHECK(!v2_anchor_value(u, V2_NONE, NULL, NULL, at));
+    CHECK(v2_unit_error(u).code == V2_ERROR_REFERENCE);
+    v2_unit_destroy(u);
+    u = v2_unit_create();
+    a = v2_anchor(u, at);
+    at.file = 77;
+    CHECK(!v2_anchor_value(u, a, NULL, NULL, at));
+    CHECK(v2_unit_error(u).code == V2_ERROR_LOCATION);
+    CHECK(v2_unit_error(u).location.file == V2_NONE);
+    v2_unit_destroy(u);
 }
 
 static void bindings(void)
@@ -552,6 +581,7 @@ int main(int argc, char **argv)
     if (!strcmp(argv[1], "arithmetic-stream")) arithmetic_stream();
     else if (!strcmp(argv[1], "graph-stream")) graph_stream();
     else if (!strcmp(argv[1], "ownership")) ownership();
+    else if (!strcmp(argv[1], "anchor-inspection")) anchor_inspection();
     else if (!strcmp(argv[1], "bindings")) bindings();
     else if (!strcmp(argv[1], "strings")) strings();
     else if (!strcmp(argv[1], "dependencies")) dependencies();

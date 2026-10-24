@@ -102,6 +102,9 @@
 #include "getopt.h"
 #include "astnode.h"
 #include "astproc.h"
+#ifdef XORCYST_V2_FRONTEND
+#include "v2/frontend.h"
+#endif
 #include "symtab.h"
 #include "codegen.h"
 #include "listing.h"
@@ -1475,6 +1478,7 @@ static int run_compare(astnode *root)
  */
 /* Diagnostic readers use AST location paths, which can differ from the source
  * resolver's paths. Reserve them before any output can truncate a later read. */
+#ifndef XORCYST_V2_FRONTEND
 static int protect_analysis_sources(const astnode *node)
 {
     for (; node; node = node->next_sibling) {
@@ -1483,6 +1487,8 @@ static int protect_analysis_sources(const astnode *node)
     }
     return 1;
 }
+
+#endif
 
 /* The manifest reserves its own destination at startup. Every other output,
    including expanded analysis paths and the binary staging path, is validated
@@ -1565,6 +1571,19 @@ int main(int argc, char *argv[]) {
     if (!parse_arguments(argc, argv)) { exit_code = 1; goto cleanup; }
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
+#ifdef XORCYST_V2_FRONTEND
+    if (!xasm_args.pure_binary || xasm_args.listing_file || xasm_args.xref_file
+        || xasm_args.instruction_records_file || xasm_args.fceux_nl_rom_prefix
+        || xasm_args.fceux_nl_ram_file || xasm_args.audit_raw_addresses
+        || xasm_args.xref_summary || xasm_args.analyze_index_patterns
+        || xasm_args.data_consumers || xasm_args.analyze_data_coverage
+        || xasm_args.compare_file || xasm_args.dependency_manifest) {
+        fprintf(stderr, "error: I3 prototype supports plain --pure-binary output only\n");
+        exit_code = 1;
+        goto cleanup;
+    }
+#endif
+
     /* Whether anything requested needs capture_instruction_provenance()
        installed (see prepare_xref_instruction_provenance): computed once
        here so every site that gates on it -- install, finalize, and the
@@ -1575,6 +1594,9 @@ int main(int argc, char *argv[]) {
 
     needs_output_protection = xasm_args.dependency_manifest
         || xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file;
+#ifdef XORCYST_V2_FRONTEND
+    needs_output_protection = 1;
+#endif
     needs_analysis = xasm_args.xref_file || xasm_args.instruction_records_file
         || xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file;
 
@@ -1627,6 +1649,10 @@ int main(int argc, char *argv[]) {
         err_count++;
     }
 
+#ifdef XORCYST_V2_FRONTEND
+    v2_frontend_process(root_node);
+    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
+#else
     /* First pass does a lot of stuff. */
     verbose("First pass...");
     astproc_first_pass(root_node);
@@ -1660,10 +1686,27 @@ int main(int argc, char *argv[]) {
         if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
     }
 
+#endif
+
     /* Print the final AST (debugging) */
 //    astnode_print(root_node, 0);
 
+#ifndef XORCYST_V2_FRONTEND
     if (needs_output_protection && !protect_analysis_sources(root_node)) goto cleanup;
+#endif
+
+#ifdef XORCYST_V2_FRONTEND
+    /* Exercise the ownership boundary on every prototype invocation. Layout
+     * and encoding must work after both the parser AST and namespace die. */
+    if (total_errors() == 0) {
+        symtab_pop();
+        symtab_finalize(symbol_table);
+        symbol_table = NULL;
+        astnode_finalize(root_node);
+        root_node = NULL;
+        v2_frontend_finish();
+    }
+#endif
 
     /* Diagnostic listings also require a complete destination plan. Their
        analysis collects layout without requiring exportable names or operands. */
@@ -1756,7 +1799,11 @@ int main(int argc, char *argv[]) {
             int output_ok;
             verbose("Generating final output...");
             if (xasm_args.pure_binary) {
+#ifdef XORCYST_V2_FRONTEND
+                v2_frontend_write(output_fp);
+#else
                 astproc_fifth_pass(root_node, output_fp);
+#endif
             } else {
                 codegen_write(root_node, output_fp);
             }
@@ -1894,6 +1941,9 @@ int main(int argc, char *argv[]) {
 symbol_failure:
     fprintf(stderr, "error: out of memory building symbol table\n");
 cleanup:
+#ifdef XORCYST_V2_FRONTEND
+    v2_frontend_clear();
+#endif
     free_analysis(analysis);
     free_analysis_outputs(analysis_outputs);
     free(tmp_outfile);

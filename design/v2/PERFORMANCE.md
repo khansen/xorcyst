@@ -72,6 +72,13 @@ memory and artifact sizes for every mode. Counts of emitted instructions,
 records, references and fill extents prevent measuring reduced output instead
 of equal useful work.
 
+**Owner's memory limit, 2026-10-24:** some increase over matched v1 is acceptable,
+but an increase of 30% or more is not. Require candidate peak RSS below 1.30
+times baseline peak RSS for each required configuration; report paired samples
+and each version's maximum observed peak as well as medians. I3 applies this to
+plain Metroid and Zelda; adding objects and analysis does not waive the limit
+or the no-slowdown rule for those later configurations.
+
 ## Sampling
 
 Run on an otherwise idle machine with stable power/thermal settings. No parallel

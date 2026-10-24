@@ -390,6 +390,8 @@ is <code class="code">$7FFFFFFF</code>, not <code class="code">-1</code>.
 </p>
 <p><code class="code">sizeof(<var class="var">symbol</var>)</code> gets the size of <var class="var">symbol</var> in bytes.
 </p>
+<p>In the non-installed v2 prototype, label sizes are captured by the source-time scan. An operand unresolved at its data line is checked again before output: its final kind and string length must match the contribution counted by <code class="code">sizeof</code>. Otherwise the original <code class="code">sizeof</code> use reports size unknown. This does not change the installed v1 tool.
+</p>
 <p>When both operands to an operator are strings, the semantics are as follows: <var class="var">str1</var> + <var class="var">str2</var> concatenates; the relational operators perform string comparison; and all other operators are invalid. When one operand is a string and the other is an integer, the integer is implicitly converted to a string and concatenated with the string operand to produce a string as result.
 </p>
 </div>
@@ -407,7 +409,9 @@ is <code class="code">$7FFFFFFF</code>, not <code class="code">-1</code>.
 <pre class="example-preformatted">.label <var class="var">identifier</var> <em class="emph">[= <var class="var">address</var>]</em> <em class="emph">[ : <var class="var">type</var>]</em>
 </pre></div>
 
-<p>The absolute address of the label can be specified. If no address is given, the address is the current Program Counter.
+<p>The absolute address of the label can be specified in v1. If no address is given, the address is the current Program Counter.
+</p>
+<p>The non-installed v2 prototype rejects <code class="code">.label name = address</code>, including an explicit <code class="code">= $</code>, with a located error. Use an equate for a fixed address. Ordinary <code class="code">.label name</code> remains supported. This corrects v1&rsquo;s inconsistent handling of explicit label addresses and does not change the installed v1 tool.
 </p>
 <p>The type of data that the label addresses can also be specified. The valid type specifiers are <code class="code">byte</code>, <code class="code">word</code>, <code class="code">dword</code>, or an identifier, which must be the name of a user-defined type.
 </p>

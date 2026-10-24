@@ -12,7 +12,7 @@ typedef struct {
     v2_id anchor, expression, extent, extent_definition, length_anchor;
     unsigned char opcode, narrow;
     unsigned char *map;
-    unsigned width, strings, mapped, early;
+    unsigned width, strings, mapped, early, literal_operand;
     uint32_t argument, origin, run;
     v2_pad_kind pad;
     unsigned char *bytes;
@@ -33,6 +33,7 @@ struct v2_layout {
     bank_request *banks;
     anchor_position *positions;
     v2_id *tree;
+    v2_id fixed_extents[5];
     size_t tree_base, position_count;
     size_t count, capacity, ram_count, ram_capacity, block_count, block_capacity;
     size_t bank_count, bank_capacity;
@@ -81,7 +82,20 @@ static int building(v2_layout *l, v2_location loc)
 {
     /* A layout is a single construction/run, including failed runs. */
     if (l->started) return layout_fail(l, V2_LAYOUT_INPUT, loc);
+    if (loc.file != V2_NONE && (!v2_file_name(l->unit, loc.file) ||
+        !loc.line || !loc.column || !loc.end_column || loc.end_line < loc.line ||
+        (loc.end_line == loc.line && loc.end_column < loc.column)))
+        return layout_fail(l, V2_LAYOUT_INPUT, v2_no_location());
     return !l->error.code && unit_ok(l);
+}
+/* These are synthetic fixed widths, not source expressions. The fragment
+ * retains its own source span and all range checks use that span. */
+static v2_id fixed_extent(v2_layout *l, uint64_t size, v2_location loc)
+{
+    if (size >= 5) return v2_extent_literal(l->unit, size, loc);
+    if (l->fixed_extents[size] == V2_NONE)
+        l->fixed_extents[size] = v2_extent_literal(l->unit, size, v2_no_location());
+    return l->fixed_extents[size];
 }
 static fragment fresh(kind k, v2_location loc)
 {
@@ -94,8 +108,8 @@ static fragment fresh(kind k, v2_location loc)
 static v2_id add(v2_layout *l, fragment f)
 {
     if (!building(l, f.loc)) goto failed;
-    if (f.anchor != V2_NONE) v2_address(l->unit, f.anchor, f.loc);
-    if (f.extent == V2_NONE) f.extent = v2_extent_literal(l->unit, 0, f.loc);
+    if (f.anchor != V2_NONE) v2_anchor_value(l->unit, f.anchor, NULL, NULL, f.loc);
+    if (f.extent == V2_NONE) f.extent = fixed_extent(l, 0, f.loc);
     l->fragments = reserve(l, l->fragments, &l->capacity, l->count + 1, sizeof(f));
     if (l->error.code || !unit_ok(l)) goto failed;
     l->fragments[l->count] = f;
@@ -108,7 +122,11 @@ v2_layout *v2_layout_create(v2_unit *u, v2_layout_mode mode)
     v2_layout *l;
     if (!u || (mode != V2_BINARY_LAYOUT && mode != V2_LINK_LAYOUT)) return NULL;
     l = calloc(1, sizeof(*l));
-    if (l) { l->unit = u; l->mode = mode; l->error.location = v2_no_location(); }
+    if (l) {
+        size_t i;
+        l->unit = u; l->mode = mode; l->error.location = v2_no_location();
+        for (i = 0; i < 5; ++i) l->fixed_extents[i] = V2_NONE;
+    }
     return l;
 }
 void v2_layout_destroy(v2_layout *l)
@@ -211,26 +229,47 @@ v2_id v2_layout_data(v2_layout *l, v2_id pc, v2_id expr, unsigned width,
         if (!f.map) { layout_fail(l, V2_LAYOUT_MEMORY, loc); return V2_NONE; }
         memcpy(f.map, map, 256); f.mapped = 1;
     }
-    f.extent_definition = v2_definition(l->unit, "data extent", loc);
-    f.extent = v2_reference(l->unit, f.extent_definition, loc);
+    if (f.strings) {
+        f.extent_definition = v2_definition(l->unit, "data extent", loc);
+        f.extent = v2_reference(l->unit, f.extent_definition, loc);
+    } else {
+        f.extent = fixed_extent(l, width, loc);
+    }
     return add(l, f);
 }
-v2_id v2_layout_instruction(v2_layout *l, v2_id pc, unsigned char opcode,
-                             v2_id operand, int wide, int early, v2_location loc)
+static v2_id instruction(v2_layout *l, v2_id pc, unsigned char opcode,
+                        v2_id operand, const int32_t *literal, int wide, int early, v2_location loc)
 {
     fragment f = fresh(INSTRUCTION, loc);
     instr_mnemonic mnemonic;
     unsigned width = (unsigned)opcode_length(opcode);
-    if (!opcode_mnemonic(opcode, &mnemonic) || (width > 1) != (operand != V2_NONE))
+    if (!opcode_mnemonic(opcode, &mnemonic) ||
+        (width > 1) != (operand != V2_NONE || literal != NULL))
         layout_fail(l, V2_LAYOUT_INPUT, loc);
     if (!building(l, loc)) return V2_NONE;
     f.anchor = pc; f.opcode = opcode; f.expression = operand; f.early = early != 0;
     if (!wide) f.narrow = opcode_zp_equiv(opcode, opcode_addressing_mode(opcode));
-    f.length_anchor = v2_anchor(l->unit, loc);
-    v2_place(l->unit, f.length_anchor, 1, (int32_t)width);
-    f.extent = v2_extent_count(l->unit, v2_address(l->unit, f.length_anchor, loc), 1, 3, loc);
+    if (literal) {
+        f.literal_operand = 1;
+        f.value.kind = V2_INTEGER; f.value.as.integer = *literal;
+        if (*literal < 0 || *literal > 255) f.narrow = 0xff;
+    }
+    if (f.narrow == 0xff) {
+        f.extent = fixed_extent(l, width, loc);
+    } else {
+        f.length_anchor = v2_anchor(l->unit, loc);
+        v2_place(l->unit, f.length_anchor, 1, (int32_t)width);
+        f.extent = v2_extent_count(l->unit, v2_address(l->unit, f.length_anchor, loc), 1, 3, loc);
+    }
     return add(l, f);
 }
+v2_id v2_layout_instruction(v2_layout *l, v2_id pc, unsigned char opcode,
+                            v2_id operand, int wide, int early, v2_location loc)
+{ return instruction(l, pc, opcode, operand, NULL, wide, early, loc); }
+
+v2_id v2_layout_literal_instruction(v2_layout *l, v2_id pc, unsigned char opcode,
+                                    int32_t operand, int wide, int early, v2_location loc)
+{ return instruction(l, pc, opcode, V2_NONE, &operand, wide, early, loc); }
 v2_id v2_layout_storage(v2_layout *l, v2_id pc, v2_id extent, v2_location loc)
 {
     fragment f = fresh(STORAGE, loc); f.anchor = pc; f.extent = extent;
@@ -262,7 +301,7 @@ int v2_layout_ram(v2_layout *l, v2_id anchor, v2_id extent, unsigned align,
     if (align > 15 || anchor == V2_NONE || extent == V2_NONE) return layout_fail(l, V2_LAYOUT_INPUT, loc);
     memset(&r, 0, sizeof(r)); r.anchor = anchor; r.extent = extent;
     r.align = align; r.zp = zp != 0; r.loc = loc;
-    v2_address(l->unit, anchor, loc);
+    v2_anchor_value(l->unit, anchor, NULL, NULL, loc);
     r.extent = v2_extent_bound(l->unit, extent, 0, UINT32_MAX, loc);
     if (!unit_ok(l)) return 0;
     l->ram = reserve(l, l->ram, &l->ram_capacity, l->ram_count + 1, sizeof(r));
@@ -461,10 +500,15 @@ static v2_id lower_span(void *context, v2_id left, v2_id right, v2_location loc)
 static int narrow(v2_layout *l, fragment *f)
 {
     v2_result r;
+    int32_t value;
     if (f->narrow == 0xff) return 0;
-    r = v2_evaluate(l->unit, f->expression);
-    if (r.state != V2_KNOWN || r.value.kind != V2_INTEGER ||
-        r.value.as.integer < 0 || r.value.as.integer > 255) return 0;
+    if (f->literal_operand) value = f->value.as.integer;
+    else {
+        r = v2_evaluate(l->unit, f->expression);
+        if (r.state != V2_KNOWN || r.value.kind != V2_INTEGER) return 0;
+        value = r.value.as.integer;
+    }
+    if (value < 0 || value > 255) return 0;
     f->opcode = f->narrow; f->narrow = 0xff;
     v2_place(l->unit, f->length_anchor, 1, 2);
     ++l->work.narrowings; return 1;
@@ -472,31 +516,67 @@ static int narrow(v2_layout *l, fragment *f)
 /* Prefixes are checked extent DAGs, not provisional integer PCs. Only extent
  * evaluation follows them; instruction decisions still see placed addresses.
  * This resolves acyclic forward counts without a second retry loop. */
+/* Keep fixed stretches as a checked literal offset instead of allocating two
+ * prefix nodes for every byte-emitting fragment. Materialize only at anchors
+ * and variable extents; optional widths remain graph dependencies. */
+typedef struct { v2_id base; uint64_t fixed; } prefix;
+static v2_id prefix_value(v2_layout *l, prefix p, v2_location loc)
+{
+    v2_id fixed;
+    if (!p.fixed && p.base != V2_NONE) return p.base;
+    fixed = v2_extent_literal(l->unit, p.fixed, loc);
+    return p.base == V2_NONE ? fixed : v2_extent_sum(l->unit, p.base, fixed, loc);
+}
+static void prefix_fixed(v2_layout *l, prefix *p, uint64_t size, v2_location loc)
+{
+    if (size > UINT64_MAX - p->fixed) {
+        p->base = prefix_value(l, *p, loc);
+        p->fixed = 0;
+    }
+    p->fixed += size;
+}
+static void prefix_extent(v2_layout *l, prefix *p, v2_id extent, v2_location loc)
+{
+    p->base = v2_extent_sum(l->unit, prefix_value(l, *p, loc), extent, loc);
+    p->fixed = 0;
+}
 static int prefixes(v2_layout *l)
 {
     size_t i;
-    v2_id zero = v2_extent_literal(l->unit, 0, v2_no_location());
-    v2_id pc = zero, used = zero;
-    v2_id ram_pc = v2_extent_literal(l->unit, l->block_count ? l->blocks[0].start : 0, v2_no_location());
+    prefix pc = { V2_NONE, 0 }, used = { V2_NONE, 0 };
+    prefix ram_pc = { V2_NONE, l->block_count ? l->blocks[0].start : 0 };
     for (i = 0; i < l->count; ++i) {
         fragment *f = &l->fragments[i];
-        if (f->kind == ORIGIN || f->kind == BANK) pc = v2_extent_literal(l->unit, f->origin, f->loc);
-        if (f->kind == BANK) used = zero;
+        uint64_t fixed = 0;
+        int constant = 1;
+        if (f->kind == ORIGIN || f->kind == BANK) pc = (prefix){ V2_NONE, f->origin };
+        if (f->kind == BANK) used = (prefix){ V2_NONE, 0 };
         if (f->anchor != V2_NONE)
-            v2_extent_anchor(l->unit, f->anchor, v2_extent_integer(l->unit, pc, f->loc));
-        if (f->kind == RAM_ORIGIN) ram_pc = v2_extent_literal(l->unit, f->origin, f->loc);
+            v2_extent_anchor(l->unit, f->anchor,
+                v2_extent_integer(l->unit, prefix_value(l, pc, f->loc), f->loc));
+        if (f->kind == RAM_ORIGIN) ram_pc = (prefix){ V2_NONE, f->origin };
         if (f->kind == RAM && l->mode == V2_BINARY_LAYOUT) {
             ram *r = &l->ram[f->argument];
-            v2_extent_anchor(l->unit, r->anchor, v2_extent_integer(l->unit, ram_pc, r->loc));
-            ram_pc = v2_extent_sum(l->unit, ram_pc, r->extent, r->loc);
+            v2_extent_anchor(l->unit, r->anchor,
+                v2_extent_integer(l->unit, prefix_value(l, ram_pc, r->loc), r->loc));
+            prefix_extent(l, &ram_pc, r->extent, r->loc);
         }
         if (f->kind == PAD && f->pad != V2_PAD_SIZE)
             f->extent = v2_extent_remainder(l->unit, v2_extent_literal(l->unit, f->argument, f->loc),
-                                           f->pad == V2_PAD_ORIGIN ? pc : used, f->loc);
+                prefix_value(l, f->pad == V2_PAD_ORIGIN ? pc : used, f->loc), f->loc);
         if (f->kind == BANK_END || f->kind == BANK || f->kind == ORIGIN ||
             f->kind == MARK || f->kind == RAM || f->kind == RAM_ORIGIN) continue;
-        pc = v2_extent_sum(l->unit, pc, f->extent, f->loc);
-        used = v2_extent_sum(l->unit, used, f->extent, f->loc);
+        if (f->kind == RAW || f->kind == COPY || f->kind == DATA) fixed = f->length;
+        else if (f->kind == INSTRUCTION && f->narrow == 0xff) fixed = (unsigned)opcode_length(f->opcode);
+        else if (f->kind == PAD && f->pad == V2_PAD_SIZE) fixed = f->argument;
+        else constant = 0;
+        if (constant) {
+            prefix_fixed(l, &pc, fixed, f->loc);
+            prefix_fixed(l, &used, fixed, f->loc);
+        } else {
+            prefix_extent(l, &pc, f->extent, f->loc);
+            prefix_extent(l, &used, f->extent, f->loc);
+        }
     }
     return unit_ok(l);
 }
@@ -531,16 +611,18 @@ static int prepare(v2_layout *l)
             anchor_position p; p.anchor = f->anchor; p.fragment = (v2_id)i;
             if (!l->positions || l->position_count >= positions) return layout_fail(l, V2_LAYOUT_INPUT, f->loc);
             l->positions[l->position_count++] = p;
-            v2_result initial = v2_evaluate(l->unit, v2_address(l->unit, f->anchor, f->loc));
-            if (initial.state != V2_DEFERRED) return layout_fail(l, V2_LAYOUT_INPUT, f->loc);
+            int known;
+            if (!v2_anchor_value(l->unit, f->anchor, &known, NULL, f->loc) || known)
+                return layout_fail(l, V2_LAYOUT_INPUT, f->loc);
         }
         /* Dynamic pads end a common-prefix run on both sides. */
         if (f->kind == PAD && f->pad != V2_PAD_SIZE) ++run;
     }
     for (i = 0; i < l->ram_count; ++i) {
-        v2_result initial = v2_evaluate(l->unit, v2_address(l->unit, l->ram[i].anchor, l->ram[i].loc));
+        int known;
         anchor_position p;
-        if (initial.state != V2_DEFERRED) return layout_fail(l, V2_LAYOUT_INPUT, l->ram[i].loc);
+        if (!v2_anchor_value(l->unit, l->ram[i].anchor, &known, NULL, l->ram[i].loc) || known)
+            return layout_fail(l, V2_LAYOUT_INPUT, l->ram[i].loc);
         p.anchor = l->ram[i].anchor; p.fragment = (v2_id)(l->count + i);
         if (!l->positions || l->position_count >= positions) return layout_fail(l, V2_LAYOUT_INPUT, l->ram[i].loc);
         l->positions[l->position_count++] = p;
@@ -574,14 +656,44 @@ static int prepare(v2_layout *l)
                     if (r.dependencies[d].kind != V2_DEP_ANCHOR)
                         return layout_fail(l, V2_LAYOUT_UNRESOLVED, f->loc);
             }
-            v2_bind(l->unit, f->extent_definition, v2_extent_literal(l->unit, size, f->loc));
+            f->length = (size_t)size;
+            if (f->extent_definition != V2_NONE)
+                v2_bind(l->unit, f->extent_definition, v2_extent_literal(l->unit, size, f->loc));
         }
     }
     /* Literal/constant widths also feed RAM size spans. */
     for (i = 0; i < l->count; ++i) if (l->fragments[i].kind == INSTRUCTION)
         narrow(l, &l->fragments[i]);
-    if (!prefixes(l)) return 0;
-    if (!v2_lower_spans(l->unit, lower_span, l) || !unit_ok(l) || l->error.code) return 0;
+    /* If every source extent is already known, no code/RAM address is needed
+     * to resolve a size. Literal data and fixed storage need no prefix graph.
+     * Optional instruction widths still change through their length anchors.
+     * Build the full graph for any unresolved extent or dynamic padding. */
+    {
+        int needs_prefix = 0;
+        for (i = 0; i < l->count && !needs_prefix; ++i) {
+            fragment *f = &l->fragments[i];
+            if (f->kind == PAD && f->pad != V2_PAD_SIZE) needs_prefix = 1;
+            else if (f->kind == STORAGE)
+                needs_prefix = v2_evaluate_extent(l->unit, f->extent).state != V2_KNOWN;
+        }
+        for (i = 0; i < l->ram_count && !needs_prefix; ++i)
+            needs_prefix = v2_evaluate_extent(l->unit, l->ram[i].extent).state != V2_KNOWN;
+        if (needs_prefix) {
+            if (!prefixes(l)) return 0;
+            {
+                size_t count = l->count + l->ram_count;
+                v2_id *roots = count ? malloc(count * sizeof(*roots)) : NULL;
+                int lowered;
+                if (count && !roots) return layout_fail(l, V2_LAYOUT_MEMORY, v2_no_location());
+                for (i = 0; i < l->count; ++i) roots[i] = l->fragments[i].extent;
+                for (i = 0; i < l->ram_count; ++i) roots[l->count + i] = l->ram[i].extent;
+                lowered = v2_lower_extent_spans(l->unit, roots, count, lower_span, l);
+                free(roots);
+                if (!lowered || !unit_ok(l) || l->error.code) return 0;
+            }
+        }
+    }
+
     if (!allocate_ram(l)) return 0;
     if (l->mode == V2_BINARY_LAYOUT) {
         uint32_t pc = l->block_count ? l->blocks[0].start : 0;
@@ -664,8 +776,8 @@ static int validate(v2_layout *l)
             if (size != fact->length) return layout_fail(l, V2_LAYOUT_UNSTABLE, f->loc);
         }
         if (f->kind != DATA && f->kind != INSTRUCTION) continue;
-        if (f->expression == V2_NONE) continue;
-        if (!evaluated(l, f->expression, f->loc, &f->value)) return 0;
+        if (f->expression == V2_NONE && !f->literal_operand) continue;
+        if (!f->literal_operand && !evaluated(l, f->expression, f->loc, &f->value)) return 0;
         if (f->value.kind == V2_STRING && f->kind == DATA && f->strings) {
             if ((uint64_t)f->width * f->value.as.string.length != fact->length)
                 return layout_fail(l, V2_LAYOUT_UNSTABLE, f->loc);

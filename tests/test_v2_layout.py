@@ -32,6 +32,9 @@ class Layout(unittest.TestCase):
         self.assertEqual(r.stderr, '')
         return r.stdout.splitlines()
 
+    def test_span_lowering_only_visits_extent_reachable_roots(self):
+        self.assertEqual(self.run_case('rooted-spans')[0], 'rooted spans: OK')
+
     def test_contract_narrowing_and_first_walk_order(self):
         expected = ['A510' * 43 + 'D0A8', 'ERROR 5 0 7', 'A510ADFFFFEA',
                     'A510AD0001EA60', 'A5FEA5FAEAEAEAEA60',
@@ -149,6 +152,17 @@ class Layout(unittest.TestCase):
                 self.assertEqual(r[0], 'ERROR 5 0 7' if delta in (-129, 128)
                                  else f'D0{delta & 255:02X}')
 
+    def test_inline_integer_operands_match_expression_fixups_and_facts(self):
+        for mode in (0,1):
+            for opcode in (0xa9,0xa1,0xb1,0xa5,0xb5,0xb6,0xad,0xbd,0xb9,0x4c,0x6c,0xd0):
+                for value in (-32769,-32768,-129,-128,-126,-1,0,127,129,130,255,256,65535,65536):
+                    for wide,early in ((0,0),(1,0),(0,1)):
+                        with self.subTest(mode=mode,opcode=opcode,value=value,wide=wide,early=early):
+                            args=(mode,opcode,value,wide,early)
+                            self.assertEqual(self.run_case('literal',*args),self.run_case('expression-literal',*args))
+        for opcode in (0xea,0x02):
+            self.assertEqual(self.run_case('literal',0,opcode,0,0,0)[0],'ERROR 2 0 7')
+
     def test_copy_is_captured_and_rechecked_before_results(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'copy.bin'
@@ -215,6 +229,8 @@ class Layout(unittest.TestCase):
         self.assertEqual(self.run_case('limits', 0, 16)[0], 'A5101012')
         self.assertEqual(self.run_case('limits', 1, 16)[0], 'A5101110')
         self.assertEqual(self.run_case('limits', 0, 17)[0], 'ERROR 2 0 0')
+        self.assertEqual(self.run_case('limits', 0, 18)[0], 'ERROR 5 0 9')
+        self.assertEqual(self.run_case('limits', 0, 19)[0], 'ERROR 2 0 0')
 
     def test_link_alignment_holes_and_binary_source_order(self):
         self.assertEqual(self.run_case('alignment', 0)[0], '111316')

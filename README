@@ -22,6 +22,11 @@ The approved D1 contract and approval record are in
 [object wire layout](design/v2/OBJECT_WIRE_DRAFT.md). The contract gate is
 complete; installed tools stay v1 until the coordinated cutover.
 
+The isolated source prototype can be built with `make xasm-v2` and run as
+`./xasm-v2 --pure-binary input.asm -o output.bin`. It is not installed and does
+not yet produce objects, listings or analysis. See [v2/README.md](v2/README.md)
+for its reviewed contracts, current stage and remaining acceptance gates.
+
 Build and test
 --------------
 

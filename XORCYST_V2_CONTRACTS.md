@@ -154,8 +154,9 @@ This is the minimum logical unit model, not a prescribed C class hierarchy.
 
 The frontend must keep label/data boundaries until each source-time
 `sizeof(label)` has either produced an integer or an error. Its scan can cover
-several statements and includes the fixed width of its own value operand when
-inside that scan. RAM allocation separately keeps emitted data-label boundaries
+several statements and includes the fixed width of its own numeric value operand
+when inside that scan. A string-valued operand built from that size rejects,
+as specified in section 4.1. RAM allocation separately keeps emitted data-label boundaries
 to determine allocation extents. These two uses of boundaries are not the same
 size calculation; section 4.1 defines each. Neither depends on raw-byte coalescing.
 
@@ -268,6 +269,29 @@ statement but defined before the `sizeof` use has a known length at that use:
 `48 45 4C 4C 4F 06`. This deliberately corrects v1's linked `... 02` and binary
 rejection. Previously resolved operands retain their existing captured bindings;
 this is not permission to recapture a value after reassignment.
+
+On 2026-10-24 the owner clarified the unit-end guard for operands unresolved
+at their data statement: record the kind and, for strings, the byte length
+counted by each `sizeof` scan. Validate against the operand's final binding,
+including `=` reassignment and `.undef` replacement. If that kind or length
+changes, report size unknown at the original `sizeof` use; do not recompute its
+captured integer. Numeric value changes and same-length string replacements
+remain valid. Literal values already captured at the data statement retain
+their captured width. This check also applies when the operand has become a
+known string or integer by the time of the scan.
+
+On 2026-10-24 the owner separately chose rejection of string-valued data
+operands built from the containing label's own `sizeof`, even without
+reassignment or `.undef`. `Tbl: .db sizeof(Tbl)+"A"` reports size unknown at
+the sizeof use and preserves the previous output; v1 emits `31 41` using the
+stale size 1 for two bytes. Count an own-size operand as one element only if
+its complete result is numeric. Numeric arithmetic and captured numeric
+constants remain valid. Labels sharing the same leading data run share this
+rule. Sizes of unrelated labels still reduce normally, so
+`Other: .db 1,2 / Tbl: .db sizeof(Tbl) / .db sizeof(Other)+"A"` emits
+`01 02 03 32 41`. Do not solve a self-sized string by iterating layout or
+retain v1's stale size. This is a distinct migration decision from the
+reassignment guard above and applies before binary or object publication.
 
 The owner also selected preservation of forward **local** operands on
 2026-10-23. Count each such unresolved data operand as one element of its
@@ -519,6 +543,10 @@ These entries supplement D0 §3.5 and are included in the section 8 D1 approval.
 
 | Case | v1 behavior | D1 disposition |
 | --- | --- | --- |
+| Forward data reassigned after its `sizeof` use: `Tbl: .dw S / S = "ABCD" / .byte sizeof(Tbl) / S = 7`; string-length changes and `.undef` replacements too | Both modes emit `07 00 03` for this example. Other changes can reject in binary mode or link with a stale size: `Msg: .char S / S = "HELLO" / .byte sizeof(Msg) / S = "HI"` links as `48 49 02`. | **Owner-selected guard, 2026-10-24.** Reject at the original sizeof use if the final operand kind or string length differs from the scan's contribution. This deliberately rejects some v1-accepted programs rather than publishing a stale captured size. Stable numeric kinds, same-length strings, and values already captured at the data line remain accepted. Source tests preserve the old output on rejection; I4 must apply the same guard before object publication. |
+| A string built from its containing label's own size: `Tbl: .db sizeof(Tbl)+"A"`, including nested arithmetic and captured string prefixes | Both modes emit `31 41`, with stale size 1 for a two-byte table. No reassignment or `.undef` is needed. | **Owner-selected rejection, 2026-10-24.** Report size unknown at the sizeof use and preserve previous output. The whole operand must keep its fixed numeric width; a string result rejects even when sizeof itself returns an integer. Numeric forms and strings built from unrelated label sizes remain supported. I3 source tests, NEWS and section 4.1 record this deliberate compatibility change; I4 must enforce it before object publication too. |
+| Source-time `$` after a narrowable instruction, in `.if`, `.equ`, `.define` or `=` | After `lda $10`, v1 uses provisional PC 3 even though the instruction emits two bytes. `lda Fwd / Here .equ $ / .dw Here / Fwd .equ $10` captures 3 too. | **Owner-confirmed correction, 2026-10-24.** D0 §3.4's known-final-PC rule means the first case uses 2; `.if $==2` can now select its body, and a captured value emits `02 00` rather than `03 00`. Unresolved instruction widths or forward data/string extents reject source-time PC uses with a located error. Operand-time `$` still uses its final anchor. No frozen-project occurrence was found in the review's scan; project builds remain the acceptance gate. |
+| Multiple string operands in one `.char`, with H mapped to 1 and I to 0 | `.char "HI","HI"` emits `01 00 48 49`: v1 maps only the first string. | **Owner-confirmed correction, 2026-10-24.** Section 2.3 applies the captured map to every string operand exactly once, giving `01 00 01 00`. Numeric operands bypass the map. Tests cover multiple strings, forward strings and map reassignment. |
 | String operands in integer identities: `"abc" * 1`, `"abc" / 1`, `1 * "abc"`, including deferred S in `S * 1` | The three known-string cases emit `61 62 63` in both modes through identity folds. Forward S rejects in pure binary but links to those bytes when S resolves to "abc". | The existing D0 §3.2 kind-before-identity rule rejects these as type errors. This is a deliberate correction in addition to the already recorded `S+0` change, not string multiplication/division support. I1 pins the value-level errors; I3 must test located rejection and output preservation in both source paths, with known and forward strings. No literal-string uses were found by the source scan; identifier forms must be checked by the I3/I4 project builds. |
 | `Msg: .char S / .byte sizeof(Msg)` with S defined later as "HELLO", or imported; also `Msg: .char S / S .equ "HELLO" / .byte sizeof(Msg)` | Binary rejects both orders; object linking can emit `48 45 4C 4C 4F 02`. A following label can also have a stale address. | **Owner-selected rejection when still unresolved at sizeof (2026-10-23).** Reject both modes with size unknown for the first order/import. In the second order the length is already known at sizeof: emit `48 45 4C 4C 4F 06` on both paths. This latter correction is explicitly part of D1 review. No link-time label sizeof; ordinary data retains D0's forward-string support. |
 | Data operands in a label-size scan whose kind is unknown at the use, including local aliases of imports | A later local `Value .equ 7` gives `07 02`; a forward local jump table gives `05 00 06 00 05 60 60`. Imported numeric/address operands also link successfully. `K .equ Ext` used in the table gives linked `07 02` with provider Ext=7 whether K is defined before or after the table/sizeof. | **Owner-selected 2026-10-23: preserve local forward operands, reject imports and deferred strings.** Count one element provisionally, then validate local non-string kinds before unit publication; diagnose failures at sizeof. Explicit imports, names that become implicit imports, and local alias chains ending in either reject in both definition orders, even when a provider would supply a number/address. No serialized guard. Data without sizeof is unaffected. |
