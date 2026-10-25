@@ -17,3 +17,5 @@ xasm-v2
 
 # Automake subdirectory stamp for the isolated v2 target.
 .dirstamp
+
+xlnk-v2

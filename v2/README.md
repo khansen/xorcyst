@@ -167,9 +167,10 @@ No project ROM equality, end-to-end v2 performance, source binding, object
 serialization/linker integration or downstream analysis gate is claimed here.
 I2 completed local independent review before publication; see its approval below.
 
-On the local arm64 build the I2 node is 288 bytes (up from the initially reviewed
+At I2 approval on the local arm64 build the node was 288 bytes (up from the initially reviewed
 192, to keep the two memo closures independent), a reverse edge 8 bytes,
-a fragment 136 bytes and a final fact 56 bytes. Character maps allocate only
+a fragment was 136 bytes and a final fact 56 bytes. I4 storage changes are
+described below; those historical sizes are not current allocation estimates. Character maps allocate only
 when used. A 1,000/5,000-instruction shared-operand fixture evaluates 2,805/10,805
 nodes in two walks. The adversarial 100/200-anchor fixture evaluates
 10,899/41,799 nodes in three walks; this is recorded work, not a project timing
@@ -321,3 +322,189 @@ not waive PR CI, later reviews, required object/link ROM gates (including
 dpadhero2), analysis/bundle performance or final cutover. Installed v1 tools
 remain unchanged. This approval record adds no executable change; the PR
 retains the reviewed revision and this documentation commit.
+
+
+## I4: object and linker integration (approved for publication)
+
+Build `make xasm-v2 xlnk-v2`. The source frontend now writes XOROBJ2 objects
+unless `--pure-binary` is selected. `xlnk-v2` reads those objects and the existing
+linker-script syntax (`ram`, `link`, `copy`, `bank`, `pad`, and `output`). It uses
+the same evaluator and layout engine as direct-binary assembly. These are
+non-installed check targets. Listings/analysis remain disabled; no v1 object
+reader or format autodetection fallback is provided.
+
+Numeric script arguments deliberately require the entire token to be valid.
+Unlike v1's prefix parsing, `8000h`, `$C000x`, `1e3` and bare `$` reject with a
+located argument error and keep the previous output. The owner approved this
+correction on 2026-10-25; valid numeric spellings and script commands are unchanged.
+
+`object.h` owns fixed-width tables and counted blobs. Decode validates the
+complete envelope, lengths, table references, field usage, fixup ownership,
+opcodes, character maps and reserved tags before linking. Integers are read
+and written explicitly in little-endian order. Cyclic graphs are structurally
+valid; a required cyclic value fails during evaluation. The approved 244-byte
+example round-trips byte-for-byte. Objects contain only definitions and the
+reachable shared expression/extent graphs, never evaluator caches or AST pointers.
+The writer omits redundant spans on definition-reference and address leaves,
+which the linker locates through their owners, and shares equivalent leaves
+using small construction-only ID maps. It retains literal/operator/bank spans,
+RAM-position wrapper locations and per-operand fixup spans. Cycle proxies also
+fall back to owner locations for spanless leaves. I5 consumes direct-binary
+facts; it does not require term spans from objects. No wire-format change or
+general graph-normalization pass is involved.
+
+The source adapter keeps declaration-time captures and final-name binding from
+I3. A reassignment invalidates cached captures after its RHS has used the old
+definition and the new definition is installed. This preserves each captured
+step of `S = Ext / S = S+1` even while Ext is forward or imported.
+Exports are captured after public tagging but before unused-label removal, so
+an exported alias can be a private label's only reference. Other unused labels
+are still removed with v1's warning policy. When unused-equate checking is
+enabled, constant reference counts are saved and restored around early export
+capture: an export is not a source use for W0201. Label dependencies stay live.
+Leading unnamed RAM storage has no allocation identity and is discarded even
+when its count uses `$`; an ordinary count needs no extra PC anchor.
+Storage after a surviving label still extends that label's RAM allocation.
+Writer errors without a source span report `location unavailable`, never a
+NULL filename. Deferred initializer lengths use extent tag 8: one element for an integer,
+counted byte length for a string (owner clarification, 2026-10-25). Native
+field remainders therefore work with imported numbers, strings, empty strings,
+word strings, nested fields and unions. Imported kinds come from the provider;
+`.extrn` annotations remain local typing hints. Deferred `.char` values carry
+the map captured at their use. Existing `sizeof(label)` kind/length guards run
+before an object can be published. Fixed instructions and raw data coalesce
+without losing address anchors or branch/range checks.
+
+The linker consumes one object at a time. Each append copies the retained
+values, bytes and spans into the native unit, then discards the decoded tables
+and reuses one translation workspace for the next object. Decoded blob
+metadata stays in the checked wire storage until an edit materializes it.
+After the last append it resolves exports, imports
+and bank requests. Binding tables are discarded before layout. RAM entries
+retain unit order and emitted-label order, the exact v1 quicksort permutation,
+and v1's first-fit allocator including failed alignment splits. Initialized
+RAM data follows v1 linked behavior: it contributes no allocation, but its
+referenced imports must still bind. The approved binary/link differences remain
+in force, including the linked 64K code limit and late wide-operand errors.
+Without script RAM blocks, sizes are still checked but placement is skipped,
+as in v1. Unused or unused-exported RAM therefore does not prevent a link;
+actual address uses still fail because their anchors remain unresolved. This
+does not skip validation when supplied blocks are exhausted during allocation.
+
+The shared storage now uses fixed-size slabs for nodes, memo entries,
+locations and layout fragments. IDs remain stable as directories grow.
+Common spans occupy eight bytes with an owned full-width fallback; no location
+field is truncated. The two query modes still have separate lazy memo slots,
+reverse edges and rollover handling. Temporary traversal marks are cleared
+after each walk; cache validity still uses binding/request epochs. Nodes occupy 32 bytes; lazy memo records
+occupy 16 bytes. Known values share their payload storage with the epoch used
+only by Deferred/Invalid states. A cycle uses its request epoch; other
+binding-dependent results use the binding epoch. Known results cannot depend
+on a definition that remains unbound. Immutable strings retain their original
+lifetime. Layout fragments occupy 28 bytes, with 16-byte auxiliary records.
+Origins and bank transitions retain shared address checkpoints; after validation,
+fragment fields retain final offsets, lengths and numeric operands. Callers can
+still request the complete public fact array. The same
+cache differential, work counters and allocation-failure tests exercise these
+representation changes.
+
+The linker supplies a private, link-lifetime heap to its values, layout and
+object decoder. Fixed records share arena blocks, small allocations use reusable
+size classes, and large temporary mappings are released individually. There is
+no global allocator state. The caller destroys every object before destroying
+its heap; the default APIs continue to use the C allocator. ASan poisoning keeps
+freed small buffers inaccessible until reuse, and protects unused capacity.
+Tests inject every mapping failure and check zero live allocations and mappings.
+This changes storage ownership only, not evaluation or wire semantics.
+
+Small blocks have no quarantine, so reuse can hide a later stale-pointer access
+from ASan. LeakSanitizer cannot see individual pooled allocations; explicit
+live-count/byte checks at heap teardown complement it. The default-libc paths
+are tested too. Sanitizer silence is not a proof of pooled lifetime correctness.
+Independent review measured the heap saving about 655 KB for dpadhero2 and
+328 KB for DPadHero3Proto versus malloc, with similar speed; no simple saving
+was found from mmap input. Peak RSS occurs during largest-object translation,
+not at the post-layout allocation snapshot. See the validation record for the
+trace and the larger wire-artifact sizes.
+
+The driver protects the script, every object and every copied file from output
+aliasing. It also detects duplicate destinations before they exist. It stages
+and closes every output before publication. The linker streams the validated
+fragment snapshot to these stages using the same encoder as buffered output,
+avoiding an extra full-ROM allocation. Small fragments share a 4 KiB write
+buffer; large runs write directly. Write failures, including a final partial
+flush, leave publication to the caller's staging checks. It does no evaluation or input reads
+during output writing. A rename failure can preserve only
+the destinations not yet published; this is not a multi-file filesystem
+transaction. No malformed object, unresolved value or range error publishes
+an output.
+
+On macOS the prototype assembler loads the Unicode comparison framework only
+when comparing not-yet-existing names containing non-ASCII bytes. ASCII-only
+names honor the volume's case-sensitivity setting without the framework.
+Existing-file identity checks use filesystem metadata. Failure to load that framework fails the affected output
+protection check; it never falls back to a weaker comparison.
+
+Run `python3 tests/test_v2_objects.py` or `make check`. The object suite uses an
+independent Python wire encoder, malformed objects, source/link controls,
+large shared graphs, I/O injection and allocation-failure sweeps. The four v2
+suites run under the Linux sanitizer CI job after publication. Only the small
+wire example is distributed as test data; private project captures and tools
+are not installed or shipped.
+
+Source-checkout utilities `design/v2/check_object_projects.py` and
+`design/v2/measure_object_projects.py` build in scratch copies from frozen assets,
+select both tool paths explicitly, trap converter recipes and recheck input
+hashes. The paired harness records separate object-assembly, linker and full
+build samples and validates each ROM. These utilities do not replace the
+independent review or the performance protocol.
+
+Current status: all 15 required ROMs and diagnostics match after the review
+follow-ups. The latest fixes restore W0201 for exported constants, discard leading
+unnamed RAM storage even with a PC-dependent count, and skip RAM placement
+when the script supplies no blocks while still checking sizes and required
+addresses. Earlier fixes preserve export dependencies during label pruning,
+keep deferred reassignment captures current, report missing layout errors and
+name symbols in binding errors. The owner-approved strict script-number parsing is recorded in the
+compatibility ledger and NEWS. Leaf sharing reduces object bytes by 12.8% for
+dpadhero2 and 16.6% for DPadHero3Proto without a wire change. All project artifact
+sizes and the remaining fixed-width tradeoff are in the validation record.
+On 2026-10-25 the owner accepted
+the current measured memory tradeoff for now, including DPadHero3Proto's
+638,976-byte increase (30.7%) over v1. Keep per-tool accounting and review whether
+the storage and existing complexity are justified; seek simple optimizations
+without disproportionate machinery. Design section 6 and contract section 12
+record this decision. Contract section 13 records bounded timing effort: the
+small link deltas do not justify prolonged tuning. The reviewed candidate-14
+15-project survey found
+at most +0.562 ms link overhead and faster complete-build medians throughout.
+Its formal plain Metroid/Zelda timing remains historical evidence. Current
+check/distcheck pass 535/540 tests, Linux sanitizers pass, all required outputs
+match. The reviewed short two-project cost survey remains historical evidence;
+this warning/RAM follow-up makes no new timing claim.
+Local independent review cleared I4 at `cf14315` with no blockers. The owner
+approved I4 on 2026-10-25; see the record below. Leading unnamed RAM initializer `$` remains an
+optional compatibility/diagnostic follow-up in TODO and the validation record;
+it is not an approved contract exception.
+See `design/v2/I4_VALIDATION.md` and prompt `design/v2/I4_REVIEW.md` in the source checkout.
+The subsequent I4 approval below authorizes its PR and CI run.
+
+
+## I4 approval record
+
+Kent Hansen approved I4 on 2026-10-25 at
+`08058227492c538341f080cd2274871893ab6d27`, after independent local review
+reported no blockers on runtime revision
+`cf14315345a932bd8948948393c77159130bcda0`. The intervening changes record
+that review and the optional RAM-initializer follow-up; they change no runtime.
+The owner authorized publication as the single I4 PR and its CI run.
+
+The approval covers the isolated XOROBJ2 writer/reader, source object lowering,
+linker integration, tests, and documented compatibility and resource decisions.
+The optional leading unnamed RAM initializer `$` issue remains tracked for
+follow-up; approval does not make it a permanent contract exception. PR CI,
+I5 analysis/consumer migration and its performance gates, and the coordinated
+I6 cutover remain required. Installed xasm/xlnk stay v1.
+
+This approval record changes documentation only. The branch retains the
+approved revision and adds this citable approval commit before publication.

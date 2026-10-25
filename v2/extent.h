@@ -16,7 +16,9 @@ v2_id v2_extent_sum(v2_unit *, v2_id left, v2_id right, v2_location);
 v2_id v2_extent_repeat(v2_unit *, v2_id count, v2_id element, v2_location);
 v2_id v2_extent_remainder(v2_unit *, v2_id declared, v2_id initialized, v2_location);
 v2_id v2_extent_bound(v2_unit *, v2_id extent, uint32_t min, uint32_t max, v2_location);
-v2_id v2_extent_string(v2_unit *, v2_id string, v2_location);
+/* Data/initializer operand length: one for an integer, byte length for a
+ * string. Owner-approved tag-8 clarification; not source sizeof(label). */
+v2_id v2_extent_string(v2_unit *, v2_id operand, v2_location);
 /* Explicit low-32-bit projection, after checked extent evaluation. */
 v2_id v2_extent_integer(v2_unit *, v2_id extent, v2_location);
 

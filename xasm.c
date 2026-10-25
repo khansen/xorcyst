@@ -1572,13 +1572,13 @@ int main(int argc, char *argv[]) {
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
 #ifdef XORCYST_V2_FRONTEND
-    if (!xasm_args.pure_binary || xasm_args.listing_file || xasm_args.xref_file
+    if (xasm_args.listing_file || xasm_args.xref_file
         || xasm_args.instruction_records_file || xasm_args.fceux_nl_rom_prefix
         || xasm_args.fceux_nl_ram_file || xasm_args.audit_raw_addresses
         || xasm_args.xref_summary || xasm_args.analyze_index_patterns
         || xasm_args.data_consumers || xasm_args.analyze_data_coverage
         || xasm_args.compare_file || xasm_args.dependency_manifest) {
-        fprintf(stderr, "error: I3 prototype supports plain --pure-binary output only\n");
+        fprintf(stderr, "error: I4 prototype does not support listing or analysis output\n");
         exit_code = 1;
         goto cleanup;
     }
@@ -1798,15 +1798,15 @@ int main(int argc, char *argv[]) {
         } else {
             int output_ok;
             verbose("Generating final output...");
-            if (xasm_args.pure_binary) {
 #ifdef XORCYST_V2_FRONTEND
-                v2_frontend_write(output_fp);
+            v2_frontend_write(output_fp);
 #else
+            if (xasm_args.pure_binary) {
                 astproc_fifth_pass(root_node, output_fp);
-#endif
             } else {
                 codegen_write(root_node, output_fp);
             }
+#endif
             output_ok = !ferror(output_fp);
             if (fclose(output_fp) != 0) output_ok = 0;
             if (!output_ok) {

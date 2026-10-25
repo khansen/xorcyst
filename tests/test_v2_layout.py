@@ -20,7 +20,7 @@ class Layout(unittest.TestCase):
             '-Wall', '-Wextra', '-I', str(REPO),
             *shlex.split(os.environ.get('TEST_V2_CFLAGS', '-O0 -g -Werror')),
             *[str(REPO / name) for name in
-              ('tests/test_v2_alloc.c', 'tests/test_v2_layout_alloc.c', 'tests/test_v2_cache.c', 'opcode.c', 'tests/test_v2_layout.c')],
+              ('v2/heap.c', 'tests/test_v2_alloc.c', 'tests/test_v2_layout_alloc.c', 'tests/test_v2_cache.c', 'opcode.c', 'tests/test_v2_layout.c')],
             '-o', str(cls.executable)], capture_output=True, text=True)
         if result.returncode:
             raise AssertionError(result.stderr)
@@ -31,6 +31,12 @@ class Layout(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(r.stderr, '')
         return r.stdout.splitlines()
+
+    def test_compact_link_facts_match_full_analysis_snapshots(self):
+        self.assertEqual(self.run_case("compact-facts")[0], "compact facts: OK")
+
+    def test_streamed_fragments_match_buffered_bytes_and_survive_graph_edits(self):
+        self.assertEqual(self.run_case("streamed-bytes")[0], "streamed bytes: OK")
 
     def test_span_lowering_only_visits_extent_reachable_roots(self):
         self.assertEqual(self.run_case('rooted-spans')[0], 'rooted spans: OK')

@@ -3,6 +3,7 @@
 #include "frontend.h"
 #include "../symtab.h"
 #include "layout.h"
+#include "program.h"
 static uint64_t binding_epoch = 1;
 static astnode *frontend_capture_constant(astnode *, symtab_entry *);
 static astnode *frontend_fold_reference(astnode *);
@@ -14,6 +15,8 @@ static int frontend_type_pc(astnode *);
 static astnode *frontend_sizeof_label(astnode *, astnode *);
 static void frontend_capture_pc(location);
 static void frontend_reset_pc(void);
+static astnode *frontend_initializer_size(astnode *);
+static void frontend_export_symbols(location);
 #include "../astproc.c"
 
 typedef struct
@@ -22,6 +25,9 @@ typedef struct
 } source_map;
 static v2_unit *values;
 static v2_layout *layout;
+static v2_program *program;
+static unsigned char *object_bytes;
+static size_t object_length;
 static source_map *maps;
 static size_t map_count, map_capacity;
 static v2_id *files;
@@ -52,7 +58,8 @@ static size_guard *size_guards;
  * No guard retains a statement pointer. astnode_clone drops the flag, so
  * cloned statements cannot inherit pending handles. */
 #define DATA_PENDING_SIZES_FLAG 0x40000
-static size_guard **pending_sizes;
+typedef struct { size_guard *sizes; v2_id extent, value; uint32_t nominal; } pending_data;
+static pending_data *pending_sizes;
 static size_t pending_size_count, pending_size_capacity;
 /* First-pass data operands remain in the AST until second-pass reduction.
  * Borrow them only across that interval. A source-time PC use selects which
@@ -148,6 +155,8 @@ static location parser_location(v2_location loc)
 {
     location result = loc_preserve;
     result.file = v2_file_name(values, loc.file);
+    if (!result.file)
+        result.file = "location unavailable";
     result.first_line = (int)loc.line;
     result.first_column = (int)loc.column;
     result.last_line = (int)loc.end_line;
@@ -216,7 +225,7 @@ static int graph_ready(const astnode *n)
     case V2_REFERENCE_NODE:
         break;
     case ARITHMETIC_NODE:
-        if (n->oper == BANK_OPERATOR)
+        if (n->oper == BANK_OPERATOR && xasm_args.pure_binary)
             return 0;
         break;
     default:
@@ -463,14 +472,14 @@ static int local_operand(astnode *n)
             return 0;
     return 1;
 }
-static int defer_size_guard(astnode *data, size_guard *g)
+static int pending_data_handle(astnode *data)
 {
     if (!(data->flags & DATA_PENDING_SIZES_FLAG))
     {
         if (pending_size_count == pending_size_capacity)
         {
             size_t capacity = pending_size_capacity ? pending_size_capacity * 2 : 16;
-            size_guard **p = realloc(pending_sizes, capacity * sizeof(*p));
+            pending_data *p = realloc(pending_sizes, capacity * sizeof(*p));
             if (!p)
                 return 0;
             pending_sizes = p;
@@ -478,12 +487,17 @@ static int defer_size_guard(astnode *data, size_guard *g)
         }
         if (pending_size_count >= LONG_MAX)
             return 0;
-        pending_sizes[pending_size_count++] = NULL;
+        pending_sizes[pending_size_count++] = (pending_data){NULL,V2_NONE,V2_NONE,0};
         data->param = (long)pending_size_count;
         data->flags |= DATA_PENDING_SIZES_FLAG;
     }
-    g->pending_next = pending_sizes[data->param - 1];
-    pending_sizes[data->param - 1] = g;
+    return 1;
+}
+static int defer_size_guard(astnode *data, size_guard *g)
+{
+    if (!pending_data_handle(data)) return 0;
+    g->pending_next = pending_sizes[data->param - 1].sizes;
+    pending_sizes[data->param - 1].sizes = g;
     return 1;
 }
 static const astnode *label_data_start(const astnode *def)
@@ -516,6 +530,24 @@ static int contains_label_size(astnode *n, const astnode *data_start)
     for (c = n->first_child; c; c = c->next_sibling)
         if (contains_label_size(c, data_start))
             return 1;
+    return 0;
+}
+/* A label-size scan may count a forward numeric initializer provisionally,
+ * just as it counts its data operand. The existing operand-kind guard rejects
+ * a later string; the field's declared count must still be known at this use. */
+static int initializer_size_hint(astnode *n, void *arg, astnode **next)
+{
+    size_t i;
+    (void)arg; (void)next;
+    for (i = 0; i < pending_size_count; ++i)
+        if (pending_sizes[i].value == (v2_id)n->param &&
+            v2_evaluate(values, (v2_id)n->param).state == V2_DEFERRED)
+        {
+            astnode *literal = astnode_create_integer((int)pending_sizes[i].nominal, n->loc);
+            astnode_replace(n, literal);
+            astnode_finalize(n);
+            return 0;
+        }
     return 0;
 }
 static astnode *frontend_sizeof_label(astnode *def, astnode *use)
@@ -587,7 +619,16 @@ static astnode *frontend_sizeof_label(astnode *def, astnode *use)
         }
         else if (n->type == STORAGE_NODE || n->type == FIELD_PADDING_NODE)
         {
-            astnode *copy = reduce_expression_complete(astnode_clone(RHS(n), n->loc), FOLD_PC_NO);
+            astnode *holder = astnode_create(LIST_NODE, n->loc);
+            astnode *copy;
+            static const astnodeprocmap hints[] = {{V2_REFERENCE_NODE, initializer_size_hint}, {0, NULL}};
+            astnode_add_child(holder, astnode_clone(RHS(n), n->loc));
+            reduce_expression_complete(holder->first_child, FOLD_PC_NO);
+            if (holder->first_child->type != INTEGER_NODE)
+                astproc_walk(holder, NULL, hints);
+            reduce_expression_complete(holder->first_child, FOLD_PC_NO);
+            copy = astnode_remove_child_at(holder, 0);
+            astnode_finalize(holder);
             unsigned width = n->type == FIELD_PADDING_NODE ? 1 : element_width(LHS(n)->datatype);
             if (!copy || copy->type != INTEGER_NODE)
             {
@@ -617,6 +658,56 @@ static astnode *frontend_sizeof_label(astnode *def, astnode *use)
         return c;
     }
 }
+static int fixed_data_width(astnode *);
+static int bind_initializer_extent(astnode *data)
+{
+    if ((data->flags & DATA_PENDING_SIZES_FLAG) && pending_sizes[data->param - 1].extent != V2_NONE)
+        {
+            astnode *operand;
+            v2_location loc = owned_location(data->loc);
+            v2_id total = v2_extent_literal(values, 0, loc);
+            for (operand = RHS(data); operand; operand = operand->next_sibling)
+            {
+                v2_id length;
+                if (fixed_data_width(operand) || operand->type == FORWARD_BRANCH_NODE || operand->type == BACKWARD_BRANCH_NODE) length = v2_extent_literal(values, 1, loc);
+                else if (expression_uses_pc(operand))
+                {
+                    err(operand->loc, "initializer string length depends on layout");
+                    return 0;
+                }
+                else length = v2_extent_string(values, expression(operand, V2_NONE), owned_location(operand->loc));
+                total = v2_extent_sum(values, total, length, loc);
+            }
+            total = v2_extent_repeat(values, total,
+                v2_extent_literal(values, element_width(LHS(data)->datatype), loc), loc);
+            v2_bind(values, pending_sizes[data->param - 1].extent, total);
+            pending_sizes[data->param - 1].extent = V2_NONE;
+        }
+    return 1;
+}
+static astnode *frontend_initializer_size(astnode *data)
+{
+    v2_location loc = owned_location(data->loc);
+    v2_id definition, value;
+    astnode *ref, *operand;
+    uint32_t nominal = 0;
+    if (!pending_data_handle(data))
+    {
+        err(data->loc, "out of memory recording initializer extent");
+        return astnode_create_integer(0, data->loc);
+    }
+    definition = v2_definition(values, "initializer extent", loc);
+    pending_sizes[data->param - 1].extent = definition;
+    value = v2_extent_integer(values, v2_reference(values, definition, loc), loc);
+    for (operand = RHS(data); operand; operand = operand->next_sibling)
+        nominal += (uint32_t)(operand->type == STRING_NODE ? strlen(operand->string) : 1) * element_width(LHS(data)->datatype);
+    pending_sizes[data->param - 1].value = value;
+    pending_sizes[data->param - 1].nominal = nominal;
+    ref = astnode_create(V2_REFERENCE_NODE, data->loc);
+    ref->param = value;
+    return ref;
+}
+static int fixed_data_width(astnode *);
 static int capture_size_guard_operands(astnode *data, void *arg, astnode **next)
 {
     size_guard *g;
@@ -624,12 +715,12 @@ static int capture_size_guard_operands(astnode *data, void *arg, astnode **next)
     (void)next;
     if (data->flags & DATA_PENDING_SIZES_FLAG)
     {
-        for (g = pending_sizes[data->param - 1]; g; g = g->pending_next)
+        for (g = pending_sizes[data->param - 1].sizes; g; g = g->pending_next)
         {
             astnode *e = astnode_get_child(data, g->operand_index);
             g->operand = astnode_clone(e, e->loc);
         }
-        pending_sizes[data->param - 1] = NULL;
+        pending_sizes[data->param - 1].sizes = NULL;
         data->flags &= ~DATA_PENDING_SIZES_FLAG;
     }
     return 0;
@@ -697,6 +788,11 @@ static void remember_pc_width(astnode *e)
 }
 static void frontend_capture_pc(location use)
 {
+    if (!xasm_args.pure_binary)
+    {
+        err(use, "cannot use $ before final layout in object output");
+        return;
+    }
     if (!pc_width_head[in_dataseg])
         return;
     if (pc_use_count == pc_use_capacity)
@@ -799,6 +895,7 @@ static int frontend_data(astnode *data)
                 remember_pc_width(expr);
         }
     }
+    if (!bind_initializer_extent(data)) return 0;
     if (in_dataseg)
         dataseg_pc += bytes;
     else
@@ -948,6 +1045,8 @@ static v2_id expression(astnode *e, v2_id pc)
         v2_id lhs, rhs;
         if (e->oper == BANK_OPERATOR)
         {
+            if (program)
+                return v2_program_bank(program, expression(LHS(e), pc), loc);
             err(e->loc, "bank operator is not supported in pure binary output");
             return V2_NONE;
         }
@@ -968,7 +1067,10 @@ static void flush_literals(void)
 {
     if (literal_count)
     {
-        v2_layout_raw(layout, literal_bytes, literal_count, owned_location(literal_location));
+        if (program)
+            v2_program_raw(program, literal_bytes, literal_count, owned_location(literal_location));
+        else
+            v2_layout_raw(layout, literal_bytes, literal_count, owned_location(literal_location));
         literal_count = 0;
     }
 }
@@ -1073,7 +1175,7 @@ static void lower_data(astnode *n, int ram)
                     err(e->loc, "%s", v2_error_message(r.diagnostic.code));
                     return;
                 }
-                if (r.state == V2_DEFERRED)
+                if (r.state == V2_DEFERRED && !program)
                 {
                     if (ram_value_count == ram_value_capacity)
                     {
@@ -1089,12 +1191,21 @@ static void lower_data(astnode *n, int ram)
                     }
                     ram_values[ram_value_count++] = (ram_value){expr, use};
                 }
-                else if (LHS(n)->datatype != CHAR_DATATYPE && r.value.kind == V2_INTEGER &&
+                else if (r.state == V2_KNOWN && LHS(n)->datatype != CHAR_DATATYPE && r.value.kind == V2_INTEGER &&
                          ((width == 1 && !IS_BYTE_VALUE(r.value.as.integer)) ||
                           (width == 2 && !IS_WORD_VALUE(r.value.as.integer))))
                     warn(e->loc, "operand out of range; truncated");
-                v2_layout_ram(layout, pc, v2_extent_literal(values, count * width, use), 0, 0, use);
+                if (program)
+                {
+                    if (r.state == V2_DEFERRED)
+                        v2_program_require(program, expr, use);
+                    v2_program_ram_storage(program, pc, v2_extent_literal(values, 0, use), use);
+                }
+                else
+                    v2_layout_ram(layout, pc, v2_extent_literal(values, count * width, use), 0, 0, use);
             }
+            else if (program)
+                v2_program_data(program, pc, expr, width, map, use);
             else
                 v2_layout_data(layout, pc, expr, width, !fixed_data_width(e), map, use);
             e = e->next_sibling;
@@ -1129,7 +1240,14 @@ static void lower(astnode *root)
         v2_location loc = owned_location(n->loc);
         v2_id pc, expr, extent;
         next = n->next_sibling;
-        if (n->type != DATA_NODE && n->type != BINARY_NODE)
+        /* Fully captured non-branch instructions have no link-time fixup.
+         * Keep them in the fixed-byte run, just as literal data. Labels and
+         * instructions that depend on placement still flush the run. */
+        int fixed_instruction = program && n->type == INSTRUCTION_NODE &&
+            (opcode_length(n->instr.opcode) == 1 ||
+             (astnode_is_type(LHS(n), INTEGER_NODE) &&
+              opcode_addressing_mode(n->instr.opcode) != RELATIVE_MODE));
+        if (n->type != DATA_NODE && n->type != BINARY_NODE && !fixed_instruction)
             flush_literals();
         switch (n->type)
         {
@@ -1156,18 +1274,44 @@ static void lower(astnode *root)
             /* .undef can retire a declaration while its bytes remain in the
              * stream. v1 resolves address operands against the final binding;
              * only that declaration places the live symbol's anchor. */
-            if (!s || s->source_label != n)
+            int live = s && s->source_label == n;
+            if (!live && !program)
                 break;
-            pc = symbol_anchor(s, n->loc);
-            if (ram)
+            pc = live ? symbol_anchor(s, n->loc) : v2_anchor(values, loc);
+            if (program && ram)
+                v2_program_ram_label(program, pc, live && (s->flags & ALIGN_FLAG) ? (unsigned)s->align : 0,
+                                     live && (s->flags & ZEROPAGE_FLAG), loc);
+            else if (program)
+                v2_program_mark(program, pc, loc);
+            else if (ram)
                 v2_layout_ram(layout, pc, v2_extent_literal(values, 0, loc), 0, 0, loc);
             else
                 v2_layout_mark(layout, pc, loc);
             break;
         }
         case INSTRUCTION_NODE:
+            if (fixed_instruction)
+            {
+                unsigned char opcode = n->instr.opcode;
+                uint32_t operand = LHS(n) ? (uint32_t)LHS(n)->integer : 0;
+                unsigned width, j;
+                unsigned char *bytes;
+                if (!n->instr.mnemonic.wide && operand <= 255) {
+                    unsigned char narrow = opcode_zp_equiv(opcode, opcode_addressing_mode(opcode));
+                    if (narrow != 0xff) opcode = narrow;
+                }
+                width = (unsigned)opcode_length(opcode);
+                bytes = append_literals(width, n->loc);
+                if (!bytes) break;
+                bytes[0] = opcode;
+                for (j = 1; j < width; j++) { bytes[j] = (unsigned char)operand; operand >>= 8; }
+                break;
+            }
             pc = LHS(n) && expression_uses_pc(LHS(n)) ? v2_anchor(values, loc) : V2_NONE;
-            if (astnode_is_type(LHS(n), INTEGER_NODE))
+            if (program)
+                v2_program_instruction(program, pc, n->instr.opcode, expression(LHS(n), pc),
+                                       n->instr.mnemonic.wide, loc);
+            else if (astnode_is_type(LHS(n), INTEGER_NODE))
                 v2_layout_literal_instruction(layout, pc, n->instr.opcode, LHS(n)->integer,
                                               n->instr.mnemonic.wide, 1, loc);
             else
@@ -1181,7 +1325,9 @@ static void lower(astnode *root)
             lower_data(n, ram);
             break;
         case STORAGE_NODE:
-            pc = v2_anchor(values, loc);
+            /* An unused PC anchor would give otherwise unnamed leading RAM
+             * storage an allocation identity that v1 does not assign it. */
+            pc = program && ram && !expression_uses_pc(n) ? V2_NONE : v2_anchor(values, loc);
             expr = expression(RHS(n), pc);
             extent = v2_extent_count(values, expr, astnode_get_child(n, 2) ? 0 : 1, 65535, loc);
             extent = v2_extent_bound(
@@ -1201,13 +1347,20 @@ static void lower(astnode *root)
                 extent =
                     v2_extent_sum(values, v2_extent_repeat(values, check, zero, loc), extent, loc);
             }
-            if (ram)
+            if (program && ram)
+                v2_program_ram_storage(program, pc, extent, loc);
+            else if (program)
+                v2_program_storage(program, pc, extent, loc);
+            else if (ram)
                 v2_layout_ram(layout, pc, extent, 0, 0, loc);
             else
                 v2_layout_storage(layout, pc, extent, loc);
             break;
         case BINARY_NODE:
-            if (ram)
+            if (program && ram)
+                v2_program_ram_storage(program, V2_NONE,
+                    v2_extent_literal(values, 0, loc), loc);
+            else if (ram)
                 v2_layout_ram(layout, v2_anchor(values, loc),
                               v2_extent_literal(values, (uint32_t)n->binary.size, loc), 0, 0, loc);
             else
@@ -1247,6 +1400,55 @@ static void lower(astnode *root)
     }
     flush_literals();
 }
+/* The table is an AVL tree and captures do not mutate its membership. Visit
+ * exports directly in the same name order as symtab_list, without allocating
+ * and looking up a second copy of every (mostly private) identifier. */
+static void export_symbols(symtab_entry *s, location fallback)
+{
+    if (!s) return;
+    export_symbols(s->left, fallback);
+    if ((s->flags & PUBLIC_FLAG) && !(s->flags & EXTRN_FLAG))
+    {
+        location loc = s->has_assignment_loc ? s->assignment_loc : s->def ? s->def->loc : fallback;
+        v2_id value = s->type == CONSTANT_SYMBOL ? capture_symbol(s, loc)
+            : v2_address(values, symbol_anchor(s, loc), owned_location(loc));
+        v2_program_export(program, s->id, value, owned_location(loc));
+    }
+    export_symbols(s->right, fallback);
+}
+static void frontend_export_symbols(location loc)
+{
+    if (program)
+    {
+        symbol_ident_list constants = {0};
+        int *refs = NULL, i;
+        /* Exports retain address dependencies, but are not source uses for
+         * W0201. Structural capture can also touch private constant chains. */
+        if (xasm_args.warn_unused_equ)
+        {
+            if (symtab_list_type(CONSTANT_SYMBOL, &constants) < 0)
+            {
+                err(loc, "out of memory preserving equate usage");
+                return;
+            }
+            refs = constants.size ? calloc((size_t)constants.size, sizeof(*refs)) : NULL;
+            if (constants.size && !refs)
+            {
+                symtab_list_finalize(&constants);
+                err(loc, "out of memory preserving equate usage");
+                return;
+            }
+            for (i = 0; i < constants.size; ++i)
+                refs[i] = symtab_lookup(constants.idents[i])->ref_count;
+        }
+        export_symbols(symtab_tos()->root, loc);
+        finish_captures();
+        for (i = 0; i < constants.size; ++i)
+            symtab_lookup(constants.idents[i])->ref_count = refs[i];
+        free(refs);
+        symtab_list_finalize(&constants);
+    }
+}
 void v2_frontend_process(astnode *root)
 {
     static const astnodeprocmap size_map[] = {{DATA_NODE, capture_size_guard_operands}, {0, NULL}};
@@ -1267,8 +1469,11 @@ void v2_frontend_process(astnode *root)
         err(root->loc, "out of memory creating v2 unit");
         return;
     }
-    layout = v2_layout_create(values, V2_BINARY_LAYOUT);
-    if (!layout)
+    if (xasm_args.pure_binary)
+        layout = v2_layout_create(values, V2_BINARY_LAYOUT);
+    else
+        program = v2_program_create(values);
+    if (!layout && !program)
     {
         err(root->loc, "out of memory creating v2 layout");
         return;
@@ -1320,6 +1525,15 @@ void v2_frontend_finish(void)
 {
     const v2_layout_fact *facts;
     size_t count, i;
+    if (program)
+    {
+        v2_object *object = v2_program_object(program);
+        if (!object || !v2_object_encode(object, &object_bytes, &object_length))
+            err(parser_location(v2_no_location()), "%s", object ?
+                v2_object_error_message(v2_object_error_at(object)) : v2_program_error(program));
+        v2_object_destroy(object);
+        return;
+    }
     if (!v2_layout_run(layout))
     {
         v2_layout_diagnostic d = v2_layout_error_at(layout);
@@ -1344,7 +1558,9 @@ void v2_frontend_finish(void)
 void v2_frontend_write(FILE *stream)
 {
     size_t length;
-    const unsigned char *bytes = v2_layout_bytes(layout, &length);
+    const unsigned char *bytes;
+    if (program) { bytes = object_bytes; length = object_length; }
+    else bytes = v2_layout_bytes(layout, &length);
     if (length && fwrite(bytes, 1, length, stream) != length)
         ++err_count;
 }
@@ -1383,6 +1599,11 @@ void v2_frontend_clear(void)
     free(pending_sizes);
     pending_sizes = NULL;
     pending_size_count = pending_size_capacity = 0;
+    v2_program_destroy(program);
+    program = NULL;
+    free(object_bytes);
+    object_bytes = NULL;
+    object_length = 0;
     v2_layout_destroy(layout);
     layout = NULL;
     v2_unit_destroy(values);

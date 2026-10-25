@@ -51,8 +51,10 @@ void test_v2_version_rollover(v2_unit *u, int which)
 void test_v2_clear_memos(v2_unit *u)
 {
     size_t i;
-    for (i = 0; i < u->node_count; ++i)
-        u->nodes[i].memo[0].cached = u->nodes[i].memo[1].cached = 0;
+    for (i = 0; i < u->node_count; ++i) {
+        (*node_memo(u, node_at(u, i), 0)).flags &= (unsigned char)~MEMO_CACHED;
+        (*node_memo(u, node_at(u, i), 1)).flags &= (unsigned char)~MEMO_CACHED;
+    }
 }
 
 size_t test_v2_node_count(v2_unit *u) { return u->node_count; }
@@ -62,6 +64,6 @@ size_t test_v2_node_count(v2_unit *u) { return u->node_count; }
 size_t test_v2_span_nodes(v2_unit *u)
 {
     size_t i, count = 0;
-    for (i = 0; i < u->node_count; ++i) count += u->nodes[i].kind == SPAN;
+    for (i = 0; i < u->node_count; ++i) count += (*node_at(u, i)).kind == SPAN;
     return count;
 }

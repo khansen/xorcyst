@@ -1,5 +1,8 @@
 Development prototype (not an installed v2 release):
 
+- Deliberate v2 linker-script correction: numeric arguments must consume the
+  whole token. Reject 8000h, $C000x, 1e3 and a bare $ rather than silently using
+  the numeric prefix as v1 does. Existing valid numeric spellings are unchanged.
 - Add the explicit, non-installed xasm-v2 target for plain pure-binary assembly.
   It uses the existing source frontend and the owned v2 value/layout backend.
   Installed xasm/xlnk, v1 objects and analysis formats remain unchanged.

@@ -1,5 +1,6 @@
 #include "v2/value.h"
 #include "v2/extent.h"
+#include "v2/graph.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +46,45 @@ static int has_dependency(v2_result r, v2_dependency_kind kind, v2_id id)
     for (i = 0; i < r.dependency_count; ++i)
         if (r.dependencies[i].kind == kind && r.dependencies[i].id == id) return 1;
     return 0;
+}
+
+static void location_storage(void)
+{
+    v2_unit *u = v2_unit_create();
+    v2_id file = v2_file(u, "source.asm"), last = file, saved[7];
+    v2_location cases[] = {
+        {0, 1, 1, 1, 9}, {0, 0xffffff, 255, 0xffffff + 255, 255},
+        {0, 0x1000000, 1, 0x1000000, 1}, {0, 2, 256, 2, 300},
+        {0, 1, 1, 257, 1}, {0, UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX},
+        {65535, 1, 1, 1, 9}
+    };
+    size_t i;
+    CHECK(file == 0);
+    for (i = 1; i <= 65535; i++) last = v2_file(u, "unit-local.asm");
+    CHECK(last == 65535);
+    for (i = 0; i < 7; i++) {
+        v2_graph_node n;
+        v2_result result;
+        v2_id value = v2_binary(u, V2_DIVIDE, number(u, 1), number(u, 0), cases[i]);
+        saved[i] = v2_graph_location_id(u, cases[i]);
+        CHECK(v2_graph_read(u, value, &n));
+        CHECK(n.location.file == cases[i].file && n.location.line == cases[i].line &&
+              n.location.column == cases[i].column && n.location.end_line == cases[i].end_line &&
+              n.location.end_column == cases[i].end_column);
+        result = v2_evaluate(u, value);
+        CHECK(result.state == V2_INVALID && result.diagnostic.code == V2_ERROR_DIV_ZERO);
+        CHECK(result.diagnostic.location.file == cases[i].file &&
+              result.diagnostic.location.end_column == cases[i].end_column);
+    }
+    v2_graph_release_location_index(u);
+    for (i = 0; i < 10000; i++) {
+        v2_location l = loc(file, (uint32_t)i + 300);
+        CHECK(v2_graph_location_id(u, l) != V2_NONE);
+    }
+    v2_graph_release_location_index(u);
+    for (i = 0; i < 7; i++) CHECK(saved[i] == v2_graph_location_id(u, cases[i]));
+    v2_unit_destroy(u);
+    CHECK(test_v2_live_allocations() == 0);
 }
 
 static void arithmetic_stream(void)
@@ -591,6 +631,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[1], "cycle-error-order")) cycle_error_order();
     else if (!strcmp(argv[1], "string-identities")) string_identities();
     else if (!strcmp(argv[1], "deep-graphs")) deep_graphs();
+    else if (!strcmp(argv[1], "locations")) location_storage();
     else if (!strcmp(argv[1], "limits")) limits();
     else if (!strcmp(argv[1], "concat-budget")) concat_budget();
     else if (!strcmp(argv[1], "invalid-builders")) invalid_builders();

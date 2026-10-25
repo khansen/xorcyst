@@ -18,8 +18,7 @@ def build(destination):
                for word in sources.replace('\\\n',' ').split() if word.endswith('.c')]
     command = [*shlex.split(os.environ.get('CC','cc')), '-I',str(REPO),'-Wall','-DXORCYST_V2_FRONTEND',
                *shlex.split(os.environ.get('TEST_V2_CFLAGS','-O2 -g -Werror')), *map(str,sources),
-               str(REPO/'v2/value.c'),str(REPO/'v2/layout.c'),'-o',str(destination)]
-    if sys.platform=='darwin': command+=['-framework','CoreFoundation']
+               str(REPO/'v2/heap.c'),str(REPO/'v2/value.c'),str(REPO/'v2/layout.c'),str(REPO/'v2/program.c'),str(REPO/'v2/object.c'),'-o',str(destination)]
     result=subprocess.run(command,capture_output=True,text=True,timeout=120)
     if result.returncode: raise AssertionError(result.stderr)
 
@@ -30,6 +29,14 @@ class Frontend(unittest.TestCase):
         cls.addClassCleanup(directory.cleanup)
         cls.tool=Path(directory.name)/'xasm-v2'
         build(cls.tool)
+        cls.protection = Path(directory.name)/'protection'
+        command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO),
+                   '-DXORCYST_V2_FRONTEND', '-Wall',
+                   *shlex.split(os.environ.get('TEST_V2_CFLAGS', '-O2 -g -Werror')),
+                   *[str(REPO/p) for p in ('tests/test_v2_dependencies.c', 'output_file.c', 'sha256.c')],
+                   '-o', str(cls.protection)]
+        r = subprocess.run(command, capture_output=True, text=True)
+        if r.returncode: raise AssertionError(r.stderr)
 
     def setUp(self):
         directory=tempfile.TemporaryDirectory(prefix='xorcyst-i3-source-')
@@ -53,6 +60,41 @@ class Frontend(unittest.TestCase):
             if expected is not None:self.assertEqual((self.directory/'out').read_bytes(),bytes.fromhex(expected))
         self.assertFalse((self.directory/'out.tmp').exists())
         return r
+
+    def test_output_protection_keeps_missing_probes_and_unicode_aliases(self):
+        def compare(a, b, aliases, env=None):
+            r = subprocess.run([str(self.protection), a, b], cwd=self.directory,
+                               capture_output=True, text=True, env=env)
+            self.assertEqual(r.returncode, 3 if aliases else 0, r.stderr)
+            self.assertNotRegex(r.stderr, r'AddressSanitizer|runtime error:')
+            if aliases: self.assertIn('output protection', r.stderr)
+            else: self.assertEqual(r.stderr, '')
+            return r
+        (self.directory/'existing').write_text('keep')
+        compare('existing', 'missing', False)
+        compare('missing', 'existing', False)
+        compare('missing', './missing', True)
+        compare('missing', 'different', False)
+        (self.directory/'dir').mkdir()
+        (self.directory/'alias').symlink_to('dir', target_is_directory=True)
+        compare('dir/missing', 'alias/missing', True)
+        os.link(self.directory/'existing', self.directory/'hard')
+        compare('existing', 'hard', True)
+        if sys.platform == 'darwin':
+            compare('café.o', 'café.o', True)
+            unavailable = {**os.environ, 'TEST_V2_UNICODE_UNAVAILABLE': '1'}
+            compare('left', 'right', False, unavailable)
+            compare('left', 'left-longer', False, unavailable)
+            compare('left-longer', 'left', False, unavailable)
+            # Query the volume through actual existing-file lookup, separately
+            # from the production comparison of not-yet-existing names.
+            (self.directory/'CASE-PROBE').write_text('probe')
+            insensitive = (self.directory/'case-probe').exists()
+            compare('MixedCase', 'mixedcase', insensitive, unavailable)
+            compare('K.o', 'K.o', True)
+            r = compare('café.o', 'café.o', True, unavailable)
+            self.assertIn('cannot initialize Unicode output comparison', r.stderr)
+        self.assertEqual((self.directory/'existing').read_text(), 'keep')
 
     def test_narrowing_controls(self):
         for k,want in ((263,'EA A5 00 AD 00 01 EA 60'),(262,None)):
@@ -88,6 +130,20 @@ class Frontend(unittest.TestCase):
         self.assemble('.org $8000\nFirst:\n@@x: .db 1\nAlias = @@x\nSecond:\n@@x: .db 2\nlda Alias\n','01 02 AD 00 80')
         self.assemble('.proc P\nlda #1\nrts\n.endp\njsr P\n','A9 01 60 20 00 00')
         self.assemble('b2 .byte[4]\nlda b2[2]\n','00 00 00 00 A5 02')
+
+    def test_reassignment_captures_new_deferred_definition_after_rhs(self):
+        cases = [
+            ('S = K\nS = S+1\n.db S\nK .equ 5\n', '06'),
+            ('S = K\n.db S\nS = S+1\n.db S\nS = S*2\n.db S\nK .equ 5\n', '05 06 0C'),
+            ('S = K\nAlias .equ S\nS = S+1\n.db Alias,S\nK .equ 5\n', '05 06'),
+            ('S = F\n.dw S\nS = S+1\n.dw S\nF:rts\n', '04 00 05 00 60'),
+            ('S = K\n.char S\nS = S+1\n.char S\nS = S+"B"\n.char S\nK .equ "A"\n',
+             '41 41 31 41 31 42'),
+        ]
+        for source, expected in cases:
+            for debug in (False, True):
+                with self.subTest(source=source, debug=debug):
+                    self.assemble(source, expected, options=('--debug',) if debug else ())
 
     def test_undef_redefinitions_keep_distinct_declarations_and_final_name_binding(self):
         cases=[('lda T\nT:.db 1\n.undef T\nT:.db 2\n','A5 03 01 02'),
@@ -557,6 +613,13 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
         self.assemble('.db 12+"N","N"+$FFFFFFFF,"B"<"a","ab"<"abc"\n','31 32 4E 4E 2D 31 01 01')
         self.assemble('.word S,$\nS .equ ""\n','00 00')
 
+    def test_forward_mapped_initializer_uses_its_final_length_in_binary(self):
+        (self.directory/'map').write_text('H=1\nI=0\n')
+        source='.charmap "map"\n.struc S\nf .char[2]\ng .byte\n.ends\nv .S {Text,7}\nText .equ "HI"\n'
+        for options in ((), ('--debug',)):
+            with self.subTest(options=options):
+                self.assemble(source, '01 00 07', options=options)
+
     def test_alias_graphs_share_dependencies_and_detect_cycles(self):
         source='.word C0\n'+''.join(f'C{i} .equ C{i+1}\n' for i in range(10000))+'C10000 .equ 42\n'
         self.assemble(source,'2A 00')
@@ -620,7 +683,7 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
         self.assemble('.include "inc.asm"\n.incbin "blob"\n.db $\n','01 02 03 00 04 05')
 
     def test_output_aliases_and_unsupported_modes_preserve_files(self):
-        self.assemble('.db 1\n',error='plain --pure-binary',options=('--listing=kept.lst',))
+        self.assemble('.db 1\n',error='does not support listing or analysis',options=('--listing=kept.lst',))
         (self.directory/'inc.asm').write_text('.db 2\n')
         self.assemble('.include "inc.asm"\n',error='aliases',options=('-o','inc.asm'),error_code=3)
         self.assertEqual((self.directory/'inc.asm').read_text(),'.db 2\n')
