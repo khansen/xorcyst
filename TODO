@@ -90,10 +90,16 @@ Compatibility planning:
   +0.562 ms link overhead and faster clean-build medians for every project.
   Retain large-project/analysis gates and investigate material costs.
   Contract section 13 records the guidance. Local review and owner approval
-  are complete; PR CI remains required.
+  are complete. I4 merged as PR #100 (63747ed), with PR and post-merge CI green.
   The 2026-10-25 tag-8 clarification is in contract section 11: an integer
   initializer contributes one element, a string its counted byte length.
   Analysis/consumer gates remain I5 work.
+  I5 is in progress locally on feat/v2-analysis. The first change separates
+  frontend cache IDs from analysis identities, retains original source spans
+  only when capture is requested, and makes the data-provenance hook reachable.
+  Plain v2 nodes retain their I4 size. Collector integration, analysis output,
+  Nesrev migration and the project/bundle performance gates are still open;
+  see design/v2/I5_WORK.md for the local checkpoint and next integration work.
   The owner-approved work-bound correction is in contract section 10; the
   project no-slowdown and byte-exact ROM gates are unchanged.
   Complete local independent review before publishing a branch or opening/updating

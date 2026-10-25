@@ -316,7 +316,7 @@ static astnode *frontend_fold_reference(astnode *n)
             if (r.value.as.string.length)
                 memcpy(replacement->string, r.value.as.string.bytes, r.value.as.string.length);
             replacement->string[r.value.as.string.length] = 0;
-            replacement->analysis_origin_id = (unsigned long)n->param + 1;
+            replacement->frontend_id = (uint32_t)n->param + 1;
         }
     }
     else if (r.state == V2_INVALID)
@@ -334,11 +334,11 @@ static astnode *frontend_fold_reference(astnode *n)
 static v2_id frontend_string_value(astnode *n)
 {
     v2_id value;
-    if (n->analysis_origin_id)
-        return (v2_id)(n->analysis_origin_id - 1);
+    if (n->frontend_id)
+        return (v2_id)(n->frontend_id - 1);
     value = v2_string(values, n->string, strlen(n->string), owned_location(n->loc));
     if (value != V2_NONE)
-        n->analysis_origin_id = (unsigned long)value + 1;
+        n->frontend_id = value + 1;
     else
         err(n->loc, "%s", v2_error_message(v2_unit_error(values).code));
     return value;
@@ -856,6 +856,11 @@ static int frontend_data(astnode *data)
     int bytes = 0;
     if (LHS(data)->datatype == CHAR_DATATYPE)
     {
+        if (map_count == UINT32_MAX)
+        {
+            err(data->loc, "too many character maps");
+            return 0;
+        }
         if (map_count == map_capacity)
         {
             size_t cap = map_capacity ? map_capacity * 2 : 16;
@@ -869,7 +874,7 @@ static int frontend_data(astnode *data)
             map_capacity = cap;
         }
         memcpy(maps[map_count].map, charmap, 256);
-        data->analysis_origin_id = ++map_count;
+        data->frontend_id = (uint32_t)++map_count;
     }
     for (expr = RHS(data); expr; expr = next)
     {
@@ -908,7 +913,7 @@ static int finish_data(astnode *n, void *arg, astnode **next)
     unsigned width = element_width(LHS(n)->datatype);
     size_t size = 0, at = 0;
     unsigned char *bytes;
-    const unsigned char *map = n->analysis_origin_id ? maps[n->analysis_origin_id - 1].map : NULL;
+    const unsigned char *map = n->frontend_id ? maps[n->frontend_id - 1].map : NULL;
     (void)arg;
     (void)next;
     for (e = RHS(n); e; e = following)
@@ -1116,7 +1121,7 @@ static void lower_data(astnode *n, int ram)
 {
     astnode *e = RHS(n);
     unsigned width = element_width(LHS(n)->datatype);
-    const unsigned char *map = n->analysis_origin_id ? maps[n->analysis_origin_id - 1].map : NULL;
+    const unsigned char *map = n->frontend_id ? maps[n->frontend_id - 1].map : NULL;
     while (e)
     {
         if (!ram && (e->type == INTEGER_NODE || e->type == STRING_NODE))

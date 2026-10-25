@@ -2306,7 +2306,7 @@ static int capture_instruction_provenance(astnode *instr)
 {
     instruction_provenance candidate, *tmp;
     memset(&candidate, 0, sizeof(candidate));
-    candidate.source_loc = instr->source_loc;
+    candidate.source_loc = astnode_source_location(instr);
     candidate.use_loc = instr->loc;
     if (instr->loc.source_file != NULL) candidate.use_loc.file = instr->loc.source_file;
     candidate.operand_loc = instr->instr.operand_loc;
@@ -2530,7 +2530,7 @@ static int emit_instruction_expression(FILE *fp, astnode *expr)
     fprintf(fp, "{\"kind\":");
     print_json_string(fp, kind);
     fprintf(fp, ",\"source\":");
-    if (!emit_instruction_source(fp, expr->source_loc)) return 0;
+    if (!emit_instruction_source(fp, astnode_source_location(expr))) return 0;
     if (astnode_is_type(expr, INTEGER_NODE)) {
         fprintf(fp, ",\"value\":%d", expr->integer);
     } else if (astnode_is_type(expr, ARITHMETIC_NODE)) {
@@ -5202,7 +5202,7 @@ static int emit_additive_terms(FILE *fp, const xref_instr *record)
             }
         }
         fprintf(fp, ",\"source\":");
-        if (!emit_instruction_source(fp, term->node->source_loc)) return 0;
+        if (!emit_instruction_source(fp, astnode_source_location(term->node))) return 0;
         fprintf(fp, "}");
     }
     fprintf(fp, "]}");
@@ -5213,7 +5213,7 @@ static int register_expression_files(const astnode *expr)
 {
     const astnode *child;
     if (expr == NULL) return 1;
-    if (!register_record_file(expr->source_loc.file)) return 0;
+    if (!register_record_file(astnode_source_location(expr).file)) return 0;
     for (child = astnode_get_first_child((astnode *)expr); child != NULL;
          child = astnode_get_next_sibling((astnode *)child)) {
         if (!register_expression_files(child)) return 0;

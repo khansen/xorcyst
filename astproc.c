@@ -2752,13 +2752,13 @@ static int process_data(astnode *data, void *arg, astnode **next)
             return 0;
         }
     }
-#ifdef XORCYST_V2_FRONTEND
-    return frontend_data(data);
-#endif
     if (data_analysis_hook != NULL && !data_analysis_hook(data)) {
         err(data->loc, "could not preserve data-directive analysis provenance");
         return 0;
     }
+#ifdef XORCYST_V2_FRONTEND
+    return frontend_data(data);
+#endif
     /* Go through the list of data values, replacing defines and folding constants */
     for (j=1; j<astnode_get_child_count(data); j++) {
         expr = astnode_get_child(data, j);

@@ -1,3 +1,30 @@
+# I5 work in progress: analysis integration
+
+I4 merged in PR #100 (`63747ed`) on 2026-10-25 after local review, owner
+approval and green CI. I5 remains local and has not been submitted for review
+or approved. Installed tools still use the existing implementation.
+
+The first I5 change prepares source capture. Frontend string/map cache IDs and
+analysis provenance IDs now occupy distinct fields. Optional original source
+locations are stored in the AST node's allocation, after the fixed node, and
+read through `astnode_source_location()`. Clones retain the original source
+span separately from their expansion location. The capture policy is selected
+before parsing; the presence of the extra storage is recorded on each node.
+Plain assembly does not allocate that storage. On the current 64-bit host the
+fixed node remains 136 bytes, as in I4; enabling capture adds a 32-byte location
+without a second allocation. This is source metadata, not another evaluator.
+
+The data-provenance hook now runs before the v2 data handler reduces operands.
+The test driver exercises this path through the real parser and expansion
+passes, while normal prototype invocations still reject analysis flags. The
+next integration must connect collectors to the shared evaluator and validated
+layout facts, retaining the boundary where parser AST and namespace die before
+layout. It must not re-enable a legacy layout/evaluation path for analysis.
+
+The source checkout's `design/v2/I5_WORK.md` records this checkpoint, validation
+and the remaining product/consumer gates. This prerequisite does not claim that
+listings, xref or instruction records work in the v2 prototype yet.
+
 # I1: shared values and owned dependencies
 
 This module implements the value/ownership stage of the approved

@@ -12,10 +12,12 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[1]
 
-def build(destination):
+def build(destination, provenance=False):
     sources = re.search(r'^xasm_SOURCES = (.*?)(?=\n\n)', (REPO/'Makefile.am').read_text(), re.M|re.S)[1]
     sources = [REPO/('v2/frontend.c' if word=='astproc.c' else word)
                for word in sources.replace('\\\n',' ').split() if word.endswith('.c')]
+    if provenance:
+        sources = [REPO/'tests/test_v2_source_driver.c' if p.name == 'xasm.c' else p for p in sources]
     command = [*shlex.split(os.environ.get('CC','cc')), '-I',str(REPO),'-Wall','-DXORCYST_V2_FRONTEND',
                *shlex.split(os.environ.get('TEST_V2_CFLAGS','-O2 -g -Werror')), *map(str,sources),
                str(REPO/'v2/heap.c'),str(REPO/'v2/value.c'),str(REPO/'v2/layout.c'),str(REPO/'v2/program.c'),str(REPO/'v2/object.c'),'-o',str(destination)]
@@ -29,6 +31,15 @@ class Frontend(unittest.TestCase):
         cls.addClassCleanup(directory.cleanup)
         cls.tool=Path(directory.name)/'xasm-v2'
         build(cls.tool)
+        cls.provenance_tool = Path(directory.name)/'xasm-v2-provenance'
+        build(cls.provenance_tool, provenance=True)
+        cls.source_locations = Path(directory.name)/'source-locations'
+        command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO),
+                   '-DXORCYST_V2_FRONTEND', '-Wall',
+                   *shlex.split(os.environ.get('TEST_V2_CFLAGS', '-O2 -g -Werror')),
+                   str(REPO/'tests/test_v2_source_locations.c'), '-o', str(cls.source_locations)]
+        r = subprocess.run(command, capture_output=True, text=True)
+        if r.returncode: raise AssertionError(r.stderr)
         cls.protection = Path(directory.name)/'protection'
         command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO),
                    '-DXORCYST_V2_FRONTEND', '-Wall',
@@ -60,6 +71,36 @@ class Frontend(unittest.TestCase):
             if expected is not None:self.assertEqual((self.directory/'out').read_bytes(),bytes.fromhex(expected))
         self.assertFalse((self.directory/'out.tmp').exists())
         return r
+
+    def run_source_locations(self, case):
+        r = subprocess.run([str(self.source_locations), case], capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stderr, '')
+
+    def test_plain_nodes_do_not_allocate_rich_source_spans(self):
+        self.run_source_locations('plain')
+
+    def test_parsed_source_span_survives_nested_expansion_and_original_free(self):
+        self.run_source_locations('expanded')
+
+    def test_provenance_and_frontend_cache_ids_have_independent_lifetimes(self):
+        self.run_source_locations('identities')
+
+    def test_optional_source_span_allocation_failure_keeps_allocator_usable(self):
+        self.run_source_locations('allocation')
+
+    def test_source_capture_preserves_bytes_and_macro_definition_spans(self):
+        (self.directory/'map.txt').write_text('H=1\nI=0\n')
+        source = ('.charmap "map.txt"\n.macro M p\n.db "A"+p\n.char "HI","HI"\n.endm\n'
+                  'M "B"\nM "C"\n.db S+"D"\nS .equ "X"\n')
+        self.assemble(source, '41 42 01 00 01 00 41 43 01 00 01 00 58 44')
+        r = subprocess.run([str(self.provenance_tool), '--pure-binary', 'in.asm', '-o', 'captured'],
+                           cwd=self.directory, capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.directory/'captured').read_bytes(), (self.directory/'out').read_bytes())
+        captures = [tuple(map(int, x.split())) for x in re.findall(r'CAPTURE (\d+ \d+)', r.stderr)]
+        self.assertEqual(captures, [(6,3),(6,4),(7,3),(7,4),(8,8)])
+        self.assertNotRegex(r.stderr, r'error:|AddressSanitizer|runtime error:')
 
     def test_output_protection_keeps_missing_probes_and_unicode_aliases(self):
         def compare(a, b, aliases, env=None):
