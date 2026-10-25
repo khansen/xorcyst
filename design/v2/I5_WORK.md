@@ -1,7 +1,10 @@
 # I5 analysis and consumer integration
 
 Status: independent local review cleared `63e4ea5` / Nesrev `4ca95e06d`
-with no blockers. Owner approval remains pending. No PR or cutover.
+with no blockers. The owner approved I5 on 2026-10-25 at `fe500f6` / `4ca95e06d`
+for publication and CI. The consumer publication branch starts from public
+master; project-specific changes and projects-branch history stay local. No
+cutover is claimed; see `v2/README.md` for the approval record.
 Base: I4 merge `63747edf648aed016928c4e2671c7f4ad4236c37` (PR #100), whose PR
 and post-merge CI passed. Installed `xasm`/`xlnk` still use the existing engine.
 

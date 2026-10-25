@@ -1,5 +1,5 @@
 {
-  "status": "independent local review cleared runtime 63e4ea5 and Nesrev 4ca95e06d with no blockers; documentation-only follow-up; owner approval pending, unpublished",
+  "status": "I5 owner-approved on 2026-10-25 for producer and shared-tooling consumer PR publication and CI; cutover pending",
   "base": "63747edf648aed016928c4e2671c7f4ad4236c37",
   "source_revision": "commit containing this record",
   "sources": {
@@ -125,17 +125,17 @@
     "tests/verify_fceux_projects.py": "5ed85e7d50db9c75b346509ff0c85d64aa971bec0715339b7dbaf9defa7fd76e"
   },
   "review_documents": {
-    "README": "0ade5f3479001caa2b9dffd0643ecce9b0a7a0295f2a398d02454d903417ee1f",
-    "TODO": "23ffac8be523d9c7a1d7b98e9b97323ea5c9f692daaa139f19697b5959c7b1c5",
-    "XORCYST_V2_CONTRACTS.md": "1add8033c36c424f28071ffbe791a138cb4a1ca285c278bef3a504495c5e547e",
+    "README": "e6721ad4b16a98c3cb113a623f12a0f6bda7c3cea700708c00ed3bb8e7538be9",
+    "TODO": "fe32d736c646c6c207ad40a18ceca012cf4d9b28cfbf73e3ce630a9e1cdbffcc",
+    "XORCYST_V2_CONTRACTS.md": "69f16c6ad817964bc2a3f4cd0a3f5bd2e5bdb019d9560f29fe1e95c781a98280",
     "XORCYST_V2_DESIGN.md": "94ce27e85462a56afefe0e995211d5eb68dfd41d52344f8364c0ae1aecdcd784",
-    "design/v2/I5_REVIEW.md": "970f210c68d8db0d806f7895bef95b2713adb888628d1c230f8b52a6abb8c047",
-    "design/v2/I5_VALIDATION.md": "53714d5372ec4d036b471f4df7201fe79a35a1b375fff5af10761774bc84a349",
-    "design/v2/I5_WORK.md": "25bfad02f7ce838802c73ab40414a3cf9d1fba759a29c9ec4a787774189b1aad",
+    "design/v2/I5_REVIEW.md": "a7e6b0316c2e37088b38179baa4e1279372fa7b242b10d60ace954e6b0af6a8e",
+    "design/v2/I5_VALIDATION.md": "068e0fd8f31355908f56cbbd1fb69abf5956cf6ff0ed54eec45fa453a7910e3c",
+    "design/v2/I5_WORK.md": "ff90b7b8169b99a2057e408cd8d64fa9f23a6de3dfb32d10bb0e5257062289c9",
     "design/v2/PERFORMANCE.md": "04421d0dd4bb1e6ee450df2c51c7df2790b2428e786754558d2353952465b8bc",
     "design/v2/i5-survey.json": "f392f3ae24cb16fe66f24d34d7abfe5808c1c0770de0944ba9e7a4b71aba5d93",
     "design/v2/measure_analysis.py": "15ba1b95a56af5ebf2c5293f3f39323f7411d44e5dbc93e2b6cee0700b6e7c96",
-    "v2/README.md": "bc4857df4afaa24baa47056c15718768917fc74a3da3b8cc4d7ac59cc02b4075"
+    "v2/README.md": "074171ea50f3b0c12a08aaddd9f3d5bba75f6392bb9d7cb01404a0c09eec1fb3"
   },
   "build_files": {
     ".github/workflows/ci.yml": "7594be5325a2e1f967a0685ebf91cc72c7a0f9c3f64422cd7f05ba2d49b8e874",
@@ -255,7 +255,7 @@
   "resource_summary_sha256": "f392f3ae24cb16fe66f24d34d7abfe5808c1c0770de0944ba9e7a4b71aba5d93",
   "timing_decision": "Owner chose documented small costs and focus on material regressions, 2026-10-25; contract section 14",
   "gaps": [
-    "Owner approval pending; no PR CI; independent local review cleared the unchanged runtime",
+    "PR CI pending; independent local review and owner approval complete; I6 not yet performed",
     "No native 32-bit/big-endian run",
     "Bounded five-pair survey on one machine with other validation active; no formal confidence gate",
     "No complete Nesrev repository test run or emulator session; only changed reader rerun in follow-up",
@@ -337,5 +337,36 @@
       "formal timing protocol",
       "allocation injection under sanitizers"
     ]
+  },
+  "approval": {
+    "date": "2026-10-25",
+    "owner": "Kent Hansen",
+    "producer_revision": "fe500f6d5d0aef0d403414b2d6972add36b62300",
+    "reviewed_runtime_revision": "63e4ea57a8f8891ed52745f152a19981004f939f",
+    "reviewed_local_consumer_revision": "4ca95e06d5894ca12982a1f1d78aa06d8508644f",
+    "scope": "I5 producer/consumer integration, documented metadata corrections and resource decisions; PR publication and CI",
+    "remaining": "PR CI and I6; inherited limitations remain tracked, not permanent contract exceptions"
+  },
+  "nesrev_publication": {
+    "worktree": "/private/tmp/nesrev-listing-v2-public",
+    "branch": "feat/listing-v2-consumers",
+    "base": "a4b6490fa4065f97fbc850ddce259b399cf32443",
+    "revision": "c584509f1abc12ff6273bc9a9df3ad3791785e32",
+    "files": {
+      ".github/workflows/ci.yml": "1659b46e3de2b04d4eb12e52eb93e9eac6649bbef3b45bc494d900aefe8e67e6",
+      "ANALYSIS_BUNDLE_SPEC.md": "e82499ddfb5548580f84726d844e384bb7036d834981d759193d1fe2f5822c5a",
+      "NESREV_STRUCTURED_ANALYSIS_MIGRATION_PLAN.md": "3c3ee4bcec4c41e16f0f24851d249ffefffa98a41d64a3c21aeb52fb9693ac45",
+      "agent_playbook/TOOLING.md": "b9674bb5a6f15699983124a1c8de84e28dcf4711473ba4536b12b85ff1f83063",
+      "scripts/analysis_bundle.py": "350e174e9b6c7c4c3419a4cf9770683564f4dfa305b4ae1406ccba90988e2480",
+      "scripts/consumer_audit.py": "8dbae3c69c1b031660b4ef768bdb5739c7379e6140e833e23f54771510e7b3c5",
+      "scripts/embedded_pointer_audit.py": "0dc6dfc84694032a4341456fa2dc7588c178e7f406885eae9891922e5fc768c3",
+      "scripts/orphan_opcode_scan.py": "5d17a144cc07bb99bdf5c507c0169265c74ae38b53eb752c1be12c6086379f66",
+      "scripts/pointer_table_body_check.py": "81e8795586920df032546f9c357f63916cafbe5ee6f4e711c32a583d237f21f2",
+      "scripts/static_analysis.py": "3211f744fbbf35546bf06ac9443162e59310defd8ea4c571eb800ce8572d31de",
+      "tests/analysis_bundle_test.py": "1da17f372dff23c5d22b73c40987c7de500ead90b331c3cc5d9d44fade5beec2",
+      "tests/embedded_pointer_audit_test.py": "b66f9f6330cb1bd8d3aca733e951c9dcfc6776e1e7156d18ac1844203561061d",
+      "tests/pointer_table_body_test.py": "47acd804ae70d290d7acad68830fb62334f10696db03293c4f6917a4a3dd8961"
+    },
+    "scope": "Shared tooling only, based on public master. Shared implementation/tests byte-identical to reviewed local files. Project helpers/tests and projects-branch history stay local. Public migration prose omits private-project details. CI pin updated to released XORcyst 1.9.12 for listing-v2 support."
   }
 }

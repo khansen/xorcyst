@@ -1,7 +1,9 @@
 # I5 local validation
 
 Status: independent local review cleared `63e4ea5` / Nesrev `4ca95e06d` with
-no blockers. Owner approval remains pending; no PR has been opened. The first
+no blockers. The owner approved I5 on 2026-10-25 at `fe500f6` / `4ca95e06d`
+for publication and CI; see `v2/README.md`. Nesrev shared tooling is published
+from public master, without project history or project-specific helpers/tests. The first
 review of `21fae67` / `ab50ea8f7` requested changes; the follow-up closes B1/B2
 and S1–S6. This subsequent revision changes documentation and evidence metadata
 only. Runtime, tests and tools are unchanged, so no new test run is claimed.

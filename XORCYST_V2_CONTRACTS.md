@@ -687,7 +687,8 @@ samples, absolute deltas, artifact sizes and remaining limitations.
 ## 15. I5 analysis corrections and publication
 
 The I5 review exposed these consequences of the existing final-facts contract.
-They are recorded for owner review, not as a new source-language feature:
+The owner approved these I5 corrections on 2026-10-25; they introduce no new
+source-language feature. The citable stage approval is in `v2/README.md`.
 
 | Case | v1 | v2 |
 | --- | --- | --- |

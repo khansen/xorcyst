@@ -3,11 +3,13 @@
 Review status: independent local review cleared `63e4ea5` / Nesrev `4ca95e06d`
 with no blockers. The prompt below is retained as the review scope. Subsequent
 documentation records the optional observations and inherited collector failures;
-it changes no runtime or tests. Owner approval is still required before a PR.
+it changes no runtime or tests. The owner approved I5 on 2026-10-25 at
+`fe500f6` / `4ca95e06d` for publication and CI; see `v2/README.md`. The original
+read-only review instructions below remain historical review scope.
 
 Review the complete local producer/consumer migration, not just its earlier
 source-capture and listing checkpoints. This is a request for independent
-review, not an approval or permission to publish. No I5 PR has been opened.
+review, not an approval or permission to publish. At review time no I5 PR was open.
 
 Producer: `/private/tmp/xorcyst-v2-analysis`, branch `feat/v2-analysis`, compared
 with I4 merge `63747edf648aed016928c4e2671c7f4ad4236c37`.

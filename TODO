@@ -103,11 +103,13 @@ Compatibility planning:
   renderer, alias depth, string references, unused bank constants, file staging and rollback
   on reported failures, and text-listing overhead were corrected
   after review. Independent local re-review cleared 63e4ea5 / Nesrev 4ca95e06d
-  with no blockers; owner approval remains pending.
+  with no blockers. The owner approved I5 on 2026-10-25 at fe500f6 / Nesrev
+  4ca95e06d for publication and CI; see v2/README.md for the approval record.
   The 100-configuration resource survey records
   small costs under the owner's bounded-effort decision (contract section 14);
-  it is not a formal no-slowdown pass. No I5 owner approval or publication is
-  implied. See design/v2/I5_REVIEW.md and I5_VALIDATION.md for the handoff.
+  it is not a formal no-slowdown pass. Nesrev shared tooling must be published
+  from a branch off master; never push projects-branch history. PR CI and I6
+  remain open. See design/v2/I5_REVIEW.md and I5_VALIDATION.md for the handoff.
   Retain the inherited collector allocation limitations as open work: summary,
   text scope/source and xref data provenance can silently omit metadata; index,
   consumers and coverage can fail without an explanatory diagnostic. Staging

@@ -2,8 +2,9 @@
 
 I4 merged in PR #100 (`63747ed`) on 2026-10-25 after local review, owner
 approval and green CI. Independent local review cleared I5 at `63e4ea5` /
-Nesrev `4ca95e06d` with no blockers. Owner approval remains pending; nothing
-has been published. Installed tools still use the existing implementation.
+Nesrev `4ca95e06d` with no blockers. The owner approved I5 on 2026-10-25;
+the approval record below authorizes PR publication and CI. Installed tools
+still use the existing implementation.
 
 The first I5 change prepares source capture. Frontend string/map cache IDs and
 analysis provenance IDs now occupy distinct fields. Optional original source
@@ -542,3 +543,24 @@ I6 cutover remain required. Installed xasm/xlnk stay v1.
 
 This approval record changes documentation only. The branch retains the
 approved revision and adds this citable approval commit before publication.
+
+## I5 approval record
+
+Kent Hansen approved I5 on 2026-10-25 at XORcyst
+`fe500f6d5d0aef0d403414b2d6972add36b62300` and local Nesrev
+`4ca95e06d5894ca12982a1f1d78aa06d8508644f`, after independent review cleared
+runtime revision `63e4ea57a8f8891ed52745f152a19981004f939f` and that consumer
+revision with no blockers. The intervening XORcyst commit records the review
+and retained limitations; it changes no runtime or tests.
+
+Approval covers the producer analysis integration, listing-v2 consumer migration,
+the section-15 metadata corrections, tests, and documented resource tradeoffs.
+It authorizes publication and CI for one producer PR and one shared-tooling
+consumer PR. Nesrev tooling is published from a branch based on public master;
+the projects branch, project history, helpers and project-specific tests remain
+local. No project history is to be pushed.
+
+The inherited parser/collector failure limitations and other optional items in
+`I5_VALIDATION.md` remain tracked; approval does not make them permanent contract
+exceptions. PR CI and the coordinated I6 cutover remain required. Installed
+tools are unchanged, and no merge or I6 completion is claimed by this record.
