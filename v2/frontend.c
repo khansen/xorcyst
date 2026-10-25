@@ -42,13 +42,16 @@ typedef struct {
     datatype data_type;
     v2_location loc;
     size_t first, end;
+    unsigned diagnostic_length, diagnostic_origin;
+    unsigned char diagnostic_opcode;
     char *label;
     astnode *statement, *tail;
     int ram, scope_anchor;
 } source_row;
 static source_row *source_rows;
 static size_t source_row_count, source_row_capacity;
-static int collect_source_rows, collect_analysis_rows;
+static int collect_source_rows, collect_analysis_rows, collect_symbol_snapshot;
+static int snapshotting_symbols;
 static symtab_entry *analysis_symbols;
 static size_t analysis_symbol_count;
 static const char **analysis_anchor_names;
@@ -1109,6 +1112,10 @@ static v2_id expression(astnode *e, v2_id pc)
         {
             if (program)
                 return v2_program_bank(program, expression(LHS(e), pc), loc);
+            /* Unused constants can be unknown in analysis without changing
+             * assembly acceptance. Used expressions are lowered before this. */
+            if (snapshotting_symbols)
+                return v2_reference(values, v2_definition(values, "<unavailable bank>", loc), loc);
             err(e->loc, "bank operator is not supported in pure binary output");
             return V2_NONE;
         }
@@ -1270,7 +1277,7 @@ int v2_frontend_analysis_elements(astnode *e, int pc, size_t *count)
     else return 0;
     return 1;
 }
-static astnode *analysis_graph_expression(v2_id id, location use, unsigned depth)
+static astnode *analysis_graph_expression(v2_id id, location use, unsigned depth, size_t steps)
 {
     static const arithmetic_operator operators[] = {
         UMINUS_OPERATOR, NEG_OPERATOR, NOT_OPERATOR, LO_OPERATOR, HI_OPERATOR,
@@ -1280,13 +1287,13 @@ static astnode *analysis_graph_expression(v2_id id, location use, unsigned depth
     };
     v2_graph_node g;
     astnode *out = NULL;
-    if (depth > 64 || !v2_graph_read(values, id, &g)) return NULL;
+    if (depth > 64 || steps > v2_graph_nodes(values) || !v2_graph_read(values, id, &g)) return NULL;
     switch (g.kind) {
     case V2_GRAPH_INTEGER: out = astnode_create_integer(g.integer, use); break;
     case V2_GRAPH_REFERENCE: {
         v2_id bound;
         if (v2_graph_definition(values, g.left, &bound, NULL) && bound != V2_NONE)
-            out = analysis_graph_expression(bound, use, depth + 1);
+            out = analysis_graph_expression(bound, use, depth, steps + 1);
         break;
     }
     case V2_GRAPH_ADDRESS: {
@@ -1303,8 +1310,8 @@ static astnode *analysis_graph_expression(v2_id id, location use, unsigned depth
     }
     case V2_GRAPH_UNARY:
     case V2_GRAPH_BINARY: {
-        astnode *left = analysis_graph_expression(g.left, use, depth + 1);
-        astnode *right = g.kind == V2_GRAPH_BINARY ? analysis_graph_expression(g.right, use, depth + 1) : NULL;
+        astnode *left = analysis_graph_expression(g.left, use, depth + 1, steps + 1);
+        astnode *right = g.kind == V2_GRAPH_BINARY ? analysis_graph_expression(g.right, use, depth + 1, steps + 1) : NULL;
         if (left && (g.kind != V2_GRAPH_BINARY || right)) {
             out = astnode_create(ARITHMETIC_NODE, use);
             if (out) {
@@ -1326,7 +1333,7 @@ static int expand_analysis_references(astnode *n)
     for (child = n->first_child; child; child = next) {
         next = child->next_sibling;
         if (child->type == V2_REFERENCE_NODE) {
-            astnode *copy = analysis_graph_expression((v2_id)child->param, child->loc, 0);
+            astnode *copy = analysis_graph_expression((v2_id)child->param, child->loc, 0, 0);
             if (!copy) {
                 err(child->loc, "could not represent assembly analysis expression");
                 return 0;
@@ -1368,7 +1375,7 @@ static int finish_analysis_row(const v2_analysis_row *row, void *unused)
                     if (row->bytes) value = row->bytes[offset];
                     astnode *scalar = astnode_create_integer((int)value, e->loc);
                     if (!scalar) return 0;
-                    if (!j) scalar->analysis_origin_id = e->analysis_origin_id;
+                    /* String substitution has no address-computation use. */
                     astnode_insert_child(e->parent, scalar, astnode_get_child_index(e->parent, e));
                     offset += width;
                 }
@@ -1392,7 +1399,7 @@ static void finish_analysis_rows(void)
             }
         }
     }
-    if (!v2_frontend_visit_rows(finish_analysis_row, NULL) && !err_count)
+    if (collect_analysis_rows && !v2_frontend_visit_rows(finish_analysis_row, NULL) && !err_count)
         err(parser_location(v2_no_location()), "incomplete analysis values");
 }
 
@@ -1564,6 +1571,13 @@ static astnode *analysis_marker(const astnode *source)
     }
     return copy;
 }
+static datatype listing_data_type(const astnode *n)
+{
+    if (LHS(n)->datatype == CHAR_DATATYPE)
+        for (const astnode *e = RHS(n); e; e = e->next_sibling)
+            if (e->type == STRING_NODE) return BYTE_DATATYPE;
+    return LHS(n)->datatype;
+}
 static void lower(astnode *root)
 {
     astnode *n, *next;
@@ -1623,7 +1637,7 @@ static void lower(astnode *root)
                 row->loc = loc;
                 row->first = v2_layout_fragment_count(layout);
                 row->ram = n->type == DATASEG_NODE ? 1 : n->type == CODESEG_NODE ? 0 : ram;
-                if (n->type == DATA_NODE) row->data_type = LHS(n)->datatype;
+                if (n->type == DATA_NODE) row->data_type = listing_data_type(n);
                 if (n->type == LABEL_NODE)
                 {
                     symtab_entry *s = symtab_lookup(n->ident);
@@ -1633,6 +1647,21 @@ static void lower(astnode *root)
                     row->scope_anchor = s && (s->type == LABEL_SYMBOL || s->type == PROC_SYMBOL);
                 }
             }
+        }
+        if (row) {
+            /* Provisional diagnostic extents survive independently of rich
+             * analysis metadata. They never claim final bytes or offsets. */
+            if (n->type == ORG_NODE) row->diagnostic_origin = (unsigned)LHS(n)->integer;
+            if (n->type == INSTRUCTION_NODE) {
+                row->diagnostic_opcode = n->instr.opcode;
+                row->diagnostic_length += (unsigned)opcode_length(n->instr.opcode);
+            } else if (n->type == STORAGE_NODE && astnode_is_type(RHS(n), INTEGER_NODE) && RHS(n)->integer >= 0)
+                row->diagnostic_length += (unsigned)RHS(n)->integer * element_width(LHS(n)->datatype);
+            else if (n->type == BINARY_NODE) row->diagnostic_length += (unsigned)n->binary.size;
+            else if (n->type == DATA_NODE)
+                for (astnode *e = RHS(n); e; e = e->next_sibling)
+                    row->diagnostic_length += element_width(LHS(n)->datatype) *
+                        (e->type == STRING_NODE ? (unsigned)strlen(e->string) : 1);
         }
         /* Fully captured non-branch instructions have no link-time fixup.
          * Keep them in the fixed-byte run, just as literal data. Labels and
@@ -1797,7 +1826,7 @@ static void lower(astnode *root)
         /* Preserve existing non-debug listing grouping without merging AST
          * operands or losing their independently captured maps/PC anchors. */
         join_source_row = row && !xasm_args.debug && n->type == DATA_NODE &&
-            astnode_is_type(next, DATA_NODE) && astnode_equal(LHS(n), LHS(next));
+            astnode_is_type(next, DATA_NODE) && listing_data_type(n) == listing_data_type(next);
         if (row && n->type == STORAGE_NODE && astnode_is_type(RHS(n), INTEGER_NODE) &&
             astnode_get_child(n, 2) == NULL && RHS(n)->integer >= 0)
         {
@@ -1920,11 +1949,13 @@ void v2_frontend_process(astnode *root)
                                          {ENUM_DECL_NODE, noop},
                                          {RECORD_DECL_NODE, noop},
                                          {0, NULL}};
-    collect_analysis_rows = xasm_args.pure_binary && ((xasm_args.listing_file && xasm_args.listing_format == LISTING_FORMAT_TEXT) || xasm_args.xref_file ||
+    collect_analysis_rows = xasm_args.pure_binary && (xasm_args.xref_file ||
         xasm_args.instruction_records_file || xasm_args.fceux_nl_rom_prefix ||
         xasm_args.fceux_nl_ram_file || xasm_args.xref_summary ||
         xasm_args.analyze_index_patterns || xasm_args.data_consumers ||
         xasm_args.analyze_data_coverage || xasm_args.audit_raw_addresses);
+    collect_symbol_snapshot = collect_analysis_rows ||
+        (xasm_args.listing_file && xasm_args.listing_format == LISTING_FORMAT_TEXT);
     collect_source_rows = xasm_args.pure_binary && (xasm_args.listing_file ||
         collect_analysis_rows || xasm_args.compare_file);
     values = v2_unit_create();
@@ -1985,12 +2016,16 @@ void v2_frontend_process(astnode *root)
     if (err_count || symtab_failed())
         return;
     lower(root);
-    if (collect_analysis_rows) {
+    finish_captures();
+    resolve_pending();
+    snapshotting_symbols = 1;
+    if (collect_symbol_snapshot) {
         snapshot_analysis_symbols();
         own_xref_analysis_locations();
     }
     finish_captures();
     resolve_pending();
+    snapshotting_symbols = 0;
     if (err_count)
         return;
 }
@@ -2023,7 +2058,7 @@ void v2_frontend_finish(void)
                 r.state == V2_INVALID ? v2_error_message(r.diagnostic.code)
                                       : "RAM data operand does not evaluate to an integer");
     }
-    if (collect_analysis_rows) finish_analysis_rows();
+    if (collect_symbol_snapshot) finish_analysis_rows();
     facts = v2_layout_facts(layout, &count);
     for (i = 0; i < count; ++i)
         if (facts[i].warning)
@@ -2088,6 +2123,49 @@ int v2_frontend_visit_rows(int (*visit)(const v2_analysis_row *, void *), void *
         if (!visit(&row, arg)) return 0;
     }
     return fragment == v2_layout_fact_count(layout) && offset == byte_count;
+}
+unsigned char v2_frontend_diagnostic_opcode(const astnode *n)
+{
+    addressing_mode mode = n->instr.mode;
+    unsigned char op = opcode_get(n->instr.mnemonic.value, mode);
+    if (op == 0xff) {
+        if (n->instr.mnemonic.value == STX_MNEMONIC && mode == ABSOLUTE_Y_MODE) mode = ZEROPAGE_Y_MODE;
+        else if (n->instr.mnemonic.value == STY_MNEMONIC && mode == ABSOLUTE_X_MODE) mode = ZEROPAGE_X_MODE;
+        else if (mode == ABSOLUTE_MODE) mode = RELATIVE_MODE;
+        op = opcode_get(n->instr.mnemonic.value, mode);
+    }
+    if (op != 0xff && astnode_is_type(LHS(n), INTEGER_NODE) &&
+        (unsigned long)LHS(n)->integer < 256 && !n->instr.mnemonic.wide) {
+        unsigned char narrow = opcode_zp_equiv(op, mode);
+        if (narrow != 0xff) op = narrow;
+    }
+    return op;
+}
+int v2_frontend_visit_diagnostic_rows(int (*visit)(const v2_analysis_row *, void *), void *arg)
+{
+    unsigned pc[2] = {0, 0};
+    for (size_t i = 0; i < source_row_count; ++i) {
+        const source_row *s = &source_rows[i];
+        v2_analysis_row row = {0};
+        if (s->kind == ORG_NODE) pc[s->ram] = s->diagnostic_origin;
+        row.kind = s->kind; row.data_type = s->data_type;
+        row.loc = parser_location(s->loc); row.label = s->label;
+        row.ram = s->ram; row.scope_anchor = s->scope_anchor;
+        row.opcode = s->diagnostic_opcode; row.length = s->diagnostic_length;
+        row.address = pc[s->ram];
+        if (!visit(&row, arg)) return 0;
+        pc[s->ram] += row.length;
+    }
+    return 1;
+}
+/* Fatal graph errors are distinct from an unknown semantic value. Check again
+ * after serialization: annotations can trigger fresh evaluation allocations. */
+int v2_frontend_analysis_ok(void)
+{
+    v2_diagnostic d = values ? v2_unit_error(values) : (v2_diagnostic){0};
+    if (!d.code) return 1;
+    err(parser_location(d.location), "%s", v2_error_message(d.code));
+    return 0;
 }
 void v2_frontend_walk_diagnostic(astnode *root, void *arg, const astnodeprocmap *map)
 {

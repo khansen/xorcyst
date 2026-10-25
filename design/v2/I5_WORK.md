@@ -1,7 +1,7 @@
 # I5 analysis and consumer integration
 
-Status: local review candidate; validation and the bounded resource survey are
-complete. Independent review, owner approval, PR and cutover remain pending.
+Status: local review follow-up. The first review requested changes; the fixes
+below await focused independent re-review and owner approval. No PR or cutover.
 Base: I4 merge `63747edf648aed016928c4e2671c7f4ad4236c37` (PR #100), whose PR
 and post-merge CI passed. Installed `xasm`/`xlnk` still use the existing engine.
 
@@ -37,7 +37,16 @@ on this host. Source metadata is retained only for requested products. Native
 statements transfer ownership instead of being cloned; PC anchors are created
 only when the actual operand or a recorded term needs `$`.
 
-The existing destination planner still precedes publication. Successful output
+Text listings use the lightweight source-row index plus the symbol snapshot;
+they do not retain or expand collector expression trees. Diagnostic rows also
+have independent provisional lengths/opcodes, so layout errors cannot erase
+JSON-only listings. Syntax-error paths retain the recovered parser statements.
+
+The existing destination planner still precedes publication. All generated
+files are staged until serialization, late value queries and dependency capture
+have finished. Commit keeps rollback links for existing destinations; a failed
+rename restores earlier destinations. The manifest is staged last. Stdout and
+process/filesystem crashes are outside this rollback guarantee. Successful output
 requires complete facts. The safe diagnostic-listing exception carries
 `binary_generated: false`, no emitted bytes and null offsets; it cannot certify
 a bundle or bypass NL/CSV/manifest destination checks. Unknown diagnostic
@@ -46,8 +55,8 @@ Collectors and provenance are destroyed before their shared value/file owner.
 
 A probe also exposed silent loss of references when an expression could not be
 represented in the existing bounded analysis expression view. That path now
-reports a located error and preserves previous outputs. A 100-level alias
-expression that v1 analysis also rejects is pinned; plain assembly still works.
+reports a located error and preserves previous outputs. The 32/64/65-level alias boundary now has controls: graph reference indirections
+do not halve the operator-depth allowance. Plain assembly is unaffected.
 This is not a new evaluator limit or permission to silently omit facts.
 
 ## Nesrev migration
@@ -125,3 +134,22 @@ for complete bundles. The largest observed paired RSS ratio is 1.1451.
 Results and qualifications are in `I5_VALIDATION.md` and `i5-survey.json`.
 The I4 small-link memory exception remains specific to those reviewed costs;
 new analysis modes retain the original memory gate.
+
+## Independent review follow-up
+
+B1/B2: diagnostic listing rows, instruction metadata, storage widths and recovered
+syntax-error statements are preserved; Devil World's `render_sequences` reader
+handles null offsets and compact fills, with good and corrupted setup controls.
+S1/S3/S4: alias depth matches v1, substituted strings are not address references,
+and unused bank expressions stay unknown without changing assembly acceptance.
+S2: `.char` grouping matches v1; corrected numeric-char text and redefined-label
+rows are listed in contract section 15. S5: fatal evaluator allocation failures
+are checked after serialization, and file publication is staged/rolled back as
+one invocation. S6: text-only listings no longer rebuild collector expressions.
+
+Remaining optional items from review: rich xref still expands shared expression
+graphs into trees (also expensive in v1); the bundle validates schema/hash/row
+shape but does not compare every listing byte to the PRG; `zeropage_y` is still
+missing from the pre-existing consumer index-mode set. The fixture migration
+must note Zelda's four final-opcode `absolute` to `zeropage` corrections. Parser
+allocation failures shared with v1 remain outside this follow-up's coverage.

@@ -18,6 +18,30 @@ Read `XORCYST_V2_DESIGN.md`, `XORCYST_V2_CONTRACTS.md`,
 `I5_VALIDATION.md`. In Nesrev, read `ANALYSIS_BUNDLE_SPEC.md`, the migration
 plan and the applicable tooling/quality playbooks.
 
+## Focused re-review
+
+The first review of `21fae67` / `ab50ea8f7` found B1/B2 and S1–S6.
+Please verify their closure, especially diagnostic listings with no other
+analysis product, first-pass and syntax errors, 32/64/65-level aliases, string
+xref substitution, unused bank constants, and text-only shared-alias memory.
+Exercise `actor_render.render_sequences` as well as the three trace runners.
+
+Challenge invocation-wide publication: fail generation after binary staging,
+fail late value evaluation and source capture, fail the second CSV/NL rename,
+and check both existing and absent destinations. Old outputs and symlinks must
+survive; temporary files must disappear. Rollback links are not a crash-atomic
+commit, stdout is not reversible, and a rollback I/O failure must be reported
+with its backup retained. Comparison/audit findings keep their existing valid
+artifacts and exit statuses. Contract section 15 records metadata corrections.
+
+Text listings should now pay only for source rows and symbol values. Rich xref
+still has the pre-existing shared-graph-to-tree expansion cost; no fix for that
+optional item is claimed. Likewise, no fix is claimed for shared parser
+allocation failures, consumer `zeropage_y` indexing, or full listing/binary
+byte comparison in the bundle reader. Note the four Zelda final-opcode mode
+corrections in the fixture migration. The validation record separates this
+follow-up's checks from earlier-head results.
+
 ## Scope and ownership
 
 All existing pure-binary products are connected: listing, xref, instruction

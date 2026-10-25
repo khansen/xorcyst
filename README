@@ -34,8 +34,8 @@ tracked in TODO and the validation record.
 The accepted memory/timing tradeoffs are recorded for review. The local I5
 prototype now supports the pure-binary listing and analysis
 products through final shared-layout facts and owned source metadata. Nesrev
-consumer migration is in an isolated local branch. The candidate is ready for
-local independent review; no I5 PR is open. See [v2/README.md](v2/README.md)
+consumer migration is in an isolated local branch. The review follow-up awaits
+local independent re-review; no I5 PR is open. See [v2/README.md](v2/README.md)
 for its reviewed contracts, current stage and remaining acceptance gates.
 
 Build and test

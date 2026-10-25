@@ -110,6 +110,7 @@
 #include "listing.h"
 #include "xasm.h"
 #include "dependencies.h"
+#include "output_file.h"
 #include "version.h"
 
 /*---------------------------------------------------------------------------*/
@@ -1301,7 +1302,7 @@ static int run_compare(astnode *root)
     compare_mismatch *mismatches = NULL;
     int exit_code = 0;
 
-    if (!read_file_bytes(xasm_args.output_file, &assembled_data, &assembled_size, 0)) {
+    if (!read_file_bytes(output_batch_read_path(xasm_args.output_file), &assembled_data, &assembled_size, 0)) {
         fprintf(stderr, "error: could not read `%s'\n", xasm_args.output_file);
         return 3;
     }
@@ -1662,7 +1663,7 @@ int main(int argc, char *argv[]) {
     }
 
 #ifdef XORCYST_V2_FRONTEND
-    v2_frontend_process(root_node);
+    if (yynerrs == 0) v2_frontend_process(root_node);
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 #else
     /* First pass does a lot of stuff. */
@@ -1803,6 +1804,9 @@ int main(int argc, char *argv[]) {
         }
         destinations_validated = 1;
     }
+#ifdef XORCYST_V2_FRONTEND
+    if (assembly_ready) output_batch_begin();
+#endif
     if (assembly_ready) {
         output_fp = open_binary_temporary(tmp_outfile);
         if (output_fp == NULL) {
@@ -1838,7 +1842,11 @@ int main(int argc, char *argv[]) {
                 remove(tmp_outfile);
                 output_generated = 0;
             } else {
+#ifdef XORCYST_V2_FRONTEND
+                if (!output_batch_stage(xasm_args.output_file, tmp_outfile, rename)) {
+#else
                 if (rename(tmp_outfile, xasm_args.output_file) != 0) {
+#endif
                     fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);
                     err_count++;
                     remove(tmp_outfile);
@@ -1956,11 +1964,21 @@ symbol_failure:
 cleanup:
     free_analysis(analysis);
     free_analysis_outputs(analysis_outputs);
-    free(tmp_outfile);
     clear_xref_data_directive_provenance();
     if (xasm_args.dependency_manifest && exit_code == 0 && total_errors() == 0
         && output_generated && !dependencies_write(xasm_args.dependency_manifest)) exit_code = 3;
     if (dependencies_failed()) exit_code = 3;
+#ifdef XORCYST_V2_FRONTEND
+    if (!v2_frontend_analysis_ok()) exit_code = 3;
+    {
+        /* A comparison mismatch or audit finding is a completed analysis,
+         * not an allocation/I/O/serialization failure. Retain its existing
+         * exit status and valid artifacts. */
+        int publish = (exit_code == 0 || exit_code == 4 || exit_code == 5) && total_errors() == 0;
+        if (!output_batch_finish(publish) && publish) exit_code = 3;
+    }
+#endif
+    free(tmp_outfile);
     dependencies_clear();
 
     /* Cleanup */

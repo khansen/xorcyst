@@ -25,6 +25,9 @@ typedef struct {
 int v2_frontend_visit_rows(int (*visit)(const v2_analysis_row *, void *), void *);
 /* Diagnostic-only traversal: no successful layout or emitted-byte claim.
  * Uses the remaining parser tree on early errors, owned metadata after lowering. */
+int v2_frontend_analysis_ok(void);
+unsigned char v2_frontend_diagnostic_opcode(const astnode *);
+int v2_frontend_visit_diagnostic_rows(int (*)(const v2_analysis_row *, void *), void *);
 void v2_frontend_walk_diagnostic(astnode *, void *, const astnodeprocmap *);
 /* Shared-value bindings on owned analysis expressions. */
 location v2_frontend_own_location(location);

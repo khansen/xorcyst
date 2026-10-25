@@ -1,7 +1,7 @@
 # I5 local review candidate: analysis integration
 
 I4 merged in PR #100 (`63747ed`) on 2026-10-25 after local review, owner
-approval and green CI. I5 is ready for local independent review; it remains
+approval and green CI. I5 has a local review follow-up awaiting re-review; it remains
 unapproved and unpublished. Installed tools still use the existing implementation.
 
 The first I5 change prepares source capture. Frontend string/map cache IDs and
@@ -16,7 +16,8 @@ without a second allocation. This is source metadata, not another evaluator.
 
 The data-provenance hook runs before the v2 data handler reduces operands.
 Lowering associates source rows with shared-layout fragments. Native statement
-metadata transfers out of the source tree; declarations and symbol definitions
+metadata for rich collectors transfers out of the source tree; text/structured
+listings use lightweight rows without rebuilding those expressions. Declarations and symbol definitions
 are copied into an owned analysis index. File names are interned in the value
 unit. No collector borrows the parser namespace, which is destroyed before
 layout. The final view supplies addresses, opcodes, extents and encoded bytes;

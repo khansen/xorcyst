@@ -1,5 +1,5 @@
 {
-  "status": "bounded survey; owner decision in contract section 14; not a formal no-slowdown pass",
+  "status": "Earlier 100-configuration bounded survey, with a focused review-follow-up survey; neither is a formal no-slowdown pass",
   "evidence": {
     "producer-survey-final": "26d9e91c9f4e1ac51c7cbef35614d5bfd649ba73caf00f7857c92b9de4b643be",
     "bundle-survey-optimized": "a184770643f817993e74ffb65d89a8db88fa0e9d923f866928d9d71930823287"
@@ -4485,5 +4485,322 @@
       },
       "max_paired_rss_ratio": 1.0281792785133002
     }
-  ]
+  ],
+  "followup": {
+    "evidence_root": "/private/tmp/xorcyst-i5-followup",
+    "tools": {
+      "baseline": {
+        "path": "/private/tmp/xorcyst-i4/baseline-source/xasm",
+        "sha256": "8e9330a9c93b2297bd9af771ba6bbc95ab183064714ae70ae82bd6456c2c9b5b"
+      },
+      "candidate": {
+        "path": "/private/tmp/xorcyst-v2-analysis/xasm-v2",
+        "sha256": "c2803cd58d3a3bf261480e963b25a63082456cf0be63cc1fe5e95682a01e97dd"
+      }
+    },
+    "survey_sha256": "6976870d80be53f388000b5efaeaa42de2ad3eda0b987c932e1b3e31d23fee54",
+    "stress_sha256": "c1bfeae7fbf7c54b627ddb6769ee1039d7c1104e8caf483a32181af78fea7f20",
+    "configurations": [
+      {
+        "project": "metroid",
+        "mode": "plain",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.9228170470031405,
+          "cpu": 0.9310669284896088,
+          "rss": 0.8640081799591002
+        },
+        "median_ms_delta": {
+          "elapsed": -5.858375923708081,
+          "cpu": -5.055000000000004
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "text",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.9591635272339939,
+          "cpu": 0.961746045841597,
+          "rss": 0.9842914438502673
+        },
+        "median_ms_delta": {
+          "elapsed": -4.237417015247047,
+          "cpu": -3.876999999999992
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "json",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0001566532446087,
+          "cpu": 0.9622990576120748,
+          "rss": 0.993941433860653
+        },
+        "median_ms_delta": {
+          "elapsed": 0.03429199568927288,
+          "cpu": -6.948999999999983
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "xref-combined",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0451541834774563,
+          "cpu": 1.0568519455068432,
+          "rss": 1.098419540229885
+        },
+        "median_ms_delta": {
+          "elapsed": 11.859084013849497,
+          "cpu": 14.388999999999985
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "records",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0123145369754172,
+          "cpu": 1.02618786125903,
+          "rss": 1.0816326530612246
+        },
+        "median_ms_delta": {
+          "elapsed": 3.66095791105181,
+          "cpu": 5.9849999999999905
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "plain",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.818903514399561,
+          "cpu": 0.832779684789429,
+          "rss": 0.8408619975134687
+        },
+        "median_ms_delta": {
+          "elapsed": -10.392833035439253,
+          "cpu": -9.061
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "text",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.8946893994398458,
+          "cpu": 0.9040076696643171,
+          "rss": 0.9275945293644409
+        },
+        "median_ms_delta": {
+          "elapsed": -8.089582901448011,
+          "cpu": -7.109000000000004
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "json",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.8973155538426868,
+          "cpu": 0.9185678556975966,
+          "rss": 0.8964256701868399
+        },
+        "median_ms_delta": {
+          "elapsed": -16.31079101935029,
+          "cpu": -12.27499999999998
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "xref-combined",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0147205497173608,
+          "cpu": 1.0264338612897994,
+          "rss": 1.0506505576208178
+        },
+        "median_ms_delta": {
+          "elapsed": 2.5846249191090465,
+          "cpu": 4.400999999999988
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "records",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.9610616676833847,
+          "cpu": 0.9716134009911273,
+          "rss": 1.0478971962616823
+        },
+        "median_ms_delta": {
+          "elapsed": -6.7451250506564975,
+          "cpu": -4.783000000000009
+        }
+      }
+    ],
+    "stress": [
+      {
+        "source": "/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV/work/big/big.asm",
+        "sha256": "e719fe6ee459f05e76067249d23e7cb07fbba145f44d2f2a695a71623dc5869c",
+        "runs": {
+          "v1": {
+            "samples": [
+              {
+                "rss": 104038400,
+                "wall": 0.35,
+                "cpu": 0.34
+              },
+              {
+                "rss": 104038400,
+                "wall": 0.35,
+                "cpu": 0.34
+              },
+              {
+                "rss": 104054784,
+                "wall": 0.35,
+                "cpu": 0.34
+              }
+            ],
+            "median": {
+              "rss": 104038400,
+              "wall": 0.35,
+              "cpu": 0.34
+            },
+            "binary_sha256": "09628ca1c472ca602a55b40eb124d59044c90313bd5d619836f16409e9ddc7b8",
+            "listing_bytes": 5947781
+          },
+          "v2": {
+            "samples": [
+              {
+                "rss": 132562944,
+                "wall": 0.33,
+                "cpu": 0.32
+              },
+              {
+                "rss": 133120000,
+                "wall": 0.34,
+                "cpu": 0.33
+              },
+              {
+                "rss": 133087232,
+                "wall": 0.33,
+                "cpu": 0.32
+              }
+            ],
+            "median": {
+              "rss": 133087232,
+              "wall": 0.33,
+              "cpu": 0.32
+            },
+            "binary_sha256": "09628ca1c472ca602a55b40eb124d59044c90313bd5d619836f16409e9ddc7b8",
+            "listing_bytes": 5947781
+          }
+        }
+      },
+      {
+        "source": "/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV/work/big/mac.asm",
+        "sha256": "0c74c52577e7191668746aab1f3359dd999b09624d381c94b1a9b290e7a80a69",
+        "runs": {
+          "v1": {
+            "samples": [
+              {
+                "rss": 53919744,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 53886976,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 53886976,
+                "wall": 0.1,
+                "cpu": 0.09
+              }
+            ],
+            "median": {
+              "rss": 53886976,
+              "wall": 0.1,
+              "cpu": 0.09
+            },
+            "binary_sha256": "73d9f5dc5a28b6645cb3bfbefae7d52029ae45a44a67f20cd311d1bc66873dc7",
+            "listing_bytes": 2524040
+          },
+          "v2": {
+            "samples": [
+              {
+                "rss": 65290240,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 67649536,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 65257472,
+                "wall": 0.1,
+                "cpu": 0.09
+              }
+            ],
+            "median": {
+              "rss": 65290240,
+              "wall": 0.1,
+              "cpu": 0.09
+            },
+            "binary_sha256": "73d9f5dc5a28b6645cb3bfbefae7d52029ae45a44a67f20cd311d1bc66873dc7",
+            "listing_bytes": 2524040
+          }
+        }
+      },
+      {
+        "source": "/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV/work/dag/dag22.asm",
+        "sha256": "15e07a5010528a87efc105fe3d0c45f9aa769b50c3837e4b0c2bee6b7e5b8e70",
+        "runs": {
+          "v2": {
+            "samples": [
+              {
+                "rss": 2408448,
+                "wall": 0.0,
+                "cpu": 0.0
+              },
+              {
+                "rss": 2392064,
+                "wall": 0.0,
+                "cpu": 0.0
+              },
+              {
+                "rss": 2392064,
+                "wall": 0.0,
+                "cpu": 0.0
+              }
+            ],
+            "median": {
+              "rss": 2392064,
+              "wall": 0.0,
+              "cpu": 0.0
+            },
+            "binary_sha256": "36215def81484e475e1bae25b91c711f0b9c7a47428f0501892b5df9fd5587a7",
+            "listing_bytes": 1266
+          }
+        }
+      }
+    ]
+  }
 }

@@ -644,7 +644,10 @@ END
         self.assertIn(b"could not write output", run.stderr)
         self.assertIn(str(sidecar).encode(), run.stderr)
         self.assertFalse(manifest.exists())
-        self.assertEqual(output.read_bytes(), b"\x60")
+        if V2_ANALYSIS:
+            self.assertFalse(output.exists())
+        else:
+            self.assertEqual(output.read_bytes(), b"\x60")
         sidecar.rmdir()
         source.write_bytes(b".ORG $C000\nLDA #'\xff'\n")
         run = subprocess.run(args, capture_output=True)

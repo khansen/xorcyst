@@ -1,12 +1,119 @@
 # I5 local validation
 
-Status: local candidate; independent review and owner approval are pending.
-No I5 PR or installed-tool cutover is claimed. The producer is based on I4
-merge `63747ed`; the isolated Nesrev migration is based on `abc8ae3e1`.
-`i5-current.json` identifies the tested source, tools and external evidence.
-The review scope is in [I5_REVIEW.md](I5_REVIEW.md).
+Status: local review follow-up, not owner-approved or published. The first
+independent review of `21fae67` / Nesrev `ab50ea8f7` requested changes.
+The candidate fixes below await focused re-review. `i5-current.json` identifies
+the current sources, tools and evidence; the original record is retained below
+as historical evidence. Installed tools and the original project trees remain
+unchanged. No PR has been opened.
 
-## Correctness and publication
+## Review findings addressed
+
+- **B1:** standalone JSON/NDJSON diagnostic listings retain their source rows.
+  Text listings contain no JSON records. `.dsw` accounts for its element width;
+  first-pass instruction metadata comes from the mnemonic/mode, including
+  branches and zero-page-only indexed stores. Recovered syntax-error statements
+  survive. Tests assert complete row sequences, addresses and extents instead
+  of accepting an empty record array. Diagnostic rows make no byte/offset claim.
+- **B2:** Devil World's `render_sequences` handles non-emitting rows and compact
+  fills. Tests exercise that reader independently of the three trace producers,
+  and reject corrupt ordinary bytes and fills before semantic table lookups.
+- **S1:** graph reference indirections no longer halve alias depth. The 32/64/65
+  controls match v1; plain assembly remains independent of the collector limit.
+- **S2:** literal-string `.char` grouping matches v1's lowered `.db` grouping.
+  Numeric-char text bytes and declaration-position label rows remain deliberate
+  final-fact corrections, now recorded in contract section 15.
+- **S3/S4:** substituted strings produce no address-computation/data-target
+  references. Unused bank constants remain unknown; analysis no longer changes
+  their assembly acceptance. Actually used bank expressions still reject.
+- **S5:** fatal evaluator allocation errors are checked after serialization.
+  All file products are staged before publication; generation or dependency
+  capture failures discard the stages. Publication failures roll back earlier
+  renames. Existing and absent destinations, CSV/NL sets, symlinks, readonly
+  directories and late value allocations are covered. This is not crash-atomic;
+  stdout cannot be rolled back. A failed rollback reports and retains its backup.
+  Comparison/audit findings keep their existing exit statuses and valid artifacts.
+- **S6:** text-only listings use lightweight rows and the symbol snapshot, without
+  rebuilding collector expression trees.
+
+## Follow-up verification
+
+The final 52-configuration Metroid/Zelda matrix matches v1 after the same
+normalization as before: timestamps, output paths and actual producer identity
+only. All 15 required ROMs rebuild exactly from 451 source-built objects. The
+frozen gate and source hashes remain unchanged. Object/stderr comparisons are
+recorded separately in the evidence.
+
+`make check` passes 673 tests in 20 suites plus shell regressions. `make distcheck`
+passes 678 in 21 suites and produces the distribution archives. The shared v1
+fault suite has one explicit not-applicable skip for the v2-only value evaluator;
+the corresponding test executes in the 117-test v2 analysis suite. The frontend
+suite has 67 methods. Distribution wiring includes its new value-fault wrapper.
+
+macOS ASan/UBSan passes the final 67-method frontend suite and the targeted late
+value-allocation sweep. Linux GCC 13.3/aarch64 ASan/UBSan/LeakSanitizer passes the
+117-test analysis suite and the 65-method frontend suite before the last
+first-pass diagnostic-opcode and compare-result controls. The final 67-method
+frontend suite passes under the same Linux sanitizers as an unprivileged user.
+The three root-skipped permission subcases from the full analysis run also pass
+in a separate unprivileged rerun. There are no sanitizer reports. No second full
+Linux analysis run is claimed for the final diagnostic-only refinements.
+
+The new producer controls fail 39 assertions on the reviewed `21fae67` tool,
+with no harness errors. Ignoring fatal value errors and publishing sidecars
+early each fail two assertions in the late-allocation test. The real code passes
+both allocation positions. Ignoring Devil World's byte comparison fails both
+corruption assertions; the real reader passes. These proofs are in scratch
+copies, not edits to the reviewed trees. The earlier broad allocation suite
+still exercises 477 collect, 3 plan, 108 prepare and 17 output-phase allocations.
+
+The changed Nesrev reader tests pass. The rest of the consumer implementation
+is unchanged from `ab50ea8f7`; no repeat of the full consumer inventory or an
+emulator run is claimed in this follow-up. The fixture migration now calls out
+Zelda's four final-opcode `absolute` to `zeropage` corrections.
+
+## Bounded resource follow-up
+
+A five-pair spot survey covers plain, text, JSON, combined xref and records on
+both games. It is a survey on one machine, with other validation work active;
+it is not the formal timing protocol. The largest elapsed increase is combined
+xref on Metroid: +11.86 ms (+4.5%), CPU +14.39 ms. Text listing is about 4.24 ms
+faster on Metroid and 8.09 ms faster on Zelda in this sample. Median peak-RSS
+ratios in these ten configurations remain at or below 1.10. Under the owner's
+bounded-effort decision, these small costs are reported without another round
+of optimization solely to erase the percentage difference.
+
+Three-run text-listing memory probes use the reviewer's synthetic inputs:
+
+| Input | v1 median peak | Current median peak | Ratio |
+| --- | ---: | ---: | ---: |
+| Large generated source | 99.22 MiB | 126.92 MiB | 1.279 |
+| Macro-heavy source | 51.39 MiB | 62.27 MiB | 1.212 |
+| Shared aliases, k=22 | not repeated | 2.28 MiB | — |
+
+The first two binaries match v1. The earlier review measured multi-gigabyte
+memory for the shared-alias text path; that old run was not repeated. The new
+text path is also bounded by an in-suite k=22 control. Rich xref's graph-to-tree
+expansion remains an optional, documented limitation. The current survey and
+artifact sizes are in `i5-survey.json` and the hashed external reports.
+
+## Remaining limits and review scope
+
+No PR CI, native 32-bit/big-endian run, complete Nesrev test run, emulator or
+formal performance pass is claimed. The shared v1 parser's allocation failures,
+rich xref's exponential alias trees, the bundle's missing full listing/binary
+byte cross-check, and the pre-existing consumer `zeropage_y` omission remain
+open. I4's unnamed-RAM `$` limitation remains. None is silently claimed fixed.
+
+Read `I5_REVIEW.md` for the focused re-review. Owner approval precedes publication;
+I6 still owns the coordinated cutover and removal of legacy implementations.
+
+## Earlier candidate record: `21fae67`
+
+The following results belong to the originally reviewed candidate, not to new
+runs of every configuration in this follow-up.
+
+### Correctness and publication
 
 The final 52-configuration matrix covers 26 producer modes on each frozen
 Metroid/Zelda input. Every PRG and diagnostic matches v1.9.12. Every analysis
@@ -46,7 +153,7 @@ Linux build with additional `-Wextra` flags stopped at pre-existing intentional
 fallthrough warnings in `astproc.c`; the CI-style `-Werror` build and sanitized
 suites pass. This is not a clean claim for that extra-warning configuration.
 
-## Consumer checks and regression proofs
+### Consumer checks and regression proofs
 
 Ninety focused Nesrev shell checks cover all bundle profiles, record validation,
 raw/RAM address consumers, pointer audits, branch literals, split pointers,
@@ -72,7 +179,7 @@ Nesrev repository hygiene passes. Its strict playbook check reports ten stale
 branch. The modified tooling guide stays within its route budget. This is a
 documented pre-existing check failure, not an all-green full-Nesrev-suite claim.
 
-## Resource assessment
+### Resource assessment
 
 `measure_analysis.py` records minimal environments, tool/consumer hashes,
 commands, five alternating pairs, elapsed and `wait4` CPU time, peak RSS and
@@ -137,7 +244,7 @@ assembly avoids this state, and `$` anchors are created only when needed.
 The fixed AST node remains 136 bytes; rich source capture adds 32 bytes within
 the same allocation. These are representation sizes, not a partition of RSS.
 
-## Limits and next gate
+### Limits and next gate
 
 No native 32-bit or big-endian host, PR CI, complete Nesrev repository test run
 or emulator session is claimed. Timing comes from one macOS arm64 machine;

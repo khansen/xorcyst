@@ -833,6 +833,11 @@ static int is_relative_branch_opcode(unsigned char op)
 static int list_instruction(astnode *instr, void *arg, astnode **next)
 {
     unsigned char op = instr->instr.opcode;
+#ifdef XORCYST_V2_FRONTEND
+    if (!listing_binary_generated) {
+        op = v2_frontend_diagnostic_opcode(instr);
+    }
+#endif
     int len = opcode_length(op);
     unsigned char bytes[3];
     int value = 0;
@@ -874,6 +879,9 @@ static int list_instruction(astnode *instr, void *arg, astnode **next)
     return 0;
 }
 
+#ifdef XORCYST_V2_FRONTEND
+static int list_resolved_row(const v2_analysis_row *, void *);
+#endif
 static int list_data(astnode *data, void *arg, astnode **next)
 {
     astnode *type = LHS(data);
@@ -887,6 +895,22 @@ static int list_data(astnode *data, void *arg, astnode **next)
     (void)arg;
     (void)next;
 
+#ifdef XORCYST_V2_FRONTEND
+    if (!listing_binary_generated) {
+        v2_analysis_row row = {0};
+        unsigned width = type->datatype == WORD_DATATYPE ? 2 : type->datatype == DWORD_DATATYPE ? 4 : 1;
+        row.kind = DATA_NODE; row.data_type = type->datatype;
+        row.loc = data->loc; row.ram = in_dataseg; row.address = (unsigned)addr_start;
+        for (expr = RHS(data); expr; expr = expr->next_sibling) {
+            size_t count = expr->type == STRING_NODE ? strlen(expr->string) : 1;
+            if (count > (UINT_MAX - row.length) / width) return 0;
+            row.length += (unsigned)count * width;
+        }
+        list_resolved_row(&row, NULL);
+        add_current_pc((int)row.length);
+        return 0;
+    }
+#endif
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
         if (!eval_expression_int(expr, &value, 0)) {
             value = 0;
@@ -929,7 +953,13 @@ static int list_storage(astnode *storage, void *arg, astnode **next)
     (void)next;
 
     if (!eval_expression_int(RHS(storage), &count, 0) || count < 0) count = 0;
-    if (current_listing_version == 2) {
+#ifdef XORCYST_V2_FRONTEND
+    if (!listing_binary_generated) {
+        int width = LHS(storage)->datatype == WORD_DATATYPE ? 2 : LHS(storage)->datatype == DWORD_DATATYPE ? 4 : 1;
+        count = count <= INT_MAX / width ? count * width : 0;
+    }
+#endif
+    if (current_listing_version == 2 && current_listing_format != LISTING_FORMAT_TEXT) {
         emit_structured_record(storage->loc, get_current_pc(), NULL, 0,
                                get_source_line(storage->loc.file, storage->loc.first_line),
                                ".DSB", NULL, 0, listing_output_offset, count, 1);
@@ -1108,7 +1138,7 @@ static int list_resolved_row(const v2_analysis_row *row, void *arg)
         if (!fill && count > HEX_BYTES_PER_ROW) count = HEX_BYTES_PER_ROW;
         emit_structured_record(row->loc, (int)(row->address + at),
             row->bytes ? row->bytes + at : NULL,
-            row->ram || fill ? 0 : (int)count,
+            row->ram || fill || !row->bytes ? 0 : (int)count,
             get_source_line(row->loc.file, row->loc.first_line),
             directive, mode, at != 0, (long)row->output_offset + at, (int)count, fill);
         at += count;
@@ -1210,6 +1240,8 @@ int generate_listing(astnode *root,
 #ifdef XORCYST_V2_FRONTEND
     if (binary_generated)
         ok = version == 2 && v2_frontend_visit_rows(list_resolved_row, NULL);
+    else if (!root)
+        ok = v2_frontend_visit_diagnostic_rows(list_resolved_row, NULL);
     else
         v2_frontend_walk_diagnostic(root, NULL, map);
 #else
@@ -3747,6 +3779,9 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     int addr = get_current_pc();
     int len = opcode_length(instr->instr.opcode);
+#ifdef XORCYST_V2_FRONTEND
+    if (ctx->diagnostic_only) len = opcode_length(v2_frontend_diagnostic_opcode(instr));
+#endif
     xref_meta meta;
     xref_instr *out = NULL;
     char expr_buf[512];
@@ -6016,6 +6051,9 @@ static int summary_visit_instruction(astnode *instr, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     int addr = get_current_pc();
     int len = opcode_length(instr->instr.opcode);
+#ifdef XORCYST_V2_FRONTEND
+    if (ctx->diagnostic_only) len = opcode_length(v2_frontend_diagnostic_opcode(instr));
+#endif
     xref_meta meta;
     char expr_buf[512];
     (void)next;
