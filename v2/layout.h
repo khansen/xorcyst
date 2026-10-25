@@ -24,6 +24,8 @@ typedef enum {
 typedef struct {
     v2_layout_fact_kind kind;
     v2_location location;
+    /* Binary RAM facts describe the data cursor/extent, with no emitted bytes.
+     * Their output_offset is the contemporaneous code-output position. */
     uint32_t address, output_offset, length;
     int32_t bank, operand;
     unsigned char opcode;
@@ -104,6 +106,9 @@ int v2_layout_keep_bytes(v2_layout *, int keep);
 int v2_layout_write_fragments(const v2_layout *, size_t first, size_t end, FILE *);
 int v2_layout_fact_at(const v2_layout *, v2_id, v2_layout_fact *);
 size_t v2_layout_fact_count(const v2_layout *);
+/* Number of appended fragments, including while building. A source collector
+ * can retain half-open fragment ranges without inspecting unresolved facts. */
+size_t v2_layout_fragment_count(const v2_layout *);
 int v2_layout_run(v2_layout *);
 const unsigned char *v2_layout_bytes(const v2_layout *, size_t *length);
 const v2_layout_fact *v2_layout_facts(const v2_layout *, size_t *count);

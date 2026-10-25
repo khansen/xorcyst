@@ -32,8 +32,9 @@ publication as the single I4 PR and its CI run. I4 merged in PR #100
 All required ROMs match. An optional leading-RAM initializer limitation is
 tracked in TODO and the validation record.
 The accepted memory/timing tradeoffs are recorded for review. Listings and
-analysis remain I5 work. I5 has started locally with source-capture plumbing;
-analysis output is not enabled in the prototype yet. See [v2/README.md](v2/README.md)
+analysis remain I5 work. The local I5 prototype now supports pure-binary
+JSON/NDJSON listings using schema 2 and final shared-layout facts; other
+analysis outputs and Nesrev integration are still pending. See [v2/README.md](v2/README.md)
 for its reviewed contracts, current stage and remaining acceptance gates.
 
 Build and test

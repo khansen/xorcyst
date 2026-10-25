@@ -1572,15 +1572,24 @@ int main(int argc, char *argv[]) {
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
 #ifdef XORCYST_V2_FRONTEND
-    if (xasm_args.listing_file || xasm_args.xref_file
+    if (xasm_args.xref_file
         || xasm_args.instruction_records_file || xasm_args.fceux_nl_rom_prefix
         || xasm_args.fceux_nl_ram_file || xasm_args.audit_raw_addresses
         || xasm_args.xref_summary || xasm_args.analyze_index_patterns
         || xasm_args.data_consumers || xasm_args.analyze_data_coverage
         || xasm_args.compare_file || xasm_args.dependency_manifest) {
-        fprintf(stderr, "error: I4 prototype does not support listing or analysis output\n");
+        fprintf(stderr, "error: I5 prototype does not yet support this analysis output\n");
         exit_code = 1;
         goto cleanup;
+    }
+    if (xasm_args.listing_file) {
+        if (!xasm_args.pure_binary || xasm_args.listing_format == LISTING_FORMAT_TEXT
+            || (xasm_args.listing_version_set && xasm_args.listing_version != 2)) {
+            fprintf(stderr, "error: I5 prototype listings require --pure-binary and JSON/NDJSON schema 2\n");
+            exit_code = 1;
+            goto cleanup;
+        }
+        xasm_args.listing_version = 2;
     }
 #endif
 
@@ -1634,6 +1643,11 @@ int main(int argc, char *argv[]) {
     if (yyparse() != 0) { exit_code = 1; goto cleanup; }
 
     if (root_node == NULL) {
+#ifdef XORCYST_V2_FRONTEND
+        if (xasm_args.listing_file)
+            root_node = astnode_create(LIST_NODE, loc_preserve);
+        if (xasm_args.listing_file && root_node == NULL) { exit_code = 3; goto cleanup; }
+#endif
         if (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest)
             root_node = astnode_create(LIST_NODE, loc_preserve);
         if (root_node == NULL) {
@@ -1837,7 +1851,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if ((output_generated || total_errors() != 0) && xasm_args.listing_file != NULL) {
+    if ((output_generated
+#ifndef XORCYST_V2_FRONTEND
+         || total_errors() != 0
+#endif
+        ) && xasm_args.listing_file != NULL) {
         if (!destinations_validated && !dependencies_output(xasm_args.listing_file)) goto cleanup;
         verbose("Generating listing...");
         if (!generate_listing(root_node,

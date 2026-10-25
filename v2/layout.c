@@ -925,6 +925,17 @@ static int validate(v2_layout *l)
         }
         /* All width constraints have now consumed the original extent ID. */
         f->extent = output; output += f->run;
+        if (f->kind == RAM && l->mode == V2_BINARY_LAYOUT) {
+            ram *r = &l->ram[extra(l, f)->placement.argument];
+            int known;
+            int32_t address;
+            if (!v2_anchor_value(l->unit, r->anchor, &known, &address, r->loc) || !known)
+                return layout_fail(l, V2_LAYOUT_UNRESOLVED, r->loc);
+            /* RAM occupies no output bytes. Preserve its separate source-order
+             * address/extent for analysis without borrowing live placements. */
+            extra(l, f)->placement.origin = (uint32_t)address;
+            f->expression = r->size;
+        }
         if (f->kind != DATA && f->kind != INSTRUCTION) continue;
         if (f->expression == V2_NONE && !f->literal_operand) continue;
         if (f->literal_operand) { operand.kind = V2_INTEGER; operand.as.integer = expr_i32(f->expression); }
@@ -1001,6 +1012,7 @@ static int emit_fragments(const v2_layout *l, size_t first, size_t end,
     size_t i, j;
     for (i = first; i < end; ++i) {
         const fragment *f = fragment_at(l, i);
+        if (f->kind == RAM || f->kind == RAM_ORIGIN) continue;
         placement fact = final_placement(l, i);
         if (!fact.length) continue;
         if (fact.output_offset > l->output_size || fact.length > l->output_size - fact.output_offset)
@@ -1110,6 +1122,10 @@ static v2_layout_fact fact_at(const v2_layout *l, size_t i)
         f->kind == MARK ? V2_FACT_MARK : V2_FACT_PLACEMENT;
     fact.location = v2_graph_location(l->unit, f->loc); fact.address = p->address; fact.output_offset = p->output_offset;
     fact.length = p->length; fact.bank = p->bank; fact.operand = p->operand;
+    if (l->mode == V2_BINARY_LAYOUT && (f->kind == RAM || f->kind == RAM_ORIGIN)) {
+        fact.address = extra(l, f)->placement.origin;
+        fact.length = f->kind == RAM ? f->expression : 0;
+    }
     fact.opcode = f->opcode; fact.has_operand = f->has_operand; fact.warning = f->warning;
     return fact;
 }
@@ -1124,6 +1140,7 @@ int v2_layout_fact_at(const v2_layout *l, v2_id id, v2_layout_fact *out)
     *out = l->facts ? l->facts[id] : fact_at(l, id); return 1;
 }
 size_t v2_layout_fact_count(const v2_layout *l) { return l->ready ? l->count : 0; }
+size_t v2_layout_fragment_count(const v2_layout *l) { return l->count; }
 int v2_layout_run(v2_layout *l)
 {
     int shortened;

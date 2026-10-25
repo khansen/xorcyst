@@ -13,6 +13,9 @@
 #include "fceux_nl.h"
 #include "output_file.h"
 #include <stdint.h>
+#ifdef XORCYST_V2_FRONTEND
+#include "v2/frontend.h"
+#endif
 
 #define SOURCE_LINE_BUFFER_SIZE 1024
 #define HEX_BYTES_PER_ROW 4
@@ -1022,6 +1025,55 @@ static int list_symbols(void)
     return 1;
 }
 
+#ifdef XORCYST_V2_FRONTEND
+static int list_resolved_row(const v2_analysis_row *row, void *arg)
+{
+    const char *directive = NULL, *mode = NULL;
+    char *display = NULL;
+    unsigned at = 0;
+    (void)arg;
+    in_dataseg = row->ram;
+    listing_output_offset = row->output_offset;
+    switch (row->kind) {
+    case DATASEG_NODE: directive = ".DATASEG"; break;
+    case CODESEG_NODE: directive = ".CODESEG"; break;
+    case ORG_NODE: directive = ".ORG"; break;
+    case LABEL_NODE:
+        display = display_label_name(row->label);
+        if (!display) return 0;
+        directive = display;
+        break;
+    case INSTRUCTION_NODE:
+        directive = opcode_to_string(row->opcode);
+        mode = addressing_mode_name(opcode_addressing_mode(row->opcode));
+        break;
+    case DATA_NODE: directive = datatype_directive_name(row->data_type); break;
+    case BINARY_NODE: directive = "INCBIN"; break;
+    case STORAGE_NODE: directive = ".DSB"; break;
+    default: return 0;
+    }
+    /* Bytes, lengths and positions are read from the encoder's final facts.
+     * RAM rows have extents but no output bytes; storage is a compact fill. */
+    do {
+        unsigned count = row->length - at;
+        int fill = row->kind == STORAGE_NODE;
+        if (!fill && count > HEX_BYTES_PER_ROW) count = HEX_BYTES_PER_ROW;
+        emit_structured_record(row->loc, (int)(row->address + at),
+            row->bytes ? row->bytes + at : NULL,
+            row->ram || fill ? 0 : (int)count,
+            get_source_line(row->loc.file, row->loc.first_line),
+            directive, mode, at != 0, (long)row->output_offset + at, (int)count, fill);
+        at += count;
+    } while (at < row->length);
+    if (row->kind == LABEL_NODE && row->scope_anchor && !is_internal_label_name(row->label)) {
+        set_scope_name(++scope_counter, display);
+        set_current_scope(display);
+    }
+    free(display);
+    return 1;
+}
+#endif
+
 int generate_listing(astnode *root,
                      const char *filename,
                      listing_format format,
@@ -1107,7 +1159,14 @@ int generate_listing(astnode *root,
         return 0;
     }
 
+#ifdef XORCYST_V2_FRONTEND
+    (void)root;
+    (void)map;
+    ok = version == 2 && format != LISTING_FORMAT_TEXT && binary_generated
+        && v2_frontend_visit_rows(list_resolved_row, NULL);
+#else
     astproc_walk(root, NULL, map);
+#endif
     if (current_listing_format == LISTING_FORMAT_TEXT) {
         ok = list_symbols();
     } else if (current_listing_format == LISTING_FORMAT_JSON) {

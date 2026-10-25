@@ -35,6 +35,9 @@ class Layout(unittest.TestCase):
     def test_compact_link_facts_match_full_analysis_snapshots(self):
         self.assertEqual(self.run_case("compact-facts")[0], "compact facts: OK")
 
+    def test_ram_analysis_facts_keep_separate_extents_and_never_emit_bytes(self):
+        self.assertEqual(self.run_case('ram-analysis')[0], 'RAM analysis facts: OK')
+
     def test_streamed_fragments_match_buffered_bytes_and_survive_graph_edits(self):
         self.assertEqual(self.run_case("streamed-bytes")[0], "streamed bytes: OK")
 

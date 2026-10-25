@@ -51,7 +51,8 @@ static void finish(void)
     } else {
         size_t end = 0;
         for (i = 0; i < count; ++i) {
-            assert(facts[i].output_offset == end); end += facts[i].length;
+            assert(facts[i].output_offset == end);
+            if (facts[i].kind != V2_FACT_RAM) end += facts[i].length;
         }
         assert(end == size);
         for (i = 0; i < size; ++i) printf("%02X", bytes[i]);
@@ -63,6 +64,52 @@ static void finish(void)
         printf("\n");
     }
     v2_layout_destroy(l); v2_unit_destroy(u);
+}
+static void ram_analysis_facts(void)
+{
+    unsigned mode;
+    for (mode = 0; mode < 4; ++mode) {
+        v2_layout_fact f;
+        v2_id a, b, reset, slot;
+        size_t size;
+        unsigned char actual[4], expected[] = {0xea, 0xa5, 0x20, 0x60};
+        FILE *stream;
+        begin(0);
+        assert(v2_layout_keep_facts(l, !(mode & 1)));
+        assert(v2_layout_keep_bytes(l, !(mode & 2)));
+        v2_layout_origin(l, 0x8000, loc); nop();
+        reset = (v2_id)v2_layout_fragment_count(l);
+        assert(v2_layout_ram_origin(l, 0x20, loc));
+        a = anchor(); b = anchor();
+        slot = (v2_id)v2_layout_fragment_count(l);
+        assert(v2_layout_ram(l, a, literal(3), 0, 0, loc));
+        ins(0xad, address(a));
+        assert(v2_layout_ram(l, b, literal(2), 0, 0, loc));
+        ins(0x60, V2_NONE);
+        assert(!v2_layout_fact_at(l, slot, &f));
+        assert(v2_layout_run(l));
+        assert(v2_layout_fact_at(l, reset, &f));
+        assert(f.kind == V2_FACT_RAM && f.address == 0x20 && f.length == 0 && f.output_offset == 1);
+        assert(v2_layout_fact_at(l, slot, &f));
+        assert(f.kind == V2_FACT_RAM && f.address == 0x20 && f.length == 3 && f.output_offset == 1);
+        assert(v2_layout_fact_at(l, slot + 2, &f));
+        assert(f.kind == V2_FACT_RAM && f.address == 0x23 && f.length == 2 && f.output_offset == 3);
+        assert(v2_place(u, a, 1, 99)); /* Published facts own the final snapshot. */
+        assert(v2_layout_fact_at(l, slot, &f) && f.address == 0x20 && f.length == 3);
+        if (!(mode & 2)) {
+            const unsigned char *bytes = v2_layout_bytes(l, &size);
+            assert(size == sizeof(expected) && !memcmp(bytes, expected, size));
+        }
+        stream = tmpfile(); assert(stream);
+        assert(v2_layout_write_fragments(l, 0, v2_layout_fragment_count(l), stream));
+        assert(ftell(stream) == sizeof(expected));
+        rewind(stream);
+        assert(fread(actual, 1, sizeof(actual), stream) == sizeof(actual));
+        assert(!memcmp(actual, expected, sizeof(actual)));
+        fclose(stream);
+        v2_layout_destroy(l); v2_unit_destroy(u);
+    }
+    puts("RAM analysis facts: OK");
 }
 static void compact_facts(void)
 {
@@ -711,6 +758,7 @@ int main(int argc, char **argv)
     }
     if (!strcmp(argv[1], "allocations")) { assert(argc == 5); allocation_copy = argv[4]; allocations(); return 0; }
     if (!strcmp(argv[1], "compact-facts")) { compact_facts(); assert(!test_v2_live_allocations()); return 0; }
+    if (!strcmp(argv[1], "ram-analysis")) { ram_analysis_facts(); assert(!test_v2_live_allocations()); return 0; }
     if (!strcmp(argv[1], "streamed-bytes")) { streamed_bytes(); assert(!test_v2_live_allocations()); return 0; }
     begin(atoi(argv[2])); which = argc > 3 ? atoi(argv[3]) : 0;
     if (!strcmp(argv[1], "rooted-spans")) { rooted_spans(); return 0; }

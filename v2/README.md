@@ -16,14 +16,22 @@ without a second allocation. This is source metadata, not another evaluator.
 
 The data-provenance hook now runs before the v2 data handler reduces operands.
 The test driver exercises this path through the real parser and expansion
-passes, while normal prototype invocations still reject analysis flags. The
-next integration must connect collectors to the shared evaluator and validated
-layout facts, retaining the boundary where parser AST and namespace die before
-layout. It must not re-enable a legacy layout/evaluation path for analysis.
+passes. Structured listings now use a separate, small owned row table that
+associates source statements with ranges of shared-layout fragments. After the
+parser AST and namespace die, the renderer reads final addresses, opcodes,
+extents and emitted bytes from those fragments. It never evaluates an operand
+or runs the old layout engine. Existing non-debug data grouping is preserved
+in row metadata, without merging operands or their captured charmaps/PCs.
+
+Use `./xasm-v2 --pure-binary input.asm -o output.bin --listing=listing.json
+--listing-format=json`; NDJSON is also supported. Schema 2 is the default and
+only supported structured listing schema in the prototype. Text listings,
+xref, instruction records and the remaining analysis products are still being
+ported and currently fail clearly. There is no object-mode structured listing.
 
 The source checkout's `design/v2/I5_WORK.md` records this checkpoint, validation
-and the remaining product/consumer gates. This prerequisite does not claim that
-listings, xref or instruction records work in the v2 prototype yet.
+and the remaining product/consumer gates. This checkpoint does not claim I5
+completion or approval; xref, records and consumer migration remain open.
 
 # I1: shared values and owned dependencies
 

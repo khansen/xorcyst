@@ -35,6 +35,24 @@ static size_t file_count, file_capacity;
 static unsigned char *literal_bytes;
 static size_t literal_count, literal_capacity;
 static location literal_location;
+typedef struct {
+    astnode_type kind;
+    datatype data_type;
+    v2_location loc;
+    size_t first, end;
+    char *label;
+    int ram, scope_anchor;
+} source_row;
+static source_row *source_rows;
+static size_t source_row_count, source_row_capacity;
+static int collect_source_rows;
+#define DATA_EARLY_WARNINGS_FLAG 0x100000
+static int validate_source_row(const v2_analysis_row *row, void *arg)
+{
+    (void)row;
+    (void)arg;
+    return 1;
+}
 typedef struct
 {
     v2_id expression;
@@ -938,6 +956,17 @@ static int finish_data(astnode *n, void *arg, astnode **next)
             return 0; /* retain the general checked-extent path */
         size += count * width;
     }
+    if (collect_source_rows)
+    {
+        /* Keep the same early warning stage as plain compaction. Retaining
+         * source rows must not reorder/promote warnings or duplicate them. */
+        for (e = RHS(n); e; e = e->next_sibling)
+            if (e->type == INTEGER_NODE && ((width == 1 && !IS_BYTE_VALUE(e->integer)) ||
+                                            (width == 2 && !IS_WORD_VALUE(e->integer))))
+                warn(e->loc, "operand out of range; truncated");
+        n->flags |= DATA_EARLY_WARNINGS_FLAG;
+        return 0;
+    }
     bytes = size ? malloc(size) : NULL;
     if (size && !bytes)
     {
@@ -1146,7 +1175,8 @@ static void lower_data(astnode *n, int ram)
             for (; e != end; e = e->next_sibling)
             {
                 size_t i, count = e->type == STRING_NODE ? strlen(e->string) : 1;
-                if (e->type == INTEGER_NODE && ((width == 1 && !IS_BYTE_VALUE(e->integer)) ||
+                if (!(n->flags & DATA_EARLY_WARNINGS_FLAG) && e->type == INTEGER_NODE &&
+                    ((width == 1 && !IS_BYTE_VALUE(e->integer)) ||
                                                 (width == 2 && !IS_WORD_VALUE(e->integer))))
                     warn(e->loc, "operand out of range; truncated");
                 for (i = 0; i < count; ++i)
@@ -1196,7 +1226,8 @@ static void lower_data(astnode *n, int ram)
                     }
                     ram_values[ram_value_count++] = (ram_value){expr, use};
                 }
-                else if (r.state == V2_KNOWN && LHS(n)->datatype != CHAR_DATATYPE && r.value.kind == V2_INTEGER &&
+                else if (!(n->flags & DATA_EARLY_WARNINGS_FLAG) && r.state == V2_KNOWN &&
+                         LHS(n)->datatype != CHAR_DATATYPE && r.value.kind == V2_INTEGER &&
                          ((width == 1 && !IS_BYTE_VALUE(r.value.as.integer)) ||
                           (width == 2 && !IS_WORD_VALUE(r.value.as.integer))))
                     warn(e->loc, "operand out of range; truncated");
@@ -1220,7 +1251,8 @@ static void lower_data(astnode *n, int ram)
 static void lower(astnode *root)
 {
     astnode *n, *next;
-    int ram = 0;
+    int ram = 0, join_source_row = 0;
+    uint64_t storage_row_bytes = 0;
     size_t incoming = 0;
     /* The statement stream is already flat. Reserve a conservative common
      * case batch so large projects do not repeatedly copy the value table.
@@ -1244,7 +1276,47 @@ static void lower(astnode *root)
     {
         v2_location loc = owned_location(n->loc);
         v2_id pc, expr, extent;
+        source_row *row = NULL;
         next = n->next_sibling;
+        if (collect_source_rows && (n->type == DATASEG_NODE || n->type == CODESEG_NODE ||
+            n->type == ORG_NODE || n->type == LABEL_NODE || n->type == INSTRUCTION_NODE ||
+            n->type == DATA_NODE || n->type == STORAGE_NODE || n->type == BINARY_NODE))
+        {
+            /* Preserve statement boundaries only for requested analysis. The
+             * layout still owns and encodes every byte; rows own metadata. */
+            flush_literals();
+            if (join_source_row)
+                row = &source_rows[source_row_count - 1];
+            else
+            {
+                storage_row_bytes = 0;
+                if (source_row_count == source_row_capacity)
+                {
+                    size_t capacity = source_row_capacity ? source_row_capacity * 2 : 256;
+                    if (capacity < source_row_capacity || capacity > SIZE_MAX / sizeof(*source_rows))
+                    { err(n->loc, "too many source rows"); return; }
+                    source_row *p = realloc(source_rows, capacity * sizeof(*p));
+                    if (!p) { err(n->loc, "out of memory recording source rows"); return; }
+                    source_rows = p;
+                    source_row_capacity = capacity;
+                }
+                row = &source_rows[source_row_count++];
+                *row = (source_row){0};
+                row->kind = n->type;
+                row->loc = loc;
+                row->first = v2_layout_fragment_count(layout);
+                row->ram = n->type == DATASEG_NODE ? 1 : n->type == CODESEG_NODE ? 0 : ram;
+                if (n->type == DATA_NODE) row->data_type = LHS(n)->datatype;
+                if (n->type == LABEL_NODE)
+                {
+                    symtab_entry *s = symtab_lookup(n->ident);
+                    row->label = malloc(strlen(n->ident) + 1);
+                    if (!row->label) { err(n->loc, "out of memory recording label"); return; }
+                    strcpy(row->label, n->ident);
+                    row->scope_anchor = s && (s->type == LABEL_SYMBOL || s->type == PROC_SYMBOL);
+                }
+            }
+        }
         /* Fully captured non-branch instructions have no link-time fixup.
          * Keep them in the fixed-byte run, just as literal data. Labels and
          * instructions that depend on placement still flush the run. */
@@ -1395,6 +1467,24 @@ static void lower(astnode *root)
             err(n->loc, "unsupported frontend statement `%s'", astnode_type_to_string(n->type));
             break;
         }
+        if (row)
+        {
+            flush_literals();
+            row->end = v2_layout_fragment_count(layout);
+        }
+        /* Preserve existing non-debug listing grouping without merging AST
+         * operands or losing their independently captured maps/PC anchors. */
+        join_source_row = row && !xasm_args.debug && n->type == DATA_NODE &&
+            astnode_is_type(next, DATA_NODE) && astnode_equal(LHS(n), LHS(next));
+        if (row && n->type == STORAGE_NODE && astnode_is_type(RHS(n), INTEGER_NODE) &&
+            astnode_get_child(n, 2) == NULL && RHS(n)->integer >= 0)
+        {
+            storage_row_bytes += (uint64_t)(unsigned)RHS(n)->integer * element_width(LHS(n)->datatype);
+            if (astnode_is_type(next, STORAGE_NODE) && astnode_is_type(RHS(next), INTEGER_NODE) &&
+                astnode_get_child(next, 2) == NULL && RHS(next)->integer >= 0)
+                join_source_row = storage_row_bytes + (uint64_t)(unsigned)RHS(next)->integer *
+                    element_width(LHS(next)->datatype) < 65536;
+        }
         /* Structural reduction and sizeof scans are finished. These statement
          * operands have been copied into the owned IR and no symbol borrows
          * them. Release them as we lower, rather than keeping two complete
@@ -1468,6 +1558,7 @@ void v2_frontend_process(astnode *root)
                                          {ENUM_DECL_NODE, noop},
                                          {RECORD_DECL_NODE, noop},
                                          {0, NULL}};
+    collect_source_rows = xasm_args.pure_binary && xasm_args.listing_file != NULL;
     values = v2_unit_create();
     if (!values)
     {
@@ -1559,6 +1650,8 @@ void v2_frontend_finish(void)
     for (i = 0; i < count; ++i)
         if (facts[i].warning)
             warn(parser_location(facts[i].location), "operand out of range; truncated");
+    if (collect_source_rows && !err_count && !v2_frontend_visit_rows(validate_source_row, NULL))
+        err(parser_location(v2_no_location()), "incomplete source layout facts");
 }
 void v2_frontend_write(FILE *stream)
 {
@@ -1569,8 +1662,62 @@ void v2_frontend_write(FILE *stream)
     if (length && fwrite(bytes, 1, length, stream) != length)
         ++err_count;
 }
+int v2_frontend_visit_rows(int (*visit)(const v2_analysis_row *, void *), void *arg)
+{
+    size_t i, fragment = 0, byte_count;
+    unsigned pc[2] = {0, 0}, offset = 0;
+    const unsigned char *bytes;
+    v2_layout_fact fact;
+    if (!layout || !collect_source_rows || !visit || err_count) return 0;
+    bytes = v2_layout_bytes(layout, &byte_count);
+    for (i = 0; i < source_row_count; ++i)
+    {
+        const source_row *s = &source_rows[i];
+        v2_analysis_row row = {0};
+        unsigned begin_offset;
+        /* Rows may omit non-rendered statements, but positions always come
+         * from final facts, never a second source-layout computation. */
+        while (fragment < s->first)
+        {
+            if (!v2_layout_fact_at(layout, (v2_id)fragment++, &fact)) return 0;
+            if (fact.kind != V2_FACT_RAM && fact.length) return 0;
+            pc[fact.kind == V2_FACT_RAM] = fact.address + fact.length;
+            if (fact.kind != V2_FACT_RAM) offset = fact.output_offset + fact.length;
+        }
+        row.kind = s->kind; row.data_type = s->data_type;
+        row.loc = parser_location(s->loc); row.label = s->label;
+        row.ram = s->ram; row.scope_anchor = s->scope_anchor;
+        row.address = pc[s->ram]; row.output_offset = begin_offset = offset;
+        while (fragment < s->end)
+        {
+            if (!v2_layout_fact_at(layout, (v2_id)fragment++, &fact)) return 0;
+            if (fragment == s->first + 1)
+            {
+                row.address = fact.address;
+                row.opcode = fact.opcode;
+                row.output_offset = begin_offset = fact.output_offset;
+            }
+            pc[fact.kind == V2_FACT_RAM] = fact.address + fact.length;
+            if (fact.kind != V2_FACT_RAM) offset = fact.output_offset + fact.length;
+            row.length += fact.length;
+        }
+        if (!s->ram && row.length)
+        {
+            if (begin_offset > byte_count || row.length > byte_count - begin_offset) return 0;
+            row.bytes = bytes + begin_offset;
+        }
+        if (!visit(&row, arg)) return 0;
+    }
+    return fragment == v2_layout_fact_count(layout) && offset == byte_count;
+}
 void v2_frontend_clear(void)
 {
+    size_t row;
+    for (row = 0; row < source_row_count; ++row) free(source_rows[row].label);
+    free(source_rows);
+    source_rows = NULL;
+    source_row_count = source_row_capacity = 0;
+    collect_source_rows = 0;
     while (structural_captures)
     {
         structural_capture *p = structural_captures;
