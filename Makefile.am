@@ -109,7 +109,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_unit_alloc.c \
   tests/test_v2_alloc.c tests/test_v2_values.c tests/test_v2_values.py \
   tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c tests/test_v2_objects.py tests/test_v2_link_io.c tests/test_v2_object_codec.c tests/test_v2_object_failures.c \
-  tests/test_v2_object_alloc.c tests/test_v2_program_alloc.c tests/test_v2_link_alloc.c tests/test_v2_heap.c tests/test_v2_heap_alloc.c tests/test_v2_frontend.py tests/test_v2_source_locations.c tests/test_v2_source_driver.c tests/test_v2_dependencies.c tests/perf_v2_frontend.py tests/v2_sizeof_cases.json \
+  tests/test_v2_object_alloc.c tests/test_v2_program_alloc.c tests/test_v2_link_alloc.c tests/test_v2_heap.c tests/test_v2_heap_alloc.c tests/test_v2_frontend.py tests/test_v2_analysis.py tests/test_v2_frontend_faults.c tests/test_v2_source_locations.c tests/test_v2_source_driver.c tests/test_v2_dependencies.c tests/perf_v2_frontend.py tests/v2_sizeof_cases.json \
   tests/test_xlnk_io_faults.c \
   tests/tool_test_support.py \
   tests/verify_fceux_projects.py \

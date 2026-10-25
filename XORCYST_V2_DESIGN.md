@@ -576,6 +576,16 @@ project/analysis requirements and report accumulated costs across a build.
 Contract section 13 and the performance protocol record this clarification;
 it does not waive correctness or claim a strict ratio pass.
 
+**I5 owner decision, 2026-10-25.** The bounded analysis survey found producer
+costs up to about 15 ms on Metroid, while the first optimized complete bundles
+were roughly level or faster. The owner chose to document small absolute costs
+for local review and focus further work on material regressions. Report
+producer, consumer and complete bundle measurements separately, including
+artifact sizes; do not present a survey or an accepted cost as a formal
+no-slowdown pass. No universal timing allowance or I5 approval is implied.
+Correctness, exact ROMs, the analysis memory gate and independent review stand.
+Contract section 14 and the performance protocol record this decision.
+
 Use focused stress fixtures only to protect against demonstrated pathologies:
 shared alias graphs, dependent offsets, nested deferred arrays, and many
 layout-dependent instructions in one section. Bound growth and measure it;

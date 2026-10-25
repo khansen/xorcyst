@@ -15,6 +15,7 @@ import unittest
 from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
+V2_ANALYSIS = False
 
 
 class OutputFailures(unittest.TestCase):
@@ -30,9 +31,14 @@ class OutputFailures(unittest.TestCase):
         sources = [REPO / word for word in sources.replace('\\\n', ' ').split()
                    if word.endswith('.c') and word not in ('xasm.c', 'listing.c', 'symtab.c', 'fceux_nl.c', 'output_file.c')]
         sources += [REPO / 'tests/test_io_faults.c', REPO / 'tests/test_analysis_faults.c']
+        if V2_ANALYSIS:
+            sources = [REPO/'tests/test_v2_frontend_faults.c' if p.name == 'astproc.c' else p for p in sources]
+            sources += [REPO/'v2'/name for name in ('heap.c', 'value.c', 'layout.c', 'program.c', 'object.c')]
+
         command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO), '-Wall',
                    *shlex.split(os.environ.get('TEST_FAULT_CFLAGS', '-O0 -g')),
                    *map(str, sources), '-o', str(cls.executable)]
+        if V2_ANALYSIS: command += ['-DXORCYST_V2_FRONTEND']
         if sys.platform == 'darwin':
             command += ['-framework', 'CoreFoundation']
         result = subprocess.run(command, capture_output=True)
@@ -383,7 +389,7 @@ class OutputFailures(unittest.TestCase):
                         blocked.chmod(0)
                     try:
                         result = self.run_xasm(*flags, nl=protection == 'nl', umask=0o027)
-                        if protection == 'none':
+                        if protection == 'none' and not V2_ANALYSIS:
                             self.assertEqual(result.returncode, 0, result.stderr.decode())
                             self.assertFalse(listing.is_symlink())
                             self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o640)
@@ -512,7 +518,7 @@ class OutputFailures(unittest.TestCase):
         xref = self.root / 'xref.json'
         for pure_binary, nl in ((True, False), (True, True), (False, False)):
             self.source.write_text(('.ORG $8000\n' if pure_binary else '') + 'Entry:\nNOP\nRTS\nEND\n')
-            flags = [f'--xref={xref}']
+            flags = [] if V2_ANALYSIS and not pure_binary else [f'--xref={xref}']
             if pure_binary:
                 flags.append(f'--dependency-manifest={manifest}')
             for operation in ('binary_ferror', 'binary_fclose', 'binary_rename'):

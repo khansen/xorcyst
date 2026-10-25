@@ -94,14 +94,15 @@ Compatibility planning:
   The 2026-10-25 tag-8 clarification is in contract section 11: an integer
   initializer contributes one element, a string its counted byte length.
   Analysis/consumer gates remain I5 work.
-  I5 is in progress locally on feat/v2-analysis. The first change separates
-  frontend cache IDs from analysis identities, retains original source spans
-  only when capture is requested, and makes the data-provenance hook reachable.
-  Plain v2 nodes retain their I4 size. Structured listing rows now use final
-  shared-layout facts and bytes after parser/namespace teardown. JSON/NDJSON
-  Metroid and Zelda listings match v1 byte-for-byte. Other collectors/outputs,
-  Nesrev migration and the project/bundle performance gates are still open;
-  see design/v2/I5_WORK.md for the local checkpoint and next integration work.
+  I5 is ready for local review on feat/v2-analysis. Listing schema 2, text listing,
+  xref, instruction records, derived analyses, manifests and debugger exports
+  now use owned metadata and the shared evaluator/layout. The parser namespace
+  is destroyed before final layout. Nesrev's isolated consumer branch migrates
+  null offsets, compact fills and accumulator modes. Product/consumer controls
+  and the required ROM gate pass. The 100-configuration resource survey records
+  small costs under the owner's bounded-effort decision (contract section 14);
+  it is not a formal no-slowdown pass. No I5 owner approval or publication is
+  implied. See design/v2/I5_REVIEW.md and I5_VALIDATION.md for the handoff.
   The owner-approved work-bound correction is in contract section 10; the
   project no-slowdown and byte-exact ROM gates are unchanged.
   Complete local independent review before publishing a branch or opening/updating

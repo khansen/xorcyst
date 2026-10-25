@@ -1,8 +1,8 @@
-# I5 work in progress: analysis integration
+# I5 local review candidate: analysis integration
 
 I4 merged in PR #100 (`63747ed`) on 2026-10-25 after local review, owner
-approval and green CI. I5 remains local and has not been submitted for review
-or approved. Installed tools still use the existing implementation.
+approval and green CI. I5 is ready for local independent review; it remains
+unapproved and unpublished. Installed tools still use the existing implementation.
 
 The first I5 change prepares source capture. Frontend string/map cache IDs and
 analysis provenance IDs now occupy distinct fields. Optional original source
@@ -14,32 +14,29 @@ Plain assembly does not allocate that storage. On the current 64-bit host the
 fixed node remains 136 bytes, as in I4; enabling capture adds a 32-byte location
 without a second allocation. This is source metadata, not another evaluator.
 
-The data-provenance hook now runs before the v2 data handler reduces operands.
-The test driver exercises this path through the real parser and expansion
-passes. Structured listings now use a separate, small owned row table that
-associates source statements with ranges of shared-layout fragments. After the
-parser AST and namespace die, the renderer reads final addresses, opcodes,
-extents and emitted bytes from those fragments. It never evaluates an operand
-or runs the old layout engine. Existing non-debug data grouping is preserved
-in row metadata, without merging operands or their captured charmaps/PCs.
+The data-provenance hook runs before the v2 data handler reduces operands.
+Lowering associates source rows with shared-layout fragments. Native statement
+metadata transfers out of the source tree; declarations and symbol definitions
+are copied into an owned analysis index. File names are interned in the value
+unit. No collector borrows the parser namespace, which is destroyed before
+layout. The final view supplies addresses, opcodes, extents and encoded bytes;
+operand/term queries use the same value graph as emission.
 
 Use `./xasm-v2 --pure-binary input.asm -o output.bin --listing=listing.json
---listing-format=json`; NDJSON is also supported. Schema 2 is the default and
-only supported structured listing schema in the prototype. Text listings,
-xref, instruction records and the remaining analysis products are still being
-ported and currently fail clearly. There is no object-mode structured listing.
+--listing-format=json`; NDJSON and text are also supported. Schema 2 is the
+only structured listing schema. Xref, standalone/embedded instruction records,
+summary, index patterns, data consumers, coverage, comparison, raw-address
+audit, dependency manifests and FCEUX exports are enabled. Structured analysis
+remains pure-binary-only. The existing safe diagnostic-listing exception has
+no emitted-byte claims and still requires complete output-destination planning.
 
-The source checkout's `design/v2/I5_WORK.md` records this checkpoint, validation
-and the remaining product/consumer gates. This checkpoint does not claim I5
-completion or approval; xref, records and consumer migration remain open.
-
-# I1: shared values and owned dependencies
-
-This module implements the value/ownership stage of the approved
-[D1 contracts](../XORCYST_V2_CONTRACTS.md), sections 1 and 2. Initially built only by
-the test harness, it is also used by the isolated I3 target below. Installed `xasm` and `xlnk` still use v1; their source
-lists do not include this module. I1 does not introduce a parser, placement
-algorithm, object reader/writer, analysis renderer or command-line option.
+The Nesrev migration uses an isolated local checkout and the same frozen source
+inputs as the baseline. The source checkout's `design/v2/I5_WORK.md` records
+implementation and remaining gates. `design/v2/I5_REVIEW.md` is the reviewer
+prompt; `I5_VALIDATION.md` and `i5-current.json` record the checks and measured
+costs, including the owner's bounded-effort decision. Installed tools stay unchanged;
+local independent review and owner approval precede an I5 PR. The prototype
+names and build selection are temporary and are removed at the I6 cutover.
 
 ## Ownership and binding
 

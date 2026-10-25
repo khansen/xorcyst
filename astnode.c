@@ -431,6 +431,16 @@ location astnode_source_location(const astnode *n)
 #endif
 }
 
+void astnode_set_source_location(astnode *n, location loc)
+{
+#ifdef XORCYST_V2_FRONTEND
+    if (n->flags & AST_SOURCE_LOCATION_FLAG) *(location *)(n + 1) = loc;
+#else
+    n->source_loc = loc;
+#endif
+}
+
+
 astnode *astnode_create(astnode_type type, location loc)
 {
     extern const char *yy_current_filename();

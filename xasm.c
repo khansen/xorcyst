@@ -1572,20 +1572,18 @@ int main(int argc, char *argv[]) {
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
 #ifdef XORCYST_V2_FRONTEND
-    if (xasm_args.xref_file
-        || xasm_args.instruction_records_file || xasm_args.fceux_nl_rom_prefix
-        || xasm_args.fceux_nl_ram_file || xasm_args.audit_raw_addresses
-        || xasm_args.xref_summary || xasm_args.analyze_index_patterns
-        || xasm_args.data_consumers || xasm_args.analyze_data_coverage
-        || xasm_args.compare_file || xasm_args.dependency_manifest) {
-        fprintf(stderr, "error: I5 prototype does not yet support this analysis output\n");
-        exit_code = 1;
-        goto cleanup;
+    if (!xasm_args.pure_binary && (xasm_args.xref_file || xasm_args.instruction_records_file ||
+        xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file || xasm_args.xref_summary ||
+        xasm_args.analyze_index_patterns || xasm_args.data_consumers || xasm_args.analyze_data_coverage ||
+        xasm_args.audit_raw_addresses)) {
+        fprintf(stderr, "error: structured analysis requires --pure-binary\n");
+        exit_code = 1; goto cleanup;
     }
+    if (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.fceux_nl_ram_file)
+        astnode_capture_source_locations(1);
     if (xasm_args.listing_file) {
-        if (!xasm_args.pure_binary || xasm_args.listing_format == LISTING_FORMAT_TEXT
-            || (xasm_args.listing_version_set && xasm_args.listing_version != 2)) {
-            fprintf(stderr, "error: I5 prototype listings require --pure-binary and JSON/NDJSON schema 2\n");
+        if (!xasm_args.pure_binary || (xasm_args.listing_version_set && xasm_args.listing_version != 2)) {
+            fprintf(stderr, "error: I5 prototype listings require --pure-binary and schema 2\n");
             exit_code = 1;
             goto cleanup;
         }
@@ -1760,6 +1758,7 @@ int main(int argc, char *argv[]) {
                 .include_locals = xasm_args.xref_include_locals,
                 .include_anon = xasm_args.xref_include_anon,
                 .collect_rom_layout = xasm_args.fceux_nl_rom_prefix != NULL,
+                .diagnostic_only = !assembly_ready,
                 .collect_ram_names = assembly_ready && xasm_args.fceux_nl_ram_file != NULL
             };
             analysis_output_options outputs = {
@@ -1851,11 +1850,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if ((output_generated
-#ifndef XORCYST_V2_FRONTEND
-         || total_errors() != 0
-#endif
-        ) && xasm_args.listing_file != NULL) {
+    if ((output_generated || total_errors() != 0) && xasm_args.listing_file != NULL) {
         if (!destinations_validated && !dependencies_output(xasm_args.listing_file)) goto cleanup;
         verbose("Generating listing...");
         if (!generate_listing(root_node,
@@ -1959,9 +1954,6 @@ int main(int argc, char *argv[]) {
 symbol_failure:
     fprintf(stderr, "error: out of memory building symbol table\n");
 cleanup:
-#ifdef XORCYST_V2_FRONTEND
-    v2_frontend_clear();
-#endif
     free_analysis(analysis);
     free_analysis_outputs(analysis_outputs);
     free(tmp_outfile);
@@ -1977,6 +1969,9 @@ cleanup:
     symtab_finalize(symbol_table);
     astnode_finalize(root_node);
     clear_xref_instruction_provenance();
+#ifdef XORCYST_V2_FRONTEND
+    v2_frontend_clear();
+#endif
 
     if (default_outfile)
         free(default_outfile);

@@ -41,6 +41,7 @@ typedef struct {
     int include_locals;
     int include_anon;
     int collect_rom_layout;
+    int diagnostic_only;
     int collect_ram_names;
 } analysis_options;
 
@@ -110,4 +111,9 @@ int run_raw_address_audit(astnode *root,
                           long rom_lo,
                           long rom_hi);
 
+#endif
+
+#ifdef XORCYST_V2_FRONTEND
+void own_xref_analysis_locations(void);
+int bind_xref_instruction_values(astnode *, unsigned *);
 #endif

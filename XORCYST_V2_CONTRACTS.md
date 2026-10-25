@@ -666,3 +666,20 @@ and performance protocol describe the survey and its limits. This bounds
 optimization effort without assigning an unrequested universal millisecond
 allowance. Large-project and analysis/bundle requirements, exact ROMs, safety
 checks and independent review remain in force. This is not I4 approval.
+
+## 14. I5 timing effort and absolute costs
+
+**Owner decision, 2026-10-25.** After the bounded analysis survey reported
+producer costs up to about 15 ms on Metroid, with the first optimized complete
+bundles roughly level or faster, the owner chose: "Document small costs; focus
+on material regressions." Carry these measured small absolute costs into local
+review instead of prolonging optimization solely to meet the strict
+per-configuration timing ratio. Continue surveying the full inventory and
+investigate material regressions. Report producer, consumer and complete bundle
+costs separately; a faster consumer does not make a slower producer a speedup.
+
+This is a bounded-effort decision for I5's measured costs, not a universal
+millisecond allowance, a formal no-slowdown pass, or implementation approval.
+Correctness, exact ROMs, the analysis memory gate and local independent review
+remain required. The performance protocol and I5 validation record retain the
+samples, absolute deltas, artifact sizes and remaining limitations.

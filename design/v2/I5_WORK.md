@@ -1,155 +1,127 @@
-# I5 analysis integration
+# I5 analysis and consumer integration
 
-Status: source capture and structured listings implemented, local only. This is
-an implementation checkpoint, not an
-I5 approval or a replacement for the approved contracts. Base: I4 merge
-`63747edf648aed016928c4e2671c7f4ad4236c37` (PR #100). PR and post-merge Ubuntu,
-macOS and sanitizer jobs passed before work began.
+Status: local review candidate; validation and the bounded resource survey are
+complete. Independent review, owner approval, PR and cutover remain pending.
+Base: I4 merge `63747edf648aed016928c4e2671c7f4ad4236c37` (PR #100), whose PR
+and post-merge CI passed. Installed `xasm`/`xlnk` still use the existing engine.
 
-## Source-capture prerequisite
+## Producer implementation
 
-Three existing implementation details prevented safe use of the collectors:
+All pure-binary products in the approved inventory are connected: text and
+JSON/NDJSON listing, text/CSV/JSON xref, embedded and standalone instruction
+records, summary, index patterns, data consumers, coverage, comparison,
+raw-address audit, dependency manifests and FCEUX ROM/RAM exports. The single
+structured listing is schema 2; xref stays at 2 and instruction records at 3.
+Object-mode structured analysis is rejected as approved. I6 removes the
+prototype names, old engine and selectable legacy schemas at coordinated cutover.
 
-- `v2/frontend.c` reused `analysis_origin_id` for cached string values and
-  captured character maps. An analysis ID could therefore be interpreted as
-  an unrelated value/map ID.
-- The prototype aliased the parsed source location and the expansion location.
-  Cloning a macro lost the original source span needed by instruction records.
-- The v2 return in `process_data` preceded the data-provenance hook, so the hook
-  was never called for native v2 data statements.
+The frontend owns a source-row index whose entries identify ranges of layout
+fragments. Native instruction/data/storage metadata transfers out of the source
+tree after lowering; marker metadata and symbol definitions have independent
+owners. Source paths are interned in the value unit, including original macro
+spans and expansion spans. Instruction terms bind to the shared value graph.
+The original source namespace and remaining parser tree are destroyed before
+layout on every successful invocation. The retained AST-shaped metadata is a
+read model for the existing collectors, not an alternative evaluator or layout
+engine. No collector dereferences a parser symbol entry after teardown.
 
-The prerequisite separates the two ID domains, adds opt-in parsed source spans
-to the same AST allocation, and runs the hook before frontend reduction. The
-fixed AST node remains 136 bytes on this host. Capture adds 32 bytes per node
-only when enabled. The source-span allocation bit belongs to the node; cloning
-still drops transient binding and pending-guard flags. Existing v1 renderer
-reads use an accessor that returns their original `source_loc` field.
+Final addresses, opcodes, modes, offsets, lengths and bytes come from the shared
+layout facts. Integer expression and term queries use its value graph. String
+metadata uses final encoded bytes, including captured character maps and widened
+elements. Snapshot enumeration preserves v1's ordering. Symbol identities and
+analysis provenance have separate fields from frontend cache IDs.
 
-Normal prototype invocations do not enable the rich capture yet. A test-only
-driver enables capture before parsing and marks provenance
-IDs while assembling real macro, string, forward-alias and charmap inputs. It
-checks exact bytes and original-versus-expansion source lines. No wire-format,
-language, installed CLI, or analysis schema changes are made here. This
-prerequisite was saved as local commit `5af5325`.
+Rich original source spans add 32 bytes to a node's allocation only when needed
+by instruction records or debugger provenance; the fixed node remains 136 bytes
+on this host. Source metadata is retained only for requested products. Native
+statements transfer ownership instead of being cloned; PC anchors are created
+only when the actual operand or a recorded term needs `$`.
 
-## Structured listings
+The existing destination planner still precedes publication. Successful output
+requires complete facts. The safe diagnostic-listing exception carries
+`binary_generated: false`, no emitted bytes and null offsets; it cannot certify
+a bundle or bypass NL/CSV/manifest destination checks. Unknown diagnostic
+extents fail closed when those extents are needed to reserve destinations.
+Collectors and provenance are destroyed before their shared value/file owner.
 
-The prototype accepts pure-binary JSON and NDJSON listings using schema 2,
-defaulting to it when no selector was supplied. Other analysis products and
-text listings remain unsupported until their collectors have been ported.
+A probe also exposed silent loss of references when an expression could not be
+represented in the existing bounded analysis expression view. That path now
+reports a located error and preserves previous outputs. A 100-level alias
+expression that v1 analysis also rejects is pinned; plain assembly still works.
+This is not a new evaluator limit or permission to silently omit facts.
 
-Lowering retains a small owned row table: source location, statement kind,
-label spelling/scope role and a half-open range of layout fragment IDs. Native
-data retains its directive kind for analysis. Plain builds still compact it.
-Literal runs flush at row boundaries only when rows are requested; non-debug
-data and known storage retain the existing listing grouping in metadata.
-Warnings still occur at their plain-build stage. No source-row entry borrows
-an AST node or symbol-table entry, and no new value/layout engine is used.
+## Nesrev migration
 
-After successful layout, the view reads final opcodes, positions, lengths and
-bytes from the shared backend. Binary RAM facts now freeze their separate
-address/extent, while contributing no output bytes. The compact and full fact
-representations and streamed encoder are tested, including later graph edits.
-The final row coverage is validated before binary publication. Assembly errors
-preserve both the previous binary and listing instead of publishing a partial
-listing with invented values. The existing destination checks protect inputs.
+The consumer branch is isolated at `/private/tmp/nesrev-xorcyst-v2-analysis`,
+based on `abc8ae3e1`; the owner's original checkout and project inputs remain
+untouched. Frozen acceptance sources/consumers remain the D1 capture.
 
-Current controls cover final narrowing, branches, code/RAM origins and segment
-switches, fill spans, word/dword data and strings, empty output, forward mapped
-field strings and padding, the relaxation cascade, wide binary PCs, includes,
-incbin, debug grouping, warning parity and output preservation. JSON and NDJSON
-rows are compared and reconstructed into the exact emitted binary.
+- Bundle validation requires successful listing-v2 rows. Non-emitting offsets
+  are null, emitted ranges retain inclusive ends, and fills carry explicit
+  byte counts. Diagnostic and malformed rows are refused.
+- Named pointer-table checks and the embedded-pointer advisory get label
+  positions from xref definitions, joined to listing source identity. Labels
+  no longer acquire an invented zero offset.
+- Static analysis uses `accumulator` for shifts/rotates, as the opcode-based
+  listing specifies. The existing carry-confusion test detects a missed migration.
+- Trace setup byte checks skip non-emitting rows and expand compact fills.
+  Synthetic checks exercise those paths without launching an emulator.
+- Current producers request listing version 2 explicitly. Profile names and
+  bundle schema stay unchanged; stale cached bundles must be regenerated.
+  Dated committed audit evidence remains historical, rather than being silently
+  rewritten as evidence from a new producer.
 
-Both frozen projects give byte-for-byte identical listings to v1 in both
-formats: Metroid 50,834 rows; Zelda 45,699 rows. PRGs match their reference and
-diagnostics match v1. A short five-pair survey (one warm pair discarded) gives:
+## Validation so far
 
-| Project / format | v1 elapsed ms | candidate elapsed ms | v1 / candidate peak RSS bytes | Listing bytes |
-| --- | ---: | ---: | ---: | ---: |
-| Metroid JSON | 170.50 | 161.83 | 49,299,456 / 47,644,672 | 27,072,685 |
-| Metroid NDJSON | 167.74 | 160.00 | 49,315,840 / 47,611,904 | 26,818,253 |
-| Zelda JSON | 136.68 | 127.01 | 40,648,704 / 36,061,184 | 24,395,332 |
-| Zelda NDJSON | 135.72 | 125.79 | 40,730,624 / 36,044,800 | 24,166,581 |
+Evidence is under `/private/tmp/xorcyst-i5/`; source/build identities and the
+final check list will be frozen in the validation record before review.
 
-These are median spot measurements on one macOS arm64 host, not the formal
-I5 producer/consumer/bundle gate. Raw samples and complete outputs are under
-`/private/tmp/xorcyst-i5/listings/` (`spot-resources.json`).
+- All 15 required source-built ROMs match, using 451 newly assembled objects.
+  Metroid and Zelda PRGs and diagnostics match their frozen v1 references.
+- The full Metroid/Zelda product comparison matches v1 after timestamp/output
+  path normalization. Manifests differ only in actual producer identity and
+  arguments. All eight bundle profiles validate for both projects with the
+  migrated consumer and exact PRGs.
+- The 116-test analysis suite reuses instruction-record, symbol, access,
+  debugger-export and publication/failure contracts. Object-mode negative cases
+  assert the approved refusal rather than skipping them. macOS ASan/UBSan passes.
+- The frontend suite now has 59 tests, including mapped forward field strings,
+  assignment generations, shared-PC facts and deep-expression failure closure.
+- Ninety focused Nesrev shell checks cover bundle/record validation, pointer
+  audits, RAM/raw-address consumers, branch literals, split pointers, used-by,
+  static analysis and orphan opcode scanning. One initial failure exposed the
+  accumulator-mode migration and passes after that fix. A separate trace-setup
+  test covers three consumers with good and corrupted byte/fill cases.
+- Full check/distcheck pass 663/668 tests in 20/21 suites, plus shell regressions.
+  Linux ASan/UBSan/LeakSanitizer passes the value/layout/frontend/analysis/object
+  suites. Three restricted-directory subcases skip under container root; macOS
+  and a separate unprivileged Linux run exercise them. The source-capture and
+  consumer mutations fail their intended assertions. Earlier checkpoint logs
+  remain historical.
+- Nesrev repository hygiene passes. Its strict playbook check reports ten
+  pre-existing stale references in historical review documents; the changed
+  tooling guide stays within its route budget.
 
-Validation of this listing checkpoint:
+## Performance assessment
 
-- Frontend: 57 tests; layout: 32 tests, plain and macOS ASan/UBSan.
-- Objects: 38 tests. The linker still emits exactly the same bytes in its
-  regression suite; RAM facts do not enter the byte stream.
-- `make check`: 545 tests in 19 suites plus shell regressions.
-- `make distcheck`: 550 tests in 20 suites, archives ready.
-- Targeted mutants are caught for missing RAM addresses/extents, emitting RAM
-  in the streaming writer, and repeating the early data warnings at lowering.
-  Logs are in `listing-mutants/`; full checks use `listing-*.log`.
-- `git diff --check` is clean. The archive checks include the new controls.
+`measure_analysis.py` records paired elapsed/CPU/RSS samples, exact PRGs and
+artifact sizes for individual products and every bundle profile. Its default
+five-pair run is explicitly a bounded survey, not a formal no-slowdown pass.
+The formal D1 sampling schedule remains available with `--pairs 15
+--batch-seconds 2`. CPU accounting uses `wait4` rather than the two-decimal
+printed CPU times of macOS `time`; the first coarse survey is retained only as
+exploratory evidence.
 
-One initial test mistakenly supplied an empty source file, which the existing
-parser rejects. The zero-output control instead uses a valid equate-only unit.
-No parser/language acceptance rule changed.
-
-## Integration still to do
-
-The approved product inventory and acceptance gates remain in design section 5
-and contract section 6. This is the implementation order within I5:
-
-1. Build the analysis input from owned source/binding metadata and the shared
-   backend's final layout facts. `lower()` currently frees instruction/data
-   statements; `xasm.c` then frees the namespace and remaining AST before
-   layout. Keep that ownership boundary. Collectors must not keep borrowed
-   parser statements or re-run the old expression/layout engine.
-2. Connect listing rows, symbols, references, instruction operands and additive
-   terms to that input. Addressing modes, bytes, offsets, lengths and values
-   must describe the same successful layout that produced the binary. Cover
-   forward strings, captured charmaps, assignment generations, macro/local
-   bindings, null offsets, fill spans and fail-closed publication.
-3. Port the remaining inventory: xref summary, index patterns, data consumers,
-   coverage, raw-address audit, comparison, manifests and FCEUX outputs. Keep
-   the approved pure-binary boundary for structured analysis.
-4. Update Nesrev consumers and fixtures in an isolated checkout, then run the
-   real profiles and producer/consumer/whole-bundle gates. Plain-project and
-   object/link regression gates remain required. Report sizes, peak memory and
-   absolute timings alongside ratios. The owner's bounded-effort guidance for
-   small costs still applies; it does not waive large-project analysis costs.
-5. Complete local independent review and owner approval before publishing I5.
-   I6 remains the coordinated cutover and removal of superseded runtime paths;
-   the temporary prototype names and build selections are not the final design.
-
-At this checkpoint `listing.c`'s xref, instruction-record and derived-analysis
-collectors still read the old AST/symbol table and have their own evaluators.
-They are not enabled for v2. The v2 structured listing bypasses those paths;
-the remaining dependencies are the next integration work, not an accepted
-permanent fallback. Nesrev was
-inspected read-only at `260a50bd79a6e4a8a3f4104a3b928aee40d02154`; its existing
-local edits were left untouched.
-
-## Validation of this prerequisite
-
-- Normal strict `-Werror` build passes.
-- Frontend suite: 53 tests, plain and macOS ASan/UBSan. Five new tests cover
-  optional allocation, nested clone ownership, distinct IDs, allocation failure
-  and the real-source hook.
-- Object suite: 38 tests. Existing v1 instruction-record suite: 36 tests.
-- `make check`: 540 tests in 19 suites and the shell regressions.
-- `make distcheck`: 545 tests in 20 suites, archives ready.
-- Two targeted mutants fail the real-source capture test: using the analysis
-  ID as a string-cache ID, and losing the original source span when cloning.
-- Frozen Metroid and Zelda each emit their exact 131,072-byte reference PRG
-  with I4, the candidate, and the capture driver. Diagnostics match after
-  removing the driver's test trace. Capture runs visit 16,767 and 7,556 native
-  data statements respectively. Source hashes are unchanged. These are byte
-  checks, not timing or memory gates (`foundation-projects.json`).
-- `git diff --check` passes. The two new C harnesses are in the distribution.
-
-The first sandboxed full runs could not bind the Unix socket used by existing
-output-protection tests. Both complete checks passed when rerun with the
-required sandbox permission. Whole-frontend `-Wconversion` is not claimed:
-that attempt encounters existing conversions in `astproc.c`/`astnode.c`.
-
-Evidence is under `/private/tmp/xorcyst-i5/` and
-`/private/tmp/xorcyst-i5-*.log`. No Linux, 32-bit, big-endian, I5 consumer or
-I5 performance-gate result is claimed by this checkpoint. Full I5 output and
-consumer validation remains open.
+The initial survey found small producer regressions, up to about 15 ms on
+Metroid. A complete bundle initially added about 143 ms; eliminating repeated
+successful-path error formatting and per-byte regex calls in the consumer
+removed that cost in the first repeated profiles without weakening validation.
+On 2026-10-25 the owner explicitly chose to document small I5 costs for local
+review and focus further effort on material regressions. Contract section 14
+records that decision. It is not a formal no-slowdown pass or I5 approval.
+The 100-configuration survey reports at most +15.31 ms for independent
+producers, +20.30 ms for bundle producers, +40.25 ms for readers and +25.73 ms
+for complete bundles. The largest observed paired RSS ratio is 1.1451.
+Results and qualifications are in `I5_VALIDATION.md` and `i5-survey.json`.
+The I4 small-link memory exception remains specific to those reviewed costs;
+new analysis modes retain the original memory gate.

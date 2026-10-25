@@ -382,6 +382,7 @@ typedef struct tag_astnode astnode;
 astnode *astnode_create(astnode_type, location);
 /* Parsed source span, independent of a macro/rept use-site location. */
 location astnode_source_location(const astnode *);
+void astnode_set_source_location(astnode *, location);
 #ifdef XORCYST_V2_FRONTEND
 /* Select before parsing. Existing nodes retain their own allocation policy;
  * plain assembly pays no extra per-node source-span allocation. */

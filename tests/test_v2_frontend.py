@@ -227,6 +227,19 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
                 self.assemble(source,'A0 00 B9 00 82 85 20 B9 01 82 85 21 B1 20 60 '+table+
                               ' 01 02 03 04 05 06 07 08 09 0A 0B 0C '+table,
                               options=('--debug',) if debug else ())
+                plain = (self.directory/'out').read_bytes()
+                options = ['--xref=xref', '--xref-data=true', '--xref-instructions=true',
+                           '--listing=rows', '--listing-format=json']
+                if debug: options.append('--debug')
+                self.assemble(source, options=options)
+                self.assertEqual((self.directory/'out').read_bytes(), plain)
+                xref = json.loads((self.directory/'xref').read_text())
+                records = xref['instruction_records']['records']
+                self.assertEqual([records[i]['operand_value'] for i in (1,3)], [0x8200,0x8201])
+                rows = json.loads((self.directory/'rows').read_text())['records']
+                self.assertEqual([r['cpu_address_start'] for r in rows
+                                  if r['directive_or_opcode']=='RawPointerTable'],
+                                 ['0x800F','0x8200'])
 
     def test_sizeof_rechecks_label_kinds_after_undef(self):
         for operand,alias in (('L',''),('L+0',''),('A1','A1 .equ L\n'),('A1','A1 .equ L+0\n')):
@@ -797,6 +810,39 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
         self.assertEqual(Path(data[0]['file']).name, 'inc.asm')
         self.assertEqual(data[-1]['directive_or_opcode'], 'INCBIN')
 
+    def test_analysis_uses_resolved_mapped_fields_assignment_generations_and_pc(self):
+        (self.directory/'map').write_text('H=1\nI=0\n')
+        source = ('.charmap "map"\n.struc Text\ns .char[2]\nn .byte\n.ends\n'
+                  'v .Text { S, 7 }\nS .equ "HI"\nAcc = K\nAcc = Acc+1\n'
+                  '.db Acc\nK .equ 5\nHere: lda $10\nlda Here+1\n.dw $\n')
+        for debug in (False, True):
+            options = ['--xref=xref', '--xref-data=true', '--xref-instructions=true',
+                       '--instruction-records-output=records', '--dependency-manifest=deps',
+                       '--listing=rows', '--listing-format=json']
+            if debug: options.append('--debug')
+            self.assemble(source, '01 00 07 06 A5 10 A5 05 08 00', options=options)
+            records = json.loads((self.directory/'records').read_text())['records']
+            self.assertEqual([(r['operand_value'], r['output_offset'], r['bytes']) for r in records],
+                             [(16, 4, [0xA5, 16]), (5, 6, [0xA5, 5])])
+            xref = json.loads((self.directory/'xref').read_text())
+            self.assertEqual(xref['instruction_records']['records'], records)
+            rows = json.loads((self.directory/'rows').read_text())['records']
+            binary = (self.directory/'out').read_bytes()
+            for row in rows:
+                if row['emits_bytes'] and row['fill_byte'] is None:
+                    start = row['output_offset_start']
+                    self.assertEqual(bytes.fromhex(''.join(row['bytes_hex'])),
+                                     binary[start:row['output_offset_end']+1])
+
+    def test_deep_analysis_expression_fails_instead_of_omitting_references(self):
+        source = ('K0 .equ Dest\n' + ''.join(f'K{i} .equ K{i-1}+1\n' for i in range(1, 101))
+                  + '.org $8000\nDest: nop\nlda K100\n')
+        self.assemble(source, 'EA AD 64 80')
+        (self.directory/'xref').write_text('previous analysis')
+        self.assemble(source, error='could not represent assembly analysis expression',
+                      options=('--xref=xref', '--xref-instructions=true'))
+        self.assertEqual((self.directory/'xref').read_text(), 'previous analysis')
+
     def test_listing_failures_keep_previous_outputs_and_reject_other_modes(self):
         source = '.byte 300\n.word 70000\n.dataseg\nR .byte 300\n.codeseg\n'
         baseline = self.assemble(source, '2C 70 11').stderr
@@ -807,7 +853,10 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
         for source in ('lda Missing\n', 'bne Target\n.dsb 128\nTarget: nop\n'):
             (self.directory/'rows').write_text('previous listing')
             r=self.assemble(source, error='error:', options=('--listing=rows','--listing-format=json'))
-            self.assertEqual((self.directory/'rows').read_text(),'previous listing')
+            diagnostic = json.loads((self.directory/'rows').read_text())
+            self.assertFalse(diagnostic['binary_generated'])
+            self.assertTrue(all(not r['emits_bytes'] and not r['bytes_hex']
+                                and r['output_offset_start'] is None for r in diagnostic['records']))
             self.assertNotIn('no error',r.stderr)
         (self.directory/'rows').write_text('previous listing')
         self.assemble('.db 1\n', error='I5 prototype listings require',
@@ -818,7 +867,8 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
         self.assertEqual((self.directory/'in.asm').read_text(),'.db 1\n')
 
     def test_output_aliases_and_unsupported_modes_preserve_files(self):
-        self.assemble('.db 1\n',error='I5 prototype listings require',options=('--listing=kept.lst',))
+        self.assemble('.db 1\n', '01', options=('--listing=kept.lst',))
+        self.assertIn('SOURCE CODE', (self.directory/'kept.lst').read_text())
         (self.directory/'inc.asm').write_text('.db 2\n')
         self.assemble('.include "inc.asm"\n',error='aliases',options=('-o','inc.asm'),error_code=3)
         self.assertEqual((self.directory/'inc.asm').read_text(),'.db 2\n')
