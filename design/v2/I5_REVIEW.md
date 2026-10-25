@@ -1,5 +1,10 @@
 # I5 local reviewer prompt
 
+Review status: independent local review cleared `63e4ea5` / Nesrev `4ca95e06d`
+with no blockers. The prompt below is retained as the review scope. Subsequent
+documentation records the optional observations and inherited collector failures;
+it changes no runtime or tests. Owner approval is still required before a PR.
+
 Review the complete local producer/consumer migration, not just its earlier
 source-capture and listing checkpoints. This is a request for independent
 review, not an approval or permission to publish. No I5 PR has been opened.
@@ -36,8 +41,9 @@ artifacts and exit statuses. Contract section 15 records metadata corrections.
 
 Text listings should now pay only for source rows and symbol values. Rich xref
 still has the pre-existing shared-graph-to-tree expansion cost; no fix for that
-optional item is claimed. Likewise, no fix is claimed for shared parser
-allocation failures, consumer `zeropage_y` indexing, or full listing/binary
+optional item is claimed. Likewise, no fix is claimed for shared parser or
+collector allocation failures (summary, text scope/source, xref provenance and
+missing index/consumer/coverage diagnostics), consumer `zeropage_y` indexing, or full listing/binary
 byte comparison in the bundle reader. Note the four Zelda final-opcode mode
 corrections in the fixture migration. The validation record separates this
 follow-up's checks from earlier-head results.

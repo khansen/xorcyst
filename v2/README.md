@@ -1,8 +1,9 @@
 # I5 local review candidate: analysis integration
 
 I4 merged in PR #100 (`63747ed`) on 2026-10-25 after local review, owner
-approval and green CI. I5 has a local review follow-up awaiting re-review; it remains
-unapproved and unpublished. Installed tools still use the existing implementation.
+approval and green CI. Independent local review cleared I5 at `63e4ea5` /
+Nesrev `4ca95e06d` with no blockers. Owner approval remains pending; nothing
+has been published. Installed tools still use the existing implementation.
 
 The first I5 change prepares source capture. Frontend string/map cache IDs and
 analysis provenance IDs now occupy distinct fields. Optional original source

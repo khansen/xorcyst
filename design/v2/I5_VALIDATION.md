@@ -1,11 +1,68 @@
 # I5 local validation
 
-Status: local review follow-up, not owner-approved or published. The first
-independent review of `21fae67` / Nesrev `ab50ea8f7` requested changes.
-The candidate fixes below await focused re-review. `i5-current.json` identifies
-the current sources, tools and evidence; the original record is retained below
-as historical evidence. Installed tools and the original project trees remain
-unchanged. No PR has been opened.
+Status: independent local review cleared `63e4ea5` / Nesrev `4ca95e06d` with
+no blockers. Owner approval remains pending; no PR has been opened. The first
+review of `21fae67` / `ab50ea8f7` requested changes; the follow-up closes B1/B2
+and S1–S6. This subsequent revision changes documentation and evidence metadata
+only. Runtime, tests and tools are unchanged, so no new test run is claimed.
+`i5-current.json` identifies the files, tools and evidence. Installed tools,
+original project trees and frozen inputs remain unchanged.
+
+## Independent follow-up review
+
+The reviewer independently confirmed all 52 product configurations, all 15 ROMs
+and 451 unchanged objects, and all eight bundle profiles for both games. Their
+68 Nesrev shell cases and eight Python suites passed with v1 and the candidate.
+The sanitizer run included 829 well-formed diagnostic listings from 200 mutated
+programs, plus 113 accepted programs across 18 product configurations, without
+reports. These are reviewer results, separate from the author runs below.
+
+Their publication checks failed every rename and backup link in ten-file and
+seven-file output sets. Existing, absent and symlinked destinations survived;
+failed restores reported and retained the backup. The late evaluator allocation
+failure now exits 3 without publication. Comparison and audit findings retain
+their existing artifact publication. The review reports no introduced blockers.
+
+Two optional observations are now explicit in contract section 15:
+
+- With `.org $8000 / L: nop / .byte <L / bad bad bad`, requesting both a text
+  listing and FCEUX NL ROM files can prevent destination planning. The tool
+  preserves the previous listing with "could not collect assembly analysis".
+  v1 published a diagnostic listing; this conservative refusal is allowed.
+- An unused `K .equ ^L` reports `null` and has no text symbol row, whereas v1
+  invents value 0 and prints `K = $0000`. Assembly acceptance is unchanged.
+
+The review also identified inherited failures that the earlier record omitted:
+
+| Shared collector under allocation failure | Reviewer-observed failure indices | Behavior |
+| --- | ---: | --- |
+| Summary | 76, same as v1 | Can exit 0 with incomplete output |
+| Text-listing scope/source text | 12, versus v1's 42 | Can exit 0 with incomplete output |
+| Xref data provenance | 9, same as v1 | Can exit 0 with incomplete output |
+| Index, consumers, coverage | not enumerated here | Exit 7–9 without an explanatory message; outputs are preserved |
+
+These are observed injection counts, not total allocation counts or exhaustive
+coverage. Staging protects against detected failures; it cannot detect silently
+ignored collector errors. They remain open alongside shared parser allocation
+failures, and this record does not waive section 6's fail-closed requirement.
+Since I4, `L: nop / K .equ L+1 / J .equ K+1` also suppresses v1's unused-L
+warning; no new correction is claimed here.
+
+The reviewer's 15-sample alternating timing run measured Metroid combined xref
+at +17.8 ms minimum and +16.8 ms median versus v1, compared with the author's
+five-pair +11.86 ms median survey below. Plain Metroid is +1.9 ms over I4 but
+still about 9% faster than v1. Staging costs about 0.3 ms with an existing
+destination in plain and object modes. These are small measured costs under
+the owner's existing bounded-effort decision, not a formal performance pass.
+The text shared-alias case used 2.3 MiB and 4 ms; large synthetic inputs were
+1.28–1.29× v1. The reviewed projects remained below the memory gate.
+
+Reviewer evidence is in
+`/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV/`
+(`c2/`, `c2asan/`, `logs/*c2*`, `logs/perf2.log`, and `scripts/`). The reviewer
+did not rerun check/distcheck, Linux, native 32-bit/big-endian, the full Nesrev
+suite, an emulator, the formal timing protocol or sanitizer allocation injection.
+The earlier author results below remain attributed to their actual runs.
 
 ## Review findings addressed
 
@@ -100,12 +157,13 @@ artifact sizes are in `i5-survey.json` and the hashed external reports.
 ## Remaining limits and review scope
 
 No PR CI, native 32-bit/big-endian run, complete Nesrev test run, emulator or
-formal performance pass is claimed. The shared v1 parser's allocation failures,
+formal performance pass is claimed by the author. The shared v1 parser and
+collector allocation failures described above,
 rich xref's exponential alias trees, the bundle's missing full listing/binary
 byte cross-check, and the pre-existing consumer `zeropage_y` omission remain
 open. I4's unnamed-RAM `$` limitation remains. None is silently claimed fixed.
 
-Read `I5_REVIEW.md` for the focused re-review. Owner approval precedes publication;
+`I5_REVIEW.md` retains the completed review's scope. Owner approval precedes publication;
 I6 still owns the coordinated cutover and removal of legacy implementations.
 
 ## Earlier candidate record: `21fae67`

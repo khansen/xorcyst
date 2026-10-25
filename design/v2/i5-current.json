@@ -1,5 +1,5 @@
 {
-  "status": "local follow-up awaiting focused independent re-review; not owner-approved or published",
+  "status": "independent local review cleared runtime 63e4ea5 and Nesrev 4ca95e06d with no blockers; documentation-only follow-up; owner approval pending, unpublished",
   "base": "63747edf648aed016928c4e2671c7f4ad4236c37",
   "source_revision": "commit containing this record",
   "sources": {
@@ -125,17 +125,17 @@
     "tests/verify_fceux_projects.py": "5ed85e7d50db9c75b346509ff0c85d64aa971bec0715339b7dbaf9defa7fd76e"
   },
   "review_documents": {
-    "README": "7573a119aa67fc5fcc1f8088d4a1b91951add0c16635bba211d8e0275664b767",
-    "TODO": "88716a43a967d88df476593f4fb6794602067bf0b70c85d271551cf8bd393b26",
-    "XORCYST_V2_CONTRACTS.md": "18c6b81753eb913ca22426de895c1b1eb7c26adb80c1475be56b47a89acf0593",
+    "README": "0ade5f3479001caa2b9dffd0643ecce9b0a7a0295f2a398d02454d903417ee1f",
+    "TODO": "23ffac8be523d9c7a1d7b98e9b97323ea5c9f692daaa139f19697b5959c7b1c5",
+    "XORCYST_V2_CONTRACTS.md": "1add8033c36c424f28071ffbe791a138cb4a1ca285c278bef3a504495c5e547e",
     "XORCYST_V2_DESIGN.md": "94ce27e85462a56afefe0e995211d5eb68dfd41d52344f8364c0ae1aecdcd784",
-    "design/v2/I5_REVIEW.md": "3d50c8ec1f50cc17db8195cb3c7a1169753d9a2dda9970a86a05112bae504d84",
-    "design/v2/I5_VALIDATION.md": "6f25464c86dde4809d4858bb11f75f5b6372d4a7129e86d3aa08778bb3a8ac2a",
-    "design/v2/I5_WORK.md": "9e1ee194d41b0dee25287844de54de745ea430941eaa9a4f30b61123bed63101",
+    "design/v2/I5_REVIEW.md": "970f210c68d8db0d806f7895bef95b2713adb888628d1c230f8b52a6abb8c047",
+    "design/v2/I5_VALIDATION.md": "53714d5372ec4d036b471f4df7201fe79a35a1b375fff5af10761774bc84a349",
+    "design/v2/I5_WORK.md": "25bfad02f7ce838802c73ab40414a3cf9d1fba759a29c9ec4a787774189b1aad",
     "design/v2/PERFORMANCE.md": "04421d0dd4bb1e6ee450df2c51c7df2790b2428e786754558d2353952465b8bc",
     "design/v2/i5-survey.json": "f392f3ae24cb16fe66f24d34d7abfe5808c1c0770de0944ba9e7a4b71aba5d93",
     "design/v2/measure_analysis.py": "15ba1b95a56af5ebf2c5293f3f39323f7411d44e5dbc93e2b6cee0700b6e7c96",
-    "v2/README.md": "faca729dbd2f8aa027ef458c5b3ec42fca5c0a762822a33a67a20118e1c4b603"
+    "v2/README.md": "bc4857df4afaa24baa47056c15718768917fc74a3da3b8cc4d7ac59cc02b4075"
   },
   "build_files": {
     ".github/workflows/ci.yml": "7594be5325a2e1f967a0685ebf91cc72c7a0f9c3f64422cd7f05ba2d49b8e874",
@@ -249,17 +249,18 @@
     "check-modes-final.py": "0cea3c7484d75fd1b2b3b5aa5786ee3371a8f6db94406f97dccfb30cae571568",
     "summarize-modes.py": "68dc449cb3b2fe660fa6d19938c3b4cf23c0bb3ddcf52f571d4fdfcdb9183c16",
     "previous-i5-current.json": "d37276efbb8697b3ef3ba291126ddff05a2210b27db2c6241f6ab7911d1d9114",
-    "freeze-followup.py": "6d0187743bdb6e15fa073e9f6dfbf82657da065f6cb40ac187bb2202bfec95ec"
+    "freeze-followup.py": "6d0187743bdb6e15fa073e9f6dfbf82657da065f6cb40ac187bb2202bfec95ec",
+    "reviewed-63e4ea5-current.json": "cd5ce7c8d2c3bc97a2970ee057997673b8c29b56e4255ddcea7c368ac1f1e2bc"
   },
   "resource_summary_sha256": "f392f3ae24cb16fe66f24d34d7abfe5808c1c0770de0944ba9e7a4b71aba5d93",
   "timing_decision": "Owner chose documented small costs and focus on material regressions, 2026-10-25; contract section 14",
   "gaps": [
-    "Focused follow-up independent review and owner approval pending; no PR CI",
+    "Owner approval pending; no PR CI; independent local review cleared the unchanged runtime",
     "No native 32-bit/big-endian run",
     "Bounded five-pair survey on one machine with other validation active; no formal confidence gate",
     "No complete Nesrev repository test run or emulator session; only changed reader rerun in follow-up",
     "Full Linux analysis suite predates the final diagnostic/compare refinements; final frontend and permission controls rerun",
-    "Rich xref graph-to-tree growth, shared v1 parser allocation failures, bundle listing/binary cross-check, and consumer zeropage_y omission remain open",
+    "Rich xref graph-to-tree growth, shared v1 parser and collector allocation failures, bundle listing/binary cross-check, and consumer zeropage_y omission remain open",
     "File publication rollback is not crash-atomic and cannot undo stdout; failed rollback retains and reports its backup",
     "Strict Nesrev playbook check has ten unchanged historical-reference warnings"
   ],
@@ -296,5 +297,45 @@
     },
     "mutants": "fatal value error ignored, early sidecar publication, and ignored Devil World byte checks: two assertions each",
     "performance": "10 configurations, five alternating pairs; concurrent validation, bounded spot survey only; synthetic text memory three runs"
+  },
+  "independent_review": {
+    "result": "no blockers; B1/B2 and S1\u2013S6 closed; not owner approval",
+    "producer_revision": "63e4ea57a8f8891ed52745f152a19981004f939f",
+    "consumer_revision": "4ca95e06d5894ca12982a1f1d78aa06d8508644f",
+    "source": "owner-provided independent review and reviewer scratch artifacts",
+    "evidence_root": "/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV",
+    "evidence": {
+      "logs/adiff-31-c2.log": "376d3839efa185fa9b09709e918a09555b257ea3003080732aed6dce14f1f86d",
+      "logs/adiff-32-c2.log": "18ae8acdbd57bc39cf4b28079b967365fae77526d25ad90ae29b0a9d742a03ba",
+      "logs/adiff-33-c2.log": "a71733b2c34c249128675cb7ba20da77074361332d571edb2a3c2f04e3708471",
+      "logs/adiff-34-c2asan.log": "acdb272e7b375ea7874367d6e48bc7554fc5304488e197476b55994e5a9d3d71",
+      "logs/c2-build.log": "05ea97f65f2687dd1b3ff07281402efa08c1ed568fa0bf90c9bfd328ddbccbb3",
+      "logs/c2-configure.log": "b7c5ca44117a4e4081cd13833956e7a99da06d6a36aff01750f9cf9f2c660cf1",
+      "logs/c2-evalns.txt": "420502af5561c43c0858fb58e235370ce3ed9d19f17f218f1c4b7bc3286d74cc",
+      "logs/c2asan-build.log": "01e41970cade2b440b4d5729a663092d016a1ef122e5f342b0d7e0d9e06bcdce",
+      "logs/c2asan-configure.log": "6d45f77c73fdcb3a4816acb4835400d274d9a7363659224f2a9a80d69eff9826",
+      "logs/inj-c2-bad-bt.txt": "cc948c969e3671ac00cbb13638fcef729f382cccf3a7407c8f7c8118134bbd02",
+      "logs/inj-c2-bad.txt": "d4adaba104fb35aae1da3e7d2873c962f5f73c752965888bfb3599c761ba4cdb",
+      "logs/inj-full-c2.json": "642f01c84c9d0ad3db6dcecdab10f6b8ed9b12730ed79e5dd94ce4dfbd2f4b8b",
+      "logs/inj-full-c2.log": "7f34a3a76eaa6cffbfc51f525d9b7d0484c07d9f5317c33d7bdd760c7899501f",
+      "logs/modes-c2.log": "890b9cc5929a4aaf3bd77f20960f09c9febad7beb27e6d6d08bea33546ce9a5c",
+      "logs/nesrev2-shell-c2.log": "c5bb75ba42e1cd5c553f0e86243e1f2bb2b2ba95d8d7326be08e100d0b3a61de",
+      "logs/roms-c2.log": "60e17752fd755a8a898f8c544459ab4cecfe3d9218764129c12d34fb6352432a",
+      "logs/perf2.log": "3a94adecbc0db2d0064be8f2abd9ae52980344644409c8058ab6b66a41308182",
+      "scripts/stagetest.py": "091f3278f4f75d1ad16f3737153282f1308aaea84ff825d8e2abf8b4c93f7fed",
+      "scripts/diagasan.py": "570aa3aa34b59c990715fcc1838351e58c767a9d19da623fc55a83076044e417",
+      "scripts/perf3.py": "e1ba6da7233221b156da92cea24d67f5328f24140aa904e227b3b2992d90c085"
+    },
+    "documentation_followup": "records unused-bank value difference, diagnostic-listing refusal with NL after syntax errors, inherited collector failures, I4 unused-label warning difference, and reviewer timing; no runtime or test changes",
+    "not_run_by_reviewer": [
+      "make check",
+      "make distcheck",
+      "Linux",
+      "native 32-bit/big-endian",
+      "full Nesrev suite",
+      "emulator",
+      "formal timing protocol",
+      "allocation injection under sanitizers"
+    ]
   }
 }

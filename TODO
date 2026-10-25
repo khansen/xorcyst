@@ -102,11 +102,17 @@ Compatibility planning:
   and the required ROM gate pass. Diagnostic listings, the missed Devil World
   renderer, alias depth, string references, unused bank constants, file staging and rollback
   on reported failures, and text-listing overhead were corrected
-  after review; focused re-review and owner approval remain pending.
+  after review. Independent local re-review cleared 63e4ea5 / Nesrev 4ca95e06d
+  with no blockers; owner approval remains pending.
   The 100-configuration resource survey records
   small costs under the owner's bounded-effort decision (contract section 14);
   it is not a formal no-slowdown pass. No I5 owner approval or publication is
   implied. See design/v2/I5_REVIEW.md and I5_VALIDATION.md for the handoff.
+  Retain the inherited collector allocation limitations as open work: summary,
+  text scope/source and xref data provenance can silently omit metadata; index,
+  consumers and coverage can fail without an explanatory diagnostic. Staging
+  preserves outputs on detected failures, not ignored ones. Also retain I4's
+  unused-label warning difference through constant-alias chains.
   The owner-approved work-bound correction is in contract section 10; the
   project no-slowdown and byte-exact ROM gates are unchanged.
   Complete local independent review before publishing a branch or opening/updating

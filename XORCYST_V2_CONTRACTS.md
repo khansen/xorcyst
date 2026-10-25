@@ -693,7 +693,8 @@ They are recorded for owner review, not as a new source-language feature:
 | --- | --- | --- |
 | Numeric `.char` in a text listing | Omits the bytes, shifting later displayed addresses and `$` values | Shows actual bytes and final addresses |
 | Label row before `.undef` and redefinition | Uses the final name's address | Uses that declaration statement's final address |
-| Generation/allocation/I/O failure in a later sidecar | May already have replaced binary/earlier sidecars | Stages the entire file set; preserves previous destinations on generation failure, and rolls back a failed publication rename |
+| Unused pure-binary `K .equ ^L` | Reports value 0 and includes `K = $0000` in the text symbol table | Reports `null` and omits K from the text symbol table; assembly still succeeds |
+| Detected generation/allocation/I/O failure in a later sidecar | May already have replaced binary/earlier sidecars | Stages the entire file set; preserves previous destinations on generation failure, and rolls back a failed publication rename |
 
 Literal-string `.char` grouping keeps v1's lowered `.db` grouping. String
 substitution produces no address-computation references. Analysis accepts the 32/64-level alias controls and rejects the 65-level
@@ -708,3 +709,15 @@ or audit finding retains its existing exit status and valid output artifacts.
 File staging is not a crash-atomic filesystem transaction, and stdout cannot
 be rolled back. If a filesystem failure also prevents rollback, report it and
 retain the recoverable backup instead of claiming preservation.
+
+The diagnostic-listing exception also requires successful destination planning.
+After a syntax error, a symbolic data operand combined with FCEUX NL output
+can prevent that planning; the previous listing is then preserved with
+"could not collect assembly analysis" instead of publishing a diagnostic one.
+
+The fail-closed requirement in section 6 remains the target. Inherited shared
+collector failures still need propagation: some summary, text scope/source and
+xref data-provenance allocations can silently lose metadata with exit 0.
+Index, consumer and coverage failures preserve outputs but can exit 7–9 without
+an explanatory diagnostic. File staging handles reported failures; it does not
+detect these ignored collector failures. See the I5 validation record.

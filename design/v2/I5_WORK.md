@@ -1,7 +1,7 @@
 # I5 analysis and consumer integration
 
-Status: local review follow-up. The first review requested changes; the fixes
-below await focused independent re-review and owner approval. No PR or cutover.
+Status: independent local review cleared `63e4ea5` / Nesrev `4ca95e06d`
+with no blockers. Owner approval remains pending. No PR or cutover.
 Base: I4 merge `63747edf648aed016928c4e2671c7f4ad4236c37` (PR #100), whose PR
 and post-merge CI passed. Installed `xasm`/`xlnk` still use the existing engine.
 
@@ -151,5 +151,10 @@ Remaining optional items from review: rich xref still expands shared expression
 graphs into trees (also expensive in v1); the bundle validates schema/hash/row
 shape but does not compare every listing byte to the PRG; `zeropage_y` is still
 missing from the pre-existing consumer index-mode set. The fixture migration
-must note Zelda's four final-opcode `absolute` to `zeropage` corrections. Parser
-allocation failures shared with v1 remain outside this follow-up's coverage.
+notes Zelda's four final-opcode `absolute` to `zeropage` corrections. Parser
+allocation failures shared with v1 remain open. Independent review also found
+inherited summary, text scope/source and xref data-provenance allocations that
+silently lose metadata, plus index/consumer/coverage failures without explanatory
+diagnostics. File staging does not fix ignored errors. The validation record
+also records the syntax-error/NL diagnostic-listing restriction and I4's unused
+label-warning difference through constant-alias chains.
