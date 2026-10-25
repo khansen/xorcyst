@@ -110,6 +110,7 @@
 #include "listing.h"
 #include "xasm.h"
 #include "dependencies.h"
+#include "output_file.h"
 #include "version.h"
 
 /*---------------------------------------------------------------------------*/
@@ -1301,7 +1302,7 @@ static int run_compare(astnode *root)
     compare_mismatch *mismatches = NULL;
     int exit_code = 0;
 
-    if (!read_file_bytes(xasm_args.output_file, &assembled_data, &assembled_size, 0)) {
+    if (!read_file_bytes(output_batch_read_path(xasm_args.output_file), &assembled_data, &assembled_size, 0)) {
         fprintf(stderr, "error: could not read `%s'\n", xasm_args.output_file);
         return 3;
     }
@@ -1572,15 +1573,22 @@ int main(int argc, char *argv[]) {
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
 #ifdef XORCYST_V2_FRONTEND
-    if (xasm_args.listing_file || xasm_args.xref_file
-        || xasm_args.instruction_records_file || xasm_args.fceux_nl_rom_prefix
-        || xasm_args.fceux_nl_ram_file || xasm_args.audit_raw_addresses
-        || xasm_args.xref_summary || xasm_args.analyze_index_patterns
-        || xasm_args.data_consumers || xasm_args.analyze_data_coverage
-        || xasm_args.compare_file || xasm_args.dependency_manifest) {
-        fprintf(stderr, "error: I4 prototype does not support listing or analysis output\n");
-        exit_code = 1;
-        goto cleanup;
+    if (!xasm_args.pure_binary && (xasm_args.xref_file || xasm_args.instruction_records_file ||
+        xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file || xasm_args.xref_summary ||
+        xasm_args.analyze_index_patterns || xasm_args.data_consumers || xasm_args.analyze_data_coverage ||
+        xasm_args.audit_raw_addresses)) {
+        fprintf(stderr, "error: structured analysis requires --pure-binary\n");
+        exit_code = 1; goto cleanup;
+    }
+    if (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.fceux_nl_ram_file)
+        astnode_capture_source_locations(1);
+    if (xasm_args.listing_file) {
+        if (!xasm_args.pure_binary || (xasm_args.listing_version_set && xasm_args.listing_version != 2)) {
+            fprintf(stderr, "error: I5 prototype listings require --pure-binary and schema 2\n");
+            exit_code = 1;
+            goto cleanup;
+        }
+        xasm_args.listing_version = 2;
     }
 #endif
 
@@ -1634,6 +1642,11 @@ int main(int argc, char *argv[]) {
     if (yyparse() != 0) { exit_code = 1; goto cleanup; }
 
     if (root_node == NULL) {
+#ifdef XORCYST_V2_FRONTEND
+        if (xasm_args.listing_file)
+            root_node = astnode_create(LIST_NODE, loc_preserve);
+        if (xasm_args.listing_file && root_node == NULL) { exit_code = 3; goto cleanup; }
+#endif
         if (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest)
             root_node = astnode_create(LIST_NODE, loc_preserve);
         if (root_node == NULL) {
@@ -1650,7 +1663,7 @@ int main(int argc, char *argv[]) {
     }
 
 #ifdef XORCYST_V2_FRONTEND
-    v2_frontend_process(root_node);
+    if (yynerrs == 0) v2_frontend_process(root_node);
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 #else
     /* First pass does a lot of stuff. */
@@ -1746,6 +1759,7 @@ int main(int argc, char *argv[]) {
                 .include_locals = xasm_args.xref_include_locals,
                 .include_anon = xasm_args.xref_include_anon,
                 .collect_rom_layout = xasm_args.fceux_nl_rom_prefix != NULL,
+                .diagnostic_only = !assembly_ready,
                 .collect_ram_names = assembly_ready && xasm_args.fceux_nl_ram_file != NULL
             };
             analysis_output_options outputs = {
@@ -1790,6 +1804,9 @@ int main(int argc, char *argv[]) {
         }
         destinations_validated = 1;
     }
+#ifdef XORCYST_V2_FRONTEND
+    if (assembly_ready) output_batch_begin();
+#endif
     if (assembly_ready) {
         output_fp = open_binary_temporary(tmp_outfile);
         if (output_fp == NULL) {
@@ -1825,7 +1842,11 @@ int main(int argc, char *argv[]) {
                 remove(tmp_outfile);
                 output_generated = 0;
             } else {
+#ifdef XORCYST_V2_FRONTEND
+                if (!output_batch_stage(xasm_args.output_file, tmp_outfile, rename)) {
+#else
                 if (rename(tmp_outfile, xasm_args.output_file) != 0) {
+#endif
                     fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);
                     err_count++;
                     remove(tmp_outfile);
@@ -1941,16 +1962,23 @@ int main(int argc, char *argv[]) {
 symbol_failure:
     fprintf(stderr, "error: out of memory building symbol table\n");
 cleanup:
-#ifdef XORCYST_V2_FRONTEND
-    v2_frontend_clear();
-#endif
     free_analysis(analysis);
     free_analysis_outputs(analysis_outputs);
-    free(tmp_outfile);
     clear_xref_data_directive_provenance();
     if (xasm_args.dependency_manifest && exit_code == 0 && total_errors() == 0
         && output_generated && !dependencies_write(xasm_args.dependency_manifest)) exit_code = 3;
     if (dependencies_failed()) exit_code = 3;
+#ifdef XORCYST_V2_FRONTEND
+    if (!v2_frontend_analysis_ok()) exit_code = 3;
+    {
+        /* A comparison mismatch or audit finding is a completed analysis,
+         * not an allocation/I/O/serialization failure. Retain its existing
+         * exit status and valid artifacts. */
+        int publish = (exit_code == 0 || exit_code == 4 || exit_code == 5) && total_errors() == 0;
+        if (!output_batch_finish(publish) && publish) exit_code = 3;
+    }
+#endif
+    free(tmp_outfile);
     dependencies_clear();
 
     /* Cleanup */
@@ -1959,6 +1987,9 @@ cleanup:
     symtab_finalize(symbol_table);
     astnode_finalize(root_node);
     clear_xref_instruction_provenance();
+#ifdef XORCYST_V2_FRONTEND
+    v2_frontend_clear();
+#endif
 
     if (default_outfile)
         free(default_outfile);

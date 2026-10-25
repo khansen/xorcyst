@@ -1,0 +1,4806 @@
+{
+  "status": "Earlier 100-configuration bounded survey, with a focused review-follow-up survey; neither is a formal no-slowdown pass",
+  "evidence": {
+    "producer-survey-final": "26d9e91c9f4e1ac51c7cbef35614d5bfd649ba73caf00f7857c92b9de4b643be",
+    "bundle-survey-optimized": "a184770643f817993e74ffb65d89a8db88fa0e9d923f866928d9d71930823287"
+  },
+  "configurations": [
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "plain",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9169042142547702,
+        "cpu": 0.9301086378933695,
+        "rss": 0.8559726962457338
+      },
+      "median_ms_delta": {
+        "elapsed": -5.857834010384977,
+        "cpu": -4.735000000000003
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.06943862501066178,
+          "cpu": 0.066943,
+          "rss": 48054272,
+          "max_rss": 48463872,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.06461816700175405,
+          "cpu": 0.063013,
+          "rss": 41140224,
+          "max_rss": 41172992,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.8573865574889117
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0037946556425286,
+        "cpu": 1.0099989616862217,
+        "rss": 0.9859625668449198
+      },
+      "median_ms_delta": {
+        "elapsed": 0.37500099278986454,
+        "cpu": 0.9630000000000055
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.09882345807272941,
+          "cpu": 0.095925,
+          "rss": 48791552,
+          "max_rss": 49020928,
+          "artifacts": {
+            "listing.txt": 2765267,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.09919845906551927,
+          "cpu": 0.096813,
+          "rss": 48168960,
+          "max_rss": 51527680,
+          "artifacts": {
+            "listing.txt": 2765267,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0560779046339825
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "json",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9557636996445649,
+        "cpu": 0.9573488548948491,
+        "rss": 0.9520938023450586
+      },
+      "median_ms_delta": {
+        "elapsed": -7.768791983835399,
+        "cpu": -7.29100000000002
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.17655404098331928,
+          "cpu": 0.17279299999999997,
+          "rss": 48857088,
+          "max_rss": 48939008,
+          "artifacts": {
+            "listing.json": 27072735,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.16833295801188797,
+          "cpu": 0.16524499999999998,
+          "rss": 46432256,
+          "max_rss": 46645248,
+          "artifacts": {
+            "listing.json": 27072736,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9535353535353536
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9503763436993533,
+        "cpu": 0.9518650036683785,
+        "rss": 0.9578030810448761
+      },
+      "median_ms_delta": {
+        "elapsed": -8.678249083459377,
+        "cpu": -8.201000000000015
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.17488129111006856,
+          "cpu": 0.171546,
+          "rss": 48463872,
+          "max_rss": 49037312,
+          "artifacts": {
+            "listing.ndjson": 26818253,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.16581475001294166,
+          "cpu": 0.16310499999999997,
+          "rss": 46628864,
+          "max_rss": 46858240,
+          "artifacts": {
+            "listing.ndjson": 26818253,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9628127112914131
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "xref",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0540680217134715,
+        "cpu": 1.0613150980876793,
+        "rss": 0.9579323618366786
+      },
+      "median_ms_delta": {
+        "elapsed": 6.062458036467433,
+        "cpu": 6.697999999999996
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.11202091700397432,
+          "cpu": 0.109178,
+          "rss": 59588608,
+          "max_rss": 59916288,
+          "artifacts": {
+            "xref.json": 6807349,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.1175675829872489,
+          "cpu": 0.11551799999999998,
+          "rss": 57016320,
+          "max_rss": 57311232,
+          "artifacts": {
+            "xref.json": 6807350,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9613259668508287
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "xref-owner",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0368973701788993,
+        "cpu": 1.0450375056623185,
+        "rss": 0.9654559309118618
+      },
+      "median_ms_delta": {
+        "elapsed": 4.928041948005557,
+        "cpu": 5.865999999999982
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.1331257080892101,
+          "cpu": 0.129921,
+          "rss": 64225280,
+          "max_rss": 64569344,
+          "artifacts": {
+            "xref.json": 12593830,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.13840312499087304,
+          "cpu": 0.13611299999999998,
+          "rss": 62275584,
+          "max_rss": 62291968,
+          "artifacts": {
+            "xref.json": 12593831,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9703930576824911
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "xref-records",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0673269116028101,
+        "cpu": 1.0773774477217908,
+        "rss": 1.0555555555555556
+      },
+      "median_ms_delta": {
+        "elapsed": 14.444874017499387,
+        "cpu": 16.296000000000006
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.21331737493164837,
+          "cpu": 0.20882399999999998,
+          "rss": 90243072,
+          "max_rss": 90292224,
+          "artifacts": {
+            "xref.json": 38158743,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.22971195809077471,
+          "cpu": 0.22558499999999998,
+          "rss": 94945280,
+          "max_rss": 95469568,
+          "artifacts": {
+            "xref.json": 38158744,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0577237248139408
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "xref-combined",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0639998420649435,
+        "cpu": 1.059565303516262,
+        "rss": 1.0474472307414757
+      },
+      "median_ms_delta": {
+        "elapsed": 15.31333290040493,
+        "cpu": 14.132999999999951
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.24120558297727257,
+          "cpu": 0.236668,
+          "rss": 90849280,
+          "max_rss": 91193344,
+          "artifacts": {
+            "xref.json": 45507194,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.2552243749378249,
+          "cpu": 0.250734,
+          "rss": 95125504,
+          "max_rss": 96092160,
+          "artifacts": {
+            "xref.json": 45507195,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0577096483318305
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "records",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0191725957702369,
+        "cpu": 1.0281088311519417,
+        "rss": 1.0482391782831988
+      },
+      "median_ms_delta": {
+        "elapsed": 4.219833994284272,
+        "cpu": 6.041999999999992
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.22009716602042317,
+          "cpu": 0.215306,
+          "rss": 89325568,
+          "max_rss": 89341952,
+          "artifacts": {
+            "deps.json": 1162,
+            "records.json": 31351360,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.22500658396165818,
+          "cpu": 0.22135799999999997,
+          "rss": 93601792,
+          "max_rss": 97779712,
+          "artifacts": {
+            "deps.json": 1157,
+            "records.json": 31351360,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.094443425637264
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "summary",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0029049325002817,
+        "cpu": 1.004479945236948,
+        "rss": 0.9775599690482332
+      },
+      "median_ms_delta": {
+        "elapsed": 2.77579203248024,
+        "cpu": 4.267000000000021
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.9581699579721317,
+          "cpu": 0.954907,
+          "rss": 63160320,
+          "max_rss": 63619072,
+          "artifacts": {
+            "summary.json": 258827,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.9601081250002608,
+          "cpu": 0.9580839999999999,
+          "rss": 61718528,
+          "max_rss": 62095360,
+          "artifacts": {
+            "summary.json": 258827,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9820031298904538
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "index",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.1093822598050325,
+        "cpu": 1.1243054517789945,
+        "rss": 0.9948686990642922
+      },
+      "median_ms_delta": {
+        "elapsed": 8.337166043929756,
+        "cpu": 9.150000000000006
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.076220458955504,
+          "cpu": 0.073609,
+          "rss": 54296576,
+          "max_rss": 54640640,
+          "artifacts": {
+            "index.json": 87610,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.0842998749576509,
+          "cpu": 0.082519,
+          "rss": 54280192,
+          "max_rss": 54312960,
+          "artifacts": {
+            "index.json": 87610,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9996982498491249
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "consumers",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0205836451121353,
+        "cpu": 1.0254262560099614,
+        "rss": 0.9907957244655582
+      },
+      "median_ms_delta": {
+        "elapsed": 3.989540971815586,
+        "cpu": 4.860000000000031
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.19382091704756021,
+          "cpu": 0.19114099999999998,
+          "rss": 54984704,
+          "max_rss": 55181312,
+          "artifacts": {
+            "consumers.json": 1199552,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.19804000004660338,
+          "cpu": 0.19643699999999997,
+          "rss": 54542336,
+          "max_rss": 54738944,
+          "artifacts": {
+            "consumers.json": 1199552,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9997007779772591
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "coverage",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0396460086077952,
+        "cpu": 1.0467069838570824,
+        "rss": 0.9893143365983972
+      },
+      "median_ms_delta": {
+        "elapsed": 7.521084044128656,
+        "cpu": 8.734999999999992
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.1897148749558255,
+          "cpu": 0.187075,
+          "rss": 55164928,
+          "max_rss": 55263232,
+          "artifacts": {
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.1978535419330001,
+          "cpu": 0.19635499999999997,
+          "rss": 54280192,
+          "max_rss": 55345152,
+          "artifacts": {
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0014823599169878
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "compare",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9764011402453625,
+        "cpu": 0.984385156296165,
+        "rss": 0.9619694397283531
+      },
+      "median_ms_delta": {
+        "elapsed": -1.6609998419880867,
+        "cpu": -1.0570000000000024
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07085229200311005,
+          "cpu": 0.067984,
+          "rss": 48218112,
+          "max_rss": 48660480,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.06909245799761266,
+          "cpu": 0.067077,
+          "rss": 46366720,
+          "max_rss": 46432256,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9702156795617939
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "audit",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0643737591594273,
+        "cpu": 1.0736391097959435,
+        "rss": 0.9857868020304569
+      },
+      "median_ms_delta": {
+        "elapsed": 8.532959036529064,
+        "cpu": 9.555999999999981
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.13248216605279595,
+          "cpu": 0.129768,
+          "rss": 48562176,
+          "max_rss": 48611328,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.1410863340133801,
+          "cpu": 0.13932399999999998,
+          "rss": 47742976,
+          "max_rss": 48037888,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9882035726322885
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "fceux",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9942944715648165,
+        "cpu": 1.003968253968254,
+        "rss": 1.071724810929495
+      },
+      "median_ms_delta": {
+        "elapsed": -0.6059589795768261,
+        "cpu": 0.4099999999999937
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.10647175007034093,
+          "cpu": 0.103694,
+          "rss": 66945024,
+          "max_rss": 67158016,
+          "artifacts": {
+            "rom0.nl": 32705,
+            "rom4.nl": 41379,
+            "rom5.nl": 40453,
+            "rom1.nl": 43912,
+            "ram.nl": 35705,
+            "rom6.nl": 1097,
+            "rom2.nl": 42541,
+            "rom3.nl": 44061,
+            "binary.bin": 131072,
+            "rom7.nl": 59019
+          }
+        },
+        "candidate": {
+          "elapsed": 0.10559962503612041,
+          "cpu": 0.10372999999999999,
+          "rss": 71974912,
+          "max_rss": 72302592,
+          "artifacts": {
+            "rom0.nl": 32705,
+            "rom4.nl": 41379,
+            "rom5.nl": 40453,
+            "rom1.nl": 43912,
+            "ram.nl": 35705,
+            "rom6.nl": 1097,
+            "rom2.nl": 42541,
+            "rom3.nl": 44061,
+            "binary.bin": 131072,
+            "rom7.nl": 59019
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0800293685756241
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "xref-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.071454400912202,
+        "cpu": 1.0872231456938768,
+        "rss": 1.0152578577967653
+      },
+      "median_ms_delta": {
+        "elapsed": 6.52295898180455,
+        "cpu": 7.766000000000009
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.09139216598123312,
+          "cpu": 0.088735,
+          "rss": 53690368,
+          "max_rss": 53854208,
+          "artifacts": {
+            "xref": 2699506,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.09855954209342599,
+          "cpu": 0.096701,
+          "rss": 54444032,
+          "max_rss": 54558720,
+          "artifacts": {
+            "xref": 2699506,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0200555384140697
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "xref-csv",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0713286071555927,
+        "cpu": 1.086131116865032,
+        "rss": 1.0128676470588236
+      },
+      "median_ms_delta": {
+        "elapsed": 6.765875034034252,
+        "cpu": 7.917000000000007
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.09519966598600149,
+          "cpu": 0.092945,
+          "rss": 53477376,
+          "max_rss": 53739520,
+          "artifacts": {
+            "xref.refs.csv": 1945148,
+            "xref.symbols.csv": 1267270,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.10173291701357812,
+          "cpu": 0.100377,
+          "rss": 54181888,
+          "max_rss": 57753600,
+          "artifacts": {
+            "xref.refs.csv": 1945148,
+            "xref.symbols.csv": 1267270,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0869565217391304
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "summary-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.006922951443539,
+        "cpu": 1.0089728980145878,
+        "rss": 0.9764492753623188
+      },
+      "median_ms_delta": {
+        "elapsed": 6.634583114646375,
+        "cpu": 8.566999999999991
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.9559529160615057,
+          "cpu": 0.952853,
+          "rss": 63307776,
+          "max_rss": 63602688,
+          "artifacts": {
+            "summary.json": 237017,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.9634109169710428,
+          "cpu": 0.9615779999999999,
+          "rss": 61784064,
+          "max_rss": 61997056,
+          "artifacts": {
+            "summary.json": 237017,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9818370524130773
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "summary-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.004332606713866,
+        "cpu": 1.0056807708420612,
+        "rss": 0.9754395036194415
+      },
+      "median_ms_delta": {
+        "elapsed": 4.148959065787494,
+        "cpu": 5.424000000000095
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.9593458749586716,
+          "cpu": 0.9565159999999999,
+          "rss": 63373312,
+          "max_rss": 63586304,
+          "artifacts": {
+            "summary.json": 260795,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.9623502499889582,
+          "cpu": 0.9604280000000001,
+          "rss": 61685760,
+          "max_rss": 61816832,
+          "artifacts": {
+            "summary.json": 260795,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9820125130344108
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "index-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.1105903164203248,
+        "cpu": 1.1325986540016724,
+        "rss": 0.997289972899729
+      },
+      "median_ms_delta": {
+        "elapsed": 8.388916030526161,
+        "cpu": 9.674000000000001
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07592195796314627,
+          "cpu": 0.073162,
+          "rss": 54444032,
+          "max_rss": 54657024,
+          "artifacts": {
+            "index.json": 51900,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08456183306407183,
+          "cpu": 0.082899,
+          "rss": 54263808,
+          "max_rss": 54575104,
+          "artifacts": {
+            "index.json": 51900,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0051297525648764
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "index-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0831863635861985,
+        "cpu": 1.10222186378483,
+        "rss": 0.9972907886815171
+      },
+      "median_ms_delta": {
+        "elapsed": 6.4161260379478335,
+        "cpu": 7.605
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07712954096496105,
+          "cpu": 0.07439699999999999,
+          "rss": 54427648,
+          "max_rss": 54640640,
+          "artifacts": {
+            "index.json": 87271,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08437854109797627,
+          "cpu": 0.082624,
+          "rss": 54312960,
+          "max_rss": 54312960,
+          "artifacts": {
+            "index.json": 87271,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0012080942313502
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "consumers-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0352495277738545,
+        "cpu": 1.039320450473509,
+        "rss": 0.99168892846542
+      },
+      "median_ms_delta": {
+        "elapsed": 6.696833064779639,
+        "cpu": 7.373999999999992
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.18966833397280425,
+          "cpu": 0.187332,
+          "rss": 55181312,
+          "max_rss": 55377920,
+          "artifacts": {
+            "consumers.json": 566555,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.1966804580297321,
+          "cpu": 0.19490999999999997,
+          "rss": 54607872,
+          "max_rss": 54738944,
+          "artifacts": {
+            "consumers.json": 566555,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9964125560538116
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "consumers-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0419072087683274,
+        "cpu": 1.049648859780636,
+        "rss": 0.9898688915375446
+      },
+      "median_ms_delta": {
+        "elapsed": 8.102750056423247,
+        "cpu": 9.437999999999974
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.19334979099221528,
+          "cpu": 0.19009500000000001,
+          "rss": 54984704,
+          "max_rss": 55197696,
+          "artifacts": {
+            "consumers.json": 1196833,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.20024979102890939,
+          "cpu": 0.19867,
+          "rss": 54427648,
+          "max_rss": 54575104,
+          "artifacts": {
+            "consumers.json": 1196833,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9904648390941597
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "coverage-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0420437070208968,
+        "cpu": 1.0489332171330816,
+        "rss": 0.994612391499551
+      },
+      "median_ms_delta": {
+        "elapsed": 7.929084007628262,
+        "cpu": 9.095999999999993
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.18859145801980048,
+          "cpu": 0.18600799999999998,
+          "rss": 54968320,
+          "max_rss": 55001088,
+          "artifacts": {
+            "coverage.json": 492666,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.19641129102092236,
+          "cpu": 0.194796,
+          "rss": 54460416,
+          "max_rss": 54738944,
+          "artifacts": {
+            "coverage.json": 492666,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9967085577498503
+    },
+    {
+      "kind": "products",
+      "project": "metroid",
+      "mode": "coverage-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0321898725026852,
+        "cpu": 1.0396588440506382,
+        "rss": 0.98868374032162
+      },
+      "median_ms_delta": {
+        "elapsed": 6.186208105646074,
+        "cpu": 7.452000000000014
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.189944582991302,
+          "cpu": 0.187247,
+          "rss": 55017472,
+          "max_rss": 55197696,
+          "artifacts": {
+            "coverage.json": 858807,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.19799304101616144,
+          "cpu": 0.196378,
+          "rss": 54444032,
+          "max_rss": 54624256,
+          "artifacts": {
+            "coverage.json": 858807,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9934445768772348
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "plain",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.8338829575410661,
+        "cpu": 0.8481835564053537,
+        "rss": 0.8276003276003276
+      },
+      "median_ms_delta": {
+        "elapsed": -8.676833007484674,
+        "cpu": -7.543000000000001
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.05218791589140892,
+          "cpu": 0.049418,
+          "rss": 39911424,
+          "max_rss": 40271872,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.043556416989304125,
+          "cpu": 0.042142,
+          "rss": 33046528,
+          "max_rss": 33112064,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.8296997120526532
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9531764263062339,
+        "cpu": 0.9667986554238833,
+        "rss": 0.9226430298146656
+      },
+      "median_ms_delta": {
+        "elapsed": -3.3983750035986304,
+        "cpu": -2.3309999999999995
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07257829199079424,
+          "cpu": 0.07020799999999999,
+          "rss": 40747008,
+          "max_rss": 40779776,
+          "artifacts": {
+            "listing.txt": 2051102,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.06917991698719561,
+          "cpu": 0.06787699999999999,
+          "rss": 37552128,
+          "max_rss": 37732352,
+          "artifacts": {
+            "listing.txt": 2051102,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.927133655394525
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "json",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9266411633435224,
+        "cpu": 0.9309745022703458,
+        "rss": 0.8769665187575635
+      },
+      "median_ms_delta": {
+        "elapsed": -10.601916932500899,
+        "cpu": -9.801000000000004
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.14487620803993195,
+          "cpu": 0.141363,
+          "rss": 40615936,
+          "max_rss": 40714240,
+          "artifacts": {
+            "listing.json": 24395382,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.1359558750409633,
+          "cpu": 0.132554,
+          "rss": 35471360,
+          "max_rss": 35618816,
+          "artifacts": {
+            "listing.json": 24395383,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.8790093382054405
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9201957395529967,
+        "cpu": 0.9248031607970213,
+        "rss": 0.878885748889786
+      },
+      "median_ms_delta": {
+        "elapsed": -11.510501033626497,
+        "cpu": -10.58199999999998
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.14423416706267744,
+          "cpu": 0.140724,
+          "rss": 40484864,
+          "max_rss": 40615936,
+          "artifacts": {
+            "listing.ndjson": 24166581,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.13367112504784018,
+          "cpu": 0.131131,
+          "rss": 35618816,
+          "max_rss": 35667968,
+          "artifacts": {
+            "listing.ndjson": 24166581,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.8855397148676171
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "xref",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0058238808732236,
+        "cpu": 1.0068958885668366,
+        "rss": 0.9256656804733728
+      },
+      "median_ms_delta": {
+        "elapsed": 0.43454207479953766,
+        "cpu": 0.5020000000000024
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07461383298505098,
+          "cpu": 0.072163,
+          "rss": 44302336,
+          "max_rss": 44351488,
+          "artifacts": {
+            "xref.json": 2916134,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.07485412491951138,
+          "cpu": 0.072986,
+          "rss": 40845312,
+          "max_rss": 41009152,
+          "artifacts": {
+            "xref.json": 2916135,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9321401938851603
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "xref-owner",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.010383925540734,
+        "cpu": 1.0179329751854695,
+        "rss": 0.9523971438286297
+      },
+      "median_ms_delta": {
+        "elapsed": 0.8361669024452567,
+        "cpu": 1.4020000000000006
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.0805251250276342,
+          "cpu": 0.07818,
+          "rss": 48185344,
+          "max_rss": 48283648,
+          "artifacts": {
+            "xref.json": 4407972,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08136129193007946,
+          "cpu": 0.079582,
+          "rss": 45891584,
+          "max_rss": 46120960,
+          "artifacts": {
+            "xref.json": 4407973,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9630516592541909
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "xref-records",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0564415371855937,
+        "cpu": 1.0435193816383048,
+        "rss": 1.0277451210909947
+      },
+      "median_ms_delta": {
+        "elapsed": 8.509500068612397,
+        "cpu": 6.396000000000013
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.151771166943945,
+          "cpu": 0.147424,
+          "rss": 69337088,
+          "max_rss": 69681152,
+          "artifacts": {
+            "xref.json": 26474054,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.15933354198932648,
+          "cpu": 0.154244,
+          "rss": 71548928,
+          "max_rss": 71630848,
+          "artifacts": {
+            "xref.json": 26474055,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0338541666666667
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "xref-combined",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0319808843768334,
+        "cpu": 1.0387676114808333,
+        "rss": 1.0209253661939084
+      },
+      "median_ms_delta": {
+        "elapsed": 5.129541968926787,
+        "cpu": 6.069999999999992
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.16278391692321748,
+          "cpu": 0.15802799999999997,
+          "rss": 70467584,
+          "max_rss": 70893568,
+          "artifacts": {
+            "xref.json": 29360580,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.1672737910412252,
+          "cpu": 0.163929,
+          "rss": 71942144,
+          "max_rss": 72089600,
+          "artifacts": {
+            "xref.json": 29360581,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0234938357757617
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "records",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.981458517862123,
+        "cpu": 0.9863870172248447,
+        "rss": 1.0133991537376588
+      },
+      "median_ms_delta": {
+        "elapsed": -3.0545840272679925,
+        "cpu": -2.1860000000000213
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.1642175839515403,
+          "cpu": 0.160582,
+          "rss": 69746688,
+          "max_rss": 70189056,
+          "artifacts": {
+            "deps.json": 1148,
+            "records.json": 23557886,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.16160975000821054,
+          "cpu": 0.158396,
+          "rss": 70631424,
+          "max_rss": 71090176,
+          "artifacts": {
+            "deps.json": 1143,
+            "records.json": 23557886,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0204609595484477
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "summary",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9989803025345005,
+        "cpu": 1.0040347510682244,
+        "rss": 0.9372278664731495
+      },
+      "median_ms_delta": {
+        "elapsed": -0.22541708312928677,
+        "cpu": 0.8809999999999929
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.22106270806398243,
+          "cpu": 0.218353,
+          "rss": 45137920,
+          "max_rss": 45596672,
+          "artifacts": {
+            "summary.json": 111257,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.22075066703837365,
+          "cpu": 0.21923399999999998,
+          "rss": 42319872,
+          "max_rss": 42369024,
+          "artifacts": {
+            "summary.json": 111257,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9393389030148929
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "index",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.035886604123305,
+        "cpu": 1.059541843709588,
+        "rss": 0.9399064411658871
+      },
+      "median_ms_delta": {
+        "elapsed": 2.048248890787363,
+        "cpu": 3.2229999999999968
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.056871416978538036,
+          "cpu": 0.054052,
+          "rss": 45531136,
+          "max_rss": 45826048,
+          "artifacts": {
+            "index.json": 104479,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.05875445797573775,
+          "cpu": 0.056977999999999994,
+          "rss": 42827776,
+          "max_rss": 42991616,
+          "artifacts": {
+            "index.json": 104479,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9438444924406048
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "consumers",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0110531481983225,
+        "cpu": 1.0273942833767962,
+        "rss": 0.9448250991705733
+      },
+      "median_ms_delta": {
+        "elapsed": 0.8959589758887887,
+        "cpu": 2.143000000000006
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.081059166113846,
+          "cpu": 0.07822799999999999,
+          "rss": 45547520,
+          "max_rss": 45793280,
+          "artifacts": {
+            "consumers.json": 356896,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08195512508973479,
+          "cpu": 0.080371,
+          "rss": 42926080,
+          "max_rss": 43433984,
+          "artifacts": {
+            "consumers.json": 356896,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9570397111913357
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "coverage",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9999288885571893,
+        "cpu": 1.0159880834160873,
+        "rss": 0.9424794569489103
+      },
+      "median_ms_delta": {
+        "elapsed": -0.00595790334045887,
+        "cpu": 1.2879999999999976
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.08157587493769825,
+          "cpu": 0.07907399999999999,
+          "rss": 45793280,
+          "max_rss": 45858816,
+          "artifacts": {
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.0813624580623582,
+          "cpu": 0.079675,
+          "rss": 43171840,
+          "max_rss": 43220992,
+          "artifacts": {
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9468772433596554
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "compare",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.8655905695654476,
+        "cpu": 0.8837404214559388,
+        "rss": 0.8878504672897196
+      },
+      "median_ms_delta": {
+        "elapsed": -7.041458040475845,
+        "cpu": -5.825999999999998
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.05244158301502466,
+          "cpu": 0.049819999999999996,
+          "rss": 40206336,
+          "max_rss": 40321024,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.04587791708763689,
+          "cpu": 0.044397,
+          "rss": 35684352,
+          "max_rss": 35799040,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.895687885010267
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "audit",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0058049361135837,
+        "cpu": 1.006410803897102,
+        "rss": 0.9284559417946645
+      },
+      "median_ms_delta": {
+        "elapsed": 11.16695802193135,
+        "cpu": 12.309999999999821
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.9237004169262946,
+          "cpu": 1.920196,
+          "rss": 40779776,
+          "max_rss": 40878080,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.9350526250200346,
+          "cpu": 1.9325059999999998,
+          "rss": 37715968,
+          "max_rss": 37879808,
+          "artifacts": {
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.932956381260097
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "fceux",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9148370233593851,
+        "cpu": 0.9294174007931226,
+        "rss": 1.0292544825416798
+      },
+      "median_ms_delta": {
+        "elapsed": -6.66016701143235,
+        "cpu": -5.304000000000003
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07808274996932596,
+          "cpu": 0.075267,
+          "rss": 52101120,
+          "max_rss": 52461568,
+          "artifacts": {
+            "rom0.nl": 5479,
+            "rom4.nl": 47838,
+            "rom5.nl": 43147,
+            "rom1.nl": 28015,
+            "ram.nl": 21332,
+            "rom6.nl": 7275,
+            "rom2.nl": 21007,
+            "rom3.nl": 1336,
+            "binary.bin": 131072,
+            "rom7.nl": 24317
+          }
+        },
+        "candidate": {
+          "elapsed": 0.07154162507504225,
+          "cpu": 0.06984199999999999,
+          "rss": 53952512,
+          "max_rss": 54149120,
+          "artifacts": {
+            "rom0.nl": 5479,
+            "rom4.nl": 47838,
+            "rom5.nl": 43147,
+            "rom1.nl": 28015,
+            "ram.nl": 21332,
+            "rom6.nl": 7275,
+            "rom2.nl": 21007,
+            "rom3.nl": 1336,
+            "binary.bin": 131072,
+            "rom7.nl": 24317
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0393081761006289
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "xref-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9931718482654237,
+        "cpu": 1.007647039803408,
+        "rss": 0.9514374514374514
+      },
+      "median_ms_delta": {
+        "elapsed": -0.44175097718834877,
+        "cpu": 0.4730000000000012
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.06469554197974503,
+          "cpu": 0.062301999999999996,
+          "rss": 42500096,
+          "max_rss": 42532864,
+          "artifacts": {
+            "xref": 1222507,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.06425379100255668,
+          "cpu": 0.062556,
+          "rss": 40402944,
+          "max_rss": 40796160,
+          "artifacts": {
+            "xref": 1222507,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9599074787972244
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "xref-csv",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9882957124907213,
+        "cpu": 1.0040781516514188,
+        "rss": 0.9506933744221879
+      },
+      "median_ms_delta": {
+        "elapsed": -0.7958749774843454,
+        "cpu": 0.26299999999999935
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.06732133403420448,
+          "cpu": 0.06473,
+          "rss": 42500096,
+          "max_rss": 42549248,
+          "artifacts": {
+            "xref.refs.csv": 833651,
+            "xref.symbols.csv": 674883,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.06690158299170434,
+          "cpu": 0.065345,
+          "rss": 40337408,
+          "max_rss": 40435712,
+          "artifacts": {
+            "xref.refs.csv": 833651,
+            "xref.symbols.csv": 674883,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9583657587548639
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "summary-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.001425976655021,
+        "cpu": 1.0059896554909022,
+        "rss": 0.9341818181818182
+      },
+      "median_ms_delta": {
+        "elapsed": 0.312417047098279,
+        "cpu": 1.2969999999999926
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.21908987499773502,
+          "cpu": 0.21653999999999998,
+          "rss": 45203456,
+          "max_rss": 45547520,
+          "artifacts": {
+            "summary.json": 93132,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.2194022920448333,
+          "cpu": 0.21783699999999998,
+          "rss": 42319872,
+          "max_rss": 42369024,
+          "artifacts": {
+            "summary.json": 93132,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9362087712939471
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "summary-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9923469464566765,
+        "cpu": 0.9969838788784432,
+        "rss": 0.9319164265129684
+      },
+      "median_ms_delta": {
+        "elapsed": -1.6898331232368946,
+        "cpu": -0.6579999999999642
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.2202902080025524,
+          "cpu": 0.217869,
+          "rss": 45465600,
+          "max_rss": 45531136,
+          "artifacts": {
+            "summary.json": 113226,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.21870900003705174,
+          "cpu": 0.217299,
+          "rss": 42221568,
+          "max_rss": 42385408,
+          "artifacts": {
+            "summary.json": 113226,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9350507982583455
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "index-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.012004462972642,
+        "cpu": 1.0307490048570283,
+        "rss": 0.9436212504517528
+      },
+      "median_ms_delta": {
+        "elapsed": 0.6898329593241215,
+        "cpu": 1.684000000000005
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.05746470799203962,
+          "cpu": 0.054765999999999995,
+          "rss": 45481984,
+          "max_rss": 45793280,
+          "artifacts": {
+            "index.json": 60698,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.05812574992887676,
+          "cpu": 0.05645,
+          "rss": 42942464,
+          "max_rss": 44630016,
+          "artifacts": {
+            "index.json": 60698,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9816216216216216
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "index-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0112352066575392,
+        "cpu": 1.0384226305431403,
+        "rss": 0.9428057553956835
+      },
+      "median_ms_delta": {
+        "elapsed": 0.6505830679088831,
+        "cpu": 2.0890000000000004
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.05723241693340242,
+          "cpu": 0.054368999999999994,
+          "rss": 45563904,
+          "max_rss": 45727744,
+          "artifacts": {
+            "index.json": 104059,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.05800725007429719,
+          "cpu": 0.056720999999999994,
+          "rss": 42942464,
+          "max_rss": 44613632,
+          "artifacts": {
+            "index.json": 104059,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9809077809798271
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "consumers-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0235423826376555,
+        "cpu": 1.0367822140367036,
+        "rss": 0.9438040345821326
+      },
+      "median_ms_delta": {
+        "elapsed": 1.8522508908063173,
+        "cpu": 2.7960000000000207
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07942700001876801,
+          "cpu": 0.07661299999999999,
+          "rss": 45727744,
+          "max_rss": 45858816,
+          "artifacts": {
+            "consumers.json": 149136,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08112550002988428,
+          "cpu": 0.079438,
+          "rss": 43040768,
+          "max_rss": 43286528,
+          "artifacts": {
+            "consumers.json": 149136,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9487734487734488
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "consumers-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0012743204732768,
+        "cpu": 1.0181520913526527,
+        "rss": 0.9427753934191703
+      },
+      "median_ms_delta": {
+        "elapsed": 0.10279205162078142,
+        "cpu": 1.4100000000000086
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.08066420792602003,
+          "cpu": 0.077808,
+          "rss": 45793280,
+          "max_rss": 45809664,
+          "artifacts": {
+            "consumers.json": 356172,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08192770800087601,
+          "cpu": 0.080439,
+          "rss": 43073536,
+          "max_rss": 43188224,
+          "artifacts": {
+            "consumers.json": 356172,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9470461095100865
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "coverage-text",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0215822987585266,
+        "cpu": 1.033016424019481,
+        "rss": 0.9467050774216781
+      },
+      "median_ms_delta": {
+        "elapsed": 1.7207908676937222,
+        "cpu": 2.5490000000000097
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.07973158406093717,
+          "cpu": 0.077204,
+          "rss": 45498368,
+          "max_rss": 45891584,
+          "artifacts": {
+            "coverage.json": 130944,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08169645897578448,
+          "cpu": 0.080067,
+          "rss": 43024384,
+          "max_rss": 43073536,
+          "artifacts": {
+            "coverage.json": 130944,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.948051948051948
+    },
+    {
+      "kind": "products",
+      "project": "zelda",
+      "mode": "coverage-ndjson",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.019753807000206,
+        "cpu": 1.032501772706762,
+        "rss": 0.941281775868242
+      },
+      "median_ms_delta": {
+        "elapsed": 1.5837911050766706,
+        "cpu": 2.5209999999999955
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.08072674996219575,
+          "cpu": 0.07812799999999999,
+          "rss": 45760512,
+          "max_rss": 45809664,
+          "artifacts": {
+            "coverage.json": 228061,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.08130375004839152,
+          "cpu": 0.079695,
+          "rss": 43073536,
+          "max_rss": 43106304,
+          "artifacts": {
+            "coverage.json": 228061,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9494584837545126
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "ci-data-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0292868497959229,
+        "cpu": 1.026777699520791,
+        "rss": 1.0023207240659087
+      },
+      "median_ms_delta": {
+        "elapsed": 10.924250003881752,
+        "cpu": 9.694999999999954
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.3714104169048369,
+          "cpu": 0.362055,
+          "rss": 70598656,
+          "max_rss": 70615040,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1785,
+            "xref_with_data.json": 12593832,
+            "data_consumers.json": 1199552,
+            "bundle.json": 3918,
+            "listing.json": 21690616,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.3819191660732031,
+          "cpu": 0.372654,
+          "rss": 70713344,
+          "max_rss": 70811648,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1805,
+            "xref_with_data.json": 12593833,
+            "data_consumers.json": 1199552,
+            "bundle.json": 3917,
+            "listing.json": 27072744,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.002784222737819
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "ci-data-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9595661601240697,
+        "cpu": 0.9583361972185948,
+        "rss": 1.1372302158273382
+      },
+      "median_ms_delta": {
+        "elapsed": -14.262165990658104,
+        "cpu": -14.54799999999995
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.3546365840593353,
+          "cpu": 0.350812,
+          "rss": 182190080,
+          "max_rss": 187105280,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1785,
+            "xref_with_data.json": 12593832,
+            "data_consumers.json": 1199552,
+            "bundle.json": 3918,
+            "listing.json": 21690616,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.34523295902181417,
+          "cpu": 0.341571,
+          "rss": 207192064,
+          "max_rss": 207732736,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1805,
+            "xref_with_data.json": 12593833,
+            "data_consumers.json": 1199552,
+            "bundle.json": 3917,
+            "listing.json": 27072744,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1443140794223827
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "ci-data-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9960609923185687,
+        "cpu": 0.995725262387466,
+        "rss": 1.1117554032683183
+      },
+      "median_ms_delta": {
+        "elapsed": -4.397501121275127,
+        "cpu": -4.724999999999868
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.1163982091238722,
+          "cpu": 1.1053309999999998,
+          "rss": 186351616,
+          "max_rss": 187105280,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1773,
+            "xref_with_data.json": 12593830,
+            "data_consumers.json": 1199552,
+            "bundle.json": 3894,
+            "listing.json": 21690614,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.112000708002597,
+          "cpu": 1.100606,
+          "rss": 207126528,
+          "max_rss": 207798272,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1793,
+            "xref_with_data.json": 12593831,
+            "data_consumers.json": 1199552,
+            "bundle.json": 3893,
+            "listing.json": 27072742,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1448817476078714
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "ci-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0192959231524912,
+        "cpu": 1.0238904322257167,
+        "rss": 1.0325943084050297
+      },
+      "median_ms_delta": {
+        "elapsed": 9.335583890788257,
+        "cpu": 11.326000000000002
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.48381120804697275,
+          "cpu": 0.47358999999999996,
+          "rss": 98615296,
+          "max_rss": 99024896,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1982,
+            "xref_with_data.json": 12593840,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4700,
+            "listing.json": 21690624,
+            "context.json": 752,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.4937950000166893,
+          "cpu": 0.487905,
+          "rss": 102170624,
+          "max_rss": 102252544,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 2003,
+            "xref_with_data.json": 12593841,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4665,
+            "listing.json": 27072752,
+            "context.json": 752,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0369015957446808
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "ci-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9622830089676322,
+        "cpu": 0.9626316924511068,
+        "rss": 1.0384332812930481
+      },
+      "median_ms_delta": {
+        "elapsed": -38.100458099506795,
+        "cpu": -37.601000000000106
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.0101669580908492,
+          "cpu": 1.006227,
+          "rss": 356810752,
+          "max_rss": 383516672,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1982,
+            "xref_with_data.json": 12593840,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4700,
+            "listing.json": 21690624,
+            "context.json": 752,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.9720664999913424,
+          "cpu": 0.9686259999999999,
+          "rss": 370851840,
+          "max_rss": 371097600,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 2003,
+            "xref_with_data.json": 12593841,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4665,
+            "listing.json": 27072752,
+            "context.json": 752,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0553040556307463
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "ci-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0007209187680666,
+        "cpu": 0.999367787272002,
+        "rss": 1.0386043739397552
+      },
+      "median_ms_delta": {
+        "elapsed": 1.7509999452158809,
+        "cpu": -1.5279999999999738
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 2.478900623973459,
+          "cpu": 2.462608,
+          "rss": 356843520,
+          "max_rss": 383926272,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1968,
+            "xref_with_data.json": 12593838,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4672,
+            "listing.json": 21690622,
+            "context.json": 752,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 2.4820802920730785,
+          "cpu": 2.466419,
+          "rss": 370573312,
+          "max_rss": 371277824,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1989,
+            "xref_with_data.json": 12593839,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4637,
+            "listing.json": 27072750,
+            "context.json": 752,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1017832781134282
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "inventory-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0179027618714638,
+        "cpu": 1.0349006561599314,
+        "rss": 1.039549002601908
+      },
+      "median_ms_delta": {
+        "elapsed": 4.905082983896136,
+        "cpu": 9.106000000000003
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.2718935830052942,
+          "cpu": 0.26242499999999996,
+          "rss": 94502912,
+          "max_rss": 94846976,
+          "artifacts": {
+            "dependencies.json": 1439,
+            "xref_with_data.json": 12593847,
+            "instructions.json": 31351360,
+            "bundle.json": 3340,
+            "context.json": 759,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.2749150840099901,
+          "cpu": 0.270018,
+          "rss": 98205696,
+          "max_rss": 99368960,
+          "artifacts": {
+            "dependencies.json": 1435,
+            "xref_with_data.json": 12593848,
+            "instructions.json": 31351360,
+            "bundle.json": 3272,
+            "context.json": 759,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0476766280877525
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "inventory-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9955840838543752,
+        "cpu": 0.9956978269282605,
+        "rss": 1.0003572704537336
+      },
+      "median_ms_delta": {
+        "elapsed": -2.9395000310614705,
+        "cpu": -2.8569999999999984
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.6675631669349968,
+          "cpu": 0.664083,
+          "rss": 275218432,
+          "max_rss": 275283968,
+          "artifacts": {
+            "dependencies.json": 1439,
+            "xref_with_data.json": 12593847,
+            "instructions.json": 31351360,
+            "bundle.json": 3340,
+            "context.json": 759,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.6645532079273835,
+          "cpu": 0.661226,
+          "rss": 275300352,
+          "max_rss": 275382272,
+          "artifacts": {
+            "dependencies.json": 1435,
+            "xref_with_data.json": 12593848,
+            "instructions.json": 31351360,
+            "bundle.json": 3272,
+            "context.json": 759,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.000595308965353
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "inventory-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9953619820228921,
+        "cpu": 0.9911591594809218,
+        "rss": 1.0000595379852346
+      },
+      "median_ms_delta": {
+        "elapsed": -7.638624869287014,
+        "cpu": -14.521999999999924
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.6469588748877868,
+          "cpu": 1.636018,
+          "rss": 275185664,
+          "max_rss": 275300352,
+          "artifacts": {
+            "dependencies.json": 1431,
+            "xref_with_data.json": 12593845,
+            "instructions.json": 31351360,
+            "bundle.json": 3324,
+            "context.json": 759,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.6392236659303308,
+          "cpu": 1.6247319999999998,
+          "rss": 275218432,
+          "max_rss": 275316736,
+          "artifacts": {
+            "dependencies.json": 1427,
+            "xref_with_data.json": 12593846,
+            "instructions.json": 31351360,
+            "bundle.json": 3256,
+            "context.json": 759,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.000714626012387
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "process-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0209986115654277,
+        "cpu": 1.02562124338387,
+        "rss": 1.0333948649102198
+      },
+      "median_ms_delta": {
+        "elapsed": 8.350083022378385,
+        "cpu": 9.996000000000006
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.3980088330572471,
+          "cpu": 0.39176099999999997,
+          "rss": 97779712,
+          "max_rss": 97910784,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1841,
+            "xref_with_data.json": 12593845,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4318,
+            "context.json": 757,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.40599937504157424,
+          "cpu": 0.40014099999999997,
+          "rss": 100892672,
+          "max_rss": 101892096,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1839,
+            "xref_with_data.json": 12593846,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4254,
+            "context.json": 757,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0406626506024097
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "process-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9973203750534015,
+        "cpu": 0.9973305592822143,
+        "rss": 1.0002923976608187
+      },
+      "median_ms_delta": {
+        "elapsed": -2.1526250056922436,
+        "cpu": -2.134999999999998
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.8033307080622762,
+          "cpu": 0.799793,
+          "rss": 280166400,
+          "max_rss": 280215552,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1841,
+            "xref_with_data.json": 12593845,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4318,
+            "context.json": 757,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.7987130000256002,
+          "cpu": 0.7956,
+          "rss": 280248320,
+          "max_rss": 280297472,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1839,
+            "xref_with_data.json": 12593846,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4254,
+            "context.json": 757,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0021087160262419
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "process-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0058576812808264,
+        "cpu": 1.0061075049100219,
+        "rss": 1.0006438019431114
+      },
+      "median_ms_delta": {
+        "elapsed": 11.210874887183309,
+        "cpu": 11.621000000000103
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.8916738749248907,
+          "cpu": 1.880267,
+          "rss": 279805952,
+          "max_rss": 279937024,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1829,
+            "xref_with_data.json": 12593843,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4294,
+            "context.json": 757,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.8935737080173567,
+          "cpu": 1.883082,
+          "rss": 280068096,
+          "max_rss": 280297472,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1827,
+            "xref_with_data.json": 12593844,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4230,
+            "context.json": 757,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.001873975169829
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "maturity-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.041631098524306,
+        "cpu": 1.0319519297319428,
+        "rss": 1.0307641415812108
+      },
+      "median_ms_delta": {
+        "elapsed": 20.295791910029948,
+        "cpu": 15.37299999999997
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.49000008404254913,
+          "cpu": 0.48340099999999997,
+          "rss": 99041280,
+          "max_rss": 99090432,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 2002,
+            "xref_with_data.json": 12593846,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4763,
+            "listing.json": 21690630,
+            "context.json": 758,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.5078109579626471,
+          "cpu": 0.498957,
+          "rss": 102105088,
+          "max_rss": 102531072,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 2023,
+            "xref_with_data.json": 12593847,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4728,
+            "listing.json": 27072758,
+            "context.json": 758,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0352357320099255
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "maturity-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9702735979259673,
+        "cpu": 0.970088409752137,
+        "rss": 1.0589032770791453
+      },
+      "median_ms_delta": {
+        "elapsed": -31.73341602087021,
+        "cpu": -31.830000000000027
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.064248583978042,
+          "cpu": 1.060771,
+          "rss": 350470144,
+          "max_rss": 383991808,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 2002,
+            "xref_with_data.json": 12593846,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4763,
+            "listing.json": 21690630,
+            "context.json": 758,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.035782792023383,
+          "cpu": 1.032306,
+          "rss": 371113984,
+          "max_rss": 371195904,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 2023,
+            "xref_with_data.json": 12593847,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4728,
+            "listing.json": 27072758,
+            "context.json": 758,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.101356278255797
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "maturity-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9913987844959314,
+        "cpu": 0.9915945831850276,
+        "rss": 1.0985080429605871
+      },
+      "median_ms_delta": {
+        "elapsed": -20.894123939797282,
+        "cpu": -20.309000000000133
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 2.4940609999466687,
+          "cpu": 2.481026,
+          "rss": 337166336,
+          "max_rss": 383516672,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 1988,
+            "xref_with_data.json": 12593844,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4735,
+            "listing.json": 21690628,
+            "context.json": 758,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 2.4480403340421617,
+          "cpu": 2.4074159999999996,
+          "rss": 370491392,
+          "max_rss": 371179520,
+          "artifacts": {
+            "index_patterns.json": 87610,
+            "dependencies.json": 2009,
+            "xref_with_data.json": 12593845,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 4700,
+            "listing.json": 27072756,
+            "context.json": 758,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1010425801422585
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0318533448337897,
+        "cpu": 1.0319980492921785,
+        "rss": 1.0473134054648816
+      },
+      "median_ms_delta": {
+        "elapsed": 7.02845910564065,
+        "cpu": 6.9550000000000445
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.22236324998084456,
+          "cpu": 0.21692099999999997,
+          "rss": 89341952,
+          "max_rss": 89374720,
+          "artifacts": {
+            "dependencies.json": 1205,
+            "instructions.json": 31351360,
+            "bundle.json": 2401,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.22831633291207254,
+          "cpu": 0.223653,
+          "rss": 93569024,
+          "max_rss": 94208000,
+          "artifacts": {
+            "dependencies.json": 1200,
+            "instructions.json": 31351360,
+            "bundle.json": 2331,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0614731401144546
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0243556246248644,
+        "cpu": 1.0142129923531342,
+        "rss": 1.0004499100179964
+      },
+      "median_ms_delta": {
+        "elapsed": 14.561958028934896,
+        "cpu": 8.350999999999885
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.5909332500305027,
+          "cpu": 0.587561,
+          "rss": 218562560,
+          "max_rss": 218644480,
+          "artifacts": {
+            "dependencies.json": 1205,
+            "instructions.json": 31351360,
+            "bundle.json": 2401,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.6068311249837279,
+          "cpu": 0.5969,
+          "rss": 218644480,
+          "max_rss": 218693632,
+          "artifacts": {
+            "dependencies.json": 1200,
+            "instructions.json": 31351360,
+            "bundle.json": 2331,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0006748650269945
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9908620174034279,
+        "cpu": 0.9909443290647518,
+        "rss": 0.9944960952026776
+      },
+      "median_ms_delta": {
+        "elapsed": -13.135958113707602,
+        "cpu": -12.923999999999936
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.4375118331518024,
+          "cpu": 1.4271719999999999,
+          "rss": 220250112,
+          "max_rss": 220282880,
+          "artifacts": {
+            "dependencies.json": 1199,
+            "instructions.json": 31351360,
+            "bundle.json": 2389,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.4229102090466768,
+          "cpu": 1.4133049999999998,
+          "rss": 219021312,
+          "max_rss": 219070464,
+          "artifacts": {
+            "dependencies.json": 1194,
+            "instructions.json": 31351360,
+            "bundle.json": 2319,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9950878237570706
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "data-listing-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.002527246077736,
+        "cpu": 1.0305764074006691,
+        "rss": 1.0026699029126214
+      },
+      "median_ms_delta": {
+        "elapsed": 0.6669998401775956,
+        "cpu": 7.730999999999987
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.26367216696962714,
+          "cpu": 0.25353899999999996,
+          "rss": 67452928,
+          "max_rss": 67518464,
+          "artifacts": {
+            "dependencies.json": 1399,
+            "xref_with_data.json": 12593837,
+            "bundle.json": 2619,
+            "listing.json": 21690621,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.26481674995739013,
+          "cpu": 0.260042,
+          "rss": 67698688,
+          "max_rss": 68304896,
+          "artifacts": {
+            "dependencies.json": 1417,
+            "xref_with_data.json": 12593838,
+            "bundle.json": 2614,
+            "listing.json": 27072749,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0126305562302647
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "data-listing-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9789434626718838,
+        "cpu": 0.9785392540175719,
+        "rss": 1.113224556026323
+      },
+      "median_ms_delta": {
+        "elapsed": -7.16329098213464,
+        "cpu": -7.217999999999947
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.33619825006462634,
+          "cpu": 0.332405,
+          "rss": 181747712,
+          "max_rss": 181829632,
+          "artifacts": {
+            "dependencies.json": 1399,
+            "xref_with_data.json": 12593837,
+            "bundle.json": 2619,
+            "listing.json": 21690621,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.327495125005953,
+          "cpu": 0.324513,
+          "rss": 202326016,
+          "max_rss": 202375168,
+          "artifacts": {
+            "dependencies.json": 1417,
+            "xref_with_data.json": 12593838,
+            "bundle.json": 2614,
+            "listing.json": 27072749,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1450820432001483
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "data-listing-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.002380118847437,
+        "cpu": 0.9950794205233583,
+        "rss": 1.1441675159825813
+      },
+      "median_ms_delta": {
+        "elapsed": 2.30587599799037,
+        "cpu": -4.691000000000001
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.9688070830889046,
+          "cpu": 0.9560379999999999,
+          "rss": 176816128,
+          "max_rss": 181698560,
+          "artifacts": {
+            "dependencies.json": 1391,
+            "xref_with_data.json": 12593835,
+            "bundle.json": 2603,
+            "listing.json": 21690619,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.9683264580089599,
+          "cpu": 0.955106,
+          "rss": 202326016,
+          "max_rss": 202358784,
+          "artifacts": {
+            "dependencies.json": 1409,
+            "xref_with_data.json": 12593836,
+            "bundle.json": 2598,
+            "listing.json": 27072747,
+            "context.json": 388,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1446709916589435
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "pass-prep-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0043255461621388,
+        "cpu": 1.0055470686266132,
+        "rss": 1.028801486528337
+      },
+      "median_ms_delta": {
+        "elapsed": 6.51508301962167,
+        "cpu": 8.308000000000204
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.506187375052832,
+          "cpu": 1.497384,
+          "rss": 106004480,
+          "max_rss": 106528768,
+          "artifacts": {
+            "summary.json": 258827,
+            "index_patterns.json": 87610,
+            "dependencies.json": 2401,
+            "xref_with_data.json": 12593847,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 5734,
+            "listing.json": 21690631,
+            "context.json": 759,
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.5127024580724537,
+          "cpu": 1.5060360000000002,
+          "rss": 108904448,
+          "max_rss": 109854720,
+          "artifacts": {
+            "summary.json": 258827,
+            "index_patterns.json": 87610,
+            "dependencies.json": 2424,
+            "xref_with_data.json": 12593848,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 5703,
+            "listing.json": 27072759,
+            "context.json": 759,
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0312211627191634
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "pass-prep-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9949814580935135,
+        "cpu": 0.9946459692053395,
+        "rss": 1.0419096209912537
+      },
+      "median_ms_delta": {
+        "elapsed": -5.046625039540231,
+        "cpu": -5.364000000000146
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.0055958749726415,
+          "cpu": 1.001862,
+          "rss": 359661568,
+          "max_rss": 386629632,
+          "artifacts": {
+            "summary.json": 258827,
+            "index_patterns.json": 87610,
+            "dependencies.json": 2401,
+            "xref_with_data.json": 12593847,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 5734,
+            "listing.json": 21690631,
+            "context.json": 759,
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.9830696670105681,
+          "cpu": 0.9795809999999999,
+          "rss": 374751232,
+          "max_rss": 374816768,
+          "artifacts": {
+            "summary.json": 258827,
+            "index_patterns.json": 87610,
+            "dependencies.json": 2424,
+            "xref_with_data.json": 12593848,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 5703,
+            "listing.json": 27072759,
+            "context.json": 759,
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1005629601116298
+    },
+    {
+      "kind": "bundles",
+      "project": "metroid",
+      "mode": "pass-prep-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0073059986986668,
+        "cpu": 1.0076083925813113,
+        "rss": 0.9659196617336152
+      },
+      "median_ms_delta": {
+        "elapsed": 25.725499959662557,
+        "cpu": 26.68700000000035
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 3.5211476241238415,
+          "cpu": 3.507574,
+          "rss": 387104768,
+          "max_rss": 387481600,
+          "artifacts": {
+            "summary.json": 258827,
+            "index_patterns.json": 87610,
+            "dependencies.json": 2383,
+            "xref_with_data.json": 12593845,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 5698,
+            "listing.json": 21690629,
+            "context.json": 759,
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 3.5554538760334253,
+          "cpu": 3.532863,
+          "rss": 374276096,
+          "max_rss": 374964224,
+          "artifacts": {
+            "summary.json": 258827,
+            "index_patterns.json": 87610,
+            "dependencies.json": 2406,
+            "xref_with_data.json": 12593846,
+            "data_consumers.json": 1199552,
+            "instructions.json": 31351360,
+            "bundle.json": 5667,
+            "listing.json": 27072757,
+            "context.json": 759,
+            "coverage.json": 861526,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.1042239922761283
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "ci-data-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0529746737365975,
+        "cpu": 1.0493025447690858,
+        "rss": 0.9357429718875502
+      },
+      "median_ms_delta": {
+        "elapsed": 11.433333973400295,
+        "cpu": 10.462
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.21672429190948606,
+          "cpu": 0.2122,
+          "rss": 53051392,
+          "max_rss": 53395456,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1765,
+            "xref_with_data.json": 4407974,
+            "data_consumers.json": 356896,
+            "bundle.json": 3875,
+            "listing.json": 19554309,
+            "context.json": 730,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.22725975001230836,
+          "cpu": 0.22280199999999997,
+          "rss": 49741824,
+          "max_rss": 49954816,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1785,
+            "xref_with_data.json": 4407975,
+            "data_consumers.json": 356896,
+            "bundle.json": 3874,
+            "listing.json": 24395391,
+            "context.json": 730,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9391223733003708
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "ci-data-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9665289326374282,
+        "cpu": 0.9654243361089132,
+        "rss": 1.08128050857078
+      },
+      "median_ms_delta": {
+        "elapsed": -9.731624973937869,
+        "cpu": -9.92000000000004
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.2907473749946803,
+          "cpu": 0.286907,
+          "rss": 144326656,
+          "max_rss": 144375808,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1765,
+            "xref_with_data.json": 4407974,
+            "data_consumers.json": 356896,
+            "bundle.json": 3875,
+            "listing.json": 19554309,
+            "context.json": 730,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.2810157500207424,
+          "cpu": 0.276987,
+          "rss": 156057600,
+          "max_rss": 156139520,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1785,
+            "xref_with_data.json": 4407975,
+            "data_consumers.json": 356896,
+            "bundle.json": 3874,
+            "listing.json": 24395391,
+            "context.json": 730,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0818759936406994
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "ci-data-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9934765687945472,
+        "cpu": 0.9929275445815505,
+        "rss": 1.0811669883074129
+      },
+      "median_ms_delta": {
+        "elapsed": -5.316915805451572,
+        "cpu": -5.696000000000034
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.8113722078269348,
+          "cpu": 0.8016239999999999,
+          "rss": 144326656,
+          "max_rss": 144375808,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1753,
+            "xref_with_data.json": 4407972,
+            "data_consumers.json": 356896,
+            "bundle.json": 3851,
+            "listing.json": 19554307,
+            "context.json": 730,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.8075002088444307,
+          "cpu": 0.797589,
+          "rss": 156057600,
+          "max_rss": 156123136,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1773,
+            "xref_with_data.json": 4407973,
+            "data_consumers.json": 356896,
+            "bundle.json": 3850,
+            "listing.json": 24395389,
+            "context.json": 730,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0816488757665228
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "ci-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.975822808340915,
+        "cpu": 1.0239329508073396,
+        "rss": 1.0246913580246915
+      },
+      "median_ms_delta": {
+        "elapsed": -7.527084089815617,
+        "cpu": 6.9990000000000325
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.31132995907682925,
+          "cpu": 0.292442,
+          "rss": 74301440,
+          "max_rss": 74629120,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1960,
+            "xref_with_data.json": 4407982,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4653,
+            "listing.json": 19554317,
+            "context.json": 738,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.30380287498701364,
+          "cpu": 0.299664,
+          "rss": 76087296,
+          "max_rss": 76218368,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1981,
+            "xref_with_data.json": 4407983,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4618,
+            "listing.json": 24395399,
+            "context.json": 738,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0273851590106007
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "ci-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9936182770879118,
+        "cpu": 0.9935717165802458,
+        "rss": 1.0200592109238114
+      },
+      "median_ms_delta": {
+        "elapsed": -4.995165974833071,
+        "cpu": -5.005999999999955
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.759388874983415,
+          "cpu": 0.755539,
+          "rss": 271171584,
+          "max_rss": 271433728,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1960,
+            "xref_with_data.json": 4407982,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4653,
+            "listing.json": 19554317,
+            "context.json": 738,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.7417849580524489,
+          "cpu": 0.737528,
+          "rss": 276512768,
+          "max_rss": 276611072,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1981,
+            "xref_with_data.json": 4407983,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4618,
+            "listing.json": 24395399,
+            "context.json": 738,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0290800463329879
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "ci-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9994090367141546,
+        "cpu": 0.999425819627167,
+        "rss": 1.019381717183915
+      },
+      "median_ms_delta": {
+        "elapsed": -1.0681659914553165,
+        "cpu": -1.0310000000000041
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.7970128750894219,
+          "cpu": 1.7825469999999997,
+          "rss": 271351808,
+          "max_rss": 271450112,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1946,
+            "xref_with_data.json": 4407980,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4625,
+            "listing.json": 19554315,
+            "context.json": 738,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.763126500067301,
+          "cpu": 1.75145,
+          "rss": 276594688,
+          "max_rss": 276611072,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1967,
+            "xref_with_data.json": 4407981,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4590,
+            "listing.json": 24395397,
+            "context.json": 738,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0295139947557779
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "inventory-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9835266434026956,
+        "cpu": 0.9884778484544137,
+        "rss": 1.031767955801105
+      },
+      "median_ms_delta": {
+        "elapsed": -3.035833011381328,
+        "cpu": -2.0649999999999835
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.18428745795972645,
+          "cpu": 0.17957800000000002,
+          "rss": 71172096,
+          "max_rss": 71516160,
+          "artifacts": {
+            "dependencies.json": 1423,
+            "xref_with_data.json": 4407989,
+            "instructions.json": 23557886,
+            "bundle.json": 3305,
+            "context.json": 745,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.18125162494834512,
+          "cpu": 0.177862,
+          "rss": 73465856,
+          "max_rss": 73613312,
+          "artifacts": {
+            "dependencies.json": 1419,
+            "xref_with_data.json": 4407990,
+            "instructions.json": 23557886,
+            "bundle.json": 3237,
+            "context.json": 745,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0327038231229848
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "inventory-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.986430839986591,
+        "cpu": 0.985817414301935,
+        "rss": 1.000684170016249
+      },
+      "median_ms_delta": {
+        "elapsed": -5.894166068173945,
+        "cpu": -6.107999999999947
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.4416405000956729,
+          "cpu": 0.43817999999999996,
+          "rss": 191643648,
+          "max_rss": 191741952,
+          "artifacts": {
+            "dependencies.json": 1423,
+            "xref_with_data.json": 4407989,
+            "instructions.json": 23557886,
+            "bundle.json": 3305,
+            "context.json": 745,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.442803000099957,
+          "cpu": 0.439617,
+          "rss": 191807488,
+          "max_rss": 191823872,
+          "artifacts": {
+            "dependencies.json": 1419,
+            "xref_with_data.json": 4407990,
+            "instructions.json": 23557886,
+            "bundle.json": 3237,
+            "context.json": 745,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.001026079521163
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "inventory-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0044436007095021,
+        "cpu": 1.0049750347802204,
+        "rss": 1.0005983417386102
+      },
+      "median_ms_delta": {
+        "elapsed": 5.005334969609976,
+        "cpu": 5.52499999999978
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.1365194589598104,
+          "cpu": 1.1240999999999999,
+          "rss": 191676416,
+          "max_rss": 191709184,
+          "artifacts": {
+            "dependencies.json": 1415,
+            "xref_with_data.json": 4407987,
+            "instructions.json": 23557886,
+            "bundle.json": 3289,
+            "context.json": 745,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.14804604195524,
+          "cpu": 1.123578,
+          "rss": 191758336,
+          "max_rss": 191807488,
+          "artifacts": {
+            "dependencies.json": 1411,
+            "xref_with_data.json": 4407988,
+            "instructions.json": 23557886,
+            "bundle.json": 3221,
+            "context.json": 745,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.001026079521163
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "process-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9853309741607869,
+        "cpu": 0.9872479406612247,
+        "rss": 1.0290723479804704
+      },
+      "median_ms_delta": {
+        "elapsed": -3.1986660324037075,
+        "cpu": -2.737000000000017
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.22036216699052602,
+          "cpu": 0.21484599999999998,
+          "rss": 73826304,
+          "max_rss": 74137600,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1821,
+            "xref_with_data.json": 4407987,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4275,
+            "context.json": 743,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.21586233307607472,
+          "cpu": 0.211979,
+          "rss": 75972608,
+          "max_rss": 76054528,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1819,
+            "xref_with_data.json": 4407988,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4211,
+            "context.json": 743,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.032243718034245
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "process-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0873624447238763,
+        "cpu": 1.0880318228986512,
+        "rss": 1.0005938746076186
+      },
+      "median_ms_delta": {
+        "elapsed": 40.248791920021176,
+        "cpu": 40.211000000000055
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.46071045799180865,
+          "cpu": 0.45698099999999997,
+          "rss": 193118208,
+          "max_rss": 193183744,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1821,
+            "xref_with_data.json": 4407987,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4275,
+            "context.json": 743,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.5009592499118298,
+          "cpu": 0.496989,
+          "rss": 193249280,
+          "max_rss": 193314816,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1819,
+            "xref_with_data.json": 4407988,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4211,
+            "context.json": 743,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.001442878967917
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "process-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0022682167592796,
+        "cpu": 1.0017447889284121,
+        "rss": 1.00016960651289
+      },
+      "median_ms_delta": {
+        "elapsed": 2.674833172932267,
+        "cpu": 2.0409999999997375
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.2033963330322877,
+          "cpu": 1.1806260000000002,
+          "rss": 193200128,
+          "max_rss": 193249280,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1809,
+            "xref_with_data.json": 4407985,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4251,
+            "context.json": 743,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.2135957080172375,
+          "cpu": 1.203558,
+          "rss": 193232896,
+          "max_rss": 193282048,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1807,
+            "xref_with_data.json": 4407986,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4187,
+            "context.json": 743,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0005937234944868
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "maturity-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0331147590649532,
+        "cpu": 1.0375471462643517,
+        "rss": 1.0242664901831018
+      },
+      "median_ms_delta": {
+        "elapsed": 9.726667078211904,
+        "cpu": 10.83099999999998
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.29616045800503343,
+          "cpu": 0.29103,
+          "rss": 74334208,
+          "max_rss": 74629120,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1980,
+            "xref_with_data.json": 4407988,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4716,
+            "listing.json": 19554323,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.30976458301302046,
+          "cpu": 0.299295,
+          "rss": 76120064,
+          "max_rss": 76169216,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 2001,
+            "xref_with_data.json": 4407989,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4681,
+            "listing.json": 24395405,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0253807106598984
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "maturity-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9716997788000478,
+        "cpu": 0.9718878628220571,
+        "rss": 1.0187801932367149
+      },
+      "median_ms_delta": {
+        "elapsed": -20.837999996729195,
+        "cpu": -20.584999999999965
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.7654627080773935,
+          "cpu": 0.761184,
+          "rss": 271319040,
+          "max_rss": 271466496,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1980,
+            "xref_with_data.json": 4407988,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4716,
+            "listing.json": 19554323,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.7154813329689205,
+          "cpu": 0.711661,
+          "rss": 276430848,
+          "max_rss": 276480000,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 2001,
+            "xref_with_data.json": 4407989,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4681,
+            "listing.json": 24395405,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0285296269202633
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "maturity-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9767504282127439,
+        "cpu": 0.9844737195859657,
+        "rss": 1.0289757823461234
+      },
+      "median_ms_delta": {
+        "elapsed": -41.72887490130961,
+        "cpu": -27.489000000000097
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.7906385840615258,
+          "cpu": 1.770482,
+          "rss": 268730368,
+          "max_rss": 271400960,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1966,
+            "xref_with_data.json": 4407986,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4688,
+            "listing.json": 19554321,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.7418522919761017,
+          "cpu": 1.7308169999999998,
+          "rss": 276578304,
+          "max_rss": 276627456,
+          "artifacts": {
+            "index_patterns.json": 104479,
+            "dependencies.json": 1987,
+            "xref_with_data.json": 4407987,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 4653,
+            "listing.json": 24395403,
+            "context.json": 744,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0300146412884335
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9911509686253048,
+        "cpu": 0.9922072531038906,
+        "rss": 1.0144893666744565
+      },
+      "median_ms_delta": {
+        "elapsed": -1.4402089873328805,
+        "cpu": -1.2390000000000179
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.1666252090362832,
+          "cpu": 0.15895,
+          "rss": 70074368,
+          "max_rss": 70123520,
+          "artifacts": {
+            "dependencies.json": 1191,
+            "instructions.json": 23557886,
+            "bundle.json": 2377,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.16179241694044322,
+          "cpu": 0.157567,
+          "rss": 71073792,
+          "max_rss": 71172096,
+          "artifacts": {
+            "dependencies.json": 1186,
+            "instructions.json": 23557886,
+            "bundle.json": 2307,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.021186440677966
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0511866329789494,
+        "cpu": 1.0506475374319966,
+        "rss": 1.0005739429883298
+      },
+      "median_ms_delta": {
+        "elapsed": 20.384165924042463,
+        "cpu": 19.988000000000007
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.398778208065778,
+          "cpu": 0.396009,
+          "rss": 171229184,
+          "max_rss": 171278336,
+          "artifacts": {
+            "dependencies.json": 1191,
+            "instructions.json": 23557886,
+            "bundle.json": 2377,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.41861637495458126,
+          "cpu": 0.414637,
+          "rss": 171278336,
+          "max_rss": 171425792,
+          "artifacts": {
+            "dependencies.json": 1186,
+            "instructions.json": 23557886,
+            "bundle.json": 2307,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0011482154817721
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9997205569228592,
+        "cpu": 0.9990441838635745,
+        "rss": 1.000573888091822
+      },
+      "median_ms_delta": {
+        "elapsed": -0.29591587372124195,
+        "cpu": -1.0030000000000872
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.0618679580511525,
+          "cpu": 1.052182,
+          "rss": 171229184,
+          "max_rss": 171294720,
+          "artifacts": {
+            "dependencies.json": 1185,
+            "instructions.json": 23557886,
+            "bundle.json": 2365,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.0586527499835938,
+          "cpu": 1.048362,
+          "rss": 171327488,
+          "max_rss": 171393024,
+          "artifacts": {
+            "dependencies.json": 1180,
+            "instructions.json": 23557886,
+            "bundle.json": 2295,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.00124449550067
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "data-listing-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0197902352790194,
+        "cpu": 1.0241675348334514,
+        "rss": 0.9239200515796261
+      },
+      "median_ms_delta": {
+        "elapsed": 3.6574589321389794,
+        "cpu": 4.338000000000008
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.18421754206065089,
+          "cpu": 0.180505,
+          "rss": 50790400,
+          "max_rss": 50839552,
+          "artifacts": {
+            "dependencies.json": 1383,
+            "xref_with_data.json": 4407979,
+            "bundle.json": 2590,
+            "listing.json": 19554314,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.18932250002399087,
+          "cpu": 0.185378,
+          "rss": 46956544,
+          "max_rss": 47464448,
+          "artifacts": {
+            "dependencies.json": 1401,
+            "xref_with_data.json": 4407980,
+            "bundle.json": 2585,
+            "listing.json": 24395396,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 0.9399740428293316
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "data-listing-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9576101375830341,
+        "cpu": 0.9569021647681963,
+        "rss": 1.082224770642202
+      },
+      "median_ms_delta": {
+        "elapsed": -11.753249913454056,
+        "cpu": -11.782000000000014
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.2772655829321593,
+          "cpu": 0.273378,
+          "rss": 142852096,
+          "max_rss": 142868480,
+          "artifacts": {
+            "dependencies.json": 1383,
+            "xref_with_data.json": 4407979,
+            "bundle.json": 2590,
+            "listing.json": 19554314,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.26551233301870525,
+          "cpu": 0.261596,
+          "rss": 154599424,
+          "max_rss": 154697728,
+          "artifacts": {
+            "dependencies.json": 1401,
+            "xref_with_data.json": 4407980,
+            "bundle.json": 2585,
+            "listing.json": 24395396,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0836680821760587
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "data-listing-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0004878334224587,
+        "cpu": 0.9957240871515112,
+        "rss": 1.0822530687163014
+      },
+      "median_ms_delta": {
+        "elapsed": 0.37254090420901775,
+        "cpu": -3.193999999999919
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.7584660830907524,
+          "cpu": 0.747554,
+          "rss": 142835712,
+          "max_rss": 142868480,
+          "artifacts": {
+            "dependencies.json": 1375,
+            "xref_with_data.json": 4407977,
+            "bundle.json": 2574,
+            "listing.json": 19554312,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.7599751249654219,
+          "cpu": 0.744845,
+          "rss": 154550272,
+          "max_rss": 154615808,
+          "artifacts": {
+            "dependencies.json": 1393,
+            "xref_with_data.json": 4407978,
+            "bundle.json": 2569,
+            "listing.json": 24395394,
+            "context.json": 380,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0825109019967867
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "pass-prep-instructions-v1",
+      "stage": "producer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 1.0188232026137605,
+        "cpu": 1.0234215129711532,
+        "rss": 1.0244897959183674
+      },
+      "median_ms_delta": {
+        "elapsed": 9.244292043149471,
+        "cpu": 11.354000000000031
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.49111154105048627,
+          "cpu": 0.485042,
+          "rss": 76234752,
+          "max_rss": 76447744,
+          "artifacts": {
+            "summary.json": 111257,
+            "index_patterns.json": 104479,
+            "dependencies.json": 2375,
+            "xref_with_data.json": 4407989,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 5679,
+            "listing.json": 19554324,
+            "context.json": 745,
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.5003558330936357,
+          "cpu": 0.495751,
+          "rss": 77758464,
+          "max_rss": 78610432,
+          "artifacts": {
+            "summary.json": 111257,
+            "index_patterns.json": 104479,
+            "dependencies.json": 2398,
+            "xref_with_data.json": 4407990,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 5648,
+            "listing.json": 24395406,
+            "context.json": 745,
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.036061325847549
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "pass-prep-instructions-v1",
+      "stage": "consumer",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9985971886437894,
+        "cpu": 0.9985380282808574,
+        "rss": 1.0288595904976001
+      },
+      "median_ms_delta": {
+        "elapsed": -0.9950001258403063,
+        "cpu": -1.0310000000000041
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 0.7251325419638306,
+          "cpu": 0.721058,
+          "rss": 269631488,
+          "max_rss": 272416768,
+          "artifacts": {
+            "summary.json": 111257,
+            "index_patterns.json": 104479,
+            "dependencies.json": 2375,
+            "xref_with_data.json": 4407989,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 5679,
+            "listing.json": 19554324,
+            "context.json": 745,
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 0.716281083994545,
+          "cpu": 0.712174,
+          "rss": 277413888,
+          "max_rss": 277446656,
+          "artifacts": {
+            "summary.json": 111257,
+            "index_patterns.json": 104479,
+            "dependencies.json": 2398,
+            "xref_with_data.json": 4407990,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 5648,
+            "listing.json": 24395406,
+            "context.json": 745,
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.029050686763097
+    },
+    {
+      "kind": "bundles",
+      "project": "zelda",
+      "mode": "pass-prep-instructions-v1",
+      "stage": "bundle",
+      "pairs": 5,
+      "median_ratios": {
+        "elapsed": 0.9963480506111765,
+        "cpu": 0.9960090064969176,
+        "rss": 1.0185954143347176
+      },
+      "median_ms_delta": {
+        "elapsed": -7.033459143713117,
+        "cpu": -7.643000000000066
+      },
+      "versions": {
+        "baseline": {
+          "elapsed": 1.9910882920958102,
+          "cpu": 1.979188,
+          "rss": 272252928,
+          "max_rss": 272351232,
+          "artifacts": {
+            "summary.json": 111257,
+            "index_patterns.json": 104479,
+            "dependencies.json": 2357,
+            "xref_with_data.json": 4407987,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 5643,
+            "listing.json": 19554322,
+            "context.json": 745,
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        },
+        "candidate": {
+          "elapsed": 1.9548060409724712,
+          "cpu": 1.9423979999999998,
+          "rss": 277381120,
+          "max_rss": 277512192,
+          "artifacts": {
+            "summary.json": 111257,
+            "index_patterns.json": 104479,
+            "dependencies.json": 2380,
+            "xref_with_data.json": 4407988,
+            "data_consumers.json": 356896,
+            "instructions.json": 23557886,
+            "bundle.json": 5612,
+            "listing.json": 24395404,
+            "context.json": 745,
+            "coverage.json": 228785,
+            "binary.bin": 131072
+          }
+        }
+      },
+      "max_paired_rss_ratio": 1.0281792785133002
+    }
+  ],
+  "followup": {
+    "evidence_root": "/private/tmp/xorcyst-i5-followup",
+    "tools": {
+      "baseline": {
+        "path": "/private/tmp/xorcyst-i4/baseline-source/xasm",
+        "sha256": "8e9330a9c93b2297bd9af771ba6bbc95ab183064714ae70ae82bd6456c2c9b5b"
+      },
+      "candidate": {
+        "path": "/private/tmp/xorcyst-v2-analysis/xasm-v2",
+        "sha256": "c2803cd58d3a3bf261480e963b25a63082456cf0be63cc1fe5e95682a01e97dd"
+      }
+    },
+    "survey_sha256": "6976870d80be53f388000b5efaeaa42de2ad3eda0b987c932e1b3e31d23fee54",
+    "stress_sha256": "c1bfeae7fbf7c54b627ddb6769ee1039d7c1104e8caf483a32181af78fea7f20",
+    "configurations": [
+      {
+        "project": "metroid",
+        "mode": "plain",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.9228170470031405,
+          "cpu": 0.9310669284896088,
+          "rss": 0.8640081799591002
+        },
+        "median_ms_delta": {
+          "elapsed": -5.858375923708081,
+          "cpu": -5.055000000000004
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "text",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.9591635272339939,
+          "cpu": 0.961746045841597,
+          "rss": 0.9842914438502673
+        },
+        "median_ms_delta": {
+          "elapsed": -4.237417015247047,
+          "cpu": -3.876999999999992
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "json",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0001566532446087,
+          "cpu": 0.9622990576120748,
+          "rss": 0.993941433860653
+        },
+        "median_ms_delta": {
+          "elapsed": 0.03429199568927288,
+          "cpu": -6.948999999999983
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "xref-combined",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0451541834774563,
+          "cpu": 1.0568519455068432,
+          "rss": 1.098419540229885
+        },
+        "median_ms_delta": {
+          "elapsed": 11.859084013849497,
+          "cpu": 14.388999999999985
+        }
+      },
+      {
+        "project": "metroid",
+        "mode": "records",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0123145369754172,
+          "cpu": 1.02618786125903,
+          "rss": 1.0816326530612246
+        },
+        "median_ms_delta": {
+          "elapsed": 3.66095791105181,
+          "cpu": 5.9849999999999905
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "plain",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.818903514399561,
+          "cpu": 0.832779684789429,
+          "rss": 0.8408619975134687
+        },
+        "median_ms_delta": {
+          "elapsed": -10.392833035439253,
+          "cpu": -9.061
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "text",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.8946893994398458,
+          "cpu": 0.9040076696643171,
+          "rss": 0.9275945293644409
+        },
+        "median_ms_delta": {
+          "elapsed": -8.089582901448011,
+          "cpu": -7.109000000000004
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "json",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.8973155538426868,
+          "cpu": 0.9185678556975966,
+          "rss": 0.8964256701868399
+        },
+        "median_ms_delta": {
+          "elapsed": -16.31079101935029,
+          "cpu": -12.27499999999998
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "xref-combined",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 1.0147205497173608,
+          "cpu": 1.0264338612897994,
+          "rss": 1.0506505576208178
+        },
+        "median_ms_delta": {
+          "elapsed": 2.5846249191090465,
+          "cpu": 4.400999999999988
+        }
+      },
+      {
+        "project": "zelda",
+        "mode": "records",
+        "stage": "producer",
+        "batch_count": 1,
+        "median_ratios": {
+          "elapsed": 0.9610616676833847,
+          "cpu": 0.9716134009911273,
+          "rss": 1.0478971962616823
+        },
+        "median_ms_delta": {
+          "elapsed": -6.7451250506564975,
+          "cpu": -4.783000000000009
+        }
+      }
+    ],
+    "stress": [
+      {
+        "source": "/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV/work/big/big.asm",
+        "sha256": "e719fe6ee459f05e76067249d23e7cb07fbba145f44d2f2a695a71623dc5869c",
+        "runs": {
+          "v1": {
+            "samples": [
+              {
+                "rss": 104038400,
+                "wall": 0.35,
+                "cpu": 0.34
+              },
+              {
+                "rss": 104038400,
+                "wall": 0.35,
+                "cpu": 0.34
+              },
+              {
+                "rss": 104054784,
+                "wall": 0.35,
+                "cpu": 0.34
+              }
+            ],
+            "median": {
+              "rss": 104038400,
+              "wall": 0.35,
+              "cpu": 0.34
+            },
+            "binary_sha256": "09628ca1c472ca602a55b40eb124d59044c90313bd5d619836f16409e9ddc7b8",
+            "listing_bytes": 5947781
+          },
+          "v2": {
+            "samples": [
+              {
+                "rss": 132562944,
+                "wall": 0.33,
+                "cpu": 0.32
+              },
+              {
+                "rss": 133120000,
+                "wall": 0.34,
+                "cpu": 0.33
+              },
+              {
+                "rss": 133087232,
+                "wall": 0.33,
+                "cpu": 0.32
+              }
+            ],
+            "median": {
+              "rss": 133087232,
+              "wall": 0.33,
+              "cpu": 0.32
+            },
+            "binary_sha256": "09628ca1c472ca602a55b40eb124d59044c90313bd5d619836f16409e9ddc7b8",
+            "listing_bytes": 5947781
+          }
+        }
+      },
+      {
+        "source": "/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV/work/big/mac.asm",
+        "sha256": "0c74c52577e7191668746aab1f3359dd999b09624d381c94b1a9b290e7a80a69",
+        "runs": {
+          "v1": {
+            "samples": [
+              {
+                "rss": 53919744,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 53886976,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 53886976,
+                "wall": 0.1,
+                "cpu": 0.09
+              }
+            ],
+            "median": {
+              "rss": 53886976,
+              "wall": 0.1,
+              "cpu": 0.09
+            },
+            "binary_sha256": "73d9f5dc5a28b6645cb3bfbefae7d52029ae45a44a67f20cd311d1bc66873dc7",
+            "listing_bytes": 2524040
+          },
+          "v2": {
+            "samples": [
+              {
+                "rss": 65290240,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 67649536,
+                "wall": 0.1,
+                "cpu": 0.09
+              },
+              {
+                "rss": 65257472,
+                "wall": 0.1,
+                "cpu": 0.09
+              }
+            ],
+            "median": {
+              "rss": 65290240,
+              "wall": 0.1,
+              "cpu": 0.09
+            },
+            "binary_sha256": "73d9f5dc5a28b6645cb3bfbefae7d52029ae45a44a67f20cd311d1bc66873dc7",
+            "listing_bytes": 2524040
+          }
+        }
+      },
+      {
+        "source": "/private/tmp/claude-501/-Users-kenthansen-dev-github-xorcyst/0ef1b090-a72f-41b3-b907-3b7d795327cb/scratchpad/i5.zymPZV/work/dag/dag22.asm",
+        "sha256": "15e07a5010528a87efc105fe3d0c45f9aa769b50c3837e4b0c2bee6b7e5b8e70",
+        "runs": {
+          "v2": {
+            "samples": [
+              {
+                "rss": 2408448,
+                "wall": 0.0,
+                "cpu": 0.0
+              },
+              {
+                "rss": 2392064,
+                "wall": 0.0,
+                "cpu": 0.0
+              },
+              {
+                "rss": 2392064,
+                "wall": 0.0,
+                "cpu": 0.0
+              }
+            ],
+            "median": {
+              "rss": 2392064,
+              "wall": 0.0,
+              "cpu": 0.0
+            },
+            "binary_sha256": "36215def81484e475e1bae25b91c711f0b9c7a47428f0501892b5df9fd5587a7",
+            "listing_bytes": 1266
+          }
+        }
+      }
+    ]
+  }
+}

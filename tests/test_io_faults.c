@@ -101,7 +101,11 @@ static int output_fchmod(int fd, mode_t mode)
 }
 static int output_rename(const char *from, const char *to)
 {
-    return output_fault("output_rename") ? -1 : rename(from, to);
+    const char *saved = fault_output_path;
+    fault_output_path = to;
+    int fail = output_fault("output_rename");
+    fault_output_path = saved;
+    return fail ? -1 : rename(from, to);
 }
 #define malloc output_malloc
 #define mkstemp output_mkstemp

@@ -12,10 +12,12 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[1]
 
-def build(destination):
+def build(destination, provenance=False):
     sources = re.search(r'^xasm_SOURCES = (.*?)(?=\n\n)', (REPO/'Makefile.am').read_text(), re.M|re.S)[1]
     sources = [REPO/('v2/frontend.c' if word=='astproc.c' else word)
                for word in sources.replace('\\\n',' ').split() if word.endswith('.c')]
+    if provenance:
+        sources = [REPO/'tests/test_v2_source_driver.c' if p.name == 'xasm.c' else p for p in sources]
     command = [*shlex.split(os.environ.get('CC','cc')), '-I',str(REPO),'-Wall','-DXORCYST_V2_FRONTEND',
                *shlex.split(os.environ.get('TEST_V2_CFLAGS','-O2 -g -Werror')), *map(str,sources),
                str(REPO/'v2/heap.c'),str(REPO/'v2/value.c'),str(REPO/'v2/layout.c'),str(REPO/'v2/program.c'),str(REPO/'v2/object.c'),'-o',str(destination)]
@@ -29,6 +31,15 @@ class Frontend(unittest.TestCase):
         cls.addClassCleanup(directory.cleanup)
         cls.tool=Path(directory.name)/'xasm-v2'
         build(cls.tool)
+        cls.provenance_tool = Path(directory.name)/'xasm-v2-provenance'
+        build(cls.provenance_tool, provenance=True)
+        cls.source_locations = Path(directory.name)/'source-locations'
+        command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO),
+                   '-DXORCYST_V2_FRONTEND', '-Wall',
+                   *shlex.split(os.environ.get('TEST_V2_CFLAGS', '-O2 -g -Werror')),
+                   str(REPO/'tests/test_v2_source_locations.c'), '-o', str(cls.source_locations)]
+        r = subprocess.run(command, capture_output=True, text=True)
+        if r.returncode: raise AssertionError(r.stderr)
         cls.protection = Path(directory.name)/'protection'
         command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO),
                    '-DXORCYST_V2_FRONTEND', '-Wall',
@@ -60,6 +71,36 @@ class Frontend(unittest.TestCase):
             if expected is not None:self.assertEqual((self.directory/'out').read_bytes(),bytes.fromhex(expected))
         self.assertFalse((self.directory/'out.tmp').exists())
         return r
+
+    def run_source_locations(self, case):
+        r = subprocess.run([str(self.source_locations), case], capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stderr, '')
+
+    def test_plain_nodes_do_not_allocate_rich_source_spans(self):
+        self.run_source_locations('plain')
+
+    def test_parsed_source_span_survives_nested_expansion_and_original_free(self):
+        self.run_source_locations('expanded')
+
+    def test_provenance_and_frontend_cache_ids_have_independent_lifetimes(self):
+        self.run_source_locations('identities')
+
+    def test_optional_source_span_allocation_failure_keeps_allocator_usable(self):
+        self.run_source_locations('allocation')
+
+    def test_source_capture_preserves_bytes_and_macro_definition_spans(self):
+        (self.directory/'map.txt').write_text('H=1\nI=0\n')
+        source = ('.charmap "map.txt"\n.macro M p\n.db "A"+p\n.char "HI","HI"\n.endm\n'
+                  'M "B"\nM "C"\n.db S+"D"\nS .equ "X"\n')
+        self.assemble(source, '41 42 01 00 01 00 41 43 01 00 01 00 58 44')
+        r = subprocess.run([str(self.provenance_tool), '--pure-binary', 'in.asm', '-o', 'captured'],
+                           cwd=self.directory, capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.directory/'captured').read_bytes(), (self.directory/'out').read_bytes())
+        captures = [tuple(map(int, x.split())) for x in re.findall(r'CAPTURE (\d+ \d+)', r.stderr)]
+        self.assertEqual(captures, [(6,3),(6,4),(7,3),(7,4),(8,8)])
+        self.assertNotRegex(r.stderr, r'error:|AddressSanitizer|runtime error:')
 
     def test_output_protection_keeps_missing_probes_and_unicode_aliases(self):
         def compare(a, b, aliases, env=None):
@@ -186,6 +227,19 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
                 self.assemble(source,'A0 00 B9 00 82 85 20 B9 01 82 85 21 B1 20 60 '+table+
                               ' 01 02 03 04 05 06 07 08 09 0A 0B 0C '+table,
                               options=('--debug',) if debug else ())
+                plain = (self.directory/'out').read_bytes()
+                options = ['--xref=xref', '--xref-data=true', '--xref-instructions=true',
+                           '--listing=rows', '--listing-format=json']
+                if debug: options.append('--debug')
+                self.assemble(source, options=options)
+                self.assertEqual((self.directory/'out').read_bytes(), plain)
+                xref = json.loads((self.directory/'xref').read_text())
+                records = xref['instruction_records']['records']
+                self.assertEqual([records[i]['operand_value'] for i in (1,3)], [0x8200,0x8201])
+                rows = json.loads((self.directory/'rows').read_text())['records']
+                self.assertEqual([r['cpu_address_start'] for r in rows
+                                  if r['directive_or_opcode']=='RawPointerTable'],
+                                 ['0x800F','0x8200'])
 
     def test_sizeof_rechecks_label_kinds_after_undef(self):
         for operand,alias in (('L',''),('L+0',''),('A1','A1 .equ L\n'),('A1','A1 .equ L+0\n')):
@@ -682,8 +736,252 @@ RawPointerTable: .DB $00,$81,$02,$81,$04,$81,$06,$81,$08,$81,$0A,$81
         (self.directory/'blob').write_bytes(bytes([3,0,4]))
         self.assemble('.include "inc.asm"\n.incbin "blob"\n.db $\n','01 02 03 00 04 05')
 
+    def listed(self, source, expected, debug=False):
+        formats = []
+        for fmt in ('json', 'ndjson'):
+            options = ('--listing=rows', '--listing-format='+fmt, *(['--debug'] if debug else []))
+            self.assemble(source, expected, options=options)
+            text = (self.directory/'rows').read_text()
+            rows = json.loads(text)['records'] if fmt == 'json' else [json.loads(x) for x in text.splitlines()]
+            emitted = bytearray()
+            for row in rows:
+                self.assertEqual(row['version'], '2')
+                count = row['byte_count']
+                address = int(row['cpu_address_start'], 16)
+                self.assertEqual(int(row['cpu_address_end'], 16), (address + max(0, count-1)) & 65535)
+                if row['emits_bytes']:
+                    self.assertEqual(row['output_offset_start'], len(emitted))
+                    self.assertEqual(row['output_offset_end'], len(emitted)+count-1)
+                    data = bytes(count) if row['fill_byte'] == '00' else bytes.fromhex(''.join(row['bytes_hex']))
+                    self.assertEqual(len(data), count)
+                    emitted += data
+                else:
+                    self.assertIsNone(row['output_offset_start'])
+                    self.assertIsNone(row['output_offset_end'])
+                    self.assertEqual(row['bytes_hex'], [])
+            self.assertEqual(bytes(emitted), bytes.fromhex(expected))
+            formats.append(rows)
+        self.assertEqual(*formats)
+        return formats[0]
+
+    def test_listing_rows_use_final_opcodes_offsets_ram_and_fill_extents(self):
+        source = ('.org $8000\nStart: lda Target\nasl\nbne Start\n.db 1,2,3,4,5\n.dsw 3\n'
+                  '.dataseg\n.org $10\nTarget: .byte 1,2\n.dsw 2\n.codeseg\nEnd: nop\n')
+        for debug in (False, True):
+            rows = self.listed(source, 'A5 10 0A D0 FB 01 02 03 04 05 00 00 00 00 00 00 EA', debug)
+            instructions = [r for r in rows if r['addressing_mode']]
+            self.assertEqual([r['addressing_mode'] for r in instructions],
+                             ['zeropage', 'accumulator', 'relative', 'implied'])
+            self.assertEqual([r['output_offset_start'] for r in instructions], [0,2,3,16])
+            ram = [r for r in rows if r['segment']=='data']
+            self.assertEqual([(r['cpu_address_start'], r['byte_count']) for r in ram],
+                             [('0x0000',0),('0x0010',0),('0x0010',0),('0x0010',2),('0x0012',4)])
+            fills = [r for r in rows if r['fill_byte']]
+            self.assertEqual([(r['byte_count'],r['output_offset_start']) for r in fills],[(6,10)])
+
+    def test_listing_deferred_string_maps_and_layout_cascade_match_emitted_bytes(self):
+        (self.directory/'map.txt').write_text('H=1\nI=0\n')
+        cases = [('.charmap "map.txt"\n.struc Text\ns .char[2]\nn .byte\n.ends\n'
+                  'v .Text { S, 7 }\nS .equ "HI"\nEnd: nop\n', '01 00 07 EA'),
+                 ('.org $F6\nlda L\nlda M\nM: nop\nnop\nnop\nnop\nL: rts\n',
+                  'A5 FE A5 FA EA EA EA EA 60'),
+                 ('.org $FFFE\n.db 1,2,3,4,5\nAfter: nop\n', '01 02 03 04 05 EA'),
+                 ('.db ""\n.dword "AB"\n.dw Fwd\nFwd: nop\n', '41 00 00 00 42 00 00 00 0A 00 EA'),
+                 ('K .equ 1\n', '')]
+        for source, expected in cases:
+            for debug in (False, True):
+                with self.subTest(source=source, debug=debug): self.listed(source, expected, debug)
+
+    def test_listing_keeps_source_boundaries_and_non_debug_data_grouping(self):
+        source = '.db 1,2\n.db 3,4,5\nOther: .db 6\n'
+        for debug in (False,True):
+            rows = self.listed(source, '01 02 03 04 05 06', debug)
+            data = [r for r in rows if r['byte_count']]
+            self.assertEqual([r['line'] for r in data], [1,2,3] if debug else [1,1,3])
+            self.assertEqual([r['continuation_of_record'] for r in data],
+                             [False,False,False] if debug else [False,True,False])
+            fills = self.listed('.dsb 1\n.dsw 2\n', '00 00 00 00 00', debug)
+            self.assertEqual(len(fills), 1)
+            self.assertEqual(fills[0]['byte_count'], 5)
+        (self.directory/'inc.asm').write_text('.db 1,2\n')
+        (self.directory/'blob').write_bytes(bytes.fromhex('03 00 04'))
+        rows = self.listed('.include "inc.asm"\n.incbin "blob"\n', '01 02 03 00 04')
+        data = [r for r in rows if r['emits_bytes']]
+        self.assertEqual(Path(data[0]['file']).name, 'inc.asm')
+        self.assertEqual(data[-1]['directive_or_opcode'], 'INCBIN')
+
+    def test_analysis_uses_resolved_mapped_fields_assignment_generations_and_pc(self):
+        (self.directory/'map').write_text('H=1\nI=0\n')
+        source = ('.charmap "map"\n.struc Text\ns .char[2]\nn .byte\n.ends\n'
+                  'v .Text { S, 7 }\nS .equ "HI"\nAcc = K\nAcc = Acc+1\n'
+                  '.db Acc\nK .equ 5\nHere: lda $10\nlda Here+1\n.dw $\n')
+        for debug in (False, True):
+            options = ['--xref=xref', '--xref-data=true', '--xref-instructions=true',
+                       '--instruction-records-output=records', '--dependency-manifest=deps',
+                       '--listing=rows', '--listing-format=json']
+            if debug: options.append('--debug')
+            self.assemble(source, '01 00 07 06 A5 10 A5 05 08 00', options=options)
+            records = json.loads((self.directory/'records').read_text())['records']
+            self.assertEqual([(r['operand_value'], r['output_offset'], r['bytes']) for r in records],
+                             [(16, 4, [0xA5, 16]), (5, 6, [0xA5, 5])])
+            xref = json.loads((self.directory/'xref').read_text())
+            self.assertEqual(xref['instruction_records']['records'], records)
+            rows = json.loads((self.directory/'rows').read_text())['records']
+            binary = (self.directory/'out').read_bytes()
+            for row in rows:
+                if row['emits_bytes'] and row['fill_byte'] is None:
+                    start = row['output_offset_start']
+                    self.assertEqual(bytes.fromhex(''.join(row['bytes_hex'])),
+                                     binary[start:row['output_offset_end']+1])
+
+    def test_deep_analysis_expression_fails_instead_of_omitting_references(self):
+        source = ('K0 .equ Dest\n' + ''.join(f'K{i} .equ K{i-1}+1\n' for i in range(1, 101))
+                  + '.org $8000\nDest: nop\nlda K100\n')
+        self.assemble(source, 'EA AD 64 80')
+        (self.directory/'xref').write_text('previous analysis')
+        self.assemble(source, error='could not represent assembly analysis expression',
+                      options=('--xref=xref', '--xref-instructions=true'))
+        self.assertEqual((self.directory/'xref').read_text(), 'previous analysis')
+
+    def test_diagnostic_listings_have_rows_and_provisional_instruction_sizes(self):
+        cases = [
+            ('L: nop\nL: nop\nbne L\nstx $10,y\nsty $11,x\nasl\n.db \"HI\"\n',
+             [('L',0,0),('NOP',0,1),('NOP',1,1),('BNE',2,2),('STX',4,2),('STY',6,2),('ASL',8,1),('.DB',9,2)]),
+            ('.org $8000\nnop\nlda #1\nlda Missing\nL: rts\n',
+             [('.ORG', 0x8000, 0), ('NOP', 0x8000, 1), ('LDA', 0x8001, 2),
+              ('LDA', 0x8003, 3), ('L', 0x8006, 0), ('RTS', 0x8006, 1)]),
+            ('.org $8000\nnop\n.dsw 3\nlda Missing\n',
+             [('.ORG', 0x8000, 0), ('NOP', 0x8000, 1), ('.DSB', 0x8001, 6), ('LDA', 0x8007, 3)]),
+            ('L: nop\nL: nop\nlda #1\n',
+             [('L', 0, 0), ('NOP', 0, 1), ('NOP', 1, 1), ('LDA', 2, 2)]),
+            ('.org $8000\nnop\nlda #1\n.db 1,2\nbad bad bad\nL: rts\n',
+             [('.ORG', 0x8000, 0), ('NOP', 0x8000, 1), ('LDA', 0x8001, 2),
+              ('.DB', 0x8003, 2), ('L', 0x8005, 0), ('RTS', 0x8005, 1)]),
+        ]
+        for source, expected in cases:
+            for fmt in ('json', 'ndjson', 'text'):
+                for extra in ((), ('--xref=xref',)):
+                    with self.subTest(source=source, fmt=fmt, extra=extra):
+                        self.assemble(source, error='error:', options=(
+                            '--listing=rows', '--listing-format='+fmt, *extra))
+                        text = (self.directory/'rows').read_text()
+                        if fmt == 'text':
+                            self.assertNotIn('{', text)
+                            for op, address, length in expected:
+                                self.assertIn(f'{address:04X}', text)
+                        else:
+                            rows = (json.loads(text)['records'] if fmt == 'json'
+                                    else [json.loads(line) for line in text.splitlines()])
+                            self.assertEqual([(r['directive_or_opcode'], int(r['cpu_address_start'],16),
+                                               r['byte_count']) for r in rows], expected)
+                            for row in rows:
+                                self.assertFalse(row['emits_bytes'])
+                                self.assertFalse(row['bytes_hex'])
+                                self.assertIsNone(row['output_offset_start'])
+
+    def test_analysis_preserves_v1_alias_depth_boundary(self):
+        for depth in (32, 64, 65):
+            source = ('K0 .equ Dest\n'+''.join(f'K{i} .equ K{i-1}+1\n' for i in range(1,depth+1))
+                      +f'.org $8000\nDest: nop\nlda K{depth}\n')
+            with self.subTest(depth=depth):
+                if depth == 65:
+                    self.assemble(source, error='could not represent assembly analysis expression', options=('--xref=xref',))
+                else:
+                    self.assemble(source, f'EA AD {depth:02X} 80', options=('--xref=xref',))
+
+    def test_text_listing_does_not_expand_shared_alias_tree(self):
+        source = ('K0 .equ Dest\n'+''.join(f'K{i} .equ K{i-1}+K{i-1}\n' for i in range(1,23))
+                  +'Dest: nop\n.dword K22\n')
+        self.assemble(source, 'EA 00 00 00 00', options=('--listing=rows',))
+        self.assertIn('K22', (self.directory/'rows').read_text())
+
+    def test_string_substitution_is_not_an_address_reference(self):
+        for data in ('.db S', '.char S', '.db S+"A"', '.db Alias'):
+            with self.subTest(data=data):
+                source='S .equ "HI"\nAlias .equ S\n'+data+'\n'
+                self.assemble(source, '48 49 41' if '+"A"' in data else '48 49', options=('--xref=xref','--xref-data=true'))
+                xref=json.loads((self.directory/'xref').read_text())
+                self.assertEqual(xref['references'], [])
+                self.assertFalse(xref['data_directive_references'])
+
+    def test_unused_bank_constants_do_not_change_analysis_acceptance(self):
+        source='K .equ ^L\nAlias .equ K+1\nL: nop\n'
+        expected=self.assemble(source, 'EA').stderr
+        for flags in (('--xref=xref',), ('--listing=rows',), ('--xref-summary',),
+                      ('--instruction-records-output=records','--dependency-manifest=deps'), ('--analyze-index-patterns',)):
+            with self.subTest(flags=flags):
+                self.assertEqual(self.assemble(source, 'EA', options=flags).stderr, expected)
+        self.assemble(source+'.db K\n', error='bank operator is not supported', options=('--xref=xref',))
+
+    def test_unwritable_listing_directory_preserves_binary_and_sidecars(self):
+        directory=self.directory/'readonly'
+        directory.mkdir()
+        listing=directory/'rows'
+        listing.write_text('previous listing')
+        (self.directory/'xref').write_text('previous xref')
+        directory.chmod(0o500)
+        try:
+            if os.access(directory, os.W_OK):
+                self.skipTest('requires an unprivileged filesystem user')
+            self.assemble('nop\n', error='could not write output', error_code=3,
+                          options=('--listing=readonly/rows','--xref=xref'))
+            self.assertEqual(listing.read_text(),'previous listing')
+            self.assertEqual((self.directory/'xref').read_text(),'previous xref')
+            self.assertEqual(list(self.directory.glob('.xasm-*')),[])
+        finally:
+            directory.chmod(0o700)
+
+    def test_comparison_findings_publish_valid_artifacts_but_io_errors_do_not(self):
+        (self.directory/'reference').write_bytes(b'\x01')
+        (self.directory/'in.asm').write_text('.db 2\n')
+        flags=[str(self.tool),'--pure-binary','in.asm','-o','out','--listing=rows',
+               '--listing-format=json','--compare=reference']
+        r=subprocess.run(flags,cwd=self.directory,capture_output=True,text=True)
+        self.assertEqual(r.returncode,5,r.stderr)
+        self.assertEqual((self.directory/'out').read_bytes(),b'\x02')
+        before={p:(self.directory/p).read_bytes() for p in ('out','rows')}
+        (self.directory/'reference').unlink()
+        (self.directory/'in.asm').write_text('.db 3\n')
+        r=subprocess.run(flags,cwd=self.directory,capture_output=True,text=True)
+        self.assertEqual(r.returncode,3,r.stderr)
+        self.assertEqual({p:(self.directory/p).read_bytes() for p in before},before)
+        self.assertFalse((self.directory/'out.tmp').exists())
+
+    def test_char_listing_groups_match_lowered_v1_directives(self):
+        for source, lengths in (('.char "A"\n.db 1\n', [2]), ('.char "A"\n.char 1\n', [1,1])):
+            for extra in ((), ('--xref=xref',)):
+                with self.subTest(source=source, extra=extra):
+                    self.assemble(source, '41 01', options=('--listing=rows', '--listing-format=json', *extra))
+                    rows=json.loads((self.directory/'rows').read_text())['records']
+                    self.assertEqual([r['byte_count'] for r in rows], lengths)
+
+    def test_listing_failures_keep_previous_outputs_and_reject_other_modes(self):
+        source = '.byte 300\n.word 70000\n.dataseg\nR .byte 300\n.codeseg\n'
+        baseline = self.assemble(source, '2C 70 11').stderr
+        for fmt in ('json','ndjson'):
+            actual = self.assemble(source, '2C 70 11',
+                                   options=('--listing=rows','--listing-format='+fmt)).stderr
+            self.assertEqual(actual, baseline)
+        for source in ('lda Missing\n', 'bne Target\n.dsb 128\nTarget: nop\n'):
+            (self.directory/'rows').write_text('previous listing')
+            r=self.assemble(source, error='error:', options=('--listing=rows','--listing-format=json'))
+            diagnostic = json.loads((self.directory/'rows').read_text())
+            self.assertFalse(diagnostic['binary_generated'])
+            self.assertTrue(diagnostic['records'])
+            self.assertTrue(all(not r['emits_bytes'] and not r['bytes_hex']
+                                and r['output_offset_start'] is None for r in diagnostic['records']))
+            self.assertNotIn('no error',r.stderr)
+        (self.directory/'rows').write_text('previous listing')
+        self.assemble('.db 1\n', error='I5 prototype listings require',
+                      options=('--listing=rows','--listing-format=json','--listing-version=1'))
+        self.assertEqual((self.directory/'rows').read_text(),'previous listing')
+        self.assemble('.db 1\n', error='aliases', error_code=3,
+                      options=('--listing=in.asm','--listing-format=json'))
+        self.assertEqual((self.directory/'in.asm').read_text(),'.db 1\n')
+
     def test_output_aliases_and_unsupported_modes_preserve_files(self):
-        self.assemble('.db 1\n',error='does not support listing or analysis',options=('--listing=kept.lst',))
+        self.assemble('.db 1\n', '01', options=('--listing=kept.lst',))
+        self.assertIn('SOURCE CODE', (self.directory/'kept.lst').read_text())
         (self.directory/'inc.asm').write_text('.db 2\n')
         self.assemble('.include "inc.asm"\n',error='aliases',options=('-o','inc.asm'),error_code=3)
         self.assertEqual((self.directory/'inc.asm').read_text(),'.db 2\n')

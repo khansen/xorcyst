@@ -44,7 +44,7 @@ jobs:
   sanitizers:
     name: ASan and UBSan
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       CC: clang
       TEST_SYMTAB_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
@@ -77,6 +77,7 @@ jobs:
           python3 tests/test_v2_values.py
           python3 tests/test_v2_layout.py
           python3 tests/test_v2_frontend.py
+          python3 tests/test_v2_analysis.py
           python3 tests/test_v2_objects.py
       - name: Check procedure instruction-analysis lifetimes
         run: |

@@ -407,17 +407,62 @@ void astnode_print(const astnode *n, int level)
  * @param loc File location
  * @return The newly created node
  */
+#ifdef XORCYST_V2_FRONTEND
+#define AST_SOURCE_LOCATION_FLAG 0x80000
+static int capture_source_locations;
+void astnode_capture_source_locations(int enabled)
+{
+    capture_source_locations = enabled != 0;
+}
+#endif
+
+location astnode_source_location(const astnode *n)
+{
+#ifdef XORCYST_V2_FRONTEND
+    if (n->flags & AST_SOURCE_LOCATION_FLAG)
+        return *(const location *)(n + 1);
+    {
+        location loc = n->loc;
+        if (loc.source_file) loc.file = loc.source_file;
+        return loc;
+    }
+#else
+    return n->source_loc;
+#endif
+}
+
+void astnode_set_source_location(astnode *n, location loc)
+{
+#ifdef XORCYST_V2_FRONTEND
+    if (n->flags & AST_SOURCE_LOCATION_FLAG) *(location *)(n + 1) = loc;
+#else
+    n->source_loc = loc;
+#endif
+}
+
+
 astnode *astnode_create(astnode_type type, location loc)
 {
     extern const char *yy_current_filename();
     if (loc.file == NULL) {
         loc.file = yy_current_filename();
     }
-    astnode *n = (astnode *)calloc(1, sizeof(astnode));
+    size_t size = sizeof(astnode);
+#ifdef XORCYST_V2_FRONTEND
+    if (capture_source_locations) size += sizeof(location);
+#endif
+    astnode *n = (astnode *)calloc(1, size);
     if (n != NULL) {
         n->type = type;
         n->loc = loc;
-#ifndef XORCYST_V2_FRONTEND
+#ifdef XORCYST_V2_FRONTEND
+        if (capture_source_locations) {
+            location *source = (location *)(n + 1);
+            n->flags |= AST_SOURCE_LOCATION_FLAG;
+            *source = loc;
+            if (loc.source_file) source->file = loc.source_file;
+        }
+#else
         n->source_loc = loc;
         if (loc.source_file != NULL) n->source_loc.file = loc.source_file;
 #endif
@@ -856,7 +901,10 @@ astnode *astnode_clone(const astnode *n, location loc)
 #ifdef XORCYST_V2_FRONTEND
     /* Only the explicit-address declaration marker survives cloning. v1
      * deliberately drops transient binding flags such as don't-globalize. */
-    c->flags = n->flags & 0x10000;
+    c->flags |= n->flags & 0x10000;
+    c->frontend_id = n->frontend_id;
+    if (c->flags & AST_SOURCE_LOCATION_FLAG)
+        *(location *)(c + 1) = astnode_source_location(n);
 #endif
     c->analysis_origin_id = n->analysis_origin_id;
 #ifndef XORCYST_V2_FRONTEND

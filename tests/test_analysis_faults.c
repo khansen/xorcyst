@@ -16,6 +16,8 @@ static void begin_fault_phase(const char *name)
         name = "constants";
     if (selected != NULL && strcmp(selected, "xref") == 0 && strcmp(name, "address") == 0)
         name = "xref";
+    if (selected != NULL && strcmp(selected, "value") == 0 && strcmp(name, "address") == 0)
+        name = "value";
     phase = name;
     active = selected != NULL && strcmp(selected, name) == 0;
     allocations = 0;
@@ -32,21 +34,23 @@ static int allocation_fails(const char *function)
     int index;
     if (!active || (address_only && strcmp(function, "build_xref_address_index") != 0)) return 0;
     if (strcmp(phase, "constants") == 0 && strcmp(function, "symtab_list_type") != 0) return 0;
+    if (strcmp(phase, "value") == 0 && strcmp(function, "value") != 0) return 0;
     index = allocations++;
     if (fail_at < 0) fprintf(stderr, "ALLOC_SITE %s %d %s\n", phase, index, function);
     if (index != fail_at) return 0;
     fprintf(stderr, "INJECT_ALLOC %s %d %s\n", phase, index, function);
     return 1;
 }
-static void *analysis_malloc(size_t size, const char *function)
+void *analysis_malloc(size_t size, const char *function)
 {
+    if (strcmp(function, "v2_frontend_analysis_symbols") == 0) function = "symtab_list_type";
     return allocation_fails(function) ? NULL : malloc(size);
 }
-static void *analysis_calloc(size_t count, size_t size, const char *function)
+void *analysis_calloc(size_t count, size_t size, const char *function)
 {
     return allocation_fails(function) ? NULL : calloc(count, size);
 }
-static void *analysis_realloc(void *ptr, size_t size, const char *function)
+void *analysis_realloc(void *ptr, size_t size, const char *function)
 {
     return allocation_fails(function) ? NULL : realloc(ptr, size);
 }
@@ -81,6 +85,10 @@ static int xref_setvbuf(FILE *fp, char *buffer, int mode, size_t size)
 #undef plan_analysis_outputs
 #undef prepare_analysis_outputs
 #undef write_analysis_outputs
+#ifdef XORCYST_V2_FRONTEND
+#undef symtab_lookup
+#undef symtab_list_type
+#endif
 
 /* Enumeration allocations belong to shared collection too. Earlier assembler
    passes still use the real allocator because no collection phase is active. */

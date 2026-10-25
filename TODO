@@ -90,10 +90,31 @@ Compatibility planning:
   +0.562 ms link overhead and faster clean-build medians for every project.
   Retain large-project/analysis gates and investigate material costs.
   Contract section 13 records the guidance. Local review and owner approval
-  are complete; PR CI remains required.
+  are complete. I4 merged as PR #100 (63747ed), with PR and post-merge CI green.
   The 2026-10-25 tag-8 clarification is in contract section 11: an integer
   initializer contributes one element, a string its counted byte length.
   Analysis/consumer gates remain I5 work.
+  I5 has a local review follow-up on feat/v2-analysis. Listing schema 2, text listing,
+  xref, instruction records, derived analyses, manifests and debugger exports
+  now use owned metadata and the shared evaluator/layout. The parser namespace
+  is destroyed before final layout. Nesrev's isolated consumer branch migrates
+  null offsets, compact fills and accumulator modes. Product/consumer controls
+  and the required ROM gate pass. Diagnostic listings, the missed Devil World
+  renderer, alias depth, string references, unused bank constants, file staging and rollback
+  on reported failures, and text-listing overhead were corrected
+  after review. Independent local re-review cleared 63e4ea5 / Nesrev 4ca95e06d
+  with no blockers. The owner approved I5 on 2026-10-25 at fe500f6 / Nesrev
+  4ca95e06d for publication and CI; see v2/README.md for the approval record.
+  The 100-configuration resource survey records
+  small costs under the owner's bounded-effort decision (contract section 14);
+  it is not a formal no-slowdown pass. Nesrev shared tooling must be published
+  from a branch off master; never push projects-branch history. PR CI and I6
+  remain open. See design/v2/I5_REVIEW.md and I5_VALIDATION.md for the handoff.
+  Retain the inherited collector allocation limitations as open work: summary,
+  text scope/source and xref data provenance can silently omit metadata; index,
+  consumers and coverage can fail without an explanatory diagnostic. Staging
+  preserves outputs on detected failures, not ignored ones. Also retain I4's
+  unused-label warning difference through constant-alias chains.
   The owner-approved work-bound correction is in contract section 10; the
   project no-slowdown and byte-exact ROM gates are unchanged.
   Complete local independent review before publishing a branch or opening/updating

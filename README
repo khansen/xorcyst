@@ -27,11 +27,16 @@ Use `./xasm-v2 --pure-binary input.asm -o output.bin` for direct binaries, or
 `./xasm-v2 input.asm -o input.o` and `./xlnk-v2 link.s` for v2 objects.
 Neither tool is installed. Local independent review cleared I4 at cf14315
 with no blockers; the owner approved revision 0805822 on 2026-10-25 for
-publication as the single I4 PR and its CI run.
+publication as the single I4 PR and its CI run. I4 merged in PR #100
+(`63747ed`); its PR and post-merge CI passed.
 All required ROMs match. An optional leading-RAM initializer limitation is
 tracked in TODO and the validation record.
-The accepted memory/timing tradeoffs are recorded for review. Listings and
-analysis remain I5 work. See [v2/README.md](v2/README.md)
+The accepted memory/timing tradeoffs are recorded for review. The local I5
+prototype now supports the pure-binary listing and analysis
+products through final shared-layout facts and owned source metadata. Nesrev
+consumer migration is in an isolated local branch. Independent review cleared
+I5 at 63e4ea5 / Nesrev 4ca95e06d with no blockers. The owner approved the
+stage on 2026-10-25 for PR publication and CI; see [v2/README.md](v2/README.md)
 for its reviewed contracts, current stage and remaining acceptance gates.
 
 Build and test

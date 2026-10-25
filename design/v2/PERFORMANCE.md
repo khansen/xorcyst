@@ -128,6 +128,17 @@ tolerance. Large-project, analysis and bundle performance requirements remain;
 use the formal protocol below where those gates apply. Correctness, safety and
 byte-identical ROM checks are unchanged.
 
+**Subsequent I5 owner decision, 2026-10-25:** the bounded analysis survey found
+producer costs up to about 15 ms on Metroid. After a simple consumer-validation
+optimization, the first complete bundles were roughly level or faster. The
+owner chose to document small absolute costs for local review and focus further
+work on material regressions, rather than continue solely to cross the strict
+per-configuration timing ratio. Complete the inventory survey and report all
+three stages separately. This does not assert a formal no-slowdown pass or set
+a universal tolerance, and it does not approve I5. The original analysis memory
+limit, equal useful work, exact ROMs, safety and independent review still apply.
+Contract section 14 and the I5 validation record identify the scope and evidence.
+
 Run on an otherwise idle machine with stable power/thermal settings. No parallel
 builds, competing benchmarks, profiler, CI queue time or filesystem cache flush
 between partners. Warm each command twice. Pre-create matched scratch copies

@@ -666,3 +666,59 @@ and performance protocol describe the survey and its limits. This bounds
 optimization effort without assigning an unrequested universal millisecond
 allowance. Large-project and analysis/bundle requirements, exact ROMs, safety
 checks and independent review remain in force. This is not I4 approval.
+
+## 14. I5 timing effort and absolute costs
+
+**Owner decision, 2026-10-25.** After the bounded analysis survey reported
+producer costs up to about 15 ms on Metroid, with the first optimized complete
+bundles roughly level or faster, the owner chose: "Document small costs; focus
+on material regressions." Carry these measured small absolute costs into local
+review instead of prolonging optimization solely to meet the strict
+per-configuration timing ratio. Continue surveying the full inventory and
+investigate material regressions. Report producer, consumer and complete bundle
+costs separately; a faster consumer does not make a slower producer a speedup.
+
+This is a bounded-effort decision for I5's measured costs, not a universal
+millisecond allowance, a formal no-slowdown pass, or implementation approval.
+Correctness, exact ROMs, the analysis memory gate and local independent review
+remain required. The performance protocol and I5 validation record retain the
+samples, absolute deltas, artifact sizes and remaining limitations.
+
+## 15. I5 analysis corrections and publication
+
+The I5 review exposed these consequences of the existing final-facts contract.
+The owner approved these I5 corrections on 2026-10-25; they introduce no new
+source-language feature. The citable stage approval is in `v2/README.md`.
+
+| Case | v1 | v2 |
+| --- | --- | --- |
+| Numeric `.char` in a text listing | Omits the bytes, shifting later displayed addresses and `$` values | Shows actual bytes and final addresses |
+| Label row before `.undef` and redefinition | Uses the final name's address | Uses that declaration statement's final address |
+| Unused pure-binary `K .equ ^L` | Reports value 0 and includes `K = $0000` in the text symbol table | Reports `null` and omits K from the text symbol table; assembly still succeeds |
+| Detected generation/allocation/I/O failure in a later sidecar | May already have replaced binary/earlier sidecars | Stages the entire file set; preserves previous destinations on generation failure, and rolls back a failed publication rename |
+
+Literal-string `.char` grouping keeps v1's lowered `.db` grouping. String
+substitution produces no address-computation references. Analysis accepts the 32/64-level alias controls and rejects the 65-level
+control, as v1 does; an unused pure-binary bank constant remains
+unknown and does not turn a successful assembly into an error. None of these
+rules permits dropping references on a representational or resource failure.
+
+Diagnostic listings remain the existing exception: unsuccessful, with no
+emitted bytes or file offsets. Their addresses and extents are provisional;
+they are not final layout facts. A successfully generated comparison mismatch
+or audit finding retains its existing exit status and valid output artifacts.
+File staging is not a crash-atomic filesystem transaction, and stdout cannot
+be rolled back. If a filesystem failure also prevents rollback, report it and
+retain the recoverable backup instead of claiming preservation.
+
+The diagnostic-listing exception also requires successful destination planning.
+After a syntax error, a symbolic data operand combined with FCEUX NL output
+can prevent that planning; the previous listing is then preserved with
+"could not collect assembly analysis" instead of publishing a diagnostic one.
+
+The fail-closed requirement in section 6 remains the target. Inherited shared
+collector failures still need propagation: some summary, text scope/source and
+xref data-provenance allocations can silently lose metadata with exit 0.
+Index, consumer and coverage failures preserve outputs but can exit 7–9 without
+an explanatory diagnostic. File staging handles reported failures; it does not
+detect these ignored collector failures. See the I5 validation record.

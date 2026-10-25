@@ -71,6 +71,9 @@
 #define ASTNODE_H
 
 #include "loc.h"
+#ifdef XORCYST_V2_FRONTEND
+#include <stdint.h>
+#endif
 
 #define LHS(e) astnode_get_child(e, 0)
 #define RHS(e) astnode_get_child(e, 1)
@@ -354,14 +357,14 @@ struct tag_astnode {
         long param;
     };
     int flags;
-    unsigned long analysis_origin_id;
 #ifdef XORCYST_V2_FRONTEND
-    /* I3 rejects analysis outputs. Keep the mandatory diagnostic span without
-     * a second per-node rich-provenance span. The source_loc view only keeps
-     * unused v1 renderer code compilable; I5 must capture original provenance
-     * separately before enabling those renderers. */
-    union { location loc; location source_loc; };
+    /* Distinct domains: analysis provenance versus frontend value/map cache.
+     * Together these occupy the old unsigned-long slot on 64-bit hosts. */
+    uint32_t analysis_origin_id;
+    uint32_t frontend_id;
+    location loc;
 #else
+    unsigned long analysis_origin_id;
     location loc;   /* File location where node was parsed */
     location source_loc; /* Parsed span, retained when expansion changes loc. */
 #endif
@@ -377,6 +380,14 @@ typedef struct tag_astnode astnode;
  * Function prototypes.
  */
 astnode *astnode_create(astnode_type, location);
+/* Parsed source span, independent of a macro/rept use-site location. */
+location astnode_source_location(const astnode *);
+void astnode_set_source_location(astnode *, location);
+#ifdef XORCYST_V2_FRONTEND
+/* Select before parsing. Existing nodes retain their own allocation policy;
+ * plain assembly pays no extra per-node source-span allocation. */
+void astnode_capture_source_locations(int enabled);
+#endif
 void astnode_finalize(astnode *);
 void astnode_replace(astnode *, astnode *);
 void astnode_remove(astnode *);
