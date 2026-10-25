@@ -324,7 +324,7 @@ remain unchanged. This approval record adds no executable change; the PR
 retains the reviewed revision and this documentation commit.
 
 
-## I4: object and linker integration (reviewed; awaiting owner approval)
+## I4: object and linker integration (approved for publication)
 
 Build `make xasm-v2 xlnk-v2`. The source frontend now writes XOROBJ2 objects
 unless `--pure-binary` is selected. `xlnk-v2` reads those objects and the existing
@@ -482,9 +482,29 @@ Its formal plain Metroid/Zelda timing remains historical evidence. Current
 check/distcheck pass 535/540 tests, Linux sanitizers pass, all required outputs
 match. The reviewed short two-project cost survey remains historical evidence;
 this warning/RAM follow-up makes no new timing claim.
-Local independent review cleared I4 at `cf14315` with no blockers. Owner
-approval remains pending. Leading unnamed RAM initializer `$` remains an
+Local independent review cleared I4 at `cf14315` with no blockers. The owner
+approved I4 on 2026-10-25; see the record below. Leading unnamed RAM initializer `$` remains an
 optional compatibility/diagnostic follow-up in TODO and the validation record;
 it is not an approved contract exception.
 See `design/v2/I4_VALIDATION.md` and prompt `design/v2/I4_REVIEW.md` in the source checkout.
-Neither the memory decision nor the tag-8 clarification authorizes an I4 PR.
+The subsequent I4 approval below authorizes its PR and CI run.
+
+
+## I4 approval record
+
+Kent Hansen approved I4 on 2026-10-25 at
+`08058227492c538341f080cd2274871893ab6d27`, after independent local review
+reported no blockers on runtime revision
+`cf14315345a932bd8948948393c77159130bcda0`. The intervening changes record
+that review and the optional RAM-initializer follow-up; they change no runtime.
+The owner authorized publication as the single I4 PR and its CI run.
+
+The approval covers the isolated XOROBJ2 writer/reader, source object lowering,
+linker integration, tests, and documented compatibility and resource decisions.
+The optional leading unnamed RAM initializer `$` issue remains tracked for
+follow-up; approval does not make it a permanent contract exception. PR CI,
+I5 analysis/consumer migration and its performance gates, and the coordinated
+I6 cutover remain required. Installed xasm/xlnk stay v1.
+
+This approval record changes documentation only. The branch retains the
+approved revision and adds this citable approval commit before publication.

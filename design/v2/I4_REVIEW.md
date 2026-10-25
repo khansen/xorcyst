@@ -1,7 +1,9 @@
 # I4 local reviewer prompt
 
-Status: **local independent review cleared `cf14315` with no blockers; I4
-owner approval is pending.** The prompt below is retained as the review scope.
+Status: **local independent review cleared `cf14315` with no blockers; the
+owner approved `0805822` on 2026-10-25 for PR publication and CI.**
+The prompt below is retained as the review scope; the approval record is in
+[v2/README.md](../../v2/README.md#i4-approval-record).
 The optional leading-RAM initializer `$` limitation is tracked in TODO and the
 validation record; this review does not approve it as a contract exception.
 [I4_VALIDATION.md](I4_VALIDATION.md) and [i4-current.json](i4-current.json)

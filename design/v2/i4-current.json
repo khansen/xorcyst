@@ -67,7 +67,7 @@
     "xasm.h": "ed85f8df82c872f2ca9cf670ea7c1c0accf83dc8c0822368f48f4ad71ddaee2c",
     "xlnk.c": "1e043ac06be1634d58c5b38b295381a551f0b92f700656dc939968860aeb5d2f"
   },
-  "status": "Local independent review cleared cf14315 with no blockers. Documentation-only status follow-up; optional leading-RAM initializer $ limitation tracked without approving a contract exception. Owner approval and publication pending.",
+  "status": "Owner approved 0805822 on 2026-10-25 after independent review cleared runtime cf14315. Publication as the single I4 PR and CI authorized; installed tools remain v1. Optional leading-RAM initializer $ follow-up remains tracked.",
   "tools": {
     "xasm-v2": "62877fb13bf8af7a4470e5bd9622415593c9610cf2a4d5cf3ac0b6128b583ece",
     "xlnk-v2": "adadcbfe188cc0cf2654e31da076e17e00f83f6b60d5f52d1bb3e3e7f261e82d"
@@ -307,8 +307,16 @@
   "independent_review": {
     "runtime_commit": "cf14315",
     "verdict": "clear, no blockers",
-    "owner_approval": "pending",
-    "publication": "not authorized",
+    "owner_approval": "approved 2026-10-25 at 08058227492c538341f080cd2274871893ab6d27",
+    "publication": "single I4 PR and CI authorized",
     "optional_followup": "Leading unnamed RAM initializer $ compatibility and located diagnostics; see TODO and I4_VALIDATION.md."
+  },
+  "owner_approval": {
+    "owner": "Kent Hansen",
+    "date": "2026-10-25",
+    "approved_commit": "08058227492c538341f080cd2274871893ab6d27",
+    "reviewed_runtime_commit": "cf14315345a932bd8948948393c77159130bcda0",
+    "record": "v2/README.md#i4-approval-record",
+    "scope": "I4 publication and CI; later gates remain required"
   }
 }

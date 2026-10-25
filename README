@@ -26,7 +26,8 @@ The isolated prototypes can be built with `make xasm-v2 xlnk-v2`.
 Use `./xasm-v2 --pure-binary input.asm -o output.bin` for direct binaries, or
 `./xasm-v2 input.asm -o input.o` and `./xlnk-v2 link.s` for v2 objects.
 Neither tool is installed. Local independent review cleared I4 at cf14315
-with no blockers; owner approval and PR publication remain pending.
+with no blockers; the owner approved revision 0805822 on 2026-10-25 for
+publication as the single I4 PR and its CI run.
 All required ROMs match. An optional leading-RAM initializer limitation is
 tracked in TODO and the validation record.
 The accepted memory/timing tradeoffs are recorded for review. Listings and

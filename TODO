@@ -67,8 +67,9 @@ Compatibility planning:
   owner locations remain. Actual source-built objects shrink 12.8% for
   dpadhero2 and 16.6% for DPadHero3Proto; the remaining 5.1x/9.5x versus v1 is
   documented as a fixed-width implementation tradeoff, not a requirement.
-  Local independent review cleared I4 at cf14315 with no blockers; owner
-  approval and PR publication remain pending. The second review follow-up
+  Local independent review cleared I4 at cf14315 with no blockers. The owner
+  approved 0805822 on 2026-10-25 for publication as the single I4 PR and CI.
+  The approval record is in v2/README.md. The second review follow-up
   captures export dependencies before pruning labels, avoids unused PC anchors
   on unnamed RAM storage,
   reports unavailable writer locations safely, and invalidates assignment
@@ -88,8 +89,8 @@ Compatibility planning:
   for percentages. The completed 15-project/45-stage survey finds at most
   +0.562 ms link overhead and faster clean-build medians for every project.
   Retain large-project/analysis gates and investigate material costs.
-  Contract section 13 records the guidance. Local review is complete; owner
-  approval is pending.
+  Contract section 13 records the guidance. Local review and owner approval
+  are complete; PR CI remains required.
   The 2026-10-25 tag-8 clarification is in contract section 11: an integer
   initializer contributes one element, a string its counted byte length.
   Analysis/consumer gates remain I5 work.

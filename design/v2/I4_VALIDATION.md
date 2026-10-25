@@ -1,11 +1,12 @@
 # I4 local validation — independent review complete
 
-Status: local independent review cleared `cf14315` with no blockers; I4 owner
-approval is pending.
-No I4 PR has been opened or updated. The branch is based on merged I3 (`cb98568`). Installed
+Status: local independent review cleared `cf14315` with no blockers. The owner
+approved `0805822` on 2026-10-25 for PR publication and CI; see the
+[I4 approval record](../../v2/README.md#i4-approval-record). Earlier pending
+status statements below are historical. The branch is based on merged I3 (`cb98568`). Installed
 `xasm` and `xlnk` remain v1; the two v2 tools are non-installed check targets.
 The owner approved the tag-8 clarification and accepted the current measured
-memory tradeoff on 2026-10-25, not this implementation. The local reviewer
+memory tradeoff on 2026-10-25 and subsequently approved I4 as recorded above. The local reviewer
 prompt is [I4_REVIEW.md](I4_REVIEW.md). The final sections supersede earlier
 in-progress gate statements; older failures and measurements remain evidence.
 
