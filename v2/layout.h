@@ -3,6 +3,7 @@
 #ifndef XORCYST_V2_LAYOUT_H
 #define XORCYST_V2_LAYOUT_H
 #include "extent.h"
+#include <stdio.h>
 
 typedef struct v2_layout v2_layout;
 typedef enum { V2_BINARY_LAYOUT, V2_LINK_LAYOUT } v2_layout_mode;
@@ -52,6 +53,9 @@ v2_id v2_layout_origin(v2_layout *, uint32_t origin, v2_location);
 v2_id v2_layout_bank(v2_layout *, uint32_t origin, uint32_t size, v2_location);
 v2_id v2_layout_mark(v2_layout *, v2_id anchor, v2_location);
 v2_id v2_layout_raw(v2_layout *, const void *, size_t, v2_location);
+/* Attach a boundary anchor to the raw run itself, avoiding an empty mark
+ * fragment when constructing object input. Bytes and placement are unchanged. */
+v2_id v2_layout_raw_anchored(v2_layout *, v2_id anchor, const void *, size_t, v2_location);
 v2_id v2_layout_copy(v2_layout *, const char *path, v2_location);
 v2_id v2_layout_data(v2_layout *, v2_id pc, v2_id expression, unsigned width,
                       int strings, const unsigned char *map256, v2_location);
@@ -87,6 +91,19 @@ int v2_layout_ram(v2_layout *, v2_id anchor, v2_id extent, unsigned alignment,
  * otherwise; invalid in binary mode. I4 binds symbols to this owner fact. */
 v2_id v2_layout_bank_expression(v2_layout *, v2_id anchor, v2_location);
 
+/* Full analysis snapshots are enabled by default. A byte-only consumer may
+ * disable the array before run; indexed facts remain available without an
+ * additional allocation. v2_layout_facts then returns NULL and count zero. */
+int v2_layout_keep_facts(v2_layout *, int keep);
+/* Buffered output is the default. A staging-file consumer may disable it
+ * before run, then write a half-open range of fragment IDs after success.
+ * The same encoder serves both paths. No evaluation or input reads occur
+ * during writing, and the caller owns publication and handles I/O failure.
+ * With buffering disabled, bytes() returns NULL and length zero. */
+int v2_layout_keep_bytes(v2_layout *, int keep);
+int v2_layout_write_fragments(const v2_layout *, size_t first, size_t end, FILE *);
+int v2_layout_fact_at(const v2_layout *, v2_id, v2_layout_fact *);
+size_t v2_layout_fact_count(const v2_layout *);
 int v2_layout_run(v2_layout *);
 const unsigned char *v2_layout_bytes(const v2_layout *, size_t *length);
 const v2_layout_fact *v2_layout_facts(const v2_layout *, size_t *count);

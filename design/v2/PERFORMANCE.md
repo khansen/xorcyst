@@ -2,9 +2,9 @@
 
 Status: approved by the owner as part of D1 on 2026-10-23.
 This defines how to apply D0's **no slower than
-v1** requirement, not a relaxation of it. There is no v2 candidate or measured
-v2 speedup yet. Single capture-build elapsed times are feasibility evidence,
-not benchmark samples.
+v1** requirement, not a relaxation of it. Implementation-stage measurements
+are recorded separately and do not constitute a completed cutover gate.
+Single capture-build elapsed times are feasibility evidence, not benchmark samples.
 
 ## Inputs and builds
 
@@ -72,14 +72,61 @@ memory and artifact sizes for every mode. Counts of emitted instructions,
 records, references and fill extents prevent measuring reduced output instead
 of equal useful work.
 
-**Owner's memory limit, 2026-10-24:** some increase over matched v1 is acceptable,
+**Original owner memory limit, 2026-10-24:** some increase over matched v1 is acceptable,
 but an increase of 30% or more is not. Require candidate peak RSS below 1.30
 times baseline peak RSS for each required configuration; report paired samples
 and each version's maximum observed peak as well as medians. I3 applies this to
 plain Metroid and Zelda; adding objects and analysis does not waive the limit
 or the no-slowdown rule for those later configurations.
 
+**Owner reaffirmation, 2026-10-25:** apply that limit to each tool separately,
+including object assembly and standalone linking. A complete build below
+1.30 times v1 does not excuse a linker above it. Keep reporting the complete
+build peak as well; at that point, further linker memory reduction was required.
+
+**Subsequent owner acceptance, 2026-10-25:** accept the current measured I4
+memory tradeoff for now, with explicit cost accounting and independent review.
+The focused candidate-14 standalone-link measurements are dpadhero2 at
+3,391,488 versus 2,637,824 bytes (+753,664, +28.6%) and DPadHero3Proto at
+2,719,744 versus 2,080,768 bytes (+638,976, +30.7%). The latter exceeds the
+original threshold; its current measured overhead is accepted rather than
+counted as a below-threshold pass. Earlier failed samples remain evidence.
+
+Keep measuring each tool and the complete build; report absolute bytes, ratios
+and the purpose of retained storage. This is a specific acceptance of the
+current I4 cost, not a new blanket budget or permission for further growth.
+Other configurations retain the existing limit unless explicitly reviewed.
+Reviewers should look for unnecessary storage and simple, measured improvements,
+including simpler alternatives to existing machinery. Do not introduce
+disproportionate allocator/representation complexity just to shave small amounts.
+The detailed accounting is in `I4_VALIDATION.md`, with review instructions in
+`I4_REVIEW.md` in the source checkout. Neither this decision nor a smaller
+complete-build peak waives correctness, timing, leak checks or review of
+unexplained/pathological memory growth. I4 implementation approval is pending.
+
 ## Sampling
+
+**Owner guidance on bounded effort, 2026-10-25:** report absolute milliseconds
+as well as ratios before investing in optimization. The owner does not want
+extended work on single-digit-millisecond costs; slowdowns of hundreds or
+thousands of milliseconds warrant investigation. The current candidate-14
+paired median link deltas are +0.118 ms elapsed/+0.119 ms CPU for Bombsweeper
+and +0.619/+0.601 ms for DPadHero3Proto. These small measured costs may proceed
+to local review without another optimization/confirmation cycle solely to
+meet the percentage rule. Retain the ratios and samples; this is an explicit
+practical acceptance, not a claim that the commands became faster.
+
+For the remaining small object projects, first run a bounded five-pair survey
+of assembly, standalone link and complete build, with one invocation per sample
+and absolute elapsed/CPU deltas. `measure_object_projects.py --survey` labels
+this separately from a formal session and makes no confidence-interval or
+no-slowdown-pass claim. Escalate material costs to focused measurement; do not
+automatically expand every sub-millisecond difference to 30/60-pair sessions.
+Measure complete-build totals too: tiny per-command costs can accumulate.
+This guidance bounds effort, rather than inventing a universal millisecond
+tolerance. Large-project, analysis and bundle performance requirements remain;
+use the formal protocol below where those gates apply. Correctness, safety and
+byte-identical ROM checks are unchanged.
 
 Run on an otherwise idle machine with stable power/thermal settings. No parallel
 builds, competing benchmarks, profiler, CI queue time or filesystem cache flush
@@ -133,9 +180,9 @@ allowance, no averaging across workflows, and no speedup elsewhere to pay for a
 regression. The complete protocol is included in the section 8 D1 approval
 record in `XORCYST_V2_CONTRACTS.md`.
 
-Instruction counts are explanatory only. Record memory/artifact regressions
-even when time passes and review them; do not invent a numerical memory budget
-without measuring the actual projects. Also measure a candidate-rich relaxation
+Instruction counts are explanatory only. Record memory and artifact sizes
+even when time passes; apply the memory policy and its explicit current-I4
+acceptance above separately from timing. Also measure a candidate-rich relaxation
 cascade and shared aliases/scoped offsets to expose pathological growth. They
 supplement, and never replace, the required real-project gate.
 

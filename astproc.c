@@ -954,6 +954,9 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                     strcpy(folded->string, lhs->string);
                     strcat(folded->string, str);
                 }
+#ifdef XORCYST_V2_FRONTEND
+                if (expr->oper == BANK_OPERATOR) break;
+#endif
                 /* Replace expression by folded one. */
                 astnode_replace(expr, folded);
                 astnode_finalize(expr);
@@ -972,6 +975,9 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                     strcpy(folded->string, str);
                     strcat(folded->string, rhs->string);
                 }
+#ifdef XORCYST_V2_FRONTEND
+                if (expr->oper == BANK_OPERATOR) break;
+#endif
                 /* Replace expression by folded one. */
                 astnode_replace(expr, folded);
                 astnode_finalize(expr);
@@ -1036,6 +1042,9 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                     case UMINUS_OPERATOR:   folded = astnode_create_integer(expr_neg(lhs->integer), expr->loc);  break;
                     default: break;
                 }
+#ifdef XORCYST_V2_FRONTEND
+                if (expr->oper == BANK_OPERATOR) break;
+#endif
                 /* Replace expression by folded one. */
                 astnode_replace(expr, folded);
                 astnode_finalize(expr);
@@ -2279,6 +2288,15 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                 );
                 num = astnode_is_type(val, STRING_NODE) ? strlen(val->string) : 1;
             }
+#ifdef XORCYST_V2_FRONTEND
+            (void)num;
+            astnode_add_child(flat, checked_padding(
+                astnode_clone(count, val->loc),
+                astnode_create_arithmetic(MINUS_OPERATOR,
+                    astnode_clone(e->field.size, val->loc),
+                    frontend_initializer_size(astnode_get_last_sibling(flat->first_child)),
+                    val->loc), e->id, 0, flat->loc));
+#else
             if (num > count->integer) {
                 err(val->loc, "initializer for field `%s' exceeds field size", e->id);
             }
@@ -2299,6 +2317,7 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                     )
                 );
             }
+#endif
             break;
 
             case USER_DATATYPE:
@@ -2425,12 +2444,23 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                         );
                         num = astnode_is_type(val, STRING_NODE) ? strlen(val->string) : 1;
                     }
+                    (void)num;
                     astnode_add_child(flat, checked_padding(
                         astnode_clone(count, val->loc),
                         astnode_create_arithmetic(MINUS_OPERATOR,
                             astnode_clone(e->field.size, val->loc),
+#ifdef XORCYST_V2_FRONTEND
+                            frontend_initializer_size(astnode_get_last_sibling(flat->first_child)),
+#else
                             astnode_create_integer(num * datatype_elem_size(type), val->loc),
-                            val->loc), e->id, num, flat->loc));
+#endif
+                            val->loc), e->id,
+#ifdef XORCYST_V2_FRONTEND
+                            0,
+#else
+                            num,
+#endif
+                            flat->loc));
                 }
                 break;
 
@@ -2890,6 +2920,12 @@ static int valid_final_storage_count(const astnode *expr)
     return 0;
 }
 
+/* v2 serializes checked extents directly; only v1 needs storage masks. */
+#ifdef XORCYST_V2_FRONTEND
+#define LEGACY_OBJECT_STORAGE 0
+#else
+#define LEGACY_OBJECT_STORAGE (!xasm_args.pure_binary)
+#endif
 static int resolve_field_padding(astnode *node, astnode **next, int final)
 {
     int errors_before = err_count;
@@ -2934,7 +2970,7 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
         return 1;
     }
     if (astnode_is_type(padding, INTEGER_NODE) && padding->integer == 0
-        && (!xasm_args.pure_binary || astnode_is_type(count, INTEGER_NODE))) {
+        && (LEGACY_OBJECT_STORAGE || astnode_is_type(count, INTEGER_NODE))) {
         /* Binary count-only checks must survive until label addresses exist.
          * Zero padding is valid, but an object-code storage count of zero
          * encodes 256 bytes. Remove it before either output path sees it. */
@@ -2943,7 +2979,7 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
     }
     /* Convert in place, retaining this statement's identity and location
      * without allocating a replacement node. */
-    if (final && xasm_args.pure_binary
+    if (final && !LEGACY_OBJECT_STORAGE
         && (!astnode_is_type(count, INTEGER_NODE)
             || !astnode_is_type(padding, INTEGER_NODE))) {
         /* Keep the original element-count constraint until addresses exist.
@@ -3030,13 +3066,13 @@ static astnode *gate_omitted_extent(astnode *bytes, const astnode *count,
                                   astnode *part, int minimum)
 {
     astnode *mask = NULL;
-    if (!xasm_args.pure_binary && part->param == OBJECT_STORAGE_GUARD) {
+    if (LEGACY_OBJECT_STORAGE && part->param == OBJECT_STORAGE_GUARD) {
         mask = take_object_storage_guard(&bytes);
         /* An empty outer array has no inner counts to validate. */
         mask = gate_omitted_size(mask, count);
     }
     bytes = gate_omitted_size(bytes, count);
-    if (!xasm_args.pure_binary && minimum >= 0) {
+    if (LEGACY_OBJECT_STORAGE && minimum >= 0) {
         /* One mask per array is enough, including zero-size elements. */
         mask = combine_object_storage_guards(mask,
             astnode_create_arithmetic(MUL_OPERATOR,
@@ -3276,9 +3312,6 @@ static int process_equ(astnode *equ, void *arg, astnode **next)
  */
 static int process_assign(astnode *assign, void *arg, astnode **next)
 {
-#ifdef XORCYST_V2_FRONTEND
-    ++binding_epoch;
-#endif
     symtab_entry *e;
     astnode *id;
     astnode *expr;
@@ -3311,6 +3344,11 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
         astnode_finalize(e->def);
         e->def = expr;
     }
+#ifdef XORCYST_V2_FRONTEND
+    /* The RHS may have cached the previous definition (S = S+1). Invalidate
+     * captures only after publishing the new definition, before its next use. */
+    ++binding_epoch;
+#endif
     /* The definition keeps the first location; bindings need this one. */
     if (e != NULL) {
         e->assignment_loc = assign->loc;
@@ -5363,6 +5401,11 @@ void astproc_second_pass(astnode *root)
     in_dataseg = 0; /* codeseg is default */
     /* Do the walk. */
     astproc_walk(root, NULL, map);
+#ifdef XORCYST_V2_FRONTEND
+    /* Exported constant graphs can be the only references to private labels.
+     * Capture their dependencies before unused-label removal discards them. */
+    if (!err_count) frontend_export_symbols(root->loc);
+#endif
     /* Preserve labels when generating a listing, so they can be emitted. */
     if (xasm_args.listing_file == NULL
         && xasm_args.xref_file == NULL

@@ -209,6 +209,9 @@ following addresses. Section 3.5 decides each known mode disagreement.
 
 Keep `.org` pure-binary-only; do not add origin constraints to object files.
 `link{origin}`, `bank{}`, padding and `copy{file}` keep their script semantics.
+Numeric arguments must consume their complete token: the owner approved
+rejecting v1's ignored suffixes and digitless prefixes on 2026-10-25. The
+contract ledger records the examples and located-error/output-preservation rule.
 Copy includes a raw file, not an assembly fragment. Keep captured input length
 and identity for layout/publication checks. Do not add new CPU wrapping,
 strict literal/range, zero-size RAM placement, or address-space policies as
@@ -472,7 +475,8 @@ Use matched baseline/candidate builds, serial alternating repetitions, and
 report CPU time and elapsed time per configuration. Instruction counts help
 explain changes but do not replace timings. Record peak memory, artifact sizes
 and downstream validation time so costs cannot be hidden in serialization or
-shifted onto Nesrev. No claimed v2 measurements exist yet.
+shifted onto Nesrev. Stage-specific measurements and their remaining gaps are
+recorded with each implementation; they are not a completed cutover gate.
 
 At minimum measure:
 
@@ -507,6 +511,70 @@ implementation. A reproducible regression in a required large-project mode
 blocks cutover. No averaging across modes, inherited 5% tolerance, or automatic
 exception for the new architecture. Any later relaxation of this requirement
 needs an explicit owner decision.
+
+**Memory tradeoff accepted for the current I4 implementation, 2026-10-25.**
+These are mostly small NES programs. The owner accepts the measured additional
+memory for now, provided its purpose is explicit and independently reviewed.
+In the current focused standalone-link session, dpadhero2 peaks at 3,391,488
+versus 2,637,824 bytes (+753,664, +28.6%); DPadHero3Proto peaks at 2,719,744
+versus 2,080,768 bytes (+638,976, +30.7%). The latter is an accepted exception
+to the earlier below-30% rule, not a measurement below that threshold. Continue
+reporting each tool separately, including absolute bytes and ratios; complete
+build peaks must not hide a tool's cost. This accepts the current measured
+overhead, not unbounded growth or I4 implementation approval.
+
+V1 walks compact object bytecode directly. V2 retains layout records, shared
+expression values and dependency/cache state, definition/address identities,
+and source spans for located link-time errors. That supports consistent
+assembly/link evaluation and diagnostics, but does not make every current
+representation choice necessary. Instrumented dpadhero2 storage after layout
+is 1,116,430 requested bytes versus 546,440 for v1; layout and expression state
+account for 727,456 of the v2 bytes. This allocation snapshot includes spare
+capacity and is not an exact partition of peak RSS. Byte-only linking allocates
+neither a complete ROM buffer nor full listing/xref fact arrays. Detailed
+accounting and measurement qualifications are in `design/v2/I4_VALIDATION.md`
+in the source checkout.
+
+Independent I4 review found the peak occurs while translating the largest
+object, with its raw wire buffer and translation workspace still live. The
+post-layout allocation snapshot above does not measure that transient overlap.
+The reviewed fixed-width objects were larger than v1's: about 5.9x for dpadhero2 and
+11.4x for DPadHero3Proto. The validation record separates artifact sizes,
+retained allocations and the reviewer's RSS trace. The reviewer measured lower
+peak RSS with the current heap than with plain malloc, and no gain from mmap
+input. No wire-format redesign or allocator expansion follows from this alone.
+The 6–11x artifact expansion is not a language requirement, and D1 approval
+of fixed-width records was not evidence that all emitted metadata was useful.
+The follow-up writer drops unused reference/address spans and shares equivalent
+leaves, while keeping literal and diagnostic use spans. Actual project objects
+shrink 12.8% for dpadhero2 and 16.6% for DPadHero3Proto, still about 5.1x and
+9.5x v1 respectively. Retaining fixed-width tables currently buys a simple
+checked reader and native table access; it does not justify unused records.
+A variable-length wire format would also need a decoding/translation design
+to reduce peak RAM, rather than merely reduce disk size. Record this remaining
+tradeoff and actual artifact sizes without treating expansion as a requirement.
+
+Reviewers should assess whether those costs and the implementation complexity
+are justified, and seek simple, measured improvements: avoid redundant copies
+or state, size workspaces to actual use, and release construction-only storage
+earlier where safe. Do not add disproportionate allocator or encoding machinery
+merely to save a small absolute amount or bring this accepted case below 30%.
+The existing custom heap is also subject to this review. Leaks, unsafe
+lifetimes, pathological growth and unnecessary complexity remain findings.
+The acceptance leaves ROM equality, timing, later analysis configurations and
+independent review gates intact; see contract section 12 and the performance
+protocol for the recorded scope.
+
+**Bounded optimization effort, owner guidance 2026-10-25.** Interpret small-tool
+ratios alongside absolute elapsed/CPU deltas and complete-build cost. The owner
+does not want prolonged optimization of single-digit-millisecond increases;
+hundreds or thousands of milliseconds merit investigation. The current small
+linker deltas are about 0.12 ms (Bombsweeper) and 0.62 ms (DPadHero3Proto), and
+may proceed to review with those costs explicit. Use a short survey to identify
+material costs rather than repeated percentage-only tuning. Preserve the large
+project/analysis requirements and report accumulated costs across a build.
+Contract section 13 and the performance protocol record this clarification;
+it does not waive correctness or claim a strict ratio pass.
 
 Use focused stress fixtures only to protect against demonstrated pathologies:
 shared alias graphs, dependent offsets, nested deferred arrays, and many

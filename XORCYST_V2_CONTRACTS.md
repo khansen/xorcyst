@@ -454,6 +454,11 @@ decoding without making a new emulated platform a release prerequisite.
 
 Normal objects retain locations for definitions, operands and storage, even
 without rich debug output. Optional source text remains optional. The linker
+may use the owner location for a reference/address leaf instead of a redundant
+expression span; operand fixups still retain their use-site locations. Literal,
+operator and bank-expression spans remain present in the current writer.
+These location-preserving choices do not change the wire record layout or add
+an object-mode analysis consumer. The linker
 reports location unavailable honestly if an imported file lacks usable metadata;
 there is no new stripping mode. `^Symbol` uses its owning/provider unit's bank
 index, or integer -1 when absent. `copy{file}` embeds raw file bytes. Neither
@@ -543,6 +548,7 @@ These entries supplement D0 §3.5 and are included in the section 8 D1 approval.
 
 | Case | v1 behavior | D1 disposition |
 | --- | --- | --- |
+| Linker-script numeric arguments with trailing text or no digits, e.g. `origin=8000h`, `$C000x`, `1e3`, bare `$` | `strtol` accepts a prefix: respectively decimal 8000, hexadecimal C000, decimal 1 and zero. | **Owner-approved correction, 2026-10-25.** Require the complete numeric token and reject malformed arguments with a located script error, preserving existing outputs. Keep valid decimal, hexadecimal and binary spellings; script commands and placement semantics otherwise stay unchanged. The prototype README/NEWS and source/link tests record this correction. |
 | Forward data reassigned after its `sizeof` use: `Tbl: .dw S / S = "ABCD" / .byte sizeof(Tbl) / S = 7`; string-length changes and `.undef` replacements too | Both modes emit `07 00 03` for this example. Other changes can reject in binary mode or link with a stale size: `Msg: .char S / S = "HELLO" / .byte sizeof(Msg) / S = "HI"` links as `48 49 02`. | **Owner-selected guard, 2026-10-24.** Reject at the original sizeof use if the final operand kind or string length differs from the scan's contribution. This deliberately rejects some v1-accepted programs rather than publishing a stale captured size. Stable numeric kinds, same-length strings, and values already captured at the data line remain accepted. Source tests preserve the old output on rejection; I4 must apply the same guard before object publication. |
 | A string built from its containing label's own size: `Tbl: .db sizeof(Tbl)+"A"`, including nested arithmetic and captured string prefixes | Both modes emit `31 41`, with stale size 1 for a two-byte table. No reassignment or `.undef` is needed. | **Owner-selected rejection, 2026-10-24.** Report size unknown at the sizeof use and preserve previous output. The whole operand must keep its fixed numeric width; a string result rejects even when sizeof itself returns an integer. Numeric forms and strings built from unrelated label sizes remain supported. I3 source tests, NEWS and section 4.1 record this deliberate compatibility change; I4 must enforce it before object publication too. |
 | Source-time `$` after a narrowable instruction, in `.if`, `.equ`, `.define` or `=` | After `lda $10`, v1 uses provisional PC 3 even though the instruction emits two bytes. `lda Fwd / Here .equ $ / .dw Here / Fwd .equ $10` captures 3 too. | **Owner-confirmed correction, 2026-10-24.** D0 §3.4's known-final-PC rule means the first case uses 2; `.if $==2` can now select its body, and a captured value emits `02 00` rather than `03 00`. Unresolved instruction widths or forward data/string extents reject source-time PC uses with a located error. Operand-time `$` still uses its final anchor. No frozen-project occurrence was found in the review's scan; project builds remain the acceptance gate. |
@@ -613,3 +619,50 @@ counters and tests bounded examples; I3–I5 must still demonstrate no slowdown
 on every required project/configuration under `design/v2/PERFORMANCE.md`.
 A synthetic counter test is not a substitute for Metroid, Nesrev analysis,
 dpadhero2 or the other frozen project gates.
+
+## 11. D1 clarification: deferred initializer operand lengths
+
+**Owner-approved 2026-10-25.** Wire extent tag 8 counts one element for a
+numeric operand and the counted byte length for a string operand. An imported
+initializer's provider supplies its kind. Both kinds use their actual extent
+when checking field remainders; neither leaves the provisional one-element
+string padding that v1 emits. This clarifies the existing forward-string and
+provider-kind rules without adding a tag or source syntax. Explicit
+`sizeof(label)` keeps its assembler-time rules and has no wire operation.
+
+## 12. I4 memory tradeoff
+
+**Owner-approved 2026-10-25.** After reviewing where the additional storage goes,
+the owner accepted the current measured I4 memory overhead for now and requested
+that the design and reviewer prompt state the tradeoff explicitly. The focused
+standalone-link measurements include dpadhero2 at +753,664 bytes (+28.6%) and
+DPadHero3Proto at +638,976 bytes (+30.7%). The latter exceeds the earlier
+below-30% per-tool limit and is explicitly accepted; it is not a measured pass
+under that limit. This does not create a general absolute or percentage allowance
+for further growth.
+
+Continue per-tool accounting and review of purpose, capacity and lifetime.
+Reviewers should seek simple optimizations with demonstrated benefit and assess
+whether existing complexity is justified. Extra allocator/encoding complexity
+solely to shave small amounts is not a goal. Design section 6 and
+`design/v2/PERFORMANCE.md` state the policy; the source-checkout validation record
+and `design/v2/I4_REVIEW.md` carry the measurements and reviewer instructions.
+This decision does not approve I4, waive timing or byte-exact project gates,
+or authorize publication before local independent review.
+
+## 13. I4 timing effort and absolute costs
+
+**Owner guidance, 2026-10-25.** Continue preparing I4 for local review with
+bounded effort. Single-digit-millisecond slowdowns do not justify prolonged
+optimization; costs of hundreds or thousands of milliseconds warrant attention.
+Report absolute elapsed/CPU times and complete-build totals alongside ratios.
+The existing paired measurements imply +0.118 ms elapsed for Bombsweeper and
++0.619 ms for DPadHero3Proto per standalone link. Those costs may proceed to
+review without another cycle solely to satisfy the strict percentage rule.
+
+Use a short survey across the remaining object-project stages to look for
+material costs; do not present it as the full formal timing gate. The design
+and performance protocol describe the survey and its limits. This bounds
+optimization effort without assigning an unrequested universal millisecond
+allowance. Large-project and analysis/bundle requirements, exact ROMs, safety
+checks and independent review remain in force. This is not I4 approval.

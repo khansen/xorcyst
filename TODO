@@ -44,14 +44,67 @@ Compatibility planning:
   Independent local review cleared I3's runtime at 7ffb2ac and its .exitm
   coverage follow-up at dc45658 with no findings or blockers. The owner approved
   I3 on 2026-10-24 for publication as one PR and CI; see v2/README.md.
-  The owner permits a memory
-  increase below 30% over matched v1; all no-slowdown and later analysis gates still apply.
-  Object/link and analysis/consumer gates remain I4/I5 work.
+  The original below-30% memory rule applies separately to each tool. On
+  2026-10-25 the owner accepted the current measured I4 overhead for now,
+  including the DPadHero3Proto exception; contract section 12 records the scope.
+  Keep per-tool reporting and the large-project/analysis requirements, with the
+  subsequent bounded-effort clarification below for small command costs.
+  I3 merged as PR #99 (cb98568). I4 now implements the XOROBJ2 codec,
+  source object lowering and the isolated xlnk-v2 driver. All 15 frozen ROMs
+  reproduce exactly, including dpadhero2. The reviewed standalone linker was
+  at 1.286x v1; DPadHero3Proto was at 1.307x (+638,976 bytes), the accepted
+  exception. Small-link timing costs are reported in absolute milliseconds below. The measured
+  memory breakdown is in design/v2/I4_VALIDATION.md; design section 6 and
+  design/v2/I4_REVIEW.md make the tradeoff and review expectations explicit.
+  Review costs and existing complexity; seek simple, measured savings without
+  adding disproportionate machinery solely to save small amounts.
+  The I4 review follow-up fixes empty layout-error messages, preserves symbol
+  names in binding errors, tests endian conversion and mapped initializer
+  padding, and replaces the bank-reference linear search with binary search.
+  The owner chose strict script-number parsing on 2026-10-25; its compatibility
+  correction is in the contract ledger and NEWS. Equivalent reference/address
+  leaves now share records without redundant spans; literal/operator/fixup and
+  owner locations remain. Actual source-built objects shrink 12.8% for
+  dpadhero2 and 16.6% for DPadHero3Proto; the remaining 5.1x/9.5x versus v1 is
+  documented as a fixed-width implementation tradeoff, not a requirement.
+  Local independent review cleared I4 at cf14315 with no blockers; owner
+  approval and PR publication remain pending. The second review follow-up
+  captures export dependencies before pruning labels, avoids unused PC anchors
+  on unnamed RAM storage,
+  reports unavailable writer locations safely, and invalidates assignment
+  captures after publishing the replacement definition. New tests fail 33
+  assertions on 42ff0c0. The next follow-up restores W0201/Werror by separating
+  export capture from constant source-use counts. It preserves v1's no-ram{}
+  behavior (check sizes, skip placement, fail actual unresolved address uses)
+  and discards unnamed leading RAM storage even for PC-dependent counts.
+  No new stricter RAM policy is introduced. Its controls fail 23 assertions
+  on 02264e0. Current check/distcheck pass 535/540 tests; Linux sanitizers
+  pass. All 15 ROMs/stderr and plain Metroid/Zelda outputs still match. A short
+  two-project survey reports sub-millisecond paired link-time differences;
+  per-tool memory and all artifact sizes are recorded in I4_VALIDATION.md.
+  The reviewed candidate-14 plain timing session remains historical evidence.
+  On 2026-10-25 the owner bounded timing effort: the measured small-link deltas
+  (+0.12/+0.62 ms) can proceed to review; do not prolong optimization solely
+  for percentages. The completed 15-project/45-stage survey finds at most
+  +0.562 ms link overhead and faster clean-build medians for every project.
+  Retain large-project/analysis gates and investigate material costs.
+  Contract section 13 records the guidance. Local review is complete; owner
+  approval is pending.
+  The 2026-10-25 tag-8 clarification is in contract section 11: an integer
+  initializer contributes one element, a string its counted byte length.
+  Analysis/consumer gates remain I5 work.
   The owner-approved work-bound correction is in contract section 10; the
   project no-slowdown and byte-exact ROM gates are unchanged.
   Complete local independent review before publishing a branch or opening/updating
   a PR; keep one PR at a time.
   Keep optional v1 repairs separate. No current formats change in this plan.
+- Optional I4 follow-up: leading unnamed RAM data containing $ still fails
+  object writing with an unlocated internal-looking anchor error, unlike v1
+  (e.g. .dataseg / x: .db $ / v .byte / .codeseg / lda v). Data after a
+  surviving RAM label works. Preserve checks for other initializer symbols.
+  Review cf14315 treats this as non-blocking; compatibility handling or a
+  documented limitation with a located diagnostic remains to be settled.
+  This note records the limitation, not an approved contract exception.
 - Optional I3 follow-ups: very long shared-label sizeof runs repeatedly scan
   their leading labels (cubic work in synthetic cases); collect those labels
   once per scan if this becomes a measured project cost. The reviewed 800/1600

@@ -67,7 +67,7 @@ class V2Values(unittest.TestCase):
         # The wrapper includes the real module and substitutes only allocation
         # functions. The production source contains no fault-injection hooks.
         result = subprocess.run([
-            *compiler, str(REPO / 'tests/test_v2_alloc.c'),
+            *compiler, str(REPO / 'v2/heap.c'), str(REPO / 'tests/test_v2_alloc.c'),
             str(REPO / 'tests/test_v2_values.c'), '-o', str(cls.executable),
         ], capture_output=True, text=True)
         if result.returncode:
@@ -98,6 +98,9 @@ class V2Values(unittest.TestCase):
         for (mode, op, a, b), actual in zip(cases, output):
             with self.subTest(mode=mode, op=op, a=a, b=b):
                 self.assertEqual(actual, expected(op, a, b))
+
+    def test_packed_and_large_source_locations_survive_index_release(self):
+        self.run_case("locations")
 
     def test_unit_owns_names_locations_and_counted_bytes(self):
         self.run_case('ownership')

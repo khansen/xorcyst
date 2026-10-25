@@ -10,6 +10,8 @@ static v2_layout *l;
 static v2_location loc;
 static int expect_no_spans;
 extern size_t test_v2_span_nodes(v2_unit *);
+void test_layout_write_failure(size_t);
+size_t test_layout_write_calls(void);
 static v2_id num(int32_t n) { return v2_integer(u, n, loc); }
 static v2_id anchor(void) { return v2_anchor(u, loc); }
 static v2_id address(v2_id a) { return v2_address(u, a, loc); }
@@ -61,6 +63,147 @@ static void finish(void)
         printf("\n");
     }
     v2_layout_destroy(l); v2_unit_destroy(u);
+}
+static void compact_facts(void)
+{
+    v2_layout *pair[2];
+    v2_unit *units[2];
+    size_t counts[2], lengths[2], i;
+    const unsigned char *bytes[2];
+    const v2_layout_fact *facts;
+    v2_layout_fact a, b;
+    unsigned mode;
+    for (mode = 0; mode < 2; mode++) {
+        v2_id start, end;
+        unsigned char raw[] = {1,2,3};
+        begin(1); pair[mode] = l; units[mode] = u;
+        assert(v2_layout_keep_facts(l, !mode));
+        assert(!v2_layout_fact_at(l, 0, &a));
+        start = anchor(); end = anchor();
+        v2_layout_bank(l, 0x8000, 32, loc); mark(start);
+        v2_layout_raw(l, raw, sizeof(raw), loc);
+        ins(0xad, address(end));
+        data(num(300), 1); /* warning and full projected operand survive */
+        data(v2_string(u, "AB", 2, loc), 2);
+        mark(end); nop(); ins(0xd0, address(start));
+        /* Bank-end padding advances output without advancing the CPU PC.
+         * Origins restart the affine address run while retaining that offset. */
+        v2_id second = v2_layout_bank(l, 0xc000, 16, loc);
+        assert(second != V2_NONE);
+        v2_layout_raw(l, "Z", 1, loc);
+        v2_id reset = v2_layout_origin(l, 0xd000, loc);
+        data(num(0x1234), 2);
+        assert(v2_layout_run(l));
+        assert(v2_layout_fact_at(l, second - 1, &a));
+        assert(a.address == 0x800e && a.output_offset == 14 && a.length == 18 && a.bank == 0);
+        assert(v2_layout_fact_at(l, second, &a));
+        assert(a.address == 0xc000 && a.output_offset == 32 && !a.length && a.bank == 1);
+        assert(v2_layout_fact_at(l, reset, &a));
+        assert(a.address == 0xd000 && a.output_offset == 33 && !a.length && a.bank == 1);
+        assert(v2_layout_fact_at(l, reset + 1, &a));
+        assert(a.address == 0xd000 && a.output_offset == 33 && a.length == 2 && a.operand == 0x1234);
+        assert(v2_layout_fact_at(l, reset + 2, &a));
+        assert(a.address == 0xd002 && a.output_offset == 35 && a.length == 13 && a.bank == 1);
+        bytes[mode] = v2_layout_bytes(l, &lengths[mode]);
+        counts[mode] = v2_layout_fact_count(l);
+        assert(!v2_layout_fact_at(l, (v2_id)counts[mode], &a));
+        assert(!v2_layout_fact_at(l, 0, NULL));
+    }
+    assert(counts[0] == counts[1] && lengths[0] == lengths[1]);
+    assert(!memcmp(bytes[0], bytes[1], lengths[0]));
+    facts = v2_layout_facts(pair[0], &i); assert(facts && i == counts[0]);
+    assert(!v2_layout_facts(pair[1], &i) && !i);
+    for (i = 0; i < counts[0]; i++) {
+        assert(v2_layout_fact_at(pair[0], (v2_id)i, &a));
+        assert(v2_layout_fact_at(pair[1], (v2_id)i, &b));
+        assert(a.kind == b.kind && a.address == b.address && a.output_offset == b.output_offset &&
+               a.length == b.length && a.bank == b.bank && a.operand == b.operand &&
+               a.opcode == b.opcode && a.has_operand == b.has_operand && a.warning == b.warning);
+        assert(a.location.file == b.location.file && a.location.line == b.location.line &&
+               a.location.column == b.location.column && a.location.end_line == b.location.end_line &&
+               a.location.end_column == b.location.end_column);
+    }
+    for (mode = 0; mode < 2; mode++) { v2_layout_destroy(pair[mode]); v2_unit_destroy(units[mode]); }
+    puts("compact facts: OK");
+}
+static void streamed_bytes(void)
+{
+    unsigned mode;
+    unsigned char reference[32768], actual[32768], text[2053], map[256];
+    size_t i;
+    memset(text, 'A', sizeof(text));
+    for (i = 0; i < sizeof(map); ++i) map[i] = (unsigned char)i;
+    map['A'] = 9;
+    for (mode = 0; mode < 4; ++mode) {
+        FILE *stream = tmpfile();
+        size_t count, length;
+        const unsigned char *bytes;
+        v2_id split, target;
+        v2_layout_fact fact;
+        assert(stream);
+        begin(1);
+        assert(v2_layout_keep_facts(l, !(mode & 1)));
+        assert(v2_layout_keep_bytes(l, !(mode & 2)));
+        assert(!v2_layout_write_fragments(l, 0, 0, stream));
+        v2_layout_bank(l, 0x8000, sizeof(reference), loc);
+        v2_layout_raw(l, "ABC", 3, loc);
+        assert(v2_layout_data(l, V2_NONE, v2_string(u, text, sizeof(text), loc), 2, 1, NULL, loc) != V2_NONE);
+        assert(v2_layout_data(l, V2_NONE, v2_string(u, text, sizeof(text), loc), 1, 1, map, loc) != V2_NONE);
+        v2_layout_data(l, V2_NONE, v2_string(u, "", 0, loc), 4, 1, NULL, loc);
+        split = v2_layout_mark(l, anchor(), loc);
+        target = anchor();
+        ins(0xad, address(target));
+        data(num(-1), 4);
+        v2_layout_storage(l, V2_NONE, v2_extent_literal(u, 23, loc), loc);
+        mark(target); ins(0xd0, address(target));
+        assert(v2_layout_run(l));
+        count = v2_layout_fact_count(l);
+        bytes = v2_layout_bytes(l, &length);
+        if (mode & 2) assert(!bytes && !length);
+        else {
+            assert(bytes && length == sizeof(reference));
+            if (!mode) memcpy(reference, bytes, length);
+            else assert(!memcmp(reference, bytes, length));
+        }
+        assert(v2_layout_fact_at(l, split, &fact) && fact.output_offset == 6162);
+        /* The writer consumes the final snapshot, never the edited graph. */
+        assert(v2_place(u, target, 1, 1));
+        assert(!v2_layout_write_fragments(l, count, count + 1, stream));
+        assert(!v2_layout_write_fragments(l, split, split - 1, stream));
+        assert(!v2_layout_write_fragments(l, 0, count, NULL));
+        assert(v2_layout_write_fragments(l, 0, split, stream));
+        assert(ftell(stream) == 6162);
+        assert(v2_layout_write_fragments(l, split, count, stream));
+        assert(ftell(stream) == (long)sizeof(reference));
+        rewind(stream);
+        assert(fread(actual, 1, sizeof(actual), stream) == sizeof(actual));
+        assert(!memcmp(actual, reference, sizeof(actual)));
+        assert(fgetc(stream) == EOF && !ferror(stream));
+        assert(!fclose(stream));
+        /* Exercise short writes in both a partial final buffer and a whole
+         * bank, then retry from the same immutable snapshot. */
+        for (i = 0; i < 2; i++) {
+            size_t end = i ? count : split, writes, at;
+            stream = tmpfile(); assert(stream);
+            test_layout_write_failure(0);
+            assert(v2_layout_write_fragments(l, 0, end, stream));
+            writes = test_layout_write_calls(); assert(writes);
+            assert(!fclose(stream));
+            for (at = 1; at <= writes; at++) {
+                stream = tmpfile(); assert(stream);
+                test_layout_write_failure(at);
+                assert(!v2_layout_write_fragments(l, 0, end, stream));
+                assert(!fclose(stream));
+            }
+            test_layout_write_failure(0);
+        }
+        v2_layout_destroy(l); v2_unit_destroy(u);
+    }
+    assert(!memcmp(reference, "ABC", 3));
+    for (i = 3; i < 4109; i += 2) assert(reference[i] == 65 && reference[i + 1] == 0);
+    for (i = 4109; i < 6162; ++i) assert(reference[i] == 9);
+    assert(reference[6162] == 0xad && reference[6192] == 0xd0 && reference[6193] == 0xfe);
+    puts("streamed bytes: OK");
 }
 static void controls(int which)
 {
@@ -567,6 +710,8 @@ int main(int argc, char **argv)
         test_layout_cache(); assert(!test_v2_live_allocations()); return 0;
     }
     if (!strcmp(argv[1], "allocations")) { assert(argc == 5); allocation_copy = argv[4]; allocations(); return 0; }
+    if (!strcmp(argv[1], "compact-facts")) { compact_facts(); assert(!test_v2_live_allocations()); return 0; }
+    if (!strcmp(argv[1], "streamed-bytes")) { streamed_bytes(); assert(!test_v2_live_allocations()); return 0; }
     begin(atoi(argv[2])); which = argc > 3 ? atoi(argv[3]) : 0;
     if (!strcmp(argv[1], "rooted-spans")) { rooted_spans(); return 0; }
     if (!strcmp(argv[1], "controls")) controls(which);

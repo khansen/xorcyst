@@ -22,9 +22,15 @@ The approved D1 contract and approval record are in
 [object wire layout](design/v2/OBJECT_WIRE_DRAFT.md). The contract gate is
 complete; installed tools stay v1 until the coordinated cutover.
 
-The isolated source prototype can be built with `make xasm-v2` and run as
-`./xasm-v2 --pure-binary input.asm -o output.bin`. It is not installed and does
-not yet produce objects, listings or analysis. See [v2/README.md](v2/README.md)
+The isolated prototypes can be built with `make xasm-v2 xlnk-v2`.
+Use `./xasm-v2 --pure-binary input.asm -o output.bin` for direct binaries, or
+`./xasm-v2 input.asm -o input.o` and `./xlnk-v2 link.s` for v2 objects.
+Neither tool is installed. Local independent review cleared I4 at cf14315
+with no blockers; owner approval and PR publication remain pending.
+All required ROMs match. An optional leading-RAM initializer limitation is
+tracked in TODO and the validation record.
+The accepted memory/timing tradeoffs are recorded for review. Listings and
+analysis remain I5 work. See [v2/README.md](v2/README.md)
 for its reviewed contracts, current stage and remaining acceptance gates.
 
 Build and test

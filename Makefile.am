@@ -21,10 +21,10 @@ xasm_SOURCES = \
   xasm.c xasm.h version.h \
   my_getopt.c my_getopt.h getopt.h
 
-# Isolated I3 prototype: build explicitly or during check; never install it.
-check_PROGRAMS = xasm-v2
+# Isolated I3/I4 prototypes: build explicitly or during check; never install them.
+check_PROGRAMS = xasm-v2 xlnk-v2
 xasm_v2_CPPFLAGS = $(AM_CPPFLAGS) -DXORCYST_V2_FRONTEND
-xasm_v2_LDADD = $(LDADD) $(DARWIN_LIBS)
+xasm_v2_LDADD = $(LDADD)
 xasm_v2_SOURCES = \
   astnode.c astnode.h \
   v2/frontend.c v2/frontend.h astproc.h expr_int.h \
@@ -39,7 +39,13 @@ xasm_v2_SOURCES = \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
   xasm.c xasm.h version.h \
   my_getopt.c my_getopt.h getopt.h \
-  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h
+  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h v2/graph.h v2/heap.c v2/heap.h v2/object.c v2/object.h v2/program.c v2/program.h v2/path.h
+
+xlnk_v2_LDADD = $(LDADD)
+xlnk_v2_SOURCES = v2/linker.c v2/link.c v2/link.h v2/object.c v2/object.h v2/path.h \
+  v2/value.c v2/value.h v2/graph.h v2/heap.c v2/heap.h v2/extent.h v2/layout.c v2/layout.h \
+  script.c script.h opcode.c opcode.h output_file.c output_file.h \
+  my_getopt.c my_getopt.h getopt.h version.h
 
 xlnk_SOURCES = \
   xlnk.c version.h expr_int.h \
@@ -55,6 +61,7 @@ dist_man1_MANS = man1/xasm.1 man1/xlnk.1
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
 EXTRA_DIST = parser.y scanner.l parser.h \
+  design/v2/object-wire-example.hex \
   v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h v2/README.md \
   man1/xasm.h2m man1/xlnk.h2m \
   tests/coverage_directives_control.asm \
@@ -101,7 +108,8 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_symtab_alloc.c \
   tests/test_unit_alloc.c \
   tests/test_v2_alloc.c tests/test_v2_values.c tests/test_v2_values.py \
-  tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c tests/test_v2_frontend.py tests/perf_v2_frontend.py tests/v2_sizeof_cases.json \
+  tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c tests/test_v2_objects.py tests/test_v2_link_io.c tests/test_v2_object_codec.c tests/test_v2_object_failures.c \
+  tests/test_v2_object_alloc.c tests/test_v2_program_alloc.c tests/test_v2_link_alloc.c tests/test_v2_heap.c tests/test_v2_heap_alloc.c tests/test_v2_frontend.py tests/test_v2_dependencies.c tests/perf_v2_frontend.py tests/v2_sizeof_cases.json \
   tests/test_xlnk_io_faults.c \
   tests/tool_test_support.py \
   tests/verify_fceux_projects.py \

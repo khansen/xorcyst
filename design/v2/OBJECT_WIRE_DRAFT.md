@@ -127,7 +127,7 @@ count diagnostics. `d` is zero for all operators.
 | 4 | repeated extent | a = count extent, b = element extent; evaluate a first; zero returns zero without evaluating b; otherwise checked multiplication |
 | 5 | field remainder | a = declared extent, b = initialized extent; both evaluated, require a >= b, checked subtraction |
 | 6 | bounded extent | a = extent, b,c = minimum/maximum bytes; require b <= value <= c |
-| 8 | string length | a = expression; counted byte length for a deferred data/initializer extent, not a deferred explicit label sizeof |
+| 8 | data operand length | a = expression; one element for an integer, counted byte length for a string; used for deferred data/initializer extents, never a deferred explicit label sizeof |
 
 Intermediate extent counters are checked unsigned 64-bit; overflow is an error.
 A conversion into a 32-bit expression is explicit (expression tag 6), not an
@@ -291,3 +291,8 @@ The example checks neither performance nor every production-loader invariant.
 This layout and its fixture are included in the D1 approval recorded in
 section 8 of the semantic contract. Implementation follows D0's staged gates;
 installed tools stay v1 until cutover.
+
+Owner-approved clarification (2026-10-25): tag 8 counts integer operands as one
+element as well as counting string bytes. Imported initializer kinds come from
+the provider; both kinds must fill the declared field without stale padding.
+No tag or source syntax changes, and the 244-byte example is unchanged.

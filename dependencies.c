@@ -13,6 +13,9 @@
 #include <mach-o/dyld.h>
 #include <CoreFoundation/CoreFoundation.h>
 #endif
+#ifdef XORCYST_V2_FRONTEND
+#include "v2/path.h"
+#endif
 
 typedef struct dependency {
     char *path;
@@ -141,6 +144,12 @@ static char *resolved_output_path(const char *path, unsigned links)
 
 static int same_future_name(const char *parent, const char *a, const char *b)
 {
+#ifdef XORCYST_V2_FRONTEND
+    const char *error;
+    int same = v2_same_future_name(parent, a, b, &error);
+    if (error) failure(error, parent);
+    return same;
+#else
     if (strcmp(a, b) == 0) return 1;
 #ifdef __APPLE__
     /* Darwin filesystems expose case sensitivity; CoreFoundation supplies
@@ -157,6 +166,7 @@ static int same_future_name(const char *parent, const char *a, const char *b)
     }
     /* An indeterminate result must still protect potential case aliases. */
     if (sensitive <= 0) flags |= kCFCompareCaseInsensitive;
+
     left = CFStringCreateWithCString(NULL, a, kCFStringEncodingUTF8);
     right = CFStringCreateWithCString(NULL, b, kCFStringEncodingUTF8);
     same = left == NULL || right == NULL || CFStringCompare(left, right, flags) == kCFCompareEqualTo;
@@ -168,6 +178,7 @@ static int same_future_name(const char *parent, const char *a, const char *b)
     (void)parent;
     return 0;
 #endif
+#endif
 }
 
 static int same_file(const char *a, const char *b)
@@ -176,8 +187,23 @@ static int same_file(const char *a, const char *b)
     char *left, *right, *a_slash, *b_slash;
     int same = 0;
     if (strcmp(a, b) == 0) return 1;
+#ifdef XORCYST_V2_FRONTEND
+    {
+        int a_exists = stat(a, &sa) == 0;
+        int a_missing = !a_exists && (errno == ENOENT || errno == ENOTDIR);
+        int b_exists = stat(b, &sb) == 0;
+        int b_missing = !b_exists && (errno == ENOENT || errno == ENOTDIR);
+        if (a_exists && b_exists)
+            return sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino;
+        /* An existing file cannot alias a missing lookup. Keep the full
+         * future-name comparison when both are missing (including missing
+         * include probes), and fail closed for other filesystem errors. */
+        if ((a_exists && b_missing) || (b_exists && a_missing)) return 0;
+    }
+#else
     if (stat(a, &sa) == 0 && stat(b, &sb) == 0)
         return sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino;
+#endif
     left = resolved_output_path(a, 0);
     right = resolved_output_path(b, 0);
     if (left != NULL && right != NULL) {

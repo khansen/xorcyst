@@ -1,6 +1,8 @@
 /* Allocation injection exists only in this test translation unit. */
 #include <assert.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
 
 static size_t calls, fail_at, live;
 void test_layout_allocation_failure(size_t at) { calls = 0; fail_at = at; }
@@ -32,9 +34,18 @@ static void checked_free(void *p)
     if (p) { assert(live); --live; }
     free(p);
 }
+static size_t write_calls, write_failure;
+void test_layout_write_failure(size_t at) { write_calls = 0; write_failure = at; }
+size_t test_layout_write_calls(void) { return write_calls; }
+static size_t checked_fwrite(const void *p, size_t size, size_t count, FILE *stream)
+{
+    if (++write_calls == write_failure) { errno = EIO; return 0; }
+    return fwrite(p, size, count, stream);
+}
 
 #define malloc checked_malloc
 #define calloc checked_calloc
 #define realloc checked_realloc
 #define free checked_free
+#define fwrite checked_fwrite
 #include "../v2/layout.c"
