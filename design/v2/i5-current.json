@@ -130,7 +130,7 @@
     "XORCYST_V2_CONTRACTS.md": "69f16c6ad817964bc2a3f4cd0a3f5bd2e5bdb019d9560f29fe1e95c781a98280",
     "XORCYST_V2_DESIGN.md": "94ce27e85462a56afefe0e995211d5eb68dfd41d52344f8364c0ae1aecdcd784",
     "design/v2/I5_REVIEW.md": "a7e6b0316c2e37088b38179baa4e1279372fa7b242b10d60ace954e6b0af6a8e",
-    "design/v2/I5_VALIDATION.md": "068e0fd8f31355908f56cbbd1fb69abf5956cf6ff0ed54eec45fa453a7910e3c",
+    "design/v2/I5_VALIDATION.md": "b794605b8f11d528568a48330d1d7a5f71c8ffeb957b862f071f0189f6b4136e",
     "design/v2/I5_WORK.md": "ff90b7b8169b99a2057e408cd8d64fa9f23a6de3dfb32d10bb0e5257062289c9",
     "design/v2/PERFORMANCE.md": "04421d0dd4bb1e6ee450df2c51c7df2790b2428e786754558d2353952465b8bc",
     "design/v2/i5-survey.json": "f392f3ae24cb16fe66f24d34d7abfe5808c1c0770de0944ba9e7a4b71aba5d93",
@@ -138,7 +138,7 @@
     "v2/README.md": "074171ea50f3b0c12a08aaddd9f3d5bba75f6392bb9d7cb01404a0c09eec1fb3"
   },
   "build_files": {
-    ".github/workflows/ci.yml": "7594be5325a2e1f967a0685ebf91cc72c7a0f9c3f64422cd7f05ba2d49b8e874",
+    ".github/workflows/ci.yml": "dcdcea5fbe0f466bf725362b8d059ea051971c0d2dee493ba466c599fd6e9318",
     "Makefile.am": "356b2245cfcc198a3992c031c0c879157f11c070695b075b9638ae3a318b5b66",
     "Makefile.in": "82315df689d9f990a22da3d80aee2cbb2fb7edf59d6a1b478c62fde1540a5156",
     "config.h": "965c0dcb57753acf88e3625d0205c2c85c6f03a9612d9da610711a4a12d7cc7c"
@@ -368,5 +368,11 @@
       "tests/pointer_table_body_test.py": "47acd804ae70d290d7acad68830fb62334f10696db03293c4f6917a4a3dd8961"
     },
     "scope": "Shared tooling only, based on public master. Shared implementation/tests byte-identical to reviewed local files. Project helpers/tests and projects-branch history stay local. Public migration prose omits private-project details. CI pin updated to released XORcyst 1.9.12 for listing-v2 support."
+  },
+  "pr_ci_followup": {
+    "run": "https://github.com/khansen/xorcyst/actions/runs/40238141666",
+    "result": "Regression jobs passed. Sanitizer job reached the 15-minute limit during objects after the 117-test analysis suite passed, without sanitizer reports.",
+    "change": "Raise only the sanitizer job timeout to 30 minutes; no runtime or test changes.",
+    "gate": "Final-head CI rerun required before merge."
   }
 }

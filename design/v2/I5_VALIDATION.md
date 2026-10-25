@@ -10,6 +10,12 @@ only. Runtime, tests and tools are unchanged, so no new test run is claimed.
 `i5-current.json` identifies the files, tools and evidence. Installed tools,
 original project trees and frozen inputs remain unchanged.
 
+The first PR sanitizer job reached its 15-minute job limit after passing the
+value, layout, frontend and 117-test analysis suites; it was canceled during
+the object suite without a sanitizer report. The job limit is now 30 minutes
+to accommodate the complete serial suite. No tests or runtime were changed;
+the final-head CI rerun remains required before merge.
+
 ## Independent follow-up review
 
 The reviewer independently confirmed all 52 product configurations, all 15 ROMs

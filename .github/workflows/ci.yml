@@ -44,7 +44,7 @@ jobs:
   sanitizers:
     name: ASan and UBSan
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       CC: clang
       TEST_SYMTAB_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
