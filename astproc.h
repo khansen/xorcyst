@@ -78,9 +78,6 @@ extern int warn_count;
 /* Function prototypes */
 void astproc_first_pass(astnode *);
 void astproc_second_pass(astnode *);
-void astproc_third_pass(astnode *);
-void astproc_fourth_pass(astnode *);
-void astproc_fifth_pass(astnode *, FILE *);
 int astproc_truncate_data_value(datatype, int, int *);
 void astproc_set_data_analysis_hook(astproc_data_analysis_hook);
 void astproc_set_instruction_analysis_hook(astproc_data_analysis_hook);

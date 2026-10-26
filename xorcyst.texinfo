@@ -38,7 +38,7 @@
 @c %**end of header
 
 @copying
-This is the manual for The XORcyst version 1.9.12.
+This is the manual for The XORcyst version 2.0.0.
 
 Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @end copying
@@ -79,13 +79,13 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
-@heading Development prototype (not an installed release)
+@heading Version 2.0.0 (unreleased candidate)
 
-An explicit @code{make xasm-v2} builds the isolated, non-installed v2 direct-binary prototype. It supports plain @code{--pure-binary} output; objects, listings and analysis remain later implementation stages. The installed @code{xasm} and @code{xlnk} continue to use v1. The prototype applies the approved v2 contracts: forward string data and use-site character maps, acyclic late storage spans, fixed-point instruction narrowing, and kind checks before integer identities. It rejects explicit-address @code{.label} declarations, @code{$} in type bodies, and expansion-time @code{$} when preceding layout is unresolved. Its assembler-time @code{sizeof(label)} checks local forward kinds and rejects imported or still-deferred string extents. The source checkout's @file{v2/README.md} describes validation and the remaining review, project and consumer gates.
+The normal @code{xasm} and @code{xlnk} share expression evaluation, layout and encoding. Rebuild all object files from source: only XOROBJ2 objects are accepted. The prototype targets and the @option{--listing-version} selector have been removed. Structured listings use schema 2; listings and analysis require @option{--pure-binary}. Instruction records retain schema 3.
 
-The prototype deliberately uses the known final source-time @code{$}: after @code{lda $10} it is 2 instead of v1's provisional 3. Conditional expansion and @code{.equ}, @code{.define} or @code{=} captures can therefore change. Unresolved instruction or data widths reject these captures with a located error. Every string operand in @code{.char} uses the captured map: with H mapped to 1 and I to 0, @code{.char "HI","HI"} emits @code{01 00 01 00}, whereas v1 leaves the second string unmapped. Numeric operands still bypass the map.
+Forward strings use the character map at their data statement. Every string operand of @code{.char} is mapped once. Kind checks precede integer identities. Binary instruction narrowing follows the linker's repeated in-place walks. Known final source-time @code{$} values remain usable; unresolved layout and @code{$} inside type dimensions are rejected. Explicit-address @code{.label} is rejected; use an equate for a fixed address.
 
-The prototype also rejects a @code{sizeof(label)} use when a forward data operand's final kind or string length differs from what that scan counted. Reassignment or @code{.undef} can therefore make a v1-accepted program fail with a located size-unknown error. Numeric changes, same-length strings and values already captured at the data line remain valid; the captured size is never silently recomputed.
+The source-time @code{sizeof(label)} scan checks forward operand kinds and lengths before publication. Imported or still-deferred strings, changed kinds or lengths, and self-sized strings reject at the original use. Numeric changes and captured literals retain their widths. See @file{MIGRATING_TO_2.0.md} and @file{XORCYST_V2_CONTRACTS.md} for the complete compatibility ledger and retained limitations. Local review and release approval are still required for this candidate.
 
 @heading Version 1.9.12
 
@@ -530,13 +530,7 @@ Writes a source listing. @code{--listing-format=text|json|ndjson} selects the
 format; the default is text. A diagnostic listing may also be produced after
 an assembly error. Listing write and close failures produce a nonzero exit.
 
-@item --listing-version 1|2
-Selects the structured listing schema; the default is version 1. Version 2
-requires @code{--pure-binary}, @code{--listing}, and JSON or NDJSON format.
-It adds segment, byte-count, emission, and zero-fill metadata. Rows that emit
-no binary bytes have null output offsets and empty byte arrays. Diagnostic
-listings explicitly indicate when no new binary was generated. See
-@file{README} for the version 2 field definitions and join rules.
+Structured listings use schema 2 and require @code{--pure-binary}. They include segment, byte-count, emission and zero-fill metadata. Non-emitting rows have null output offsets and empty byte arrays. Diagnostic listings never claim bytes from a previous output. See @file{README} for field definitions and join rules.
 
 @item --xref FILE
 Writes symbol definitions and reference sites.
@@ -784,7 +778,7 @@ is @code{$7FFFFFFF}, not @code{-1}.
 
 @code{sizeof(@var{symbol})} gets the size of @var{symbol} in bytes.
 
-In the non-installed v2 prototype, label sizes are captured by the source-time scan. An operand unresolved at its data line is checked again before output: its final kind and string length must match the contribution counted by @code{sizeof}. Otherwise the original @code{sizeof} use reports size unknown. This does not change the installed v1 tool.
+Label sizes are captured by the source-time scan. An operand unresolved at its data line is checked again before output: its final kind and string length must match the contribution counted by @code{sizeof}. Otherwise the original @code{sizeof} use reports size unknown.
 
 When both operands to an operator are strings, the semantics are as follows: @var{str1} + @var{str2} concatenates; the relational operators perform string comparison; and all other operators are invalid. When one operand is a string and the other is an integer, the integer is implicitly converted to a string and concatenated with the string operand to produce a string as result.
 
@@ -799,12 +793,10 @@ There are two ways to define a global label.
 @item Using the @code{.label} directive. It is of the form
 
 @example
-.label @var{identifier} @emph{[= @var{address}]} @emph{[ : @var{type}]}
+.label @var{identifier} @emph{[ : @var{type}]}
 @end example
 
-The absolute address of the label can be specified in v1. If no address is given, the address is the current Program Counter.
-
-The non-installed v2 prototype rejects @code{.label name = address}, including an explicit @code{= $}, with a located error. Use an equate for a fixed address. Ordinary @code{.label name} remains supported. This corrects v1's inconsistent handling of explicit label addresses and does not change the installed v1 tool.
+The label takes the current Program Counter. An explicit @code{= address}, including @code{= $}, is rejected with a located error. Use an equate for a fixed address.
 
 The type of data that the label addresses can also be specified. The valid type specifiers are @code{byte}, @code{word}, @code{dword}, or an identifier, which must be the name of a user-defined type.
 
@@ -1424,7 +1416,7 @@ The basic usage is
 
 where @var{script-file} is the linker script file containing commands to be processed by the linker.
 
-To have the linker print some information on what it is doing, give the @code{--verbose} switch.
+Use @code{--verbose} for input/copy/output file progress. The old RAM symbol-map dump is no longer emitted; @code{--quiet} suppresses warnings and progress.
 
 @section A simple linker script example
 
@@ -1659,7 +1651,7 @@ Include contents of @var{filename} as binary data
 @item incsrc "@var{filename}"
 Include contents of @var{filename} as assembler statements
 
-@item label @var{identifier} @emph{[= @var{address}]} @emph{[ : @var{type}]}
+@item label @var{identifier} @emph{[ : @var{type}]}
 Defines a global label
 
 @item macro @var{identifier} @emph{[@var{identifier}, ...]}
@@ -1736,93 +1728,13 @@ Specify that 6502 RAM in the range @var{start-address}...@var{end-address} (non-
 @node Object Code Format
 @appendix Object Code Format
 
-An object code file, or unit, produced by the assembler has the following major sections:
+Objects use the portable XOROBJ2 format. The eight-byte magic @code{XOROBJ2} followed by a newline identifies the format version; an incompatible format requires new magic. All table fields are unsigned 32-bit little-endian words. Values retain signed 32-bit arithmetic; payload blobs preserve their counted byte lengths.
 
-@itemize
+The checked header describes ten tables: blobs, files, source locations, definitions, expressions, extents, anchors, operand fixups, fragments and RAM allocation identities. Table offsets, counts, ownership, references, reserved fields and payload bounds are validated before linking. The reader rejects old object formats; rebuild them from assembly source.
 
-@item Magic number and assembler version
+Files carry locations needed for diagnostics, captured character maps and expression graphs. RAM records retain source label order for the specified allocation permutation. Code fragments and operand fixups use the same layout and encoder as direct binary assembly. Source-time expansion and @code{sizeof} are completed by the assembler.
 
-@item Definitions of exported constants
-
-@item Descriptors for imported symbols
-
-@item Data segment bytecodes
-
-@item Code segment bytecodes
-
-@item Definitions of expressions referred to by bytecodes
-
-@end itemize
-
-Each of these will be described in the sequel.
-
-@section Magic number and assembler version
-
-The magic number is the 16-bit constant @code{0xFACE}. It is followed by the one-byte object-format version, currently @code{0x14}. This identifies the file format, independently of the software release version.
-
-@section Definitions of exported constants
-
-This is a series of triplets @var{(identifier, type, value)}, each describing a constant made publicly available.
-
-Integer values use the same encoding as integer expression nodes: the 8-,
-16- and 24-bit forms contain nonnegative values, and the 32-bit form contains
-a signed two's-complement value. The assembler uses the 32-bit form for every
-negative integer. Multi-byte integer payloads are stored most-significant
-byte first. These rules apply to both exported constants and expression
-literals, independently of the linker's host word size.
-
-@section Descriptors for imported symbols
-
-This is a list of descriptors for the symbols used by this unit which are not defined in the unit itself; that is, they are external dependencies.
-
-@section Data segment bytecodes
-
-Statements in the original assembler file are encoded in a compact bytecode form. The bytecodes here define the labels and data storages located in the unit's @code{dataseg} section(s). The bytecode commands are a subset of the ones described in the next section.
-
-@section Code segment bytecodes
-
-These bytecodes are a compact representation of the contents of the unit's @code{codeseg} section(s). The commands and their arguments are as follows:
-
-@table @code
-
-@item CMD_END
-Indicates the end of the segment.
-
-@item CMD_BIN8 @var{count} @var{byte1, byte2, ...}
-The next @var{count} bytes are binary data which needn't be processed in any special way. @var{count} is an 8-bit quantity.
-
-@item CMD_BIN16 @var{count} @var{byte1, byte2, ...}
-The next @var{count} bytes are binary data which needn't be processed in any special way. @var{count} is a 16-bit quantity.
-
-@item CMD_LABEL @var{flag} @var{identifier}
-Define a label. If bit 0 of the byte @var{flag} is set, this is a public variable and its identifier follows.
-
-@item CMD_INSTR @var{opcode} @var{expression-id}
-An instruction whose operand must ultimately be resolved. @var{opcode} is the 6502 operation code. @var{expression-id} is a 16-bit quantity which refers to the expression which is the (symbolic) operand of the instruction (see the next section).
-
-@item CMD_DB @var{expression-id}
-Define a byte symbolically. @var{expression-id} refers to the expression which is the operand.
-
-@item CMD_DW @var{expression-id}
-Define a word symbolically. @var{expression-id} refers to the expression which is the operand.
-
-@item CMD_DD @var{expression-id}
-Define a doubleword symbolically. @var{expression-id} refers to the expression which is the operand.
-
-@item CMD_DSI8 @var{size}
-Define data storage of @var{size} bytes. @var{size} is an 8-bit quantity.
-
-@item CMD_DSI16
-Define data storage of @var{size} bytes. @var{size} is a 16-bit quantity.
-
-@item CMD_DSB @var{expression-id}
-Define data storage of bytes, the size of which is determined by the expression referred to by @var{expression-id}.
-
-@end table
-
-@section Expressions
-
-As you may have noticed in the preceding section, many bytecodes have an expression identifier as argument. This is just an index into the list of expressions defined in the final part of the object file. The main advantages of separating the @emph{use} of an expression (through its identifier) from its @emph{definition} is ease of parsing and processing (each bytecoded instruction will always occupy 4 bytes), and the ability to share the same expression among several instructions without having to redefine it every time. In most cases, the expression will just be a stand-alone reference to a symbol (local or external). But any expression that the assembler understands can be encoded here.
+The exact header, record widths, tags, validation rules and example are documented in @file{design/v2/OBJECT_WIRE_DRAFT.md}, installed with the tools. The historical filename is retained for stable contract references; it describes the current wire format.
 
 @node Custom Character Maps
 @appendix Custom Character Maps
@@ -2053,11 +1965,6 @@ When using the @var{.equ}-directive you can only define each identifier once. (U
 
 @item W0017: --listing-format is ignored because --listing is not set
 Printed when @code{--listing-format} is given without @code{--listing=@var{FILE}}; there is no listing for the requested format to apply to. Unlike the other messages in this table, it carries no source-file/line prefix, since it is not tied to a line in your program. Suppressed by @code{--no-warn} like any other warning.
-
-@item W0017: --listing-version is ignored because --listing is not set
-Printed when @code{--listing-version=1} is explicitly given without
-@code{--listing=@var{FILE}}. Suppressed by @code{--no-warn}. Version 2 requires
-a structured listing and instead reports a command-line error when it is absent.
 
 @item W0201: symbol `@var{identifier}' defined by .EQU is never used
 Opt-in: silent unless @code{--warn-unused-equ} is given. @code{--Werror=unused-equ} promotes it to a fatal @samp{error W0201} and is @emph{not} silenced by @code{--no-warn}; @code{--Wno-unused-equ} turns the check back off entirely. To suppress one definition without disabling the check everywhere, add a same-line @code{; xasm:ignore unused-equ} comment on the @code{.EQU} statement, or bracket a region with @code{; xasm:disable unused-equ} and @code{; xasm:enable unused-equ} comments.

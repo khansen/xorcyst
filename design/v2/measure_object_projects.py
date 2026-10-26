@@ -19,7 +19,7 @@ import time
 
 from check_object_projects import digest, environment_at, make_command, tools_at
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'tests'))
-from perf_v2_frontend import interval
+from perf_ir_frontend import interval
 
 
 def object_output(command):

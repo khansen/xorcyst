@@ -1,7 +1,7 @@
 # XORcyst v2: approved scope and design
 
 Status: **D0 approved by the owner on 2026-10-22; D1 contracts and baselines
-approved on 2026-10-23 after independent review.** The current release is v1.9.12.
+approved on 2026-10-23 after independent review.** The latest published release is v1.9.12; this tree prepares 2.0.0.
 
 Independent review found speculative scope and incompatible layout rules in
 the initial design. This approved scope addresses demonstrated project needs
@@ -10,7 +10,8 @@ owner approval are distinct; the approval record is in section 8.
 
 **Gate:** D0 and D1 review and owner approval are complete. Implementation
 follows the sequence in section 7 after the approved D1 revision is merged.
-Installed `xasm`/`xlnk` stay v1 until cutover.
+I1–I5 are approved and merged. I6 replaces the installed targets locally and
+awaits independent review and owner approval; no 2.0.0 release is tagged.
 
 D1 work and its approval record are in the
 [contracts](XORCYST_V2_CONTRACTS.md) and

@@ -5,7 +5,8 @@ review reported no blockers.** The approval record is in section 8; the
 owner-approved binary-logical-operator erratum is in section 9.
 These contracts implement the decisions in [the approved D0 scope](XORCYST_V2_DESIGN.md),
 merged as `162dacc`. They define interfaces and acceptance cases, not C APIs or
-runtime code. The installed tools remain v1.9.12. The source-only baseline
+runtime code. I1–I5 are approved and merged. The I6 candidate uses the normal tool names;
+its review and release approval remain pending. The source-only baseline
 record, `design/v2/BASELINES.md`, and
 [performance protocol](design/v2/PERFORMANCE.md) are included in this approval.
 The baseline evidence is not included in release archives or installed docs.

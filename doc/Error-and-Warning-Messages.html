@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.9.12.
+<!-- This is the manual for The XORcyst version 2.0.0.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>Error and Warning Messages (The XORcyst Manual)</title>
@@ -289,12 +289,6 @@ before encoding; invalid member names produce their own source diagnostics.
 </dd>
 <dt>&lsquo;<samp class="samp">W0017: --listing-format is ignored because --listing is not set</samp>&rsquo;</dt>
 <dd><p>Printed when <code class="code">--listing-format</code> is given without <code class="code">--listing=<var class="var">FILE</var></code>; there is no listing for the requested format to apply to. Unlike the other messages in this table, it carries no source-file/line prefix, since it is not tied to a line in your program. Suppressed by <code class="code">--no-warn</code> like any other warning.
-</p>
-</dd>
-<dt>&lsquo;<samp class="samp">W0017: --listing-version is ignored because --listing is not set</samp>&rsquo;</dt>
-<dd><p>Printed when <code class="code">--listing-version=1</code> is explicitly given without
-<code class="code">--listing=<var class="var">FILE</var></code>. Suppressed by <code class="code">--no-warn</code>. Version 2 requires
-a structured listing and instead reports a command-line error when it is absent.
 </p>
 </dd>
 <dt>&lsquo;<samp class="samp">W0201: symbol `<var class="var">identifier</var>' defined by .EQU is never used</samp>&rsquo;</dt>

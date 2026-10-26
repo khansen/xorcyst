@@ -116,9 +116,7 @@ struct tag_symtab_entry {
     symbol_type type;
     char *id;
     astnode *def;   /* Pointer to something that describes this entry more */
-#ifdef XORCYST_V2_FRONTEND
     astnode *source_label; /* borrowed declaration identity, before flattening */
-#endif
     int flags;
     int tag;
     int ref_count;

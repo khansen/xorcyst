@@ -14,11 +14,9 @@
 #include "output_file.h"
 #include <stdint.h>
 #include <limits.h>
-#ifdef XORCYST_V2_FRONTEND
-#include "v2/frontend.h"
-#define symtab_lookup v2_frontend_analysis_symbol
-#define symtab_list_type v2_frontend_analysis_symbols
-#endif
+#include "ir/frontend.h"
+#define symtab_lookup ir_frontend_analysis_symbol
+#define symtab_list_type ir_frontend_analysis_symbols
 
 #define SOURCE_LINE_BUFFER_SIZE 1024
 #define HEX_BYTES_PER_ROW 4
@@ -55,7 +53,6 @@ static int scope_by_namespace_size = 0;
 static int scope_counter = 0;
 static char *current_scope_name = NULL;
 static listing_format current_listing_format = LISTING_FORMAT_TEXT;
-static int current_listing_version = 1;
 static int listing_binary_generated = 0;
 static const char *listing_source_file_arg = NULL;
 static const char *listing_output_file_arg = NULL;
@@ -85,9 +82,8 @@ static void add_current_pc(int value)
     }
 }
 
-#ifdef XORCYST_V2_FRONTEND
 typedef struct { void *arg; astnodeprocmap *map; } analysis_walk_context;
-static int analysis_walk_row(const v2_analysis_row *row, void *arg)
+static int analysis_walk_row(const ir_analysis_row *row, void *arg)
 {
     analysis_walk_context *ctx = arg;
     astnodeprocmap *entry;
@@ -106,15 +102,8 @@ static int walk_analysis_rows(astnode *root, void *arg, astnodeprocmap *map)
 {
     analysis_walk_context ctx = {arg, map};
     (void)root;
-    return v2_frontend_visit_rows(analysis_walk_row, &ctx);
+    return ir_frontend_visit_rows(analysis_walk_row, &ctx);
 }
-#else
-static int walk_analysis_rows(astnode *root, void *arg, astnodeprocmap *map)
-{
-    astproc_walk(root, arg, map);
-    return 1;
-}
-#endif
 
 static char *xstrdup(const char *s)
 {
@@ -447,98 +436,8 @@ static const char *get_source_line(const char *filename, int line)
 
 static int eval_expression_int(astnode *expr, int *value, int depth)
 {
-#ifdef XORCYST_V2_FRONTEND
     (void)depth;
-    return v2_frontend_eval_analysis(expr, get_current_pc(), value);
-#else
-    int lhs = 0;
-    int rhs = 0;
-    symtab_entry *e;
-
-    if (expr == NULL || value == NULL || depth > EVAL_RECURSION_LIMIT) {
-        return 0;
-    }
-
-    switch (astnode_get_type(expr)) {
-        case INTEGER_NODE:
-            *value = expr->integer;
-            return 1;
-
-        case CURRENT_PC_NODE:
-            *value = get_current_pc();
-            return 1;
-
-        case IDENTIFIER_NODE:
-            e = symtab_lookup(expr->ident);
-            if (e == NULL) {
-                return 0;
-            }
-            if (e->flags & ADDR_FLAG) {
-                *value = e->address;
-                return 1;
-            }
-            if (e->type == CONSTANT_SYMBOL && e->def != NULL) {
-                return eval_expression_int(e->def, value, depth + 1);
-            }
-            return 0;
-
-        case ARITHMETIC_NODE:
-            switch (expr->oper) {
-                case NEG_OPERATOR:
-                case NOT_OPERATOR:
-                case LO_OPERATOR:
-                case HI_OPERATOR:
-                case UMINUS_OPERATOR:
-                case BANK_OPERATOR:
-                    if (!eval_expression_int(LHS(expr), &lhs, depth + 1)) {
-                        return 0;
-                    }
-                    switch (expr->oper) {
-                        case NEG_OPERATOR: *value = ~lhs; return 1;
-                        case NOT_OPERATOR: *value = !lhs; return 1;
-                        case LO_OPERATOR: *value = lhs & 0xFF; return 1;
-                        case HI_OPERATOR: *value = (lhs >> 8) & 0xFF; return 1;
-                        case UMINUS_OPERATOR: *value = expr_neg(lhs); return 1;
-                        case BANK_OPERATOR: *value = (lhs >> 16) & 0xFF; return 1;
-                        default: return 0;
-                    }
-
-                default:
-                    if (!eval_expression_int(LHS(expr), &lhs, depth + 1)) {
-                        return 0;
-                    }
-                    if (!eval_expression_int(RHS(expr), &rhs, depth + 1)) {
-                        return 0;
-                    }
-                    switch (expr->oper) {
-                        case PLUS_OPERATOR: *value = expr_add(lhs, rhs); return 1;
-                        case MINUS_OPERATOR: *value = expr_sub(lhs, rhs); return 1;
-                        case MUL_OPERATOR: *value = expr_mul(lhs, rhs); return 1;
-                        case DIV_OPERATOR:
-                            if (rhs == 0) return 0;
-                            *value = expr_div(lhs, rhs); return 1;
-                        case MOD_OPERATOR:
-                            if (rhs == 0) return 0;
-                            *value = expr_mod(lhs, rhs); return 1;
-                        case AND_OPERATOR: *value = lhs & rhs; return 1;
-                        case OR_OPERATOR: *value = lhs | rhs; return 1;
-                        case XOR_OPERATOR: *value = lhs ^ rhs; return 1;
-                        case SHL_OPERATOR: return expr_shl(lhs, rhs, value);
-                        case SHR_OPERATOR: return expr_shr(lhs, rhs, value);
-                        case LT_OPERATOR: *value = lhs < rhs; return 1;
-                        case GT_OPERATOR: *value = lhs > rhs; return 1;
-                        case EQ_OPERATOR: *value = lhs == rhs; return 1;
-                        case NE_OPERATOR: *value = lhs != rhs; return 1;
-                        case LE_OPERATOR: *value = lhs <= rhs; return 1;
-                        case GE_OPERATOR: *value = lhs >= rhs; return 1;
-                        default: return 0;
-                    }
-            }
-
-        default:
-            return 0;
-    }
-#endif
+    return ir_frontend_eval_analysis(expr, get_current_pc(), value);
 }
 
 static void format_hex_bytes(const unsigned char *bytes, int count, char *out, int out_size)
@@ -655,9 +554,8 @@ static void emit_structured_record(location loc,
                                    int zero_fill)
 {
     int i;
-    int version2 = current_listing_version == 2;
     int emits_bytes = listing_binary_generated && !in_dataseg && span_count > 0;
-    int size = version2 ? span_count : count;
+    int size = span_count;
     unsigned cpu_end = (unsigned)addr + (unsigned)((size > 0) ? (size - 1) : 0);
     long output_end = row_output_offset + ((size > 0) ? (size - 1) : 0);
 
@@ -678,7 +576,7 @@ static void emit_structured_record(location loc,
     fprintf(listing_fp, ",\"source_text\":");
     print_json_string(listing_fp, source_text != NULL ? source_text : "");
 
-    if (version2) {
+    {
         fprintf(listing_fp, ",\"version\":\"2\",\"segment\":\"%s\"", in_dataseg ? "data" : "code");
         fprintf(listing_fp, ",\"binary_generated\":%s", listing_binary_generated ? "true" : "false");
         fprintf(listing_fp, ",\"byte_count\":%d,\"emits_bytes\":%s", span_count, emits_bytes ? "true" : "false");
@@ -687,7 +585,7 @@ static void emit_structured_record(location loc,
 
     fprintf(listing_fp, ",\"cpu_address_start\":\"0x%04X\"", addr & 0xFFFF);
     fprintf(listing_fp, ",\"cpu_address_end\":\"0x%04X\"", cpu_end & 0xFFFF);
-    if (version2 && !emits_bytes) {
+    if (!emits_bytes) {
         fprintf(listing_fp, ",\"output_offset_start\":null,\"output_offset_end\":null");
     } else {
         fprintf(listing_fp, ",\"output_offset_start\":%ld", row_output_offset);
@@ -695,7 +593,7 @@ static void emit_structured_record(location loc,
     }
 
     fprintf(listing_fp, ",\"bytes_hex\":[");
-    for (i = 0; i < count && (!version2 || emits_bytes); ++i) {
+    for (i = 0; i < count && emits_bytes; ++i) {
         if (i > 0) {
             fprintf(listing_fp, ",");
         }
@@ -726,9 +624,7 @@ static void print_listing_line(location loc,
                                const char *addressing_mode)
 {
     char hex_buf[HEX_COLUMN_WIDTH + 1];
-#ifdef XORCYST_V2_FRONTEND
     if (!listing_binary_generated && current_listing_format == LISTING_FORMAT_TEXT) count = 0;
-#endif
     const char *source_line = "";
     int print_source = 0;
     int row_count;
@@ -833,22 +729,17 @@ static int is_relative_branch_opcode(unsigned char op)
 static int list_instruction(astnode *instr, void *arg, astnode **next)
 {
     unsigned char op = instr->instr.opcode;
-#ifdef XORCYST_V2_FRONTEND
     if (!listing_binary_generated) {
-        op = v2_frontend_diagnostic_opcode(instr);
+        op = ir_frontend_diagnostic_opcode(instr);
     }
-#endif
     int len = opcode_length(op);
     unsigned char bytes[3];
     int value = 0;
     int addr = get_current_pc();
     int count = 0;
     const char *opcode_name = opcode_to_string(op);
-    /* V2 describes the emitted instruction, including late zero-page
-     * shortening. V1 retains its historical parsed-mode metadata. */
-    const char *mode_name = addressing_mode_name(current_listing_version == 2
-                                                ? opcode_addressing_mode(op)
-                                                : instr->instr.mode);
+    /* Describe the emitted instruction, including late zero-page shortening. */
+    const char *mode_name = addressing_mode_name(opcode_addressing_mode(op));
 
     (void)arg;
     (void)next;
@@ -879,9 +770,7 @@ static int list_instruction(astnode *instr, void *arg, astnode **next)
     return 0;
 }
 
-#ifdef XORCYST_V2_FRONTEND
-static int list_resolved_row(const v2_analysis_row *, void *);
-#endif
+static int list_resolved_row(const ir_analysis_row *, void *);
 static int list_data(astnode *data, void *arg, astnode **next)
 {
     astnode *type = LHS(data);
@@ -895,9 +784,8 @@ static int list_data(astnode *data, void *arg, astnode **next)
     (void)arg;
     (void)next;
 
-#ifdef XORCYST_V2_FRONTEND
     if (!listing_binary_generated) {
-        v2_analysis_row row = {0};
+        ir_analysis_row row = {0};
         unsigned width = type->datatype == WORD_DATATYPE ? 2 : type->datatype == DWORD_DATATYPE ? 4 : 1;
         row.kind = DATA_NODE; row.data_type = type->datatype;
         row.loc = data->loc; row.ram = in_dataseg; row.address = (unsigned)addr_start;
@@ -910,7 +798,6 @@ static int list_data(astnode *data, void *arg, astnode **next)
         add_current_pc((int)row.length);
         return 0;
     }
-#endif
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
         if (!eval_expression_int(expr, &value, 0)) {
             value = 0;
@@ -919,7 +806,7 @@ static int list_data(astnode *data, void *arg, astnode **next)
         /* V1 historically omits numeric .char data. Keep that wire format;
          * V2 must account for every byte, including unmapped numeric chars. */
         if (type->datatype == BYTE_DATATYPE
-            || (type->datatype == CHAR_DATATYPE && current_listing_version == 2)) {
+            || (type->datatype == CHAR_DATATYPE)) {
             append_byte(&line_bytes, &line_size, &line_capacity, (unsigned char)(value & 0xFF));
             add_current_pc(1);
         } else if (type->datatype == WORD_DATATYPE) {
@@ -953,13 +840,11 @@ static int list_storage(astnode *storage, void *arg, astnode **next)
     (void)next;
 
     if (!eval_expression_int(RHS(storage), &count, 0) || count < 0) count = 0;
-#ifdef XORCYST_V2_FRONTEND
     if (!listing_binary_generated) {
         int width = LHS(storage)->datatype == WORD_DATATYPE ? 2 : LHS(storage)->datatype == DWORD_DATATYPE ? 4 : 1;
         count = count <= INT_MAX / width ? count * width : 0;
     }
-#endif
-    if (current_listing_version == 2 && current_listing_format != LISTING_FORMAT_TEXT) {
+    if (current_listing_format != LISTING_FORMAT_TEXT) {
         emit_structured_record(storage->loc, get_current_pc(), NULL, 0,
                                get_source_line(storage->loc.file, storage->loc.first_line),
                                ".DSB", NULL, 0, listing_output_offset, count, 1);
@@ -1097,8 +982,7 @@ static int list_symbols(void)
     return 1;
 }
 
-#ifdef XORCYST_V2_FRONTEND
-static int list_resolved_row(const v2_analysis_row *row, void *arg)
+static int list_resolved_row(const ir_analysis_row *row, void *arg)
 {
     const char *directive = NULL, *mode = NULL;
     char *display = NULL;
@@ -1150,12 +1034,10 @@ static int list_resolved_row(const v2_analysis_row *row, void *arg)
     free(display);
     return 1;
 }
-#endif
 
 int generate_listing(astnode *root,
                      const char *filename,
                      listing_format format,
-                     int version,
                      int binary_generated,
                      const char *source_file,
                      const char *output_file)
@@ -1195,7 +1077,6 @@ int generate_listing(astnode *root,
     listing_fp = output.stream;
 
     current_listing_format = format;
-    current_listing_version = version;
     listing_binary_generated = binary_generated;
     listing_source_file_arg = source_file;
     listing_output_file_arg = output_file;
@@ -1215,10 +1096,8 @@ int generate_listing(astnode *root,
         fprintf(listing_fp, "%s\n", DIVIDER);
     } else if (current_listing_format == LISTING_FORMAT_JSON) {
         fprintf(listing_fp, "{\n");
-        fprintf(listing_fp, "  \"version\": \"%d\",\n", version);
-        if (version == 2) {
-            fprintf(listing_fp, "  \"binary_generated\": %s,\n", binary_generated ? "true" : "false");
-        }
+        fprintf(listing_fp, "  \"version\": \"2\",\n");
+        fprintf(listing_fp, "  \"binary_generated\": %s,\n", binary_generated ? "true" : "false");
         fprintf(listing_fp, "  \"source_file\": ");
         print_json_string(listing_fp, listing_source_file_arg != NULL ? listing_source_file_arg : "");
         fprintf(listing_fp, ",\n");
@@ -1237,16 +1116,12 @@ int generate_listing(astnode *root,
         return 0;
     }
 
-#ifdef XORCYST_V2_FRONTEND
     if (binary_generated)
-        ok = version == 2 && v2_frontend_visit_rows(list_resolved_row, NULL);
+        ok = ir_frontend_visit_rows(list_resolved_row, NULL);
     else if (!root)
-        ok = v2_frontend_visit_diagnostic_rows(list_resolved_row, NULL);
+        ok = ir_frontend_visit_diagnostic_rows(list_resolved_row, NULL);
     else
-        v2_frontend_walk_diagnostic(root, NULL, map);
-#else
-    astproc_walk(root, NULL, map);
-#endif
+        ir_frontend_walk_diagnostic(root, NULL, map);
     if (current_listing_format == LISTING_FORMAT_TEXT) {
         ok = ok && list_symbols();
     } else if (current_listing_format == LISTING_FORMAT_JSON) {
@@ -1289,160 +1164,17 @@ static void lookup_consume_bytes(location loc, int addr, int count)
     lookup_current_offset += count;
 }
 
-static int lookup_dataseg(astnode *n, void *arg, astnode **next)
-{
-    (void)n;
-    (void)arg;
-    (void)next;
-    in_dataseg = 1;
-    return 0;
-}
-
-static int lookup_codeseg(astnode *n, void *arg, astnode **next)
-{
-    (void)n;
-    (void)arg;
-    (void)next;
-    in_dataseg = 0;
-    return 0;
-}
-
-static int lookup_org(astnode *org, void *arg, astnode **next)
-{
-    int addr = get_current_pc();
-    (void)arg;
-    (void)next;
-    if (eval_expression_int(LHS(org), &addr, 0)) {
-        set_current_pc(addr);
-    }
-    return 0;
-}
-
-static int lookup_instruction(astnode *instr, void *arg, astnode **next)
-{
-    int len = opcode_length(instr->instr.opcode);
-    int addr = get_current_pc();
-    (void)arg;
-    (void)next;
-    if (len < 1) {
-        len = 1;
-    }
-    if (!in_dataseg) {
-        lookup_consume_bytes(instr->loc, addr, len);
-    }
-    add_current_pc(len);
-    return 0;
-}
-
-static int lookup_data(astnode *data, void *arg, astnode **next)
-{
-    int bytes_per_item = 1;
-    int count = 0;
-    int total_bytes;
-    astnode *expr;
-    int addr = get_current_pc();
-    (void)arg;
-    (void)next;
-
-    switch (LHS(data)->datatype) {
-        case BYTE_DATATYPE:
-        case CHAR_DATATYPE:
-            bytes_per_item = 1;
-            break;
-        case WORD_DATATYPE:
-            bytes_per_item = 2;
-            break;
-        case DWORD_DATATYPE:
-            bytes_per_item = 4;
-            break;
-        default:
-            bytes_per_item = 1;
-            break;
-    }
-
-    for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
-        count++;
-    }
-    total_bytes = count * bytes_per_item;
-
-    if (!in_dataseg) {
-        lookup_consume_bytes(data->loc, addr, total_bytes);
-    }
-    add_current_pc(total_bytes);
-    return 0;
-}
-
-static int lookup_storage(astnode *storage, void *arg, astnode **next)
-{
-    int count = 0;
-    int addr = get_current_pc();
-    (void)arg;
-    (void)next;
-    if (eval_expression_int(RHS(storage), &count, 0) && count > 0) {
-        if (!in_dataseg) {
-            lookup_consume_bytes(storage->loc, addr, count);
-        }
-        add_current_pc(count);
-    }
-    return 0;
-}
-
-static int lookup_binary(astnode *node, void *arg, astnode **next)
-{
-    int addr = get_current_pc();
-    (void)arg;
-    (void)next;
-    if (!in_dataseg) {
-        lookup_consume_bytes(node->loc, addr, node->binary.size);
-    }
-    add_current_pc(node->binary.size);
-    return 0;
-}
-
-#ifdef XORCYST_V2_FRONTEND
-static int lookup_resolved_row(const v2_analysis_row *row, void *arg)
+static int lookup_resolved_row(const ir_analysis_row *row, void *arg)
 {
     (void)arg;
     lookup_current_offset = row->output_offset;
     if (!row->ram) lookup_consume_bytes(row->loc, (int)row->address, (int)row->length);
     return 1;
 }
-#endif
 
 int listing_lookup_output_offset(astnode *root, long output_offset, listing_lookup_result *out)
 {
-    static astnodeprocmap map[] = {
-        { DATASEG_NODE, lookup_dataseg },
-        { CODESEG_NODE, lookup_codeseg },
-        { ORG_NODE, lookup_org },
-        { INSTRUCTION_NODE, lookup_instruction },
-        { DATA_NODE, lookup_data },
-        { STORAGE_NODE, lookup_storage },
-        { BINARY_NODE, lookup_binary },
-        { STRUC_DECL_NODE, list_noop },
-        { UNION_DECL_NODE, list_noop },
-        { ENUM_DECL_NODE, list_noop },
-        { RECORD_DECL_NODE, list_noop },
-        { MACRO_NODE, list_noop },
-        { MACRO_DECL_NODE, list_noop },
-        { PROC_NODE, list_noop },
-        { REPT_NODE, list_noop },
-        { WHILE_NODE, list_noop },
-        { DO_NODE, list_noop },
-        { EXITM_NODE, list_noop },
-        { PUSH_MACRO_BODY_NODE, list_noop },
-        { POP_MACRO_BODY_NODE, list_noop },
-        { PUSH_BRANCH_SCOPE_NODE, list_noop },
-        { POP_BRANCH_SCOPE_NODE, list_noop },
-        { UNDEF_NODE, list_noop },
-        { TOMBSTONE_NODE, list_noop },
-        { 0, NULL }
-    };
-
     if (out == NULL || output_offset < 0
-#ifndef XORCYST_V2_FRONTEND
-        || root == NULL
-#endif
         ) {
         return 0;
     }
@@ -1459,12 +1191,8 @@ int listing_lookup_output_offset(astnode *root, long output_offset, listing_look
     in_dataseg = 0;
     dataseg_pc = 0;
     codeseg_pc = 0;
-#ifdef XORCYST_V2_FRONTEND
-    (void)root; (void)map;
-    if (!v2_frontend_visit_rows(lookup_resolved_row, NULL)) return 0;
-#else
-    astproc_walk(root, NULL, map);
-#endif
+    (void)root;
+    if (!ir_frontend_visit_rows(lookup_resolved_row, NULL)) return 0;
 
     if (!lookup_found) {
         return 0;
@@ -2537,24 +2265,23 @@ int finish_xref_instruction_provenance(astnode *root)
     return 1;
 }
 
-#ifdef XORCYST_V2_FRONTEND
 void own_xref_analysis_locations(void)
 {
     size_t i;
     for (i = 0; i < instruction_provenance_count; ++i) {
         instruction_provenance *p = &instruction_provenance_records[i];
         int j;
-        p->source_loc = v2_frontend_own_location(p->source_loc);
-        p->use_loc = v2_frontend_own_location(p->use_loc);
-        p->operand_loc = v2_frontend_own_location(p->operand_loc);
-        v2_frontend_own_analysis_locations(p->operand.original_expression);
+        p->source_loc = ir_frontend_own_location(p->source_loc);
+        p->use_loc = ir_frontend_own_location(p->use_loc);
+        p->operand_loc = ir_frontend_own_location(p->operand_loc);
+        ir_frontend_own_analysis_locations(p->operand.original_expression);
         for (j = 0; j < p->term_count; ++j) {
-            p->terms[j].binding_loc = v2_frontend_own_location(p->terms[j].binding_loc);
-            v2_frontend_own_analysis_locations(p->terms[j].shadow);
+            p->terms[j].binding_loc = ir_frontend_own_location(p->terms[j].binding_loc);
+            ir_frontend_own_analysis_locations(p->terms[j].shadow);
         }
     }
     for (i = 0; i < xref_data_provenance_count; ++i)
-        v2_frontend_own_analysis_locations(xref_data_provenance_records[i].original_expression);
+        ir_frontend_own_analysis_locations(xref_data_provenance_records[i].original_expression);
 }
 int bind_xref_instruction_values(astnode *n, unsigned *anchor)
 {
@@ -2563,10 +2290,9 @@ int bind_xref_instruction_values(astnode *n, unsigned *anchor)
     if (!id || id > instruction_provenance_count) return 1;
     instruction_provenance *p = &instruction_provenance_records[id - 1];
     for (i = 0; i < p->term_count; ++i)
-        if (!v2_frontend_bind_analysis(p->terms[i].shadow, anchor)) return 0;
+        if (!ir_frontend_bind_analysis(p->terms[i].shadow, anchor)) return 0;
     return 1;
 }
-#endif
 
 /* Records write each distinct source path once, in "files", and every span
  * names its file by index into that table. */
@@ -3155,82 +2881,8 @@ static int eval_expression_int_with_xref(astnode *expr,
                                          int *value,
                                          int depth)
 {
-#ifdef XORCYST_V2_FRONTEND
     (void)ctx; (void)depth;
-    return v2_frontend_eval_analysis(expr, pc, value);
-#else
-    int lhs = 0;
-    int rhs = 0;
-    const char *name;
-    int symbol_index;
-    symtab_entry *entry;
-    if (expr == NULL || value == NULL || depth > EVAL_RECURSION_LIMIT) {
-        return 0;
-    }
-    if (astnode_is_type(expr, INTEGER_NODE)) {
-        *value = expr->integer;
-        return 1;
-    }
-    if (astnode_is_type(expr, CURRENT_PC_NODE)) {
-        *value = pc;
-        return 1;
-    }
-    if (astnode_is_type(expr, IDENTIFIER_NODE)
-        || astnode_is_type(expr, LOCAL_ID_NODE)
-        || astnode_is_type(expr, FORWARD_BRANCH_NODE)
-        || astnode_is_type(expr, BACKWARD_BRANCH_NODE)) {
-        name = expr->string;
-        entry = symtab_lookup(name);
-        if (entry != NULL && entry->type == CONSTANT_SYMBOL && entry->def != NULL) {
-            return eval_expression_int_with_xref(entry->def, ctx, pc, value, depth + 1);
-        }
-        symbol_index = find_xref_symbol_index(ctx, name);
-        if (symbol_index >= 0 && ctx->symbols[symbol_index].has_cpu_address) {
-            *value = ctx->symbols[symbol_index].cpu_address;
-            return 1;
-        }
-        return 0;
-    }
-    if (!astnode_is_type(expr, ARITHMETIC_NODE)
-        || !eval_expression_int_with_xref(LHS(expr), ctx, pc, &lhs, depth + 1)) {
-        return 0;
-    }
-    switch (expr->oper) {
-        case NEG_OPERATOR: *value = ~lhs; return 1;
-        case NOT_OPERATOR: *value = !lhs; return 1;
-        case LO_OPERATOR: *value = lhs & 0xFF; return 1;
-        case HI_OPERATOR: *value = (lhs >> 8) & 0xFF; return 1;
-        case UMINUS_OPERATOR: *value = expr_neg(lhs); return 1;
-        case BANK_OPERATOR: *value = (lhs >> 16) & 0xFF; return 1;
-        default: break;
-    }
-    if (!eval_expression_int_with_xref(RHS(expr), ctx, pc, &rhs, depth + 1)) {
-        return 0;
-    }
-    switch (expr->oper) {
-        case PLUS_OPERATOR: *value = expr_add(lhs, rhs); return 1;
-        case MINUS_OPERATOR: *value = expr_sub(lhs, rhs); return 1;
-        case MUL_OPERATOR: *value = expr_mul(lhs, rhs); return 1;
-        case DIV_OPERATOR:
-            if (rhs == 0) return 0;
-            *value = expr_div(lhs, rhs); return 1;
-        case MOD_OPERATOR:
-            if (rhs == 0) return 0;
-            *value = expr_mod(lhs, rhs); return 1;
-        case AND_OPERATOR: *value = lhs & rhs; return 1;
-        case OR_OPERATOR: *value = lhs | rhs; return 1;
-        case XOR_OPERATOR: *value = lhs ^ rhs; return 1;
-        case SHL_OPERATOR: return expr_shl(lhs, rhs, value);
-        case SHR_OPERATOR: return expr_shr(lhs, rhs, value);
-        case LT_OPERATOR: *value = lhs < rhs; return 1;
-        case GT_OPERATOR: *value = lhs > rhs; return 1;
-        case EQ_OPERATOR: *value = lhs == rhs; return 1;
-        case NE_OPERATOR: *value = lhs != rhs; return 1;
-        case LE_OPERATOR: *value = lhs <= rhs; return 1;
-        case GE_OPERATOR: *value = lhs >= rhs; return 1;
-        default: return 0;
-    }
-#endif
+    return ir_frontend_eval_analysis(expr, pc, value);
 }
 
 /* Keep definitions complete. Scope switches belong to xref's output view,
@@ -3779,9 +3431,7 @@ static int xref_visit_instruction(astnode *instr, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     int addr = get_current_pc();
     int len = opcode_length(instr->instr.opcode);
-#ifdef XORCYST_V2_FRONTEND
-    if (ctx->diagnostic_only) len = opcode_length(v2_frontend_diagnostic_opcode(instr));
-#endif
+    if (ctx->diagnostic_only) len = opcode_length(ir_frontend_diagnostic_opcode(instr));
     xref_meta meta;
     xref_instr *out = NULL;
     char expr_buf[512];
@@ -3944,7 +3594,6 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
             break;
     }
 
-#ifdef XORCYST_V2_FRONTEND
     if (ctx->diagnostic_only) {
         size_t length = 0;
         if (LHS(data)->datatype == USER_DATATYPE) {
@@ -3953,7 +3602,7 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
         }
         for (expr = RHS(data); expr; expr = expr->next_sibling) {
             size_t elements;
-            if (!v2_frontend_analysis_elements(expr, addr + (int)length, &elements)
+            if (!ir_frontend_analysis_elements(expr, addr + (int)length, &elements)
                 || elements > (INT_MAX - length) / (unsigned)bytes_per_item) {
                 if (ctx->collect_output_extents) ctx->failed = 1;
                 return 0;
@@ -3963,7 +3612,6 @@ static int xref_visit_data(astnode *data, void *arg, astnode **next)
         advance_xref_position(ctx, (int)length);
         return 0;
     }
-#endif
     for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr)) {
         item_count++;
     }
@@ -4030,14 +3678,12 @@ static int xref_visit_storage(astnode *storage, void *arg, astnode **next)
     if (!eval_expression_int(RHS(storage), &count, 0) || count < 0) {
         if (ctx->collect_output_extents) ctx->failed = 1;
     } else if (count > 0) {
-#ifdef XORCYST_V2_FRONTEND
         if (ctx->diagnostic_only) {
             unsigned width = LHS(storage)->datatype == DWORD_DATATYPE ? 4 :
                 LHS(storage)->datatype == WORD_DATATYPE ? 2 : 1;
             if ((unsigned)count > INT_MAX / width) { ctx->failed = 1; return 0; }
             count *= (int)width;
         }
-#endif
         advance_xref_position(ctx, count);
     }
     return 0;
@@ -6051,9 +5697,7 @@ static int summary_visit_instruction(astnode *instr, void *arg, astnode **next)
     xref_build_context *ctx = (xref_build_context *)arg;
     int addr = get_current_pc();
     int len = opcode_length(instr->instr.opcode);
-#ifdef XORCYST_V2_FRONTEND
-    if (ctx->diagnostic_only) len = opcode_length(v2_frontend_diagnostic_opcode(instr));
-#endif
+    if (ctx->diagnostic_only) len = opcode_length(ir_frontend_diagnostic_opcode(instr));
     xref_meta meta;
     char expr_buf[512];
     (void)next;
@@ -10232,8 +9876,7 @@ void free_analysis(analysis_result *analysis)
     free(analysis);
 }
 
-#ifdef XORCYST_V2_FRONTEND
-static int collect_resolved_row(const v2_analysis_row *row, void *arg)
+static int collect_resolved_row(const ir_analysis_row *row, void *arg)
 {
     xref_build_context *ctx = arg;
     astnode *n = row->statement;
@@ -10254,7 +9897,6 @@ static int collect_resolved_row(const v2_analysis_row *row, void *arg)
     }
     return !ctx->failed;
 }
-#endif
 
 analysis_result *collect_analysis(astnode *root, const analysis_options *options)
 {
@@ -10311,13 +9953,9 @@ analysis_result *collect_analysis(astnode *root, const analysis_options *options
     dataseg_pc = 0;
     codeseg_pc = 0;
     close_source_cache();
-#ifdef XORCYST_V2_FRONTEND
     if (options->diagnostic_only)
-        v2_frontend_walk_diagnostic(root, ctx, map);
-    else if (!v2_frontend_visit_rows(collect_resolved_row, ctx)) ctx->failed = 1;
-#else
-    astproc_walk(root, ctx, map);
-#endif
+        ir_frontend_walk_diagnostic(root, ctx, map);
+    else if (!ir_frontend_visit_rows(collect_resolved_row, ctx)) ctx->failed = 1;
     if (ctx->failed) {
         ok = 0;
     }
@@ -11239,12 +10877,6 @@ int run_raw_address_audit(astnode *root,
     };
     audit_context ctx;
 
-#ifndef XORCYST_V2_FRONTEND
-    if (root == NULL) {
-        return 0;
-    }
-
-#endif
     memset(&ctx, 0, sizeof(ctx));
     ctx.level_error = level_error ? 1 : 0;
     ctx.output_json = output_json ? 1 : 0;

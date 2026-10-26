@@ -1,43 +1,27 @@
 The XORcyst is a set of tools for 6502 software development: the `xasm`
-assembler and `xlnk` linker. This release is version 1.9.12.
+assembler and `xlnk` linker. This source tree targets version 2.0.0.
 Run `xasm --version` or `xlnk --version` to identify an installed build.
 
-v2 planning
------------
+Version 2.0.0 cutover candidate
+-------------------------------
 
-The next major workstream is the approved v2 scope/design in
-[XORCYST_V2_DESIGN.md](XORCYST_V2_DESIGN.md). It traces requirements to owner
-decisions, existing Nesrev/game/music workflows and reproduced defects. D0 was
-approved on 2026-10-22; the independently reviewed D1 contracts and baselines
-were approved on 2026-10-23. Implementation follows the staged gates. v2 must be
-no slower than v1 on large projects, both plain and with listings and analysis enabled,
-and in object assembly/linking. The required game and music builds must retain
-their ROM bytes; d-pad hero 2 is a mandatory acceptance fixture.
-Current formats and behavior are unchanged by this plan.
+The normal `xasm` and `xlnk` now use the shared expression, layout and encoding
+implementation. There are no alternate prototype tools or legacy object engine.
+All source-built projects must be rebuilt: XOROBJ2 objects are incompatible with
+objects from earlier releases. Linker-script syntax is retained, with strict
+numeric-token validation.
 
-The approved D1 contract and approval record are in
-[XORCYST_V2_CONTRACTS.md](XORCYST_V2_CONTRACTS.md), with
-`design/v2/BASELINES.md` in the source checkout (not shipped), the
-[performance protocol](design/v2/PERFORMANCE.md) and the
-[object wire layout](design/v2/OBJECT_WIRE_DRAFT.md). The contract gate is
-complete; installed tools stay v1 until the coordinated cutover.
+Structured listings use schema 2; `--listing-version` has been removed. Listing,
+xref and debugger exports require `--pure-binary`. Instruction records retain
+schema 3. See [MIGRATING_TO_2.0.md](MIGRATING_TO_2.0.md) for source, artifact and
+consumer changes, and the listing contract below for field meanings.
 
-The isolated prototypes can be built with `make xasm-v2 xlnk-v2`.
-Use `./xasm-v2 --pure-binary input.asm -o output.bin` for direct binaries, or
-`./xasm-v2 input.asm -o input.o` and `./xlnk-v2 link.s` for v2 objects.
-Neither tool is installed. Local independent review cleared I4 at cf14315
-with no blockers; the owner approved revision 0805822 on 2026-10-25 for
-publication as the single I4 PR and its CI run. I4 merged in PR #100
-(`63747ed`); its PR and post-merge CI passed.
-All required ROMs match. An optional leading-RAM initializer limitation is
-tracked in TODO and the validation record.
-The accepted memory/timing tradeoffs are recorded for review. The local I5
-prototype now supports the pure-binary listing and analysis
-products through final shared-layout facts and owned source metadata. Nesrev
-consumer migration is in an isolated local branch. Independent review cleared
-I5 at 63e4ea5 / Nesrev 4ca95e06d with no blockers. The owner approved the
-stage on 2026-10-25 for PR publication and CI; see [v2/README.md](v2/README.md)
-for its reviewed contracts, current stage and remaining acceptance gates.
+This source tree is an unreleased cutover candidate. Local independent review,
+owner approval and release CI must precede the 2.0.0 tag. The approved semantics
+and resource decisions are recorded in
+[XORCYST_V2_CONTRACTS.md](XORCYST_V2_CONTRACTS.md), with the
+[performance protocol](design/v2/PERFORMANCE.md) and
+[object wire layout](design/v2/OBJECT_WIRE_DRAFT.md).
 
 Build and test
 --------------
@@ -85,12 +69,9 @@ Listings and cross-references
 -----------------------------
 
 `--listing=FILE` supports `--listing-format=text|json|ndjson` (default text).
-Structured listings default to version 1. Use `--listing-version=2` with
-`--pure-binary` and JSON or NDJSON for explicit segment and emission metadata;
-see the listing contract below. Version 1 and text output retain their existing
-format, including version 1's numeric offsets on non-emitting rows and its
-omission of numeric-only `.char` data from bytes and address accounting.
-Version 2 corrects both limitations.
+Structured listings use schema 2 with explicit segment and emission metadata.
+Non-emitting rows have null output offsets. Numeric `.char` data contributes
+its emitted bytes and address extent. All listing formats require `--pure-binary`.
 `--xref=FILE` supports `--xref-format=json|text|csv` (default JSON). CSV expands
 the supplied prefix into `.symbols.csv` and `.refs.csv` destinations.
 
@@ -203,24 +184,21 @@ Listing version 2 contract
 --------------------------
 
     xasm --pure-binary game.asm -o game.prg \
-      --listing=game.listing.json --listing-format=json --listing-version=2
+      --listing=game.listing.json --listing-format=json
 
 JSON keeps the `source_file`, `output_file`, and `records` envelope, sets
 `version` to the string `"2"`, and adds `binary_generated`. NDJSON has one
 record per line and no envelope. Every version 2 record contains `version`
 and `binary_generated`, so streamed records are self-describing too. An empty
-NDJSON listing has no records. Object output is unsupported in version 2:
-its serialized object-file offsets are not raw emitted-byte offsets. Invalid
-version values or version 2 without a structured listing and `--pure-binary`
-are command-line errors (exit 2).
-An explicit `--listing-version=1` without `--listing` warns with W0017,
-like `--listing-format`; `--no-warn` suppresses this warning.
+NDJSON listing has no records. Object-mode listings are unsupported: serialized
+object offsets are not raw emitted-byte offsets. The removed `--listing-version`
+option is rejected; callers should omit it and validate the returned schema.
 
 Rows retain the source fields (`file`, `line`, `column`, `source_text`),
 `directive_or_opcode`, `addressing_mode`, and `continuation_of_record`.
 For instructions, version 2's `addressing_mode` describes the final opcode,
 including zero-page shortening during layout, and agrees with instruction
-records. Version 1 retains its historical parsed-mode metadata.
+records.
 Data and included binaries remain split into rows of at most four bytes;
 the continuation flag marks subsequent rows of the same statement. Labels,
 segment switches, and `.ORG` have zero length. Segment-switch rows describe
@@ -242,7 +220,7 @@ bytes, even when their source has explicit data or `.INCBIN`. They retain
 their CPU spans. A storage directive has one row covering its complete span;
 code storage describes zero fill without materializing a large byte array.
 This also covers late label-difference counts once binary layout is resolved.
-Text and version 1 listings intentionally omit storage bytes; use version 2
+Text listings omit storage bytes; use structured listings
 for complete binary reconstruction, including zero fill.
 These rules also apply to padding generated from user-defined types.
 
@@ -261,14 +239,12 @@ A diagnostic listing after an assembly or binary-output error has
 `binary_generated: false`: every row has null output offsets, empty bytes,
 null fill, and `emits_bytes: false`. CPU spans in such a listing are advisory.
 An existing binary from a previous invocation is never claimed as this
-invocation's output. As with version 1, some early failures cannot produce a
+invocation's output. Some early failures cannot produce a
 listing; callers must check exit status and avoid using stale artifacts.
 
-Version 2 uses the existing listing traversal and byte evaluation. Added work
-is constant per row; storage is represented in constant space. Default-format
-output must remain byte-for-byte compatible, and real-project timing must
-meet the performance limits below. Tests reconstruct binaries from version 2
-rows, verify joins and JSON/NDJSON equivalence, and preserve version 1 coverage.
+Listing rows use final layout facts. Diagnostic rows use provisional extents,
+never bytes from an earlier output. Tests reconstruct binaries from emitting
+rows and check instruction joins and JSON/NDJSON equivalence.
 
 Performance
 -----------
@@ -280,15 +256,13 @@ available real project:
     python3 tests/verify_fceux_projects.py --baseline /path/to/base/xasm \
       --candidate ./xasm --source /path/to/largest.asm --report /tmp/xasm-check.json
 
-Add `--allow-analysis-changes` for an intended output change. The median CPU
-time of every timed mode may grow by at most 5%, plus 20 ms for timer noise.
-The report records output sizes; they may grow for new content, not for
-repetition. A larger regression needs explicit approval, recorded with its
-reason. Specs for new or changed outputs state their expected cost and the
-measurements that confirm it.
-
-Those allowances apply to v1 maintenance. The proposed v2 has the stricter
-per-configuration no-slowdown requirement described in XORCYST_V2_DESIGN.md.
+Add `--allow-analysis-changes` for a reviewed output change. Record wall and CPU
+time, peak memory, artifact sizes and exact-output comparisons per configuration.
+The owner accepted small absolute costs for review, while material regressions
+and large-project costs still require attention. Do not spend disproportionate
+effort tuning single-digit milliseconds. The accepted small-link memory overhead
+is documented separately; analysis retains its below-1.30× memory gate. See
+`design/v2/PERFORMANCE.md` and contract sections 12, 13 and 15 for the decisions.
 
 Maintainer builds
 -----------------

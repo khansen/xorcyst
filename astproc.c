@@ -807,21 +807,14 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
     astnode *lhs;
     astnode *rhs;
     if (expr == NULL) { return NULL; }
-#ifdef XORCYST_V2_FRONTEND
-    if (expr->type == V2_REFERENCE_NODE) return frontend_fold_reference(expr);
+    if (expr->type == IR_REFERENCE_NODE) return frontend_fold_reference(expr);
     if (expr->type == STRING_NODE) frontend_string_value(expr);
-#endif
     folded = NULL;
     if (fold_pc && astnode_is_type(expr, CURRENT_PC_NODE)) {
-#ifdef XORCYST_V2_FRONTEND
         if (deferred_pc[in_dataseg])
             err(expr->loc, "cannot use $ before final layout; use a label or an absolute value");
         else
             frontend_capture_pc(expr->loc);
-#else
-        if (fold_pc == FOLD_PC_EQUATE && deferred_pc[in_dataseg])
-            err(expr->loc, "cannot capture $ after unresolved storage; use a label");
-#endif
         folded = astnode_create_integer(in_dataseg ? dataseg_pc : codeseg_pc, expr->loc);
         astnode_replace(expr, folded);
         astnode_finalize(expr);
@@ -831,11 +824,9 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
         /* Fold operands recursively */
         lhs = fold_constants(LHS(expr), fold_pc);
         rhs = fold_constants(RHS(expr), fold_pc);
-#ifdef XORCYST_V2_FRONTEND
         if ((astnode_is_type(lhs, STRING_NODE) && (rhs == NULL || astnode_is_literal(rhs)))
             || (astnode_is_type(rhs, STRING_NODE) && astnode_is_literal(lhs)))
             return frontend_string_fold(expr);
-#endif
         switch (expr->oper) {
             /* Binary ops */
             case PLUS_OPERATOR:
@@ -907,118 +898,6 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                     return folded;
                 }
             }
-            else if ( (astnode_is_type(lhs, STRING_NODE)) &&
-                (astnode_is_type(rhs, STRING_NODE)) ) {
-                /* Both sides are string literals. */
-                /* Folding is defined only for certain operators. */
-                switch (expr->oper) {
-                    case PLUS_OPERATOR:
-                    /* String concatenation. */
-                    folded = astnode_create(STRING_NODE, expr->loc);
-                    folded->string = (char *)malloc(strlen(lhs->string) + strlen(rhs->string) + 1);
-                    if (folded->string != NULL) {
-                        strcpy(folded->string, lhs->string);
-                        strcat(folded->string, rhs->string);
-                    }
-                    break;
-
-                    /* String comparison. */
-                    case LT_OPERATOR:   folded = astnode_create_integer(strcmp(lhs->string, rhs->string) < 0, expr->loc);   break;
-                    case GT_OPERATOR:   folded = astnode_create_integer(strcmp(lhs->string, rhs->string) > 0, expr->loc);   break;
-                    case EQ_OPERATOR:   folded = astnode_create_integer(strcmp(lhs->string, rhs->string) == 0, expr->loc);  break;
-                    case NE_OPERATOR:   folded = astnode_create_integer(strcmp(lhs->string, rhs->string) != 0, expr->loc);  break;
-                    case LE_OPERATOR:   folded = astnode_create_integer(strcmp(lhs->string, rhs->string) <= 0, expr->loc);  break;
-                    case GE_OPERATOR:   folded = astnode_create_integer(strcmp(lhs->string, rhs->string) >= 0, expr->loc);  break;
-
-                    default:
-                    folded = expr;
-                    break;
-                }
-                if (folded != expr) {
-                    /* Replace expression by folded one. */
-                    astnode_replace(expr, folded);
-                    astnode_finalize(expr);
-                    return folded;
-                }
-            }
-            else if ((astnode_get_type(lhs) == STRING_NODE) &&
-                (astnode_get_type(rhs) == INTEGER_NODE) &&
-                (expr->oper == PLUS_OPERATOR)) {
-                /* Left side is string and right side is integer.
-                Result is a string. */
-                char str[32];
-                snprintf(str, sizeof (str), "%d", rhs->integer);
-                folded = astnode_create(STRING_NODE, expr->loc);
-                folded->string = (char *)malloc(strlen(lhs->string) + strlen(str) + 1);
-                if (folded->string != NULL) {
-                    strcpy(folded->string, lhs->string);
-                    strcat(folded->string, str);
-                }
-#ifdef XORCYST_V2_FRONTEND
-                if (expr->oper == BANK_OPERATOR) break;
-#endif
-                /* Replace expression by folded one. */
-                astnode_replace(expr, folded);
-                astnode_finalize(expr);
-                return folded;
-            }
-            else if ((astnode_get_type(rhs) == STRING_NODE) &&
-                (astnode_get_type(lhs) == INTEGER_NODE) &&
-                (expr->oper == PLUS_OPERATOR)) {
-                /* Left side is integer and right side is string.
-                Result is a string. */
-                char str[32];
-                snprintf(str, sizeof (str), "%d", lhs->integer);
-                folded = astnode_create(STRING_NODE, expr->loc);
-                folded->string = (char *)malloc(strlen(str) + strlen(rhs->string) + 1);
-                if (folded->string != NULL) {
-                    strcpy(folded->string, str);
-                    strcat(folded->string, rhs->string);
-                }
-#ifdef XORCYST_V2_FRONTEND
-                if (expr->oper == BANK_OPERATOR) break;
-#endif
-                /* Replace expression by folded one. */
-                astnode_replace(expr, folded);
-                astnode_finalize(expr);
-                return folded;
-            }
-#ifndef XORCYST_V2_FRONTEND
-            /* Use some mathematical identities... */
-            else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 0))
-                && (expr->oper == PLUS_OPERATOR)) {
-                /* 0+expr == expr */
-                astnode_remove_child(expr, rhs);
-                astnode_replace(expr, rhs);
-                astnode_finalize(expr);
-                return rhs;
-            }
-            else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 0))
-                && (expr->oper == PLUS_OPERATOR)) {
-                /* expr+0 == expr */
-                astnode_remove_child(expr, lhs);
-                astnode_replace(expr, lhs);
-                astnode_finalize(expr);
-                return lhs;
-            }
-            else if ((astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 1))
-                && (expr->oper == MUL_OPERATOR)) {
-                /* 1*expr == expr */
-                astnode_remove_child(expr, rhs);
-                astnode_replace(expr, rhs);
-                astnode_finalize(expr);
-                return rhs;
-            }
-            else if ((astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 1))
-                && ((expr->oper == MUL_OPERATOR) || (expr->oper == DIV_OPERATOR)) ) {
-                /* expr*1 == expr */
-                /* expr/1 == expr */
-                astnode_remove_child(expr, lhs);
-                astnode_replace(expr, lhs);
-                astnode_finalize(expr);
-                return lhs;
-            }
-#endif
             else {
                 /* No chance of folding this one. */
             }
@@ -1042,9 +921,7 @@ static astnode *fold_constants(astnode *expr, int fold_pc)
                     case UMINUS_OPERATOR:   folded = astnode_create_integer(expr_neg(lhs->integer), expr->loc);  break;
                     default: break;
                 }
-#ifdef XORCYST_V2_FRONTEND
                 if (expr->oper == BANK_OPERATOR) break;
-#endif
                 /* Replace expression by folded one. */
                 astnode_replace(expr, folded);
                 astnode_finalize(expr);
@@ -1122,9 +999,7 @@ static int datatype_elem_size(astnode *d_type)
  */
 static astnode *sizeof_label_data(astnode *def, astnode *expr)
 {
-#ifdef XORCYST_V2_FRONTEND
     return frontend_sizeof_label(def, expr);
-#endif
     astnode *curr = def->next_sibling;
     int total_bytes = 0;
     int found_data = 0;
@@ -1777,12 +1652,10 @@ static astnode *substitute_defines_recursive(astnode *expr, const constant_expan
             constant_expansion current = {symbol, parents};
             int value, errors_before = err_count;
             if (symbol == NULL || symbol->type != CONSTANT_SYMBOL) break;
-#ifdef XORCYST_V2_FRONTEND
             {
                 astnode *captured = frontend_capture_constant(expr, symbol);
                 if (captured != NULL) return captured;
             }
-#endif
             if (astnode_is_type(symbol->def, INTEGER_NODE)) return substitute_ident(expr);
             if (cached_constant(cache, symbol, &value)) {
                 reference_constant(expr, symbol);
@@ -2288,7 +2161,6 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                 );
                 num = astnode_is_type(val, STRING_NODE) ? strlen(val->string) : 1;
             }
-#ifdef XORCYST_V2_FRONTEND
             (void)num;
             astnode_add_child(flat, checked_padding(
                 astnode_clone(count, val->loc),
@@ -2296,28 +2168,6 @@ static void flatten_union_recursive(symtab_entry *s, astnode *init, astnode *fla
                     astnode_clone(e->field.size, val->loc),
                     frontend_initializer_size(astnode_get_last_sibling(flat->first_child)),
                     val->loc), e->id, 0, flat->loc));
-#else
-            if (num > count->integer) {
-                err(val->loc, "initializer for field `%s' exceeds field size", e->id);
-            }
-            /* Fill in remainder of field if necessary: count - 1 */
-            else if (count->integer > num) {
-                astnode_add_child(flat,
-                    astnode_create_storage(
-                        astnode_create_datatype(type->datatype, NULL, type->loc),
-                        astproc_fold_constants(
-                            astnode_create_arithmetic(
-                                MINUS_OPERATOR,
-                                astnode_clone(count, count->loc),
-                                astnode_create_integer(num, flat->loc),
-                                count->loc
-                            )
-                        ),
-                        val->loc
-                    )
-                );
-            }
-#endif
             break;
 
             case USER_DATATYPE:
@@ -2449,17 +2299,9 @@ static void flatten_struc_recursive(symtab_entry *s, astnode *init, astnode *fla
                         astnode_clone(count, val->loc),
                         astnode_create_arithmetic(MINUS_OPERATOR,
                             astnode_clone(e->field.size, val->loc),
-#ifdef XORCYST_V2_FRONTEND
                             frontend_initializer_size(astnode_get_last_sibling(flat->first_child)),
-#else
-                            astnode_create_integer(num * datatype_elem_size(type), val->loc),
-#endif
                             val->loc), e->id,
-#ifdef XORCYST_V2_FRONTEND
                             0,
-#else
-                            num,
-#endif
                             flat->loc));
                 }
                 break;
@@ -2599,7 +2441,6 @@ static int process_instruction(astnode *instr, void *arg, astnode **next)
             return 0;
         }
         op = opcode_get(instr->instr.mnemonic.value, instr->instr.mode);
-#ifdef XORCYST_V2_FRONTEND
         if (op != 0xff && !instr->instr.mnemonic.wide
             && opcode_zp_equiv(op, instr->instr.mode) != 0xff) {
             expr = LHS(instr);
@@ -2608,7 +2449,6 @@ static int process_instruction(astnode *instr, void *arg, astnode **next)
                     op = opcode_zp_equiv(op, instr->instr.mode);
             } else deferred_pc[0] = 1;
         }
-#endif
         if (op != 0xFF) {
             codeseg_pc += opcode_length(op);
         } else {
@@ -2687,9 +2527,7 @@ static int process_undef(astnode *undef, void *arg, astnode **next)
 {
     astnode *id = LHS(undef);
     assert(astnode_is_type(id, IDENTIFIER_NODE));
-#ifdef XORCYST_V2_FRONTEND
     ++binding_epoch;
-#endif
     symtab_remove(id->ident);
     astnode_remove(undef);
     astnode_finalize(undef);
@@ -2756,9 +2594,7 @@ static int process_data(astnode *data, void *arg, astnode **next)
         err(data->loc, "could not preserve data-directive analysis provenance");
         return 0;
     }
-#ifdef XORCYST_V2_FRONTEND
     return frontend_data(data);
-#endif
     /* Go through the list of data values, replacing defines and folding constants */
     for (j=1; j<astnode_get_child_count(data); j++) {
         expr = astnode_get_child(data, j);
@@ -2876,9 +2712,7 @@ static astnode *reduce_field_count(astnode *expr, const field_count_definition *
  * binary address pass or linker, but reject expressions neither can evaluate. */
 static int valid_storage_expression(const astnode *expr)
 {
-#ifdef XORCYST_V2_FRONTEND
-    if (expr->type == V2_REFERENCE_NODE) return 1;
-#endif
+    if (expr->type == IR_REFERENCE_NODE) return 1;
     symtab_entry *symbol;
     switch (astnode_get_type(expr)) {
         case INTEGER_NODE:
@@ -2920,12 +2754,6 @@ static int valid_final_storage_count(const astnode *expr)
     return 0;
 }
 
-/* v2 serializes checked extents directly; only v1 needs storage masks. */
-#ifdef XORCYST_V2_FRONTEND
-#define LEGACY_OBJECT_STORAGE 0
-#else
-#define LEGACY_OBJECT_STORAGE (!xasm_args.pure_binary)
-#endif
 static int resolve_field_padding(astnode *node, astnode **next, int final)
 {
     int errors_before = err_count;
@@ -2970,16 +2798,15 @@ static int resolve_field_padding(astnode *node, astnode **next, int final)
         return 1;
     }
     if (astnode_is_type(padding, INTEGER_NODE) && padding->integer == 0
-        && (LEGACY_OBJECT_STORAGE || astnode_is_type(count, INTEGER_NODE))) {
-        /* Binary count-only checks must survive until label addresses exist.
-         * Zero padding is valid, but an object-code storage count of zero
-         * encodes 256 bytes. Remove it before either output path sees it. */
+        && astnode_is_type(count, INTEGER_NODE)) {
+        /* Count-only checks survive until label addresses exist. A fully
+         * known zero remainder contributes no storage. */
         astnode_finalize(node);
         return 0;
     }
     /* Convert in place, retaining this statement's identity and location
      * without allocating a replacement node. */
-    if (final && !LEGACY_OBJECT_STORAGE
+    if (final
         && (!astnode_is_type(count, INTEGER_NODE)
             || !astnode_is_type(padding, INTEGER_NODE))) {
         /* Keep the original element-count constraint until addresses exist.
@@ -3040,54 +2867,6 @@ static astnode *gate_omitted_size(astnode *value, const astnode *count)
         value, value->loc);
 }
 
-/* Object-only STORAGE/FIELD_PADDING param: RHS is bytes | invalid-count mask.
- * Keep the two expressions separate while merging: adding a negative extent
- * to the mask could otherwise cancel it and publish an invalid layout. */
-#define OBJECT_STORAGE_GUARD 1
-
-static astnode *take_object_storage_guard(astnode **extent)
-{
-    astnode *wrapper = *extent;
-    assert(astnode_is_type(wrapper, ARITHMETIC_NODE) && wrapper->oper == OR_OPERATOR);
-    astnode *mask = astnode_remove_child_at(wrapper, 1);
-    *extent = astnode_remove_child_at(wrapper, 0);
-    astnode_finalize(wrapper);
-    return mask;
-}
-
-static astnode *combine_object_storage_guards(astnode *lhs, astnode *rhs)
-{
-    if (lhs == NULL) return rhs;
-    if (rhs == NULL) return lhs;
-    return astnode_create_arithmetic(OR_OPERATOR, lhs, rhs, lhs->loc);
-}
-
-static astnode *gate_omitted_extent(astnode *bytes, const astnode *count,
-                                  astnode *part, int minimum)
-{
-    astnode *mask = NULL;
-    if (LEGACY_OBJECT_STORAGE && part->param == OBJECT_STORAGE_GUARD) {
-        mask = take_object_storage_guard(&bytes);
-        /* An empty outer array has no inner counts to validate. */
-        mask = gate_omitted_size(mask, count);
-    }
-    bytes = gate_omitted_size(bytes, count);
-    if (LEGACY_OBJECT_STORAGE && minimum >= 0) {
-        /* One mask per array is enough, including zero-size elements. */
-        mask = combine_object_storage_guards(mask,
-            astnode_create_arithmetic(MUL_OPERATOR,
-                astnode_create_arithmetic(LT_OPERATOR,
-                    astnode_clone(count, count->loc),
-                    astnode_create_integer(minimum, count->loc), count->loc),
-                astnode_create_integer(0x10000, count->loc), count->loc));
-    }
-    if (mask != NULL) {
-        part->param = OBJECT_STORAGE_GUARD;
-        bytes = astnode_create_arithmetic(OR_OPERATOR, bytes, mask, bytes->loc);
-    }
-    return bytes;
-}
-
 static astnode *lower_omitted_array(astnode *node)
 {
     int errors_before = err_count;
@@ -3125,8 +2904,7 @@ static astnode *lower_omitted_array(astnode *node)
         for (part = element->first_child; part != NULL; part = part->next_sibling) {
             astnode *bytes = RHS(part);
             astnode_remove(bytes);
-            astnode_insert_child(part, gate_omitted_extent(bytes, count, part,
-                part == remainder ? minimum : -1), 1);
+            astnode_insert_child(part, gate_omitted_size(bytes, count), 1);
             if (astnode_is_type(part, STORAGE_NODE)) {
                 astnode_finalize(LHS(part));
                 astnode_insert_child(part, astnode_create_integer(1, part->loc), 0);
@@ -3188,9 +2966,7 @@ static int process_storage(astnode *storage, void *arg, astnode **next)
     astnode *new_expr;
     type = LHS(storage);
     expr = RHS(storage);
-#ifdef XORCYST_V2_FRONTEND
     if (type->datatype != USER_DATATYPE) return frontend_storage(storage);
-#endif
     /* If not BYTE_DATATYPE, multiply by word/dword-size */
     switch (type->datatype) {
         case CHAR_DATATYPE:
@@ -3274,9 +3050,7 @@ static astnode *clone_equate_expression(astnode *value, location loc)
  */
 static int process_equ(astnode *equ, void *arg, astnode **next)
 {
-#ifdef XORCYST_V2_FRONTEND
     ++binding_epoch;
-#endif
     symtab_entry *e;
     astnode *id;
     astnode *expr;
@@ -3344,11 +3118,9 @@ static int process_assign(astnode *assign, void *arg, astnode **next)
         astnode_finalize(e->def);
         e->def = expr;
     }
-#ifdef XORCYST_V2_FRONTEND
     /* The RHS may have cached the previous definition (S = S+1). Invalidate
      * captures only after publishing the new definition, before its next use. */
     ++binding_epoch;
-#endif
     /* The definition keeps the first location; bindings need this one. */
     if (e != NULL) {
         e->assignment_loc = assign->loc;
@@ -3534,9 +3306,7 @@ static int process_org(astnode *org, void *arg, astnode **next)
                 else
                     codeseg_pc = addr->integer;
                 if (!uses_pc) deferred_pc[in_dataseg] = 0;
-#ifdef XORCYST_V2_FRONTEND
                 if (!uses_pc) frontend_reset_pc();
-#endif
             }
         } else {
             err(org->loc, "org address does not evaluate to literal");
@@ -3743,12 +3513,10 @@ static int enter_label(astnode *label, void *arg, astnode **next)
 {
     symtab_entry *e;
     astnode *addr;
-#ifdef XORCYST_V2_FRONTEND
     if (label->flags & 0x10000) {
         err(label->loc, "explicit-address .label is not supported; use an equate");
         return 0;
     }
-#endif
     e = symtab_lookup(label->ident);
     if (e) {
         if (!(e->flags & EXTRN_FLAG) || (e->type != LABEL_SYMBOL)) {
@@ -3800,9 +3568,7 @@ static int enter_var(astnode *var, void *arg, astnode **next)
         var->modifiers &= ~ZEROPAGE_FLAG;
     }
     e = enter_owned_symbol(id->ident, VAR_SYMBOL, astnode_clone(RHS(var), var->loc), (in_dataseg ? DATA_FLAG : 0) | var->modifiers | symbol_modifiers);
-#ifdef XORCYST_V2_FRONTEND
     if (e != NULL) e->source_label = id;
-#endif
     return 1;
 }
 
@@ -3836,9 +3602,7 @@ static int enter_proc(astnode *proc, void *arg, astnode **next)
     /* Enter it! RHS(proc) is the list of procedure statements */
     e = symtab_enter(id->ident, PROC_SYMBOL, RHS(proc), (in_dataseg ? DATA_FLAG : 0) );
     if (e != NULL) {
-#ifdef XORCYST_V2_FRONTEND
         e->source_label = id;
-#endif
         /* Keep the declaration span when flattening replaces the body list. */
         e->assignment_loc = proc->loc;
         e->has_assignment_loc = 1;
@@ -3979,17 +3743,13 @@ astnode *enter_struc_union_field(astnode *n, astnode *offset, ordered_field_list
  */
 static int enter_struc(astnode *struc_def, void *arg, astnode **next)
 {
-#ifdef XORCYST_V2_FRONTEND
     ++binding_epoch;
-#endif
     ordered_field_list **plist;
     symtab_entry *se;
     astnode *c;
     astnode *offset;
     astnode *struc_id = LHS(struc_def);
-#ifdef XORCYST_V2_FRONTEND
     if (frontend_type_pc(struc_def)) return 0;
-#endif
     assert(astnode_is_type(struc_id, IDENTIFIER_NODE));
     se = symtab_enter(struc_id->ident, STRUC_SYMBOL, struc_def, 0);
     if (se == NULL) {
@@ -4122,14 +3882,10 @@ static void enter_union_fields(symtab_entry *se, astnode *union_def)
  */
 static int enter_union(astnode *union_def, void *arg, astnode **next)
 {
-#ifdef XORCYST_V2_FRONTEND
     ++binding_epoch;
-#endif
     symtab_entry *se;
     astnode *union_id = astnode_get_child(union_def, 0);
-#ifdef XORCYST_V2_FRONTEND
     if (frontend_type_pc(union_def)) return 0;
-#endif
     assert(astnode_is_type(union_id, IDENTIFIER_NODE));
     if (astnode_is_type(union_id, NULL_NODE)) {
         err(union_def->loc, "anonymous union not allowed in global scope");
@@ -4155,9 +3911,7 @@ static int enter_union(astnode *union_def, void *arg, astnode **next)
  */
 static int enter_enum(astnode *enum_def, void *arg, astnode **next)
 {
-#ifdef XORCYST_V2_FRONTEND
     ++binding_epoch;
-#endif
     symtab_entry *member;
     astnode *c;
     astnode *id;
@@ -4218,9 +3972,7 @@ static int enter_enum(astnode *enum_def, void *arg, astnode **next)
  */
 static int enter_record(astnode *record_def, void *arg, astnode **next)
 {
-#ifdef XORCYST_V2_FRONTEND
     ++binding_epoch;
-#endif
     ordered_field_list **plist;
     astnode *c;
     astnode *field_id;
@@ -5401,11 +5153,9 @@ void astproc_second_pass(astnode *root)
     in_dataseg = 0; /* codeseg is default */
     /* Do the walk. */
     astproc_walk(root, NULL, map);
-#ifdef XORCYST_V2_FRONTEND
     /* Exported constant graphs can be the only references to private labels.
      * Capture their dependencies before unused-label removal discards them. */
     if (!err_count) frontend_export_symbols(root->loc);
-#endif
     /* Preserve labels when generating a listing, so they can be emitted. */
     if (xasm_args.listing_file == NULL
         && xasm_args.xref_file == NULL
@@ -5536,127 +5286,6 @@ static int translate_instruction(astnode *instr, void *arg, astnode **next)
 /**
  * ### Is this really such a good idea?
  */
-static int maybe_merge_data(astnode *n, void *arg, astnode **next)
-{
-    astnode *temp;
-    astnode *type;
-    astnode *tail = NULL;
-    type = LHS(n);
-    /* Only merge if no debugging, otherwise line information is lost. */
-    while (!xasm_args.debug && astnode_is_type(*next, DATA_NODE)
-        && astnode_equal(type, LHS(*next)) ) {
-        /* Merge the whole run, retaining the tail instead of rescanning all
-         * accumulated operands for every adjacent data statement. */
-        astnode *operands;
-        if (tail == NULL) tail = astnode_get_last_sibling(n->first_child);
-        temp = *next;
-        astnode_finalize( astnode_remove_child_at(temp, 0) );   /* Remove datatype node */
-        operands = astnode_remove_children(temp);
-        astnode_add_sibling_after(tail, operands);
-        if (operands != NULL) tail = astnode_get_last_sibling(operands);
-        *next = temp->next_sibling;
-        astnode_finalize(temp);
-    }
-    {
-        /* Reduce expressions to final form */
-        for (n = n->first_child; n != NULL; n = temp->next_sibling) {
-            temp = reduce_expression_complete(n, FOLD_PC_NO);
-            if (astnode_is_type(temp, INTEGER_NODE)) {
-                /* Check that value fits according to datatype */
-                switch (type->datatype) {
-                    case CHAR_DATATYPE:
-                    /* Pure output diagnoses this when writing bytes. Objects
-                     * need the same warning here; retain the value so legacy
-                     * listings and character-map behavior stay unchanged. */
-                    if (!xasm_args.pure_binary && !IS_BYTE_VALUE(temp->integer))
-                        warn(temp->loc, "operand out of range; truncated");
-                    break;
-
-                    case BYTE_DATATYPE:
-                    if (!IS_BYTE_VALUE(temp->integer)) {
-                        warn(temp->loc, "operand out of range; truncated");
-                        temp->integer &= 0xFF;
-                    }
-                    break;
-
-                    case WORD_DATATYPE:
-                    if (!IS_WORD_VALUE(temp->integer)) {
-                        warn(temp->loc, "operand out of range; truncated");
-                        temp->integer &= 0xFFFF;
-                    }
-                    break;
-
-                    case DWORD_DATATYPE:
-                    break;
-
-                    default:
-                    break;
-                }
-            }
-        }
-    }
-    return 0;
-}
-
-/**
- *
- */
-static int maybe_merge_storage(astnode *storage, void *arg, astnode **next)
-{
-    astnode *temp;
-    astnode *new_count;
-    astnode *old_count;
-    int literals = astnode_is_type(*next, STORAGE_NODE)
-        && astnode_is_type(RHS(storage), INTEGER_NODE)
-        && astnode_is_type(RHS(*next), INTEGER_NODE);
-    /* Binary layout needs each late expression's own PC and range check; a
-     * positive neighbor must not hide a negative count. Preserve object-mode
-     * grouping, which can absorb a field remainder that is zero at link time.
-     * Keep each immediate storage command below 65536 bytes in either mode. */
-    if (astnode_is_type(*next, STORAGE_NODE)
-        && astnode_equal(LHS(storage), LHS(*next))
-        && (!xasm_args.pure_binary || (literals
-            && astnode_get_child(storage, 2) == NULL
-            && astnode_get_child(*next, 2) == NULL))
-        && (!literals || (long)RHS(storage)->integer + RHS(*next)->integer < 0x10000)) {
-        /* Merge ahead */
-        temp = *next;
-        astnode_finalize( astnode_remove_child_at(temp, 0) );   /* Remove datatype node */
-        old_count = RHS(storage);
-        /* Combine byte extents separately from object count guards. A guard
-         * is ORed into the complete sum, so no negative neighbor can erase it. */
-        if (!xasm_args.pure_binary
-            && (storage->param == OBJECT_STORAGE_GUARD || temp->param == OBJECT_STORAGE_GUARD)) {
-            astnode *lhs = astnode_remove_child_at(temp, 0);
-            astnode *rhs = astnode_clone(old_count, storage->loc);
-            astnode *mask = NULL;
-            if (temp->param == OBJECT_STORAGE_GUARD)
-                mask = take_object_storage_guard(&lhs);
-            if (storage->param == OBJECT_STORAGE_GUARD)
-                mask = combine_object_storage_guards(mask, take_object_storage_guard(&rhs));
-            new_count = astnode_create_arithmetic(OR_OPERATOR,
-                astnode_create_arithmetic(PLUS_OPERATOR, lhs, rhs, storage->loc),
-                mask, storage->loc);
-            storage->param = OBJECT_STORAGE_GUARD;
-        } else {
-            new_count = astnode_create_arithmetic(
-                PLUS_OPERATOR, astnode_remove_child_at(temp, 0),
-                astnode_clone(old_count, storage->loc), storage->loc);
-        }
-        new_count = reduce_expression_complete(new_count, FOLD_PC_NO);
-        astnode_replace(old_count, new_count);
-        astnode_finalize(old_count);
-        astnode_finalize(temp);
-        *next = storage;
-    } else {
-        reduce_expression_complete(RHS(storage), FOLD_PC_NO);
-    }
-    return 0;
-}
-
-/**
- * Replaces .proc by its label followed by statements.
- */
 static int flatten_proc(astnode *proc, void *arg, astnode **next)
 {
     astnode *id = LHS(proc);
@@ -5686,437 +5315,6 @@ static int flatten_var_decl(astnode *var, void *arg, astnode **next)
     astnode_replace(var, stmts);
     astnode_finalize(var);
     *next = stmts;
-    return 0;
-}
-
-/**
- * Third and final pass (if the output isn't pure 6502).
- * Translates instructions, merges data and storage nodes,
- * and reduces their operands to final form on the way.
- */
-void astproc_third_pass(astnode *root)
-{
-    finalizing_expressions = 1;
-    /* Table of callback functions for our purpose. */
-    static astnodeprocmap map[] = {
-        { INSTRUCTION_NODE, translate_instruction },
-        { DATA_NODE, maybe_merge_data },
-        { STORAGE_NODE, maybe_merge_storage },
-        { FIELD_PADDING_NODE, finalize_field_padding },
-        { VAR_DECL_NODE, flatten_var_decl },
-        { PROC_NODE, flatten_proc },
-        { STRUC_DECL_NODE, noop },
-        { UNION_DECL_NODE, noop },
-        { ENUM_DECL_NODE, noop },
-        { RECORD_DECL_NODE, noop },
-        { 0, NULL }
-    };
-    in_dataseg = 0; /* codeseg is default */
-    /* Do the walk. */
-    astproc_walk(root, NULL, map);
-    warn_unused_equates();
-}
-
-/*---------------------------------------------------------------------------*/
-
-/* Evaluate an arithmetic operator without taking ownership of its operands. */
-static astnode *eval_arithmetic(const astnode *expr, const astnode *lhs, const astnode *rhs)
-{
-    switch (expr->oper) {
-        /* Binary ops */
-        case PLUS_OPERATOR:
-        case MINUS_OPERATOR:
-        case MUL_OPERATOR:
-        case DIV_OPERATOR:
-        case MOD_OPERATOR:
-        case AND_OPERATOR:
-        case OR_OPERATOR:
-        case XOR_OPERATOR:
-        case SHL_OPERATOR:
-        case SHR_OPERATOR:
-        case LT_OPERATOR:
-        case GT_OPERATOR:
-        case EQ_OPERATOR:
-        case NE_OPERATOR:
-        case LE_OPERATOR:
-        case GE_OPERATOR:
-        if (astnode_is_type(lhs, INTEGER_NODE)
-            && astnode_is_type(rhs, INTEGER_NODE)) {
-            /* Both sides are integer literals. */
-            switch (expr->oper) {
-                case PLUS_OPERATOR:  return astnode_create_integer(expr_add(lhs->integer, rhs->integer), expr->loc);
-                case MINUS_OPERATOR: return astnode_create_integer(expr_sub(lhs->integer, rhs->integer), expr->loc);
-                case MUL_OPERATOR:   return astnode_create_integer(expr_mul(lhs->integer, rhs->integer), expr->loc);
-                case DIV_OPERATOR:
-                    if (rhs->integer == 0) {
-                        err(expr->loc, "division by zero in expression");
-                        return astnode_create_integer(0, expr->loc);
-                    } else {
-                        return astnode_create_integer(expr_div(lhs->integer, rhs->integer), expr->loc);
-                    }
-                case MOD_OPERATOR:
-                    if (rhs->integer == 0) {
-                        err(expr->loc, "modulo by zero in expression");
-                        return astnode_create_integer(0, expr->loc);
-                    } else {
-                        return astnode_create_integer(expr_mod(lhs->integer, rhs->integer), expr->loc);
-                    }
-                case AND_OPERATOR:   return astnode_create_integer(lhs->integer & rhs->integer, expr->loc);
-                case OR_OPERATOR:    return astnode_create_integer(lhs->integer | rhs->integer, expr->loc);
-                case XOR_OPERATOR:   return astnode_create_integer(lhs->integer ^ rhs->integer, expr->loc);
-                case SHL_OPERATOR:   return shift_integer(lhs->integer, rhs->integer, 0, expr->loc);
-                case SHR_OPERATOR:   return shift_integer(lhs->integer, rhs->integer, 1, expr->loc);
-                case LT_OPERATOR:    return astnode_create_integer(lhs->integer < rhs->integer, expr->loc);
-                case GT_OPERATOR:    return astnode_create_integer(lhs->integer > rhs->integer, expr->loc);
-                case EQ_OPERATOR:    return astnode_create_integer(lhs->integer == rhs->integer, expr->loc);
-                case NE_OPERATOR:    return astnode_create_integer(lhs->integer != rhs->integer, expr->loc);
-                case LE_OPERATOR:    return astnode_create_integer(lhs->integer <= rhs->integer, expr->loc);
-                case GE_OPERATOR:    return astnode_create_integer(lhs->integer >= rhs->integer, expr->loc);
-
-                default:    /* ### Error, actually */
-                break;
-            }
-        }
-        /* Use some mathematical identities... */
-        else if (rhs != NULL && (astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 0))
-            && (expr->oper == PLUS_OPERATOR)) {
-            /* 0+expr == expr */
-            return astnode_clone(rhs, rhs->loc);
-        } else if (lhs != NULL && (astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 0))
-            && (expr->oper == PLUS_OPERATOR)) {
-            /* expr+0 == expr */
-            return astnode_clone(lhs, lhs->loc);
-        } else if (rhs != NULL && (astnode_is_type(lhs, INTEGER_NODE) && (lhs->integer == 1))
-            && (expr->oper == MUL_OPERATOR)) {
-            /* 1*expr == expr */
-            return astnode_clone(rhs, rhs->loc);
-        } else if (lhs != NULL && (astnode_is_type(rhs, INTEGER_NODE) && (rhs->integer == 1))
-            && ((expr->oper == MUL_OPERATOR) || (expr->oper == DIV_OPERATOR)) ) {
-            /* expr*1 == expr */
-            /* expr/1 == expr */
-            return astnode_clone(lhs, lhs->loc);
-        }
-        break;
-
-        /* Unary ops */
-        case NEG_OPERATOR:
-        case NOT_OPERATOR:
-        case LO_OPERATOR:
-        case HI_OPERATOR:
-        case UMINUS_OPERATOR:
-        case BANK_OPERATOR:
-        if (astnode_is_type(lhs, INTEGER_NODE)) {
-            switch (expr->oper) {
-                case NEG_OPERATOR:  return astnode_create_integer(~lhs->integer, expr->loc);
-                case NOT_OPERATOR:  return astnode_create_integer(!lhs->integer, expr->loc);
-                case LO_OPERATOR:   return astnode_create_integer(lhs->integer & 0xFF, expr->loc);
-                case HI_OPERATOR:   return astnode_create_integer((lhs->integer >> 8) & 0xFF, expr->loc);
-                case UMINUS_OPERATOR: return astnode_create_integer(expr_neg(lhs->integer), expr->loc);
-                default: break;
-            }
-        }
-        break;
-    } /* switch */
-    return NULL;
-}
-
-/**
- * Evaluates the given expression, _without_ replacing it in the AST
- * (unlike astproc_reduce_expression() and friends).
- */
-static astnode *eval_expression(astnode *expr)
-{
-    switch (astnode_get_type(expr)) {
-
-        case ARITHMETIC_NODE: {
-        astnode *lhs = eval_expression(LHS(expr));
-        astnode *rhs = eval_expression(RHS(expr));
-        astnode *result = eval_arithmetic(expr, lhs, rhs);
-        astnode_finalize(lhs);
-        astnode_finalize(rhs);
-        return result;
-        }
-
-        case INTEGER_NODE:
-        return astnode_clone(expr, expr->loc);
-
-        case IDENTIFIER_NODE: {
-            symtab_entry *e = symtab_lookup(expr->ident);
-            /* Flattened procedure and variable declarations also get label
-             * addresses in the layout pass. Keep their symbol kinds for
-             * type/scope metadata, but evaluate every assigned address. */
-            if (e != NULL && (e->type == LABEL_SYMBOL || e->type == PROC_SYMBOL
-                              || e->type == VAR_SYMBOL) && (e->flags & ADDR_FLAG))
-                return astnode_create_integer(e->address, expr->loc);
-        } break;
-
-        case CURRENT_PC_NODE:
-        return astnode_create_integer(in_dataseg ? dataseg_pc : codeseg_pc, expr->loc);
-
-        default:
-        break;
-    } /* switch */
-    return 0;
-}
-
-/**
- * Sets the address of the label to be the currently calculated PC.
- */
-static int set_label_address(astnode *label, void *arg, astnode **next)
-{
-    symtab_entry *e = symtab_lookup(label->ident);
-// ###   assert(e && (e->type == LABEL_SYMBOL));
-    e->address = in_dataseg ? dataseg_pc : codeseg_pc;
-    e->flags |= ADDR_FLAG;
-    return 0;
-}
-
-/**
- * Sets the current PC to the address specified by the ORG node.
- */
-static int set_pc_from_org(astnode *org, void *arg, astnode **next)
-{
-    astnode *addr = LHS(org);
-    assert(astnode_is_type(addr, INTEGER_NODE));
-    if ((addr->integer >= 0) && (addr->integer < 0x10000)) {
-        if (in_dataseg)
-            dataseg_pc = addr->integer;
-        else
-            codeseg_pc = addr->integer;
-    }
-    return 0;
-}
-
-/**
- * Ensures that the given symbol is defined.
- */
-static int ensure_symbol_is_defined(astnode *id, void *arg, astnode **next)
-{
-    symtab_entry *e = symtab_lookup(id->ident);
-    if (e == NULL) {
-        return 0;
-    }
-    if (xasm_args.pure_binary && (e->flags & EXTRN_FLAG) && !(e->flags & ERROR_UNDEFINED_FLAG)) {
-        err(id->loc, "cannot generate pure binary because `%s' is not defined", id->ident);
-        e->flags |= ERROR_UNDEFINED_FLAG;
-    }
-    return 0;
-}
-
-/**
- * Increments PC according to the size of the instruction.
- */
-static int inc_pc_by_instruction(astnode *instr, void *arg, astnode **next)
-{
-    assert(!in_dataseg);
-    if (LHS(instr)) {
-        /* Has operand */
-        if (!instr->instr.mnemonic.wide) {
-            unsigned char zp_op = opcode_zp_equiv(instr->instr.opcode, instr->instr.mode);
-            if (zp_op != 0xFF) {
-                /* See if we can optimize this to a ZP-instruction */
-                astnode *operand = eval_expression(LHS(instr));
-                if (operand && astnode_is_type(operand, INTEGER_NODE)) {
-                    if ((operand->integer >= 0) && (operand->integer < 256)) {
-                        instr->instr.opcode = zp_op;
-                    }
-                    astnode_finalize(operand);
-                }
-            }
-        }
-    }
-    codeseg_pc += opcode_length(instr->instr.opcode);
-    return 1;
-}
-
-/**
- * Increments PC according to the size of the defined data.
- */
-static int inc_pc_by_data(astnode *data, void *arg, astnode **next)
-{
-    astnode *type = LHS(data);
-    int count = astnode_get_child_count(data) - 1;
-    int nbytes;
-    switch (type->datatype) {
-        case BYTE_DATATYPE:
-        case CHAR_DATATYPE:  nbytes = count; break;
-        case WORD_DATATYPE:  nbytes = count * 2; break;
-        case DWORD_DATATYPE: nbytes = count * 4; break;
-        default:
-        assert(0);
-        break;
-    }
-    if (in_dataseg)
-        dataseg_pc += nbytes;
-    else
-        codeseg_pc += nbytes;
-    return 0;
-}
-
-/* Evaluate each late count independently, before combining it with any
- * neighboring storage. The first address walk may still see forward labels;
- * report errors only when validating the final output. */
-static int binary_storage_size(astnode *storage, int report)
-{
-    astnode *constraint = astnode_get_child(storage, 2);
-    astnode *value;
-    int size;
-    if (constraint != NULL) {
-        value = eval_expression(constraint);
-        if (!astnode_is_type(value, INTEGER_NODE)) {
-            if (report) err(storage->loc, "storage size expression does not evaluate to integer literal");
-            astnode_finalize(value);
-            return -1;
-        }
-        if (value->integer < astnode_get_child(storage, 4)->integer) {
-            if (report) padding_error(storage->loc, astnode_get_child(storage, 3)->string);
-            astnode_finalize(value);
-            return -1;
-        }
-        astnode_finalize(value);
-    }
-    value = eval_expression(RHS(storage));
-    if (!astnode_is_type(value, INTEGER_NODE)) {
-        if (report) err(storage->loc, "storage size expression does not evaluate to integer literal");
-        astnode_finalize(value);
-        return -1;
-    }
-    size = value->integer;
-    astnode_finalize(value);
-    if (size < (constraint != NULL ? 0 : 1) || size >= 0x10000) {
-        if (report) err(storage->loc, "storage size out of range");
-        return -1;
-    }
-    return size;
-}
-
-/**
- * Record the extent used by the last address walk for comparison at emission.
- * STORAGE_NODE's otherwise unused param holds the byte count, or -1 if unknown.
- */
-static int inc_pc_by_storage(astnode *storage, void *arg, astnode **next)
-{
-    int size = binary_storage_size(storage, 0);
-    assert(LHS(storage)->datatype == BYTE_DATATYPE);
-    storage->param = size;
-    if (size >= 0) {
-        if (in_dataseg) dataseg_pc += size;
-        else codeseg_pc += size;
-    }
-    return 1;
-}
-
-/**
- * This pass is only performed if the output format is pure 6502.
- * It ensures that it is actually possible to generate pure 6502
- * for this syntax tree (i.e. no external symbols).
- * Furthermore, it calculates the address of all labels, so that
- * everything is ready for the final output phase.
- */
-void astproc_fourth_pass(astnode *root)
-{
-    int x;
-    /* ### Should loop while there's a change in the address of
-       one or more labels */
-    for (x = 0; x < 2; ++x) {
-        in_dataseg = 0; /* codeseg is default */
-        dataseg_pc = 0;
-        codeseg_pc = 0;
-        /* Table of callback functions for our purpose. */
-        static astnodeprocmap map[] = {
-            { DATASEG_NODE, process_dataseg },
-            { CODESEG_NODE, process_codeseg },
-            { ORG_NODE, set_pc_from_org },
-            { LABEL_NODE, set_label_address },
-            { IDENTIFIER_NODE, ensure_symbol_is_defined },
-            { INSTRUCTION_NODE, inc_pc_by_instruction },
-            { DATA_NODE, inc_pc_by_data },
-            { STORAGE_NODE, inc_pc_by_storage },
-            { BINARY_NODE, inc_pc_by_binary },
-            { STRUC_DECL_NODE, noop },
-            { UNION_DECL_NODE, noop },
-            { ENUM_DECL_NODE, noop },
-            { RECORD_DECL_NODE, noop },
-            { 0, NULL }
-        };
-        /* Do the walk. */
-        astproc_walk(root, NULL, map);
-    }
-}
-
-/*---------------------------------------------------------------------------*/
-
-/**
- * Writes an instruction.
- */
-static int write_instruction(astnode *instr, void *arg, astnode **next)
-{
-    FILE *fp = (FILE *)arg;
-    unsigned char op = instr->instr.opcode;
-    int len = opcode_length(op);
-    fputc(op, fp);
-    if (len > 1) {
-        /* Write operand */
-        astnode *operand = eval_expression(LHS(instr));
-        if(!astnode_is_type(operand, INTEGER_NODE)) {
-            /* ### This is rather fatal, it should be a literal by this point */
-            err(instr->loc, "operand does not evaluate to literal");
-        } else {
-            int value = operand->integer;
-            if (len == 2) {
-                /* Check if it's a relative jump */
-                switch (op) {
-                    case 0x10:
-                    case 0x30:
-                    case 0x50:
-                    case 0x70:
-                    case 0x90:
-                    case 0xB0:
-                    case 0xD0:
-                    case 0xF0:
-                    /* Calculate difference between target and address of next instruction */
-                    value = value - (codeseg_pc + 2);
-                    if (!IS_BYTE_VALUE(value)) {
-                        err(operand->loc, "branch out of range");
-                        value &= 0xFF;
-                    }
-                    break;
-
-                    default: {
-                    /* Address passes can shorten an instruction before its
-                     * final operand is known. Check the emitted opcode, not
-                     * instr.mode, which can still describe the wide form.
-                     * Literal operands already passed translation's byte
-                     * checks, as they do before object encoding. */
-                    addressing_mode mode = opcode_addressing_mode(op);
-                    int fits = (mode == ZEROPAGE_MODE || mode == ZEROPAGE_X_MODE
-                                || mode == ZEROPAGE_Y_MODE)
-                        ? IS_UNSIGNED_BYTE_VALUE(value) : IS_BYTE_VALUE(value);
-                    if (!astnode_is_type(LHS(instr), INTEGER_NODE) && !fits) {
-                        err(operand->loc, "instruction operand doesn't fit in 1 byte");
-                    } else if (!IS_BYTE_VALUE(value)) {
-                        warn(operand->loc, "operand out of range; truncated");
-                        value &= 0xFF;
-                    }
-                    break;
-                    }
-                }
-                fputc((unsigned char)value, fp);
-            } else {
-                assert(len == 3);
-                if (!IS_WORD_VALUE(value)) {
-                    warn(operand->loc, "operand out of range; truncated");
-                    value &= 0xFFFF;
-                }
-                fputc((unsigned char)value, fp);
-                fputc((unsigned char)(value >> 8), fp);
-            }
-        }
-        if (operand != NULL) {
-            astnode_finalize(operand);
-        }
-    }
-    codeseg_pc += opcode_length(instr->instr.opcode);
     return 0;
 }
 
@@ -6150,149 +5348,6 @@ int astproc_truncate_data_value(datatype type, int value, int *was_truncated)
 /**
  * Writes data.
  */
-static int write_data(astnode *data, void *arg, astnode **next)
-{
-    astnode *type = LHS(data);
-    astnode *expr;
-    if (in_dataseg) {
-        int count = astnode_get_child_count(data) - 1;
-        int nbytes;
-        switch (type->datatype) {
-            case BYTE_DATATYPE:
-            case CHAR_DATATYPE:  nbytes = count; break;
-            case WORD_DATATYPE:  nbytes = count * 2; break;
-            case DWORD_DATATYPE: nbytes = count * 4; break;
-            default: nbytes = 0; break;
-        }
-        dataseg_pc += nbytes;
-        return 1;
-    }
-    FILE *fp = (FILE *)arg;
-    for (expr = RHS(data); expr != NULL; expr = astnode_get_next_sibling(expr) ) {
-        int value;
-        astnode *e = eval_expression(expr);
-        if (e == NULL || !astnode_is_type(e, INTEGER_NODE)) {
-            err(expr->loc, "expression does not evaluate to integer literal");
-            codeseg_pc += (type->datatype == BYTE_DATATYPE || type->datatype == CHAR_DATATYPE) ? 1 :
-                          (type->datatype == WORD_DATATYPE) ? 2 : 4;
-            if (e != NULL) {
-                astnode_finalize(e);
-            }
-            continue;
-        }
-        value = e->integer;
-        switch (type->datatype) {
-            case BYTE_DATATYPE:
-            case CHAR_DATATYPE:
-            {
-                int was_truncated;
-                value = astproc_truncate_data_value(type->datatype, value, &was_truncated);
-                if (was_truncated) {
-                    warn(expr->loc, "operand out of range; truncated");
-                }
-                fputc((unsigned char)value, fp);
-                codeseg_pc += 1;
-            }
-            break;
-
-            case WORD_DATATYPE:
-            {
-                int was_truncated;
-                value = astproc_truncate_data_value(type->datatype, value, &was_truncated);
-                if (was_truncated) {
-                    warn(expr->loc, "operand out of range; truncated");
-                }
-                fputc((unsigned char)value, fp);
-                fputc((unsigned char)(value >> 8), fp);
-                codeseg_pc += 2;
-            }
-            break;
-
-            case DWORD_DATATYPE:
-            fputc((unsigned char)value, fp);
-            fputc((unsigned char)(value >> 8), fp);
-            fputc((unsigned char)(value >> 16), fp);
-            fputc((unsigned char)(value >> 24), fp);
-            codeseg_pc += 4;
-            break;
-
-            default:
-            assert(0);
-            break;
-        }
-        astnode_finalize(e);
-    }
-    return 0;
-}
-
-/**
- * Writes storage (padding).
- */
-static int write_storage(astnode *storage, void *arg, astnode **next)
-{
-    int i, size = binary_storage_size(storage, 1);
-    FILE *fp = (FILE *)arg;
-    if (size < 0) return 0;
-    if (size != storage->param) {
-        err(storage->loc, "storage size changed after address calculation");
-        return 0;
-    }
-    if (in_dataseg) {
-        dataseg_pc += size;
-        return 0;
-    }
-    assert(LHS(storage)->datatype == BYTE_DATATYPE);
-    for (i = 0; i < size; ++i) fputc(0, fp);
-    codeseg_pc += size;
-    return 0;
-}
-
-/**
- * Writes binary.
- */
-static int write_binary(astnode *node, void *arg, astnode **next)
-{
-    if (in_dataseg) {
-        dataseg_pc += node->binary.size;
-        return 0;
-    }
-    FILE *fp = (FILE *)arg;
-    fwrite(node->binary.data, 1, node->binary.size, fp);
-    codeseg_pc += node->binary.size;
-    return 0;
-}
-
-/**
- * This pass is only performed if the output format is pure 6502.
- * It writes the binary code.
- */
-void astproc_fifth_pass(astnode *root, FILE *fp)
-{
-    /* Table of callback functions for our purpose. */
-    static astnodeprocmap map[] = {
-        { DATASEG_NODE, process_dataseg },
-        { CODESEG_NODE, process_codeseg },
-        { ORG_NODE, set_pc_from_org },
-        { INSTRUCTION_NODE, write_instruction },
-        { DATA_NODE, write_data },
-        { STORAGE_NODE, write_storage },
-        { BINARY_NODE, write_binary },
-        { STRUC_DECL_NODE, noop },
-        { UNION_DECL_NODE, noop },
-        { ENUM_DECL_NODE, noop },
-        { RECORD_DECL_NODE, noop },
-        { 0, NULL }
-    };
-    in_dataseg = 0; /* codeseg is default */
-    dataseg_pc = 0;
-    codeseg_pc = 0;
-    /* Do the walk. */
-    astproc_walk(root, fp, map);
-}
-
-/*---------------------------------------------------------------------------*/
-/* Instruction-record analysis shadows (XASM_INSTRUCTION_RECORDS_V2_SPEC.md) */
-
 static void analysis_set_ident(astnode *n, const char *prefix, const char *suffix)
 {
     char *name = (char *)malloc(strlen(prefix) + strlen(suffix) + 1);

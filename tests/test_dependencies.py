@@ -385,7 +385,7 @@ class Dependencies(unittest.TestCase):
         previous = self.manifest.read_bytes()
         for options in [["--listing=inner.inc"], ["-o", "inner.inc", "--listing=listing.txt"],
                         ["--xref=inner.inc", "--listing=listing.txt"],
-                        ["--dependency-manifest=inner.inc"]]:
+                        ["--dependency-manifest=inner.inc", "--listing=listing.txt"]]:
             with self.subTest(options=options):
                 run = self.run_asm(*options, manifest=not options[0].startswith("--dependency-manifest="))
                 self.assertEqual(run.returncode, 3, run.stderr)

@@ -43,7 +43,7 @@ static int allocation_fails(const char *function)
 }
 void *analysis_malloc(size_t size, const char *function)
 {
-    if (strcmp(function, "v2_frontend_analysis_symbols") == 0) function = "symtab_list_type";
+    if (strcmp(function, "ir_frontend_analysis_symbols") == 0) function = "symtab_list_type";
     return allocation_fails(function) ? NULL : malloc(size);
 }
 void *analysis_calloc(size_t count, size_t size, const char *function)
@@ -85,10 +85,8 @@ static int xref_setvbuf(FILE *fp, char *buffer, int mode, size_t size)
 #undef plan_analysis_outputs
 #undef prepare_analysis_outputs
 #undef write_analysis_outputs
-#ifdef XORCYST_V2_FRONTEND
 #undef symtab_lookup
 #undef symtab_list_type
-#endif
 
 /* Enumeration allocations belong to shared collection too. Earlier assembler
    passes still use the real allocator because no collection phase is active. */

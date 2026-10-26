@@ -11,7 +11,6 @@ import unittest
 
 XASM = Path(sys.argv.pop(1)).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / 'xasm'
 XLNK = Path(os.environ.get('XLNK', XASM.parent / 'xlnk')).resolve()
-V2_ANALYSIS = False
 
 
 class AnalysisSymbols(unittest.TestCase):
@@ -32,7 +31,7 @@ class AnalysisSymbols(unittest.TestCase):
                     with self.subTest(pure=pure, debug=debug, fmt=fmt), tempfile.TemporaryDirectory() as directory:
                         root = Path(directory)
                         (root / 'input.asm').write_text(source)
-                        if V2_ANALYSIS and not pure: (root / 'output').write_bytes(b'previous object')
+                        if not pure: (root / 'output').write_bytes(b'previous object')
                         flags = ['--pure-binary'] if pure else []
                         if debug:
                             flags += ['--debug']
@@ -44,7 +43,7 @@ class AnalysisSymbols(unittest.TestCase):
                         result = subprocess.run([str(XASM), 'input.asm', '-o', 'output',
                             '--xref=xref', f'--xref-format={fmt}', *flags],
                             cwd=root, capture_output=True, timeout=10)
-                        if V2_ANALYSIS and not pure:
+                        if not pure:
                             self.assertEqual(result.returncode, 1, result.stderr.decode())
                             self.assertIn(b'structured analysis requires --pure-binary', result.stderr)
                             self.assertEqual((root / 'output').read_bytes(), b'previous object')
@@ -183,12 +182,12 @@ class AnalysisSymbols(unittest.TestCase):
                         with self.subTest(body=body, pure=pure, debug=debug, fmt=fmt), tempfile.TemporaryDirectory() as d:
                             root = Path(d)
                             (root / 'input.asm').write_text('.public u\nu: nop\n' + body)
-                            if V2_ANALYSIS and not pure: (root / 'output').write_bytes(b'previous object')
+                            if not pure: (root / 'output').write_bytes(b'previous object')
                             flags = (['--pure-binary'] if pure else []) + (['--debug'] if debug else [])
                             result = subprocess.run([str(XASM), 'input.asm', '-o', 'output',
                                                      '--xref=xref', f'--xref-format={fmt}', *flags],
                                                     cwd=root, capture_output=True, timeout=10)
-                            if V2_ANALYSIS and not pure:
+                            if not pure:
                                 self.assertEqual(result.returncode, 1, result.stderr.decode())
                                 self.assertIn(b'structured analysis requires --pure-binary', result.stderr)
                                 self.assertEqual((root / 'output').read_bytes(), b'previous object')

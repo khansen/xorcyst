@@ -1,11 +1,20 @@
-Development prototype (not an installed v2 release):
+Version 2.0.0 (unreleased cutover candidate):
 
 - Deliberate v2 linker-script correction: numeric arguments must consume the
   whole token. Reject 8000h, $C000x, 1e3 and a bare $ rather than silently using
   the numeric prefix as v1 does. Existing valid numeric spellings are unchanged.
-- Add the explicit, non-installed xasm-v2 target for plain pure-binary assembly.
-  It uses the existing source frontend and the owned v2 value/layout backend.
-  Installed xasm/xlnk, v1 objects and analysis formats remain unchanged.
+- Replace the separate assembly and link engines with one owned value graph,
+  layout engine and encoder, exposed through the normal xasm and xlnk commands.
+  Remove the prototype targets and the old object reader and writer. Rebuild
+  all objects from source; XOROBJ2 is the only accepted object format.
+- Make structured listing schema 2 the sole JSON/NDJSON schema and remove
+  --listing-version. Listing and analysis outputs require --pure-binary.
+  Preserve instruction-record schema 3 and the current xref schemas.
+- Stage binary and analysis outputs together. Detected collection and I/O
+  failures preserve previous outputs; compare and audit findings still publish
+  their deliberate result sets. See the migration guide for retained limitations.
+- Captured aliases retain undeclared-global warnings and reject missing local
+  labels instead of implicitly importing a scoped local name.
 - Apply the approved v2 source rules: forward string data and use-site character
   maps, acyclic late storage spans, and fixed-point narrowing on the binary path.
   Strings are resolved before integer identities: S+0 concatenates when S is a
@@ -19,7 +28,6 @@ Development prototype (not an installed v2 release):
   it, reject at the sizeof use instead of publishing a stale size. This can
   reject v1-accepted programs using reassignment or .undef; numeric changes,
   same-length strings and values captured at the data line remain valid.
-  These changes belong only to the prototype until review and staged cutover.
 - Reject strings built from the containing label's own sizeof with a located
   size-unknown error, even without reassignment or .undef. For example,
   Tbl: .db sizeof(Tbl)+"A" no longer emits "1A" with a stale one-byte size.

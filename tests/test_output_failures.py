@@ -15,7 +15,6 @@ import unittest
 from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
-V2_ANALYSIS = False
 
 
 class OutputFailures(unittest.TestCase):
@@ -31,15 +30,13 @@ class OutputFailures(unittest.TestCase):
         sources = [REPO / word for word in sources.replace('\\\n', ' ').split()
                    if word.endswith('.c') and word not in ('xasm.c', 'listing.c', 'symtab.c', 'fceux_nl.c', 'output_file.c')]
         sources += [REPO / 'tests/test_io_faults.c', REPO / 'tests/test_analysis_faults.c']
-        if V2_ANALYSIS:
-            sources = [REPO/'tests/test_v2_frontend_faults.c' if p.name == 'astproc.c' else p for p in sources]
-            sources += [REPO/'v2'/name for name in ('heap.c', 'layout.c', 'program.c', 'object.c')]
-            sources += [REPO/'tests/test_v2_value_faults.c']
+        sources = [REPO/'tests/test_ir_frontend_faults.c' if p == REPO/'ir/frontend.c'
+                   else REPO/'tests/test_ir_value_faults.c' if p == REPO/'ir/value.c'
+                   else p for p in sources]
 
         command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO), '-Wall',
                    *shlex.split(os.environ.get('TEST_FAULT_CFLAGS', '-O0 -g')),
                    *map(str, sources), '-o', str(cls.executable)]
-        if V2_ANALYSIS: command += ['-DXORCYST_V2_FRONTEND']
         if sys.platform == 'darwin':
             command += ['-framework', 'CoreFoundation']
         result = subprocess.run(command, capture_output=True)
@@ -129,9 +126,9 @@ class OutputFailures(unittest.TestCase):
                         'XASM_TEST_IO_FAILURE': operation, 'XASM_TEST_IO_AT': str(fail_at)})
                     self.assertGreater(result.returncode, 0, result.stderr.decode())
                     self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
-                    self.assertEqual(self.output.read_bytes(), previous[self.output] if V2_ANALYSIS else published[self.output])
+                    self.assertEqual(self.output.read_bytes(), previous[self.output])
                     for index, path in enumerate(ordered):
-                        self.assertEqual(path.read_bytes(), published[path] if not V2_ANALYSIS and index < fail_at else previous[path])
+                        self.assertEqual(path.read_bytes(), previous[path])
                     self.assertEqual(manifest.read_bytes(), previous[manifest])
                     self.assert_no_temporary_files()
 
@@ -277,7 +274,7 @@ class OutputFailures(unittest.TestCase):
                                     path.unlink()
                             result = self.run_xasm(*flags, faults={'XASM_TEST_IO_FAILURE': operation,
                                                                   'XASM_TEST_OUTPUT_PATH': str(target)})
-                            self.assertEqual(result.returncode, 3 if V2_ANALYSIS and operation == "output_rename" else code, result.stderr.decode())
+                            self.assertEqual(result.returncode, 3 if operation == "output_rename" else code, result.stderr.decode())
                             self.assertIn(f'INJECT_IO {operation}'.encode(), result.stderr)
                             if name == 'manifest':
                                 errors = [line for line in result.stderr.splitlines() if line.startswith(b'error:')]
@@ -285,18 +282,15 @@ class OutputFailures(unittest.TestCase):
                             for index, path in enumerate(paths):
                                 # CSV closes both streams before either rename. A
                                 # failure of the second rename cannot undo the first.
-                                if not V2_ANALYSIS and operation == 'output_rename' and index < target_index:
-                                    self.assertEqual(path.read_bytes(), published[path])
-                                elif existing:
+                                if existing:
                                     self.assertEqual(path.read_bytes(), previous[path])
                                     self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o664)
                                 else:
                                     self.assertFalse(path.exists())
                             if manifest not in paths:
                                 self.assertEqual(manifest.read_bytes(), previous[manifest])
-                            if V2_ANALYSIS:
-                                for path in (self.output, self.ram, self.bank0, self.bank1):
-                                    self.assertEqual(path.read_bytes(), previous[path])
+                            for path in (self.output, self.ram, self.bank0, self.bank1):
+                                self.assertEqual(path.read_bytes(), previous[path])
                             self.assert_no_temporary_files()
 
     def test_sidecar_permissions_preserve_existing_modes_and_respect_umask(self):
@@ -393,7 +387,7 @@ class OutputFailures(unittest.TestCase):
                         blocked.chmod(0)
                     try:
                         result = self.run_xasm(*flags, nl=protection == 'nl', umask=0o027)
-                        if protection == 'none' and not V2_ANALYSIS:
+                        if False:
                             self.assertEqual(result.returncode, 0, result.stderr.decode())
                             self.assertFalse(listing.is_symlink())
                             self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o640)
@@ -454,8 +448,6 @@ class OutputFailures(unittest.TestCase):
                     self.assert_no_temporary_files()
 
     def test_late_value_allocations_preserve_the_complete_output_set(self):
-        if not V2_ANALYSIS:
-            self.skipTest('owned value evaluator only')
         self.source.write_text('.org $8000\nBase: nop\nK .equ 2\n'+''.join(f'.dw Base+(K+{i})\n' for i in range(128)))
         xref, manifest, listing = [self.root/name for name in ('xref.json','deps.json','listing.json')]
         flags = (f'--xref={xref}', '--xref-data=true', f'--dependency-manifest={manifest}',
@@ -544,7 +536,7 @@ class OutputFailures(unittest.TestCase):
         xref = self.root / 'xref.json'
         for pure_binary, nl in ((True, False), (True, True), (False, False)):
             self.source.write_text(('.ORG $8000\n' if pure_binary else '') + 'Entry:\nNOP\nRTS\nEND\n')
-            flags = [] if V2_ANALYSIS and not pure_binary else [f'--xref={xref}']
+            flags = [] if not pure_binary else [f'--xref={xref}']
             if pure_binary:
                 flags.append(f'--dependency-manifest={manifest}')
             for operation in ('binary_ferror', 'binary_fclose', 'binary_rename'):
