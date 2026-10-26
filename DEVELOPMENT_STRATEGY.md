@@ -65,14 +65,23 @@ or a case timeout prevents completion, mark the run incomplete and identify
 what was omitted; do not silently shrink the matrix to claim a pass. Keep
 larger campaigns separately selectable.
 
-Preserved reviewer tools are starting points for that deliverable. The analysis
-set includes `agen.py`, `adiff.py`, `selfcheck.py`, `injsweep.py`, `stagetest.py`
-and `diagasan.py`, with `failalloc.c` and `failfs.c` interposers. The linker set
-includes `linkdiff.py`, `objfuzz2.py` and `assigngen.py`. Keep their original
-bytes, provenance and checksums in the external evidence archive. They contain
-review-specific paths, fixtures, feature exclusions and old CLI assumptions;
-the interposers use macOS DYLD. A portable integration needs Linux equivalents
-such as `LD_PRELOAD` or the existing test hooks, with separate validation.
+Preserved reviewer tools are starting points for that deliverable. Prefer the
+I6-era `adiff56.py` and `linki56.py` for two current-tool builds: they use the
+normal executable names and omit the removed listing selector. Their inherited
+comments still use some v1/v2 terminology. The earlier analysis set includes
+`agen.py`, `adiff.py`, `selfcheck.py`, `injsweep.py`, `stagetest.py` and
+`diagasan.py`, with `failalloc.c` and `failfs.c` interposers. The earlier linker
+set includes `linkdiff.py`, `objfuzz2.py` and `assigngen.py`. Also retain
+`ddmin.py` for input reduction, `jdiff.py` for structural JSON differences and
+`injbt.sh` for allocation backtraces, together with the original injection and
+publication fixtures and the I6 generator dependency.
+
+Keep their original bytes, provenance and checksums in the external evidence
+archive. They contain review-specific paths, feature exclusions and, in the
+older versions, obsolete CLI assumptions. Audit their normalization before reuse.
+The interposers and backtrace script use macOS DYLD. A portable integration
+needs Linux equivalents such as `LD_PRELOAD` or the existing test hooks, with
+separate validation.
 
 | Surface | Compare or validate |
 | --- | --- |
