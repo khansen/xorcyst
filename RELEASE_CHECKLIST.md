@@ -97,13 +97,20 @@ The archive was regenerated with `make dist` and checked against the committed
 source. The full suite and ROM gate were not repeated for these text-only edits;
 the results above apply to the unchanged code and tests.
 
+The subsequent TODO update tracks integration of the preserved reviewer tools.
+The tracked, source-only `DEVELOPMENT_STRATEGY.md` defines that future work; no
+harness or CI changes are implemented by this documentation update. `make dist`
+was repeated for the shipped TODO change, and all archive files were compared
+with the prepared source. Full tests and project builds were not repeated.
+
 All 184 regular files in the archive match the prepared tracked source. No
 historical `design/` directory, private evidence or owner-local filesystem paths
 are included. The local archive, SHA256SUMS and validation record are outside the
 worktree under `/private/tmp/xorcyst-2.0-release-preparation/`; earlier archives
-are retained in `previous-2181add/` and `previous-05f863c/`. None is committed or
+are retained in `previous-2181add/`, `previous-05f863c/` and
+`previous-c436394/`. None is committed or
 published. The current archive SHA-256 is
-`a1f2abfef2056fbec58f9c516ae63ab37b0a9d61897b6f2d6958ba52f41510a1`.
+`fc6019eff0cedca0af1c4ac0d7bf9c0925a5f4f8354a9ff77f32358af9dc745a`.
 
 These checks validate the prepared archive, not a tagged release. Rebuild and
 verify from the final merged release commit before publication.

@@ -47,7 +47,7 @@ by its exact candidate commit; do not call it a released baseline. Retain 1.9.12
 as a secondary oracle for compatibility investigations. Approved 2.0 corrections
 must not be mistaken for regressions against v1.
 
-### Proposed optional maintainer harness
+### Planned optional maintainer harness
 
 Adapt the useful reviewed generators into a small, reproducible check under
 `tests/`. Use explicit baseline/candidate tool paths, deterministic seeds,
@@ -146,6 +146,47 @@ Existing checks to reuse:
   analysis options and multi-unit linking. The project ROM gate alone does not
   provide it. A timing script's built-in threshold is not a substitute for the
   owner-approved performance policy.
+
+### Integration plan and completion criteria
+
+The harness is an active item in [TODO](TODO) and the next validation-tooling
+task. The external backup is a preservation step; usable tests belong in the
+repository. Implement this as separately reviewed tooling work, keeping the
+2.0 release preparation independent of a new test-framework project.
+
+1. **Land the bounded differential.** Adapt `adiff56.py`, `linki56.py` and their
+   generator into `tests/differential/`, with the 200-program command and
+   coverage report described above. Include small public fixtures, structural
+   comparison, a reducer and reproducible failing-case bundles. Fold useful
+   assignment and self-consistency controls into this suite. Remove hard-coded
+   paths and audit normalizations and exclusions. Validate the harness using
+   identical builds and deliberately changed output, diagnostics and artifacts.
+2. **Make it reproducible and automatic.** Track a baseline source commit and
+   build recipe; build that reference and the candidate with matched settings.
+   Use an explicitly identified candidate until the actual 2.0.0 release commit
+   is available. Cache reference builds by revision, compiler, flags and host;
+   binaries on one developer's machine must not be required. After local review,
+   add the bounded fixed-seed check to Linux and macOS PR CI, with coverage and
+   failure bundles retained as artifacts. Keep larger campaigns manually
+   selectable. Keep ordinary `make check` usable without a reference build.
+3. **Integrate failure and malformed-input checks.** Adapt the allocation,
+   publication, backtrace and object-mutation tools into the existing fault and
+   object suites where practical. Track their synthetic fixtures. Prefer the
+   existing portable test hooks; add platform-specific interposers only where
+   necessary and validate each platform. Preserve the path/destination conditions
+   needed to reproduce individual failures. Keep expensive sweeps opt-in.
+4. **Retire dependence on the backup.** Record which maintained test or helper
+   replaces each useful reviewer tool, and which older variants are superseded.
+   Keep the original snapshot for provenance; normal development and CI must
+   never read it. Mark the TODO complete only when a fresh checkout on supported
+   Linux/macOS hosts can build the declared baseline and run the documented
+   checks without private projects, review scratchpads or owner-local files.
+
+For later 2.x releases, retain the pinned 2.0 reference for cumulative behavior
+checks and compare with the immediate base for changes under review. Update
+baseline pins and intentional-difference controls through review; do not move
+the baseline merely to make a failing comparison disappear. Minimized regressions
+belong in the ordinary test suite so they survive changes to generators or seeds.
 
 ## Check the behavior around every fix
 

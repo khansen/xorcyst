@@ -1,5 +1,10 @@
 Open product work
 
+- Integrate the preserved reviewer tools into a portable, versioned differential
+  suite: 100 pure-binary and 100 multi-unit programs, coverage reporting and
+  reduction, targeting five minutes. Add Linux/macOS CI and reproducible pinned
+  baseline builds; then integrate fault injection and object fuzzing. See the
+  integration plan and completion criteria in DEVELOPMENT_STRATEGY.md.
 - Report parser and analysis allocation failures reliably. Summary, text
   scope/source and xref data provenance can silently omit facts; index,
   consumer and coverage collectors can fail without explaining why.
