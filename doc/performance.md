@@ -222,7 +222,10 @@ supplement, and never replace, the required real-project gate.
 ## Evidence retained
 
 Keep machine/tool/input manifests, command arrays, exit codes, full raw timings,
-output hashes, correctness-validation results and profiles with the reviewed
-candidate revision. Project assets/ROMs remain in the owner's local archive;
-commit the manifests and concise report. Repeat combined-tree comparisons when producer or consumer behavior changes. A green CI test suite alone is
-not a performance pass.
+output hashes, correctness-validation results and profiles in a durable evidence
+archive outside the repository. Associate the evidence with the reviewed
+candidate revision and its checksums, and retain a concise review report.
+Private project assets and ROMs stay outside the repository. Completed reports
+and manifests already committed remain available in Git history; they need not
+remain in the working tree. Repeat combined-tree comparisons when producer or
+consumer behavior changes. A green CI test suite alone is not a performance pass.

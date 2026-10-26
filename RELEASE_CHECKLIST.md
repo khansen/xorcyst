@@ -75,9 +75,10 @@ performance documents now live in `doc/`, project checks and portable fixture
 identities in `tests/projects/`, and the wire example in `tests/fixtures/`.
 The root semantic/design contracts remain. No assembler or linker source changed.
 
-Automake 1.19 regenerated the packaging rules; Texinfo 7.3 regenerated the
-manual. `make distcheck` passed 531 tests (19 regression suites plus installed-tool
-checks), shell regressions, installation, uninstall and distclean, with no skips.
+At `05f863c`, Automake 1.19 regenerated the packaging rules and Texinfo 7.3
+regenerated the manual. `make distcheck` passed 531 tests (19 regression suites
+plus installed-tool checks), shell regressions, installation, uninstall and
+distclean, with no skips.
 The first sandboxed run could not bind the socket used by an output-safety test;
 the successful run had the required permission. The install tests also verify
 the two relocated public documents.
@@ -88,13 +89,21 @@ other four project tools. The independent 244-byte wire fixture is byte-identica
 its checker and all five project-tool imports work from the source archive.
 Local document links and frozen-input identities were checked.
 
+Independent local review cleared that cleanup and the subsequent edits to the
+migration guide, TODO and fixture provenance. The follow-up also clarifies
+where validation evidence is retained. Only documentation and provenance text
+changed; all 50 sizeof cases, runtime sources and build rules are unchanged.
+The archive was regenerated with `make dist` and checked against the committed
+source. The full suite and ROM gate were not repeated for these text-only edits;
+the results above apply to the unchanged code and tests.
+
 All 184 regular files in the archive match the prepared tracked source. No
 historical `design/` directory, private evidence or owner-local filesystem paths
 are included. The local archive, SHA256SUMS and validation record are outside the
-worktree under `/private/tmp/xorcyst-2.0-release-preparation/`; the previous
-metadata-only archive is retained in `previous-2181add/`. None is committed or
+worktree under `/private/tmp/xorcyst-2.0-release-preparation/`; earlier archives
+are retained in `previous-2181add/` and `previous-05f863c/`. None is committed or
 published. The current archive SHA-256 is
-`5736a9fb23c469b3cf6fa9d27a5fbededf1c1b094eef80879f5a6188eee95963`.
+`a1f2abfef2056fbec58f9c516ae63ab37b0a9d61897b6f2d6958ba52f41510a1`.
 
 These checks validate the prepared archive, not a tagged release. Rebuild and
 verify from the final merged release commit before publication.

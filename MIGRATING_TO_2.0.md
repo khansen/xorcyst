@@ -68,12 +68,26 @@ rollback itself fails, it reports and retains its backup for recovery. The
 linker stages all outputs before publishing them, but publication is per file:
 a later rename failure can leave an earlier output published.
 
-## Remaining limits and costs
+## Known limitations and costs
 
 Inherited parser and some shared collector allocation failures are not all
-reported reliably. Leading unnamed RAM data containing `$`, duplicate size
-errors, and exponential expansion of shared aliases in rich analysis remain
-tracked in `TODO`. These are known limitations, not new compatibility promises.
+reported reliably. These failures, linker output-set rollback and exponential
+expansion of shared aliases in rich analysis are active priorities in `TODO`.
+
+Other known limitations are retained for reference:
+
+- Leading unnamed RAM data containing `$` fails in object output with an
+  unlocated anchor error. This includes data whose unused label was removed.
+- Requesting FCEUX ROM export together with a diagnostic listing can prevent
+  the listing after a syntax error or unresolved storage. If the output
+  destinations cannot be planned safely, previous outputs are preserved.
+- `sizeof` scans over very long runs of shared labels can take cubic time.
+  This has been observed in synthetic cases; optimization is deferred until
+  a real workload warrants it.
+- Multiple `sizeof` uses of one operand can repeat the same size-unknown
+  diagnostic.
+- Labels referenced only through unused constant-alias chains may not receive
+  an unused-label warning.
 
 Objects are larger because they carry fixed-width tables, expression graphs,
 fixups and diagnostic locations. The largest input buffer remains live briefly
