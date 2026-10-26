@@ -1,6 +1,9 @@
 {
   "base": "8e354892d4915d2861872b3d06ab43ebdf235d56",
   "date": "2026-10-26",
+  "documentation_only_updates": [
+    "TODO trimmed to unresolved product work after review; runtime and recorded test evidence unchanged."
+  ],
   "evidence": {
     "build.log": {
       "sha256": "c1ec3bd47854a7ae86a14948157a8affce23be0cc227bb14fc7bda939c22532a",
@@ -167,8 +170,8 @@
       "size": 16247
     },
     "TODO": {
-      "sha256": "012a62c646de05a3870b6c235f73edda7c60bc33ad5bcea7cc33a13dd412b39b",
-      "size": 4058
+      "sha256": "7ab7332b4eb9caf528683377a3f5cbbd0574cfc84b109049a52ecc688276e8c9",
+      "size": 1658
     },
     "XASM_ANALYSIS_FEATURES_GUIDE.md": {
       "sha256": "5c91390a6db136334dcbb083f119988423da0de9dd4b78163338c96433f9e18c",
