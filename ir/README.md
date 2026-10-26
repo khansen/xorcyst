@@ -14,7 +14,7 @@ and the same encoder for final bytes. There is one installed assembler and linke
   wire input before translation. `link.c` resolves providers and imports.
 - `heap.c` pools small linker allocations. Its tradeoffs, including sanitizer
   limits and measured transient object-buffer costs, are in the performance
-  protocol and historical I4 validation record.
+  policy in `doc/performance.md`.
 - `path.h` implements future-path identity checks used by both drivers.
 
 Integer arithmetic wraps to signed 32-bit values through `expr_int.h`.
@@ -29,6 +29,7 @@ exercise them independently; frontend, object and analysis tests use the normal
 command-line programs. Run `make check`; `TEST_IR_CFLAGS` selects instrumentation
 for the direct-IR and source/object integration suites.
 
-The semantic contract, wire specification and recorded owner decisions remain in
-`XORCYST_V2_CONTRACTS.md` and `design/v2/`. Historical stage approvals are retained
-in `design/v2/IMPLEMENTATION_HISTORY.md`; they do not certify the final cutover.
+The semantic contract and owner decisions are in `XORCYST_V2_CONTRACTS.md`;
+the wire specification is `doc/object-format.md`. Project validation tools and
+frozen-input identities are in `tests/projects/`. Historical review records
+remain in Git history; they do not certify a later release.

@@ -350,7 +350,7 @@ class Objects(unittest.TestCase):
         self.link(error='rebuild with xasm')
 
     def test_approved_hex_fixture_round_trips_exactly(self):
-        text = (REPO/'design/v2/object-wire-example.hex').read_text()
+        text = (REPO/'tests/fixtures/object-wire-example.hex').read_text()
         # Checked-in hex has commentary following '#'.
         data = bytes.fromhex(' '.join(line.split('#')[0] for line in text.splitlines()))
         self.assertEqual(len(data), 244)

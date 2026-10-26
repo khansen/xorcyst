@@ -1,4 +1,4 @@
-Version 2.0.0 (unreleased cutover candidate):
+Version 2.0.0:
 
 - Deliberate v2 linker-script correction: numeric arguments must consume the
   whole token. Reject 8000h, $C000x, 1e3 and a bare $ rather than silently using

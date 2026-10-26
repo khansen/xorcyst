@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build the frozen I4 source projects without running asset converters.
+"""Build the frozen source projects without running asset converters.
 
-This source-checkout tool uses the external D1 gate archive. It never builds in
+This source-checkout tool uses the external frozen gate archive. It never builds in
 an input tree. Both tools must be explicit; installed xasm/xlnk are not used.
 """
 import argparse

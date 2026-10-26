@@ -1,12 +1,10 @@
-# D1 object wire layout
+# XORcyst object format
 
-Status: **approved by the owner as part of D1 on 2026-10-23.**
-Includes the owner-approved preimplementation erratum in semantic contract §9.
-No runtime implementation is included here. This is the concrete
-wire check following the corrected [semantic contract](../../XORCYST_V2_CONTRACTS.md).
-The numbers below and the independent hex example were reviewed together.
-Changing this encoding requires reopening the affected D1 contract.
-It adds no language, v1 reader, cross-unit type system or linker analysis output.
+This is the current `XOROBJ2` wire contract. It complements the
+[semantic contract](../XORCYST_V2_CONTRACTS.md). The field layouts and independent
+hex example were reviewed together; encoding changes require contract review.
+The format does not support v1 objects, cross-unit type definitions or linker
+analysis output.
 
 ## File organization
 
@@ -103,7 +101,7 @@ selection and explicit label-size queries are frontend operations; they cannot
 escape as extra object tags. Any pending local operand-kind checks for label
 sizeof must finish in the assembler before an object is published; there is no
 wire guard or deferred query. The owner-selected exclusion of `.label name = expr`
-is in the D1 migration ledger; this draft has no fixed-address label flag.
+is in the D1 migration ledger; this format has no fixed-address label flag.
 
 Definitions and expressions may forward-reference tables. Shared references
 stay shared after decoding; no tree expansion is permitted. Cycles in required
@@ -261,8 +259,8 @@ zero-size behavior and the approved count rules; add no broader zero-storage rul
 
 ## Independent fixture and validation checklist
 
-The source-tree evidence `object-wire-example.hex` was written from these field/offset tables, with no
-XORcyst serializer. `check_wire_example.py` independently reads the literal
+The source-tree fixture `tests/fixtures/object-wire-example.hex` was written from these field/offset tables, with no
+XORcyst serializer. `tests/check_wire_example.py` independently reads the literal
 bytes and checks the offsets, references and decoded facts. It is evidence
 tooling, not a proposed production loader. The example represents a public
 `Start: .byte $EA` lowered to raw data, with location `input.asm:1:1–1:17`.
@@ -276,9 +274,8 @@ encoded a link-time label-size query that v2 no longer supports. Frontend
 capture/rejection is pinned by the source probes instead; a second wire form is
 unnecessary for an ordinary integer literal.
 
-Before production implementation, the review must check every mapping above
-against the semantic examples. The eventual implementation tests must additionally
-cover strings with mapped NUL, assembler-captured label-size literals,
+Changes must keep every mapping above consistent with the semantic examples.
+Regression tests must cover strings with mapped NUL, assembler-captured label-size literals,
 RAM spans and exact quicksort permutation, shared expression/extent DAGs, imported aliases
 and both link orders, zero field remainders, all narrowing controls and bank/RAM
 ownership. Mutated inputs must reject unknown tags, nonzero reserved fields,
@@ -288,9 +285,8 @@ Resource/invalid-evaluation failures preserve old output. Tests must distinguish
 malformed files from valid files whose required expressions later fail evaluation.
 The example checks neither performance nor every production-loader invariant.
 
-This layout and its fixture are included in the D1 approval recorded in
-section 8 of the semantic contract. Implementation follows D0's staged gates;
-installed tools stay v1 until cutover.
+This layout and its fixture were approved as part of D1; section 8 of the
+semantic contract preserves that approval. Both normal tools use this format.
 
 Owner-approved clarification (2026-10-25): tag 8 counts integer operands as one
 element as well as counting string bytes. Imported initializer kinds come from

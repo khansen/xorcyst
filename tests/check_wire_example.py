@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Inspect the hand-written D1 wire example independently; not a runtime loader."""
+"""Inspect the hand-written object-format example independently; not a runtime loader."""
 from pathlib import Path
 import struct
 
 
 def inspect(name, length, counts):
-    raw = bytes.fromhex(Path(__file__).with_name(name).read_text())
+    raw = bytes.fromhex((Path(__file__).resolve().parent / "fixtures" / name).read_text())
     assert raw[:8] == b"XOROBJ2\n"
     assert struct.unpack_from("<I", raw, 8)[0] == len(raw) == length
     widths = (8, 12, 20, 24, 24, 36, 20, 24, 28, 20)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Paired Unix producer/consumer measurements on the frozen D1 inputs.
+"""Paired Unix producer/consumer measurements on the frozen baseline inputs.
 
-Default: bounded five-pair survey, not a formal performance pass. For the D1
+Default: bounded five-pair survey, not a formal performance pass. For the formal
 sampling schedule use --pairs 15 --batch-seconds 2 on an idle machine. Correctness
 and cross-version fact parity are checked separately; every timed run checks its
 exit status and the exact frozen PRG. No project checkout is written.

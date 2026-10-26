@@ -1,26 +1,16 @@
 Open product work
 
+- Integrate the preserved reviewer tools into a portable, versioned differential
+  suite: 100 pure-binary and 100 multi-unit programs, coverage reporting and
+  reduction, targeting five minutes. Add Linux/macOS CI and reproducible pinned
+  baseline builds; then integrate fault injection and object fuzzing. See the
+  integration plan and completion criteria in DEVELOPMENT_STRATEGY.md.
 - Report parser and analysis allocation failures reliably. Summary, text
   scope/source and xref data provenance can silently omit facts; index,
   consumer and coverage collectors can fail without explaining why.
-- Handle leading unnamed RAM data containing $ in object output. It currently
-  fails with an unlocated anchor error. Keep validation of other initializer
-  symbols when discarding data that has no allocation identity.
 - Preserve earlier linker outputs when publishing a later output fails.
   The linker stages all files but publishes them independently; the assembler
   already rolls back its requested output set on detected failures.
 - Bound rich-analysis expansion of shared aliases. It currently turns shared
   graphs into trees and can consume exponential memory. Text listings avoid
   this path; focus optimization on demonstrated workloads.
-- Improve diagnostic-listing availability when FCEUX ROM export is requested
-  after a syntax error or unresolved storage. Do not publish a partial set
-  when its destinations cannot be planned safely.
-- Avoid repeated scans of very long shared-label runs in sizeof, if a real
-  workload warrants it. The current synthetic worst case grows cubically.
-- Deduplicate size-unknown diagnostics for multiple sizeof uses of one operand.
-- Investigate unused-label warnings through constant-alias chains. Keep source
-  usage separate from references retained only for export or layout.
-
-Release coordination: design/v2/I6_RELEASE_CHECKLIST.md.
-Approved behavior and scope: XORCYST_V2_CONTRACTS.md and XORCYST_V2_DESIGN.md.
-Completed implementation history and validation: design/v2/.

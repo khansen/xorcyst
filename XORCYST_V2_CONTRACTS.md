@@ -5,16 +5,18 @@ review reported no blockers.** The approval record is in section 8; the
 owner-approved binary-logical-operator erratum is in section 9.
 These contracts implement the decisions in [the approved D0 scope](XORCYST_V2_DESIGN.md),
 merged as `162dacc`. They define interfaces and acceptance cases, not C APIs or
-runtime code. I1–I5 are approved and merged. I6 uses the normal tool names and
+runtime code. I1–I6 are approved and merged. I6 uses the normal tool names and
 received owner approval at `7105ea7` on 2026-10-26 after independent review.
-CI, merge and coordinated workflow activation remain release gates, recorded
-in the source checkout's `design/v2/I6_RELEASE_CHECKLIST.md`. The source-only baseline
-record, `design/v2/BASELINES.md`, and
-[performance protocol](design/v2/PERFORMANCE.md) are included in this approval.
-The baseline evidence is not included in release archives or installed docs.
+Release coordination is recorded in the source checkout's
+`RELEASE_CHECKLIST.md`. The frozen-input identities in
+`tests/projects/baselines.json` and
+[performance protocol](doc/performance.md) are included in this approval.
+Private sources, ROMs and raw baseline evidence are not included in release
+archives or installed docs. Historical review records remain in
+[Git history](https://github.com/khansen/xorcyst/tree/9a273fa081524e3d55d608b3c9587ad55261aca4/design/v2).
 
 The fragment and fixup semantics were reviewed before the concrete wire layout.
-The approved [wire layout](design/v2/OBJECT_WIRE_DRAFT.md) maps these entities
+The approved [wire layout](doc/object-format.md) maps these entities
 to records and a hand-written hex example. Its tags and byte offsets are part
 of D1. Subsequent semantic or encoding changes must reopen the affected
 contract for review. Implementation follows D0's staged sequence; this document
@@ -490,7 +492,7 @@ Terms, operand values, emitted values and listing bytes come from the same
 resolved facts. A CPU address and a raw output offset are separate coordinates;
 macros and repeated bank CPU windows do not make either a unique source key.
 
-The consumer checklist in `design/v2/BASELINES.md` in the source checkout (not shipped) covers every
+The consumer checklist in `tests/projects/README.md` in the source checkout covers every
 D0 output product. Port the collectors, not their schemas by default. Nesrev's
 bundle reader must accept listing version 2 and its corrected non-emitting/fill
 facts, and its fixture expectations must migrate intentionally. A producer
@@ -619,7 +621,7 @@ project performance gates and adding an adversarial regression fixture.
 
 This changes neither evaluation order nor source semantics. I2 reports work
 counters and tests bounded examples; I3–I5 must still demonstrate no slowdown
-on every required project/configuration under `design/v2/PERFORMANCE.md`.
+on every required project/configuration under `doc/performance.md`.
 A synthetic counter test is not a substitute for Metroid, Nesrev analysis,
 dpadhero2 or the other frozen project gates.
 
@@ -648,8 +650,9 @@ Continue per-tool accounting and review of purpose, capacity and lifetime.
 Reviewers should seek simple optimizations with demonstrated benefit and assess
 whether existing complexity is justified. Extra allocator/encoding complexity
 solely to shave small amounts is not a goal. Design section 6 and
-`design/v2/PERFORMANCE.md` state the policy; the source-checkout validation record
-and `design/v2/I4_REVIEW.md` carry the measurements and reviewer instructions.
+[performance policy](doc/performance.md) state the policy and summarize the
+costs. The historical I4 validation and review records retain the measurements
+and reviewer instructions in Git history.
 This decision does not approve I4, waive timing or byte-exact project gates,
 or authorize publication before local independent review.
 
@@ -691,8 +694,8 @@ samples, absolute deltas, artifact sizes and remaining limitations.
 
 The I5 review exposed these consequences of the existing final-facts contract.
 The owner approved these I5 corrections on 2026-10-25; they introduce no new
-source-language feature. The citable stage approval is in the source checkout's
-`design/v2/IMPLEMENTATION_HISTORY.md`.
+source-language feature. The citable stage approval remains in the historical
+implementation record linked above.
 
 | Case | v1 | v2 |
 | --- | --- | --- |

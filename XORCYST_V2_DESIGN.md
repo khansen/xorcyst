@@ -1,24 +1,22 @@
 # XORcyst v2: approved scope and design
 
 Status: **D0 approved by the owner on 2026-10-22; D1 contracts and baselines
-approved on 2026-10-23 after independent review.** The latest published release is v1.9.12; this tree prepares 2.0.0.
+approved on 2026-10-23 after independent review.** The 2.0.0 implementation is complete.
 
 Independent review found speculative scope and incompatible layout rules in
 the initial design. This approved scope addresses demonstrated project needs
 and states the compatibility decisions explicitly. Independent review and
 owner approval are distinct; the approval record is in section 8.
 
-**Gate:** D0 and D1 review and owner approval are complete. Implementation
-follows the sequence in section 7 after the approved D1 revision is merged.
-I1–I5 are approved and merged. I6 completed independent review and received
-owner approval at `7105ea7` on 2026-10-26. CI, merge and coordinated workflow
-activation remain release gates; no 2.0.0 release is tagged. The source checkout
-records approval and the remaining steps in `design/v2/I6_APPROVAL.md` and
-`design/v2/I6_RELEASE_CHECKLIST.md`.
+**Gate:** D0, D1 and I1–I6 are approved and merged. I6 received owner approval
+at `7105ea7` on 2026-10-26 after independent review. Section 7 preserves the
+completed implementation sequence. Historical approval and review records
+remain in [Git history](https://github.com/khansen/xorcyst/tree/9a273fa081524e3d55d608b3c9587ad55261aca4/design/v2); current release coordination is in
+`RELEASE_CHECKLIST.md` in the source checkout.
 
 D1 work and its approval record are in the
 [contracts](XORCYST_V2_CONTRACTS.md) and
-`design/v2/BASELINES.md` in the source checkout (not shipped). D1 approval
+the frozen-input identities in `tests/projects/baselines.json`. D1 approval
 supplements the historical D0 approval without waiving implementation gates.
 
 ## 1. Where the requirements come from
@@ -44,7 +42,7 @@ semantics or every analysis field.
 | R4 | Preserve output on errors and refuse incomplete analysis bundles. | Nesrev's manifest/hash/freshness checks; [dependency manifest contract](XASM_DEPENDENCY_MANIFEST_SPEC.md); `test_unresolved_analysis_values_preserve_all_outputs` in [test_inputs.py](tests/test_inputs.py). |
 | R5 | Support one structured-listing schema, with an output identifier and coordinated consumer migration. | Owner decision. Listing v2 already fixes concrete byte/fill/mode errors; the [README listing contract](README) describes them. This does not require half-open ranges or a new analysis product. |
 | R6 | Design full forward-string data support, including use-site character maps and final lengths. | Owner decision following reproduced binary/object disagreement. `.byte Text / After: .word After / Text .equ "ABC"` must give `41 42 43 03 00` at zero. No claim that Metroid needs forward strings. |
-| R7 | Replace the object format where needed; no v1 object reader/writer is required in v2. | Owner decision. Concrete format constraints are in [objdef.h](objdef.h), [codegen.c](codegen.c), and [TODO](TODO): count-minus-one storage cannot represent zero remainders, exports can retain unresolved aliases, and expression IDs have a fixed ceiling. |
+| R7 | Replace the object format where needed; no v1 object reader/writer is required in v2. | Owner decision. The v1 format constraints are recorded in [objdef.h](https://github.com/khansen/xorcyst/blob/86c1a43d1dfa237facf40d75085e9112e8617a13/objdef.h), [codegen.c](https://github.com/khansen/xorcyst/blob/86c1a43d1dfa237facf40d75085e9112e8617a13/codegen.c), and the [historical TODO](https://github.com/khansen/xorcyst/blob/86c1a43d1dfa237facf40d75085e9112e8617a13/TODO): count-minus-one storage cannot represent zero remainders, exports can retain unresolved aliases, and expression IDs have a fixed ceiling. |
 | R8 | Retain the selected 32-bit arithmetic semantics on all evaluation paths. | Owner decision already implemented in [expr_int.h](expr_int.h); arithmetic/shift/export regression tests in [test_inputs.py](tests/test_inputs.py). |
 | R9 | Do not reintroduce unbounded expansion, cycles, provisional-PC values or unsafe AST lifetimes while changing the internals. | Reproduced defects and existing tests: [scoped-offset cases](tests/test_expressions.py), [field-count/PC cases](tests/test_field_initializers.py), and [procedure analysis](tests/test_instruction_records.py). These justify safe ownership/evaluation, not a general equation solver. |
 
@@ -536,8 +534,8 @@ is 1,116,430 requested bytes versus 546,440 for v1; layout and expression state
 account for 727,456 of the v2 bytes. This allocation snapshot includes spare
 capacity and is not an exact partition of peak RSS. Byte-only linking allocates
 neither a complete ROM buffer nor full listing/xref fact arrays. Detailed
-accounting and measurement qualifications are in `design/v2/I4_VALIDATION.md`
-in the source checkout.
+accounting is preserved in the historical I4 validation report; the current
+[performance policy](doc/performance.md) summarizes the costs and rationale.
 
 Independent I4 review found the peak occurs while translating the largest
 object, with its raw wire buffer and translation workspace still live. The

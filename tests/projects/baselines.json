@@ -1,0 +1,288 @@
+{
+  "baseline": "v1.9.12",
+  "baseline_commit": "86c1a43d1dfa237facf40d75085e9112e8617a13",
+  "capture_directory": "2026-10-22-capture",
+  "capture_sha256": "48861250ee64f16df3658e3a00d0e9b19f3a0e944c2f1668919ca5e19dbe27aa",
+  "disassemblies": {
+    "metroid": {
+      "prg_sha256": "d2cdc3e8432f104709c17c88b20ceae87780e97cf6a2e3372fd54d0a67972062",
+      "prg_size": 131072,
+      "source_sha256": "9bb872dd7b0d619286230b8aade7828a3ac5ec67d3cb843f447bfd1edde873fb"
+    },
+    "zelda": {
+      "prg_sha256": "085e5397a3487357c263dfa159fb0fe20a5f3ea8ef82d7af6a7e848d3b9364e8",
+      "prg_size": 131072,
+      "source_sha256": "d7ccb14787de91d92001bf0bacfdd3e4fa1a952ea950a9c758a8ca961ed69def"
+    }
+  },
+  "gate_directory": "2026-10-22-frozen-assets-02",
+  "gate_sha256": "5eaccd61551501e36d28d495ee1a8cf8fbb1daed81291d0a2382cd0f8dfb1e30",
+  "nesrev_commit": "260a50bd79a6e4a8a3f4104a3b928aee40d02154",
+  "projects": {
+    "bombsweeper": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "8c08a24ccadce627baaea0c9576f073ff855b7a0edc4369a01ba8371e2fe5dad",
+        "size": 24592
+      },
+      "generated_targets": [],
+      "inputs_manifest": {
+        "sha256": "6627cf5140851587a4818c18e0a937b14ba44a63cf3c267df9cfef8eeb50679d",
+        "size": 5640
+      },
+      "product": "bombswpr.nes",
+      "target": "bombswpr.nes"
+    },
+    "dpadhero2": {
+      "build_directory": "src",
+      "expected_rom": {
+        "sha256": "ff435b932b5804c92f8a747f7507ddc293ff482c4a2152c46db9c3d4029b884e",
+        "size": 262160
+      },
+      "generated_targets": [
+        "songs/break.inc",
+        "songs/burn.inc",
+        "songs/count.inc",
+        "songs/creditwintheme.inc",
+        "songs/elevatortheme.inc",
+        "songs/endtheme.inc",
+        "songs/levva.inc",
+        "songs/misery.inc",
+        "songs/mutesong.inc",
+        "songs/ocean.inc",
+        "songs/piecewintheme.inc",
+        "songs/ripepray.inc",
+        "songs/smooth.inc",
+        "songs/spacetheme.inc",
+        "songs/starstheme.inc",
+        "songs/titletheme.inc",
+        "songs/versuswintheme.inc",
+        "targetdata/breaktargets.inc",
+        "targetdata/burntargets.inc",
+        "targetdata/counttargets.inc",
+        "targetdata/levvatargets.inc",
+        "targetdata/oceantargets.inc",
+        "targetdata/ripetargets.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "b73ee1d5bd0b3772c3af60282684d875e6a5c98d4ce7f7948f5f8237afada0a9",
+        "size": 47664
+      },
+      "product": "build/dpadhero2.nes",
+      "target": "build/dpadhero2.nes"
+    },
+    "music-bob-omb-battlefield": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "000d7680102d83d4326c44aa47e883acb399a3f00925cf35c935bc851434017f",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "dc88c86d59ac95f86a00148245f9f4de08a631124155185c9c71879ec3be933d",
+        "size": 8703
+      },
+      "product": "BobOmbBattlefield.nes",
+      "target": "BobOmbBattlefield.nes"
+    },
+    "music-dire-dire-docks": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "dcd500b50719a97944f225e5b210eb71795200377ee3ee6430b95725129dcf1d",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "62ee5ae1a933cd0b95221ddce260da137d91b39972e1dd4619f0d08944ce8a68",
+        "size": 9446
+      },
+      "product": "DireDireDocks.nes",
+      "target": "DireDireDocks.nes"
+    },
+    "music-double-dragon-ii-vs-f1": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "e057cc2b0bbb97ccb722345edb9699515bd006d4d45513803ceb8029fbd8a635",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "ee646ef49f58df6465c95479f3e2f377ad3e7a7a19f914f2332770a162c0fadb",
+        "size": 7847
+      },
+      "product": "DoubleDragonIIvsF1.nes",
+      "target": "DoubleDragonIIvsF1.nes"
+    },
+    "music-dpadhero3proto": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "4d78ccf4e02d394001225f668310a71601ec44804f3298272f13363ce51be504",
+        "size": 24592
+      },
+      "generated_targets": [
+        "mutesong.inc",
+        "song.inc",
+        "songcues.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "142e9ff3643f72f93a028665463880450c396ba2ad38d81f4eb047943c708685",
+        "size": 11140
+      },
+      "product": "DPadHero3Proto.nes",
+      "target": "DPadHero3Proto.nes"
+    },
+    "music-is-it-scary": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "1ccda80a1ba6b9fb455ed4b8b0bde7bde283c305d8f2116177ca6258fbc6f958",
+        "size": 24592
+      },
+      "generated_targets": [
+        "packchr.chr",
+        "packchr.nam",
+        "packnam.dat",
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "a01c1c5fae0520852fdcbbcf24e28a0127b8710112153e7a4fa5671bbface42f",
+        "size": 8817
+      },
+      "product": "IsItScary.nes",
+      "target": "IsItScary.nes"
+    },
+    "music-live-and-learn": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "0b4a111f6eac1f423c628e4a085c7f3423b1b269d22abcd1a3956da8c073b55e",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "a1a07cb184c3f1a846ba4ceefdf36bf86e8575c7b607a36bbd88993359f742a3",
+        "size": 8073
+      },
+      "product": "LiveAndLearn.nes",
+      "target": "LiveAndLearn.nes"
+    },
+    "music-mega-jean-trooper": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "8bfd29c36f409e300e20c911d6830c3d5c79421c1bc00e14e90fdfae273e9acd",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc",
+        "song2.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "30063dabee583035d105758ceadce0acbe2953a9d41c421bf4147182c570bc4b",
+        "size": 7958
+      },
+      "product": "MegaJeanTrooper.nes",
+      "target": "MegaJeanTrooper.nes"
+    },
+    "music-merry-xmas-everybody": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "877ab698e6b4ffaf38850bad90ffe413888cec30b42fe2571d3081acaca72869",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "5097ac36edb1ea615474feee0f9391946030447f7552efcb8e997fc852dba8ab",
+        "size": 8720
+      },
+      "product": "MerryXmasEverybody.nes",
+      "target": "MerryXmasEverybody.nes"
+    },
+    "music-somewhere-only-we-know": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "06649156f0a840c1d4c0fa922ebcb9a90bedc148f107f2aec020b2d157eec957",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "781bbc7947ef0ece0ae100e5ebc71dd7aeeefb7b78447d7429238887f6e2f4f6",
+        "size": 7830
+      },
+      "product": "WelcomeToParadise.nes",
+      "target": "WelcomeToParadise.nes"
+    },
+    "music-there-must-be-an-angel": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "27a2ec22531301e1126c1e94216785e9bf352a12757ae9d7883797b5bc8df8ec",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "066120b94834d9438aa935ab4622640f137ff4208bfbeca429306092968877ae",
+        "size": 7953
+      },
+      "product": "ThereMustBeAnAngel.nes",
+      "target": "WelcomeToParadise.nes"
+    },
+    "music-welcome-to-paradise": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "8079f5f54ec56ae0618b1043c6391e6aaa69a9d6b9e1bc298cf4ff7312ae1dff",
+        "size": 24592
+      },
+      "generated_targets": [
+        "song.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "f0849645ca899e9184fa0b1700ce5503b2098626ea9ef1955f878e1cdf7cd025",
+        "size": 7831
+      },
+      "product": "WelcomeToParadise.nes",
+      "target": "WelcomeToParadise.nes"
+    },
+    "music-wishmaster": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "bf5d36af63744d1c06150136dd485cae00afd559de971da373608ac8cfe3b2df",
+        "size": 40976
+      },
+      "generated_targets": [
+        "song.inc",
+        "song2.inc"
+      ],
+      "inputs_manifest": {
+        "sha256": "db6a61a61ce550c83b3fb7de370eed96c1ab5e69876f0ae3bae9dcfcd772d2e3",
+        "size": 8442
+      },
+      "product": "Wishmaster.nes",
+      "target": "Wishmaster.nes"
+    },
+    "ntxdev": {
+      "build_directory": ".",
+      "expected_rom": {
+        "sha256": "425269feb29e4cad202bec11e4d08b9445b645967b593f86146153af6e7ec6e8",
+        "size": 262160
+      },
+      "generated_targets": [],
+      "inputs_manifest": {
+        "sha256": "bd57710d6b6f94a0464b2130bb6f119eb4a0ec92f9f0d540117032420c9fd3fe",
+        "size": 16230
+      },
+      "product": "ntxdev.nes",
+      "target": "ntxdev.nes"
+    }
+  }
+}

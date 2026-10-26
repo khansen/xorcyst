@@ -387,7 +387,11 @@ dist_man1_MANS = man1/xasm.1 man1/xlnk.1
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
 EXTRA_DIST = astproc.c parser.y scanner.l parser.h \
-  design/v2/object-wire-example.hex \
+  tests/fixtures/object-wire-example.hex tests/check_wire_example.py \
+  tests/projects/README.md tests/projects/baselines.json \
+  tests/projects/freeze_baselines.py tests/projects/freeze_gate_assets.py \
+  tests/projects/check_object_projects.py tests/projects/measure_object_projects.py \
+  tests/projects/measure_analysis.py \
   ir/value.c ir/value.h ir/extent.h ir/layout.c ir/layout.h ir/README.md \
   man1/xasm.h2m man1/xlnk.h2m \
   tests/coverage_directives_control.asm \
@@ -466,10 +470,10 @@ dist_doc_DATA = README NEWS MIGRATING_TO_2.0.md xorcyst.texinfo \
   XASM_REVERSE_ENGINEERING_FEATURES_SPEC.md
 
 
-# Public protocol only; local baseline manifests, scripts and reviewer notes
-# contain owner-specific evidence and are not installed or distributed.
-nobase_dist_doc_DATA = design/v2/PERFORMANCE.md \
-  design/v2/OBJECT_WIRE_DRAFT.md
+# Install maintained public protocols; private captures and historical review
+# records are not part of the release.
+nobase_dist_doc_DATA = doc/performance.md \
+  doc/object-format.md
 
 DISTCHECK_CONFIGURE_FLAGS = --disable-maintainer-mode YACC=: LEX=: HELP2MAN=:
 AM_CFLAGS = -Wall
