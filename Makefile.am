@@ -3,34 +3,14 @@
 AUTOMAKE_OPTIONS = subdir-objects
 
 bin_PROGRAMS = xasm xlnk
-xasm_LDADD = $(LDADD) $(DARWIN_LIBS)
+xasm_LDADD = $(LDADD)
+xlnk_LDADD = $(LDADD)
 
-# Use the *generated* files for normal builds
 xasm_SOURCES = \
   astnode.c astnode.h \
-  astproc.c astproc.h expr_int.h \
+  ir/frontend.c ir/frontend.h astproc.h expr_int.h \
   charmap.c charmap.h \
-  codegen.c codegen.h \
-  loc.h objdef.h \
-  opcode.c opcode.h \
-  parser.c scanner.c \
-  symtab.c symtab.h \
-  listing.c listing.h fceux_nl.c fceux_nl.h \
-  output_file.c output_file.h \
-  dependencies.c dependencies.h sha256.c sha256.h utf8.h \
-  xasm.c xasm.h version.h \
-  my_getopt.c my_getopt.h getopt.h
-
-# Isolated I3/I4 prototypes: build explicitly or during check; never install them.
-check_PROGRAMS = xasm-v2 xlnk-v2
-xasm_v2_CPPFLAGS = $(AM_CPPFLAGS) -DXORCYST_V2_FRONTEND
-xasm_v2_LDADD = $(LDADD)
-xasm_v2_SOURCES = \
-  astnode.c astnode.h \
-  v2/frontend.c v2/frontend.h astproc.h expr_int.h \
-  charmap.c charmap.h \
-  codegen.c codegen.h \
-  loc.h objdef.h \
+  loc.h \
   opcode.c opcode.h \
   parser.c scanner.c \
   symtab.c symtab.h \
@@ -39,30 +19,20 @@ xasm_v2_SOURCES = \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
   xasm.c xasm.h version.h \
   my_getopt.c my_getopt.h getopt.h \
-  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h v2/graph.h v2/heap.c v2/heap.h v2/object.c v2/object.h v2/program.c v2/program.h v2/path.h
+  ir/value.c ir/value.h ir/extent.h ir/layout.c ir/layout.h ir/graph.h ir/heap.c ir/heap.h ir/object.c ir/object.h ir/program.c ir/program.h ir/path.h
 
-xlnk_v2_LDADD = $(LDADD)
-xlnk_v2_SOURCES = v2/linker.c v2/link.c v2/link.h v2/object.c v2/object.h v2/path.h \
-  v2/value.c v2/value.h v2/graph.h v2/heap.c v2/heap.h v2/extent.h v2/layout.c v2/layout.h \
+xlnk_SOURCES = xlnk.c ir/link.c ir/link.h ir/object.c ir/object.h ir/path.h \
+  ir/value.c ir/value.h ir/graph.h ir/heap.c ir/heap.h ir/extent.h ir/layout.c ir/layout.h \
   script.c script.h opcode.c opcode.h output_file.c output_file.h \
   my_getopt.c my_getopt.h getopt.h version.h
-
-xlnk_SOURCES = \
-  xlnk.c version.h expr_int.h \
-  output_file.c output_file.h \
-  script.c script.h \
-  unit.c unit.h \
-  hashtab.c hashtab.h \
-  opcode.c opcode.h \
-  my_getopt.c my_getopt.h getopt.h
 
 # Install the generated (but checked-in) man pages alongside the tools.
 dist_man1_MANS = man1/xasm.1 man1/xlnk.1
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
-EXTRA_DIST = parser.y scanner.l parser.h \
+EXTRA_DIST = astproc.c parser.y scanner.l parser.h \
   design/v2/object-wire-example.hex \
-  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h v2/README.md \
+  ir/value.c ir/value.h ir/extent.h ir/layout.c ir/layout.h ir/README.md \
   man1/xasm.h2m man1/xlnk.h2m \
   tests/coverage_directives_control.asm \
   tests/coverage_directives_layout.asm \
@@ -106,11 +76,9 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_symtab.c \
   tests/test_symtab.py \
   tests/test_symtab_alloc.c \
-  tests/test_unit_alloc.c \
-  tests/test_v2_alloc.c tests/test_v2_values.c tests/test_v2_values.py \
-  tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c tests/test_v2_objects.py tests/test_v2_link_io.c tests/test_v2_object_codec.c tests/test_v2_object_failures.c \
-  tests/test_v2_object_alloc.c tests/test_v2_program_alloc.c tests/test_v2_link_alloc.c tests/test_v2_heap.c tests/test_v2_heap_alloc.c tests/test_v2_frontend.py tests/test_v2_analysis.py tests/test_v2_frontend_faults.c tests/test_v2_value_faults.c tests/test_v2_source_locations.c tests/test_v2_source_driver.c tests/test_v2_dependencies.c tests/perf_v2_frontend.py tests/v2_sizeof_cases.json \
-  tests/test_xlnk_io_faults.c \
+  tests/test_ir_alloc.c tests/test_ir_values.c tests/test_ir_values.py \
+  tests/test_ir_layout_alloc.c tests/test_ir_layout.c tests/test_ir_layout.py tests/test_ir_cache.c tests/test_ir_objects.py tests/test_ir_link_io.c tests/test_ir_object_codec.c tests/test_ir_object_failures.c \
+  tests/test_ir_object_alloc.c tests/test_ir_program_alloc.c tests/test_ir_link_alloc.c tests/test_ir_heap.c tests/test_ir_heap_alloc.c tests/test_ir_frontend.py tests/test_ir_frontend_faults.c tests/test_ir_value_faults.c tests/test_ir_source_locations.c tests/test_ir_source_driver.c tests/test_ir_dependencies.c tests/perf_ir_frontend.py tests/ir_sizeof_cases.json \
   tests/tool_test_support.py \
   tests/verify_fceux_projects.py \
   doc/Assembler-Directives.html \
@@ -127,7 +95,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   doc/index.html
 
 # Install the current feature documentation alongside the tools.
-dist_doc_DATA = README NEWS xorcyst.texinfo \
+dist_doc_DATA = README NEWS MIGRATING_TO_2.0.md xorcyst.texinfo \
   XORCYST_V2_DESIGN.md \
   XORCYST_V2_CONTRACTS.md \
   XASM_ANALYSIS_FEATURES_GUIDE.md \

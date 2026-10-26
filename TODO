@@ -1,242 +1,26 @@
-- a way to define temporary variables for a proc (on the stack)?
-- types must be defined before they are used
-- .module or .namespace
-- .obj, .objend
-- .radix
-- .type, .symtype
-- .pushstate, .popstate
-- .local
-- variable-number-of-argument macros
-- -W flag allowing more fine-grained control of warnings
-- inlining function calls?
-- a way to specify fixed-point numbers?
-- .ifdef inside struct/union
+Open product work
 
-Compatibility planning:
+- Report parser and analysis allocation failures reliably. Summary, text
+  scope/source and xref data provenance can silently omit facts; index,
+  consumer and coverage collectors can fail without explaining why.
+- Handle leading unnamed RAM data containing $ in object output. It currently
+  fails with an unlocated anchor error. Keep validation of other initializer
+  symbols when discarding data that has no allocation identity.
+- Preserve earlier linker outputs when publishing a later output fails.
+  The linker stages all files but publishes them independently; the assembler
+  already rolls back its requested output set on detected failures.
+- Bound rich-analysis expansion of shared aliases. It currently turns shared
+  graphs into trees and can consume exponential memory. Text listings avoid
+  this path; focus optimization on demonstrated workloads.
+- Improve diagnostic-listing availability when FCEUX ROM export is requested
+  after a syntax error or unresolved storage. Do not publish a partial set
+  when its destinations cannot be planned safely.
+- Avoid repeated scans of very long shared-label runs in sizeof, if a real
+  workload warrants it. The current synthetic worst case grows cubically.
+- Deduplicate size-unknown diagnostics for multiple sizeof uses of one operand.
+- Investigate unused-label warnings through constant-alias chains. Keep source
+  usage separate from references retained only for export or layout.
 
-- Prioritize the v2 scope/design in XORCYST_V2_DESIGN.md. Requirements
-  must trace to an owner decision, an existing project dependency, or a concrete
-  defect; synthetic probes do not automatically justify new language features.
-  D0 was approved on 2026-10-22 and D1 on 2026-10-23 after independent review.
-  I1's isolated value graph in v2/value.c received owner approval on 2026-10-23
-  after local independent review found no blockers; see v2/README.md.
-  I2 layout/encoding is implemented with direct-IR tests and local validation.
-  Independent local review cleared I2's runtime at 92b5243 and coverage at
-  35fbb0c with no findings. The owner approved I2 on 2026-10-24 for publication
-  as one PR and CI; see v2/README.md. Later project and cutover gates stay open.
-  I2 merged as PR #98 (2083c7a). I3 now has an isolated direct-binary
-  source prototype, source controls and a plain-project benchmark harness.
-  Its review follow-up fixes declaration identity across .undef, nested-macro
-  binding and RAM truncation warnings. Source-time sizeof/PC width assumptions
-  are also rechecked when final-name binding changes an operand's kind or
-  string length. Backward local labels keep their fixed data width. The S1/R1
-  follow-up includes the owner-approved sizeof reassignment clarification.
-  Size guards bind the actual data-line capture by walking surviving native
-  statements after pass 1, including operands later in the sizeof use's own
-  statement and anonymous +/- references whose renaming finishes later.
-  Repeated sizeof operands count their integer width without re-entering the
-  same scan; their complete expressions still undergo the kind check.
-  Leading labels that share a data run share this rule. The owner explicitly
-  approved rejecting self-sized strings on 2026-10-24; the contract ledger
-  and NEWS record that compatibility choice independently of reassignment.
-  Unprocessed user-typed initializers that are flattened/freed leave an unbound
-  guard and give a located size-unknown error. No guard retains an AST statement.
-  Independent local review cleared I3's runtime at 7ffb2ac and its .exitm
-  coverage follow-up at dc45658 with no findings or blockers. The owner approved
-  I3 on 2026-10-24 for publication as one PR and CI; see v2/README.md.
-  The original below-30% memory rule applies separately to each tool. On
-  2026-10-25 the owner accepted the current measured I4 overhead for now,
-  including the DPadHero3Proto exception; contract section 12 records the scope.
-  Keep per-tool reporting and the large-project/analysis requirements, with the
-  subsequent bounded-effort clarification below for small command costs.
-  I3 merged as PR #99 (cb98568). I4 now implements the XOROBJ2 codec,
-  source object lowering and the isolated xlnk-v2 driver. All 15 frozen ROMs
-  reproduce exactly, including dpadhero2. The reviewed standalone linker was
-  at 1.286x v1; DPadHero3Proto was at 1.307x (+638,976 bytes), the accepted
-  exception. Small-link timing costs are reported in absolute milliseconds below. The measured
-  memory breakdown is in design/v2/I4_VALIDATION.md; design section 6 and
-  design/v2/I4_REVIEW.md make the tradeoff and review expectations explicit.
-  Review costs and existing complexity; seek simple, measured savings without
-  adding disproportionate machinery solely to save small amounts.
-  The I4 review follow-up fixes empty layout-error messages, preserves symbol
-  names in binding errors, tests endian conversion and mapped initializer
-  padding, and replaces the bank-reference linear search with binary search.
-  The owner chose strict script-number parsing on 2026-10-25; its compatibility
-  correction is in the contract ledger and NEWS. Equivalent reference/address
-  leaves now share records without redundant spans; literal/operator/fixup and
-  owner locations remain. Actual source-built objects shrink 12.8% for
-  dpadhero2 and 16.6% for DPadHero3Proto; the remaining 5.1x/9.5x versus v1 is
-  documented as a fixed-width implementation tradeoff, not a requirement.
-  Local independent review cleared I4 at cf14315 with no blockers. The owner
-  approved 0805822 on 2026-10-25 for publication as the single I4 PR and CI.
-  The approval record is in v2/README.md. The second review follow-up
-  captures export dependencies before pruning labels, avoids unused PC anchors
-  on unnamed RAM storage,
-  reports unavailable writer locations safely, and invalidates assignment
-  captures after publishing the replacement definition. New tests fail 33
-  assertions on 42ff0c0. The next follow-up restores W0201/Werror by separating
-  export capture from constant source-use counts. It preserves v1's no-ram{}
-  behavior (check sizes, skip placement, fail actual unresolved address uses)
-  and discards unnamed leading RAM storage even for PC-dependent counts.
-  No new stricter RAM policy is introduced. Its controls fail 23 assertions
-  on 02264e0. Current check/distcheck pass 535/540 tests; Linux sanitizers
-  pass. All 15 ROMs/stderr and plain Metroid/Zelda outputs still match. A short
-  two-project survey reports sub-millisecond paired link-time differences;
-  per-tool memory and all artifact sizes are recorded in I4_VALIDATION.md.
-  The reviewed candidate-14 plain timing session remains historical evidence.
-  On 2026-10-25 the owner bounded timing effort: the measured small-link deltas
-  (+0.12/+0.62 ms) can proceed to review; do not prolong optimization solely
-  for percentages. The completed 15-project/45-stage survey finds at most
-  +0.562 ms link overhead and faster clean-build medians for every project.
-  Retain large-project/analysis gates and investigate material costs.
-  Contract section 13 records the guidance. Local review and owner approval
-  are complete. I4 merged as PR #100 (63747ed), with PR and post-merge CI green.
-  The 2026-10-25 tag-8 clarification is in contract section 11: an integer
-  initializer contributes one element, a string its counted byte length.
-  Analysis/consumer gates remain I5 work.
-  I5 has a local review follow-up on feat/v2-analysis. Listing schema 2, text listing,
-  xref, instruction records, derived analyses, manifests and debugger exports
-  now use owned metadata and the shared evaluator/layout. The parser namespace
-  is destroyed before final layout. Nesrev's isolated consumer branch migrates
-  null offsets, compact fills and accumulator modes. Product/consumer controls
-  and the required ROM gate pass. Diagnostic listings, the missed Devil World
-  renderer, alias depth, string references, unused bank constants, file staging and rollback
-  on reported failures, and text-listing overhead were corrected
-  after review. Independent local re-review cleared 63e4ea5 / Nesrev 4ca95e06d
-  with no blockers. The owner approved I5 on 2026-10-25 at fe500f6 / Nesrev
-  4ca95e06d for publication and CI; see v2/README.md for the approval record.
-  The 100-configuration resource survey records
-  small costs under the owner's bounded-effort decision (contract section 14);
-  it is not a formal no-slowdown pass. Nesrev shared tooling must be published
-  from a branch off master; never push projects-branch history. PR CI and I6
-  remain open. See design/v2/I5_REVIEW.md and I5_VALIDATION.md for the handoff.
-  Retain the inherited collector allocation limitations as open work: summary,
-  text scope/source and xref data provenance can silently omit metadata; index,
-  consumers and coverage can fail without an explanatory diagnostic. Staging
-  preserves outputs on detected failures, not ignored ones. Also retain I4's
-  unused-label warning difference through constant-alias chains.
-  The owner-approved work-bound correction is in contract section 10; the
-  project no-slowdown and byte-exact ROM gates are unchanged.
-  Complete local independent review before publishing a branch or opening/updating
-  a PR; keep one PR at a time.
-  Keep optional v1 repairs separate. No current formats change in this plan.
-- Optional I4 follow-up: leading unnamed RAM data containing $ still fails
-  object writing with an unlocated internal-looking anchor error, unlike v1
-  (e.g. .dataseg / x: .db $ / v .byte / .codeseg / lda v). Data after a
-  surviving RAM label works. Preserve checks for other initializer symbols.
-  Review cf14315 treats this as non-blocking; compatibility handling or a
-  documented limitation with a located diagnostic remains to be settled.
-  This note records the limitation, not an approved contract exception.
-- Optional I3 follow-ups: very long shared-label sizeof runs repeatedly scan
-  their leading labels (cubic work in synthetic cases); collect those labels
-  once per scan if this becomes a measured project cost. The reviewed 800/1600
-  label cases took about 0.41/6.6 seconds, versus v1's 0.015/0.04 seconds;
-  neither Metroid nor Zelda uses sizeof. Multiple sizeof guards can also print
-  the same size-unknown error repeatedly. Both remain non-blocking review notes.
-- D1's approved contracts and approval record are in XORCYST_V2_CONTRACTS.md. Required ROM
-  baselines and Metroid/Zelda analysis captures are frozen; see
-  design/v2/BASELINES.md. Semantics, the no-slowdown measurement rule and the
-  concrete object encoding are reviewed and approved; retain their gates
-  throughout implementation.
-  Freeze converter outputs for gate builds: Wishmaster xm2nes output varies
-  with the environment. Keep baseline archives outside the repository.
-  The owner chose median <= 1.000 with no regression confirmed in an independent
-  session; see design/v2/PERFORMANCE.md for the full decision rule.
-- v2 may replace the object format without reading or writing v1 objects.
-  Use that freedom to remove demonstrated encoding limitations, not to redesign
-  working source binding, placement, or every analysis field. Rebuild objects
-  and coordinate consumer migration at cutover.
-- Aim for one structured-listing schema with an output identifier, not
-  indefinite selectable legacy schemas. Start from existing complete listing
-  version 2 facts and preserve working conventions. Migrate Nesrev before
-  removing --listing-version. The approved scope removes object-mode structured
-  listing/xref exports; retain text listing only through the shared renderer.
-  Listing version 2 currently requires pure binary; that is not a statement
-  about a future XORcyst software version 2. New xlnk analysis is not required.
-- Full forward-string data support is an explicit v2 request: final extents,
-  use-site character maps, existing string operations and matching analysis.
-  The selected v1 policy is consistent rejection of unresolved string data;
-  that narrow repair and exported-alias repairs remain separate work.
-- v2 must be no slower than v1 on large projects such as Metroid, both plain
-  and with listing, xref, records and actual combined Nesrev analysis profiles.
-  Include object-mode xasm, xlnk and full builds of bombsweeper, dpadhero2,
-  ntxdev and the projects under nesdev/music. The selected dpadhero tree is
-  /Users/kenthansen/Dropbox/nesdev/ntxdev/games/dpadhero (build in src), but
-  its full-ROM test is non-blocking while it depends on precompiled v1 song
-  objects. Do not spend work recovering/converting them or supporting v1 objects.
-  Require byte-identical ROMs;
-  the working dpadhero2/src build is a mandatory acceptance gate. Freeze actual
-  source/assets/tools, including local inputs, without changing their trees.
-  Improvement is the goal. The v1 5% plus 20 ms allowance is not a v2 budget;
-  investigate noise and gate each configuration, not an average across modes.
-- The approved v2 scope selects xlnk's relaxation loop on both paths,
-  rejects unresolved PCs in expansion directives and PC-dependent field
-  dimensions, and decides the known binary/link differences in section 3.5.
-  These are approved scope decisions, not changes to the current v1 behavior.
-
-Known defects and follow-ups:
-
-- Late word instruction operands outside -32768..65535 still warn and truncate
-  in pure-binary output while the linker rejects them. Decide the policy together
-  with 16-bit address wrapping: existing binaries/listings can cross $FFFF. Late
-  byte operands now have matching assembler/linker range checks.
-- FCEUX ROM export rejects an unevaluable or negative storage count during
-  analysis collection, before the writer can supply its diagnostic listing.
-  A late negative count can lose the located range error too, leaving only
-  "could not collect assembly analysis" and exit 3 without a manifest. With a
-  dependency manifest this also exits 3 when an invalid shift has already
-  produced a located error. Omit ROM export to obtain the ordinary diagnostic.
-  Deferring collection failure also needs safe destination planning: unknown
-  size means not all ROM bank paths can be enumerated, and allowing a listing
-  can overwrite an NL file that was omitted from the incomplete plan.
-- An omitted structure-array count that still depends on $ after constant
-  substitution uses first-element expansion and cannot become zero in
-  pure-binary mode. Object output retains its previous link-time behavior.
-  The binary remainder evaluates the count after the first element, changing
-  some layouts from 1.9.2, which evaluated it at the field start. Constants
-  and label differences support late zero counts, including nested layouts.
-- PC equates and PC-relative .org now reject a first-pass position made
-  uncertain by deferred storage. Other first-pass consumers of $ (conditionals,
-  loops and messages),
-  later instruction shortening and reassigned type dimensions still need a
-  general final-layout/capture policy. Use labels for final addresses.
-  Consider resolving deferred PC equates instead of conservatively rejecting
-  them, including recomputing prefixes after a count becomes known.
-- Both outer omitted-array counts and nested field counts that depend on $
-  can differ between binary and object output: binary uses the remainder's
-  PC after the first element for an outer count and each field's PC for nested
-  counts; object merging uses the start of the merged storage. At origin zero,
-  an omitted Inner[3-$] with two-byte elements and a trailing byte occupies
-  three bytes in binary, seven in object output and in 1.9.2. Keep address-
-  dependent field counts in labels/constants when both output modes must agree.
-- Conditional extents for late omitted structure-array counts add expression
-  evaluation work, especially for nested arrays and object output. Benchmark
-  omitted arrays too, not only explicitly initialized arrays, when reducing
-  this overhead. Known positive counts use direct expansion.
-- Shared alias chains and dependent scoped offsets that remain unresolved
-  (for example, with label or external counts) are expanded as trees, so
-  evaluation time and object size can grow exponentially. Completed integer
-  values are cached per evaluation. Sufficiently deep definitions can also
-  exhaust the recursive evaluator's stack.
-- Repeated cyclic references within one ordinary expression can report once
-  per use (e.g. .byte Value+Value), rather than once per expression.
-- Invalid dotted storage counts can report the same error for both the count
-  and byte-size expressions, followed by a range error. Cyclic counts in
-  uninitialized structures can also report at both instance and declaration.
-- Union dimensions must be known when the union is declared.
-- A field remainder that becomes zero only at link time is encoded as storage
-  and rejected by the linker instead of being omitted.
-- A forward code-label difference used as storage size can assemble in binary
-  mode but fail object link layout with "storage size must evaluate to an
-  integer during layout". For example, .dsb Tail-Head before Head: nop / nop /
-  Tail: rts emits two zero bytes in binary. Support resolvable forward
-  differences during link layout. Listing v2 already describes the full fill
-  span with byte_count and fill_byte; text/v1 intentionally omit storage
-  bytes while retaining following addresses and output offsets.
-- Data-segment storage counts built from data-segment labels can fail link
-  layout with "storage size must evaluate to an integer during layout", even
-  when the link script provides a RAM region.
-- A late error in merged storage can point to the preceding storage statement
-  instead of the statement that supplied the invalid count.
-- Forward strings differ between binary and object output, and exported forward
-  constant aliases can still fail object encoding.
+Release coordination: design/v2/I6_RELEASE_CHECKLIST.md.
+Approved behavior and scope: XORCYST_V2_CONTRACTS.md and XORCYST_V2_DESIGN.md.
+Completed implementation history and validation: design/v2/.

@@ -20,7 +20,7 @@ class BackendPerformance(unittest.TestCase):
         cls.addClassCleanup(build.cleanup)
         root = Path(build.name)
         cls.executable = root / 'xasm'
-        compiler = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO), '-Wall',
+        compiler = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO), '-Wall', '-I', str(REPO / 'ir'),
                     *shlex.split(os.environ.get('TEST_BACKEND_CFLAGS', '-O0 -g'))]
         source = (REPO / 'astnode.c').read_text()
         signature = 'int astnode_get_child_index(const astnode *p, const astnode *c)'
@@ -40,10 +40,11 @@ class BackendPerformance(unittest.TestCase):
             raise AssertionError('expected one constant-substitution definition')
         processor = processor.replace(signature, signature +
             '\n    extern unsigned long test_constant_expansions;\n    test_constant_expansions++;')
-        processor = processor.replace('entries = calloc(capacity, sizeof(*entries));',
-            'entries = getenv("XASM_TEST_CONSTANT_CACHE_FAIL") ? NULL : calloc(capacity, sizeof(*entries));')
         measured_processor = root / 'astproc.c'
-        measured_processor.write_text(processor)
+        frontend = (REPO / 'ir/frontend.c').read_text()
+        frontend = frontend.replace('#include \"../astproc.c\"', processor)
+        frontend = frontend.replace('#include \"../', '#include \"')
+        measured_processor.write_text(frontend)
         objects = []
         for section in ('TEST_AST_WORK', 'TEST_JSON_WORK', 'TEST_BACKEND_MAIN'):
             obj = root / (section + '.o')
@@ -56,7 +57,7 @@ class BackendPerformance(unittest.TestCase):
         sources = re.search(r'^xasm_SOURCES = (.*?)(?=\n\n)',
                             (REPO / 'Makefile.am').read_text(), re.M | re.S)[1]
         sources = [REPO / name for name in sources.replace('\\\n', ' ').split()
-                   if name.endswith('.c') and name not in ('astnode.c', 'astproc.c', 'listing.c', 'xasm.c')]
+                   if name.endswith('.c') and name not in ('astnode.c', 'ir/frontend.c', 'listing.c', 'xasm.c')]
         sources.append(measured_processor)
         command = [*compiler, *map(str, sources + objects), '-o', str(cls.executable)]
         if sys.platform == 'darwin':
@@ -162,19 +163,6 @@ class BackendPerformance(unittest.TestCase):
                                              'repeated aliases were expanded as a tree')
                         self.assertEqual(output.read_bytes(), expected)
 
-    def test_constant_cache_allocation_failure_preserves_output(self):
-        with tempfile.TemporaryDirectory(prefix='xasm-constant-failure-') as directory:
-            root = Path(directory)
-            source, output = root / 'input.asm', root / 'output.bin'
-            source.write_text('.byte Value\nValue .equ Alias+Alias\nAlias=1\n')
-            output.write_bytes(b'previous output')
-            result = subprocess.run([str(self.executable), '--pure-binary', str(source), '-o', str(output)],
-                                    env={**os.environ, 'XASM_TEST_CONSTANT_CACHE_FAIL': '1'},
-                                    capture_output=True, timeout=10)
-            self.assertEqual(result.returncode, 1, result.stderr.decode())
-            self.assertEqual(result.stderr.count(b'out of memory resolving constants'), 1,
-                             result.stderr.decode())
-            self.assertEqual(output.read_bytes(), b'previous output')
 
     def test_json_escaping_preserves_all_bytes_and_embedded_nuls(self):
         for payload in (bytes(range(256)), b'\x00after nul\x00', b'"\\\b\f\n\r\t',

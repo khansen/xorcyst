@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paired Unix I5 producer/consumer measurements on the frozen D1 inputs.
+"""Paired Unix producer/consumer measurements on the frozen D1 inputs.
 
 Default: bounded five-pair survey, not a formal performance pass. For the D1
 sampling schedule use --pairs 15 --batch-seconds 2 on an idle machine. Correctness
@@ -140,7 +140,8 @@ def main():
                             sample = timed(manifest['argv'], directory, environment)
                     else:
                         command = [str(tools[version]), '--pure-binary', str(source), '-o', str(out / 'binary.bin'),
-                                   *[flag.format(out=out, ref=reference) for flag in MODES[mode]]]
+                                   *[flag.format(out=out, ref=reference) for flag in MODES[mode]
+                                     if version == "baseline" or not flag.startswith("--listing-version=")]]
                         sample = timed(command, directory, environment)
                     if (out / 'binary.bin').read_bytes() != expected: raise RuntimeError('PRG mismatch: ' + str(out))
                     sample['artifacts'] = {f.name: f.stat().st_size for f in out.iterdir() if f.is_file()}

@@ -5,7 +5,10 @@ review reported no blockers.** The approval record is in section 8; the
 owner-approved binary-logical-operator erratum is in section 9.
 These contracts implement the decisions in [the approved D0 scope](XORCYST_V2_DESIGN.md),
 merged as `162dacc`. They define interfaces and acceptance cases, not C APIs or
-runtime code. The installed tools remain v1.9.12. The source-only baseline
+runtime code. I1–I5 are approved and merged. I6 uses the normal tool names and
+received owner approval at `7105ea7` on 2026-10-26 after independent review.
+CI, merge and coordinated workflow activation remain release gates, recorded
+in the source checkout's `design/v2/I6_RELEASE_CHECKLIST.md`. The source-only baseline
 record, `design/v2/BASELINES.md`, and
 [performance protocol](design/v2/PERFORMANCE.md) are included in this approval.
 The baseline evidence is not included in release archives or installed docs.
@@ -688,7 +691,8 @@ samples, absolute deltas, artifact sizes and remaining limitations.
 
 The I5 review exposed these consequences of the existing final-facts contract.
 The owner approved these I5 corrections on 2026-10-25; they introduce no new
-source-language feature. The citable stage approval is in `v2/README.md`.
+source-language feature. The citable stage approval is in the source checkout's
+`design/v2/IMPLEMENTATION_HISTORY.md`.
 
 | Case | v1 | v2 |
 | --- | --- | --- |

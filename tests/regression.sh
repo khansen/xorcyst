@@ -53,7 +53,7 @@ run_expect_success_with_listing() {
     lst_file="$TMPDIR/out-listing.lst"
     log_file="$TMPDIR/out-listing.log"
 
-    if ! "$XASM" --lst="$lst_file" "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
+    if ! "$XASM" --pure-binary --lst="$lst_file" "$asm_file" -o "$out_file" >"$log_file" 2>&1; then
         cat "$log_file" >&2
         fail "expected listing success for $asm_file"
     fi
@@ -119,7 +119,7 @@ run_expect_success_pure_binary_with_listing_json() {
         fail "pure-binary JSON listing file was not generated for $asm_file"
     fi
 
-    if ! grep -q '"version": "1"' "$lst_file"; then
+    if ! grep -q '"version": "2"' "$lst_file"; then
         fail "JSON listing version missing for $asm_file"
     fi
 
@@ -843,30 +843,24 @@ ASM
         fail "anonymous data-directive references should follow the include-anon flag"
     fi
 
-    if ! "$XASM" --xref="$TMPDIR/xref-data-directives-object-control.json" \
-        --xref-format=json --xref-data=false "$object_asm" \
-        -o "$TMPDIR/xref-data-directives-control.o" \
-        >"$log_file" 2>&1; then
+    if ! "$XASM" "$object_asm" -o "$TMPDIR/xref-data-directives.o" >"$log_file" 2>&1; then
         cat "$log_file" >&2
-        fail "object-mode control assembly failed"
+        fail "object control assembly failed"
     fi
-    if ! "$XASM" --xref="$object_json" --xref-format=json \
-        --xref-include-owner=true --xref-data=true \
-        "$object_asm" -o "$TMPDIR/xref-data-directives.o" >"$log_file" 2>&1; then
+    cp "$TMPDIR/xref-data-directives.o" "$TMPDIR/xref-data-directives-control.o"
+    printf 'previous analysis' > "$object_json"
+    set +e
+    "$XASM" --xref="$object_json" --xref-format=json --xref-data=true \
+        "$object_asm" -o "$TMPDIR/xref-data-directives.o" >"$log_file" 2>&1
+    status=$?
+    set -e
+    if [ "$status" -ne 1 ] || ! grep -q 'requires --pure-binary' "$log_file"; then
         cat "$log_file" >&2
-        fail "object-mode data-directive xref generation failed"
+        fail "object analysis must be refused"
     fi
-    if ! cmp -s "$TMPDIR/xref-data-directives-control.o" "$TMPDIR/xref-data-directives.o"; then
-        fail "object-mode data-directive xref generation changed output bytes"
-    fi
-    if ! grep -Fq '"use_output_offset":null' "$object_json"; then
-        fail "object-mode data-directive reference should use a null output offset"
-    fi
-    if ! grep -Fq '"emitted_value":0,"use_cpu_address":"0x0001","use_output_offset":null' "$object_json"; then
-        fail "object-mode data-directive value should use the completed xref address map"
-    fi
-    if ! grep -Fq '"directive":".DW","width_bytes":2' "$object_json"; then
-        fail "word aliases should use the canonical .DW directive name"
+    if ! cmp -s "$TMPDIR/xref-data-directives-control.o" "$TMPDIR/xref-data-directives.o" \
+        || [ "$(cat "$object_json")" != 'previous analysis' ]; then
+        fail "refused object analysis replaced an output"
     fi
 
     cat > "$TMPDIR/xref-data-directives-empty.asm" <<'ASM'
@@ -1071,7 +1065,7 @@ ASM
     done
 
     # listing JSON structural checks + continuation semantics.
-    for k in '"version": "1"' '"source_file":' '"output_file":' '"records": [' '"output_offset_start":' '"output_offset_end":' '"continuation_of_record":true'; do
+    for k in '"version": "2"' '"source_file":' '"output_file":' '"records": [' '"output_offset_start":' '"output_offset_end":' '"continuation_of_record":true'; do
         if ! grep -Fq "$k" "$listing_json"; then
             fail "phase1 parity listing JSON missing key/value: $k"
         fi
@@ -1447,7 +1441,7 @@ run_expect_error_no_crash() {
     log_file="$TMPDIR/out-error.log"
 
     set +e
-    "$XASM" "$asm_file" -o "$out_file" >"$log_file" 2>&1
+    "$XASM" --pure-binary "$asm_file" -o "$out_file" >"$log_file" 2>&1
     status=$?
     set -e
 
@@ -1698,7 +1692,7 @@ output{file=$TMPDIR/link_overflow.bin}
 bank{size=\$0010,origin=\$8000}
 link{file=$TMPDIR/link_overflow.o}
 EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/link_overflow.script" "bank size.*exceeded"
+run_xlnk_expect_error_no_crash "$TMPDIR/link_overflow.script" "layout exceeds address, bank or output limit"
 
 # Linker regression: unresolved external
 cat > "$TMPDIR/link_unresolved.asm" <<'ASM'
@@ -1714,7 +1708,7 @@ output{file=$TMPDIR/link_unresolved.bin}
 bank{size=\$100,origin=\$8000}
 link{file=$TMPDIR/link_unresolved.o}
 EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/link_unresolved.script" "unknown symbol \`missing_symbol'"
+run_xlnk_expect_error_no_crash "$TMPDIR/link_unresolved.script" "undefined imported symbol \`missing_symbol'"
 
 # Linker regression: multiple banks
 cat > "$TMPDIR/link_bank1.asm" <<'ASM'
@@ -1776,13 +1770,13 @@ run_xlnk_expect_error_no_crash "$TMPDIR/link_bad_cmd.script" "unknown command \`
 cat > "$TMPDIR/link_missing_arg.script" <<EOF
 bank{}
 EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/link_missing_arg.script" "no bank size set"
+run_xlnk_expect_error_no_crash "$TMPDIR/link_missing_arg.script" "invalid bank size or origin"
 
 # Linker regression: argument out of range in script
 cat > "$TMPDIR/link_range_arg.script" <<EOF
 ram{start=\$10000,end=\$100}
 EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/link_range_arg.script" "value of argument \`start' is out of range"
+run_xlnk_expect_error_no_crash "$TMPDIR/link_range_arg.script" "invalid RAM block"
 
 # Linker regression: cannot pad backwards
 cat > "$TMPDIR/link_pad_back.script" <<EOF
@@ -1791,7 +1785,7 @@ bank{size=\$100,origin=\$8000}
 pad{size=\$10}
 pad{offset=\$5}
 EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/link_pad_back.script" "cannot pad.*backwards"
+run_xlnk_expect_error_no_crash "$TMPDIR/link_pad_back.script" "layout exceeds address, bank or output limit"
 
 # Linker regression: multiple RAM blocks allocation
 cat > "$TMPDIR/link_multi_ram.asm" <<'ASM'
@@ -1837,7 +1831,7 @@ ram{start=\$0200,end=\$0210}
 bank{size=\$100,origin=\$8000}
 link{file=$TMPDIR/link_out_of_ram.o}
 EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/link_out_of_ram.script" "out of.*RAM"
+run_xlnk_expect_error_no_crash "$TMPDIR/link_out_of_ram.script" "RAM placement failed"
 
 # Regression: DSB in DATASEG must not crash in pure binary mode
 cat > "$TMPDIR/dataseg-dsb-crash.asm" <<'ASM'
@@ -2022,30 +2016,16 @@ if ! od -An -t x1 "$TMPDIR/reloc-link.bin" | tr -d '[:space:]' | grep -q "6000c0
     fail "Label was not correctly relocated (frozen at Pass 1 address?)"
 fi
 
-# Regression: EQU $ must snapshot, but normal labels must remain accurate 
-# even when ZP optimization changes instruction lengths between passes.
+# A source-time PC capture must reject unresolved instruction narrowing.
 cat > "$TMPDIR/zp-opt-accurate-pc.asm" <<'ASM'
-    ORG $0080
-Start:
-    LDA #1
-    LDA Target  ; Pass 1: estimated 3 bytes (Absolute)
-                ; Pass 3: optimized to 2 bytes (Zero Page)
-Snap EQU $      ; Pass 1: $0082 + 3 = $0085
-                ; Pass 5: should still be $0085
-Target:         ; Pass 1: $0085
-                ; Pass 5: should be $0084 (LDA #1=2, LDA Target=2)
-    RTS
+ORG $0080
+LDA #1
+LDA Target
+Snap EQU $
+Target: RTS
 END
 ASM
-run_expect_success_pure_binary_with_listing "$TMPDIR/zp-opt-accurate-pc.asm" "0080"
-if ! grep -q "Snap.*=.*\$0085" "$TMPDIR/out-pure-listing.lst"; then
-    cat "$TMPDIR/out-pure-listing.lst" >&2
-    fail "EQU \$ did not correctly snapshot Pass 1 PC"
-fi
-if ! grep -q "Target.*=.*\$0084" "$TMPDIR/out-pure-listing.lst"; then
-    cat "$TMPDIR/out-pure-listing.lst" >&2
-    fail "Normal label address was frozen at Pass 1 PC instead of remaining accurate"
-fi
+run_expect_error_no_crash "$TMPDIR/zp-opt-accurate-pc.asm" "cannot use.*before final layout"
 
 # Regression: Invalid ORG address should not poison PC-relative equates
 cat > "$TMPDIR/org-range-poison.asm" <<'ASM'
@@ -2357,15 +2337,15 @@ status=$?
 set -e
 if [ "$status" -eq 0 ]; then
     cat "$TMPDIR/branch-far-out-of-range.log" >&2
-    fail "Branch at 256-byte offset should fail with 'branch out of range'"
+    fail "Branch at 256-byte offset should fail with 'operand out of range'"
 fi
 if [ "$status" -ge 128 ]; then
     cat "$TMPDIR/branch-far-out-of-range.log" >&2
     fail "xasm crashed for branch-far-out-of-range (exit $status)"
 fi
-if ! grep -q "branch out of range" "$TMPDIR/branch-far-out-of-range.log"; then
+if ! grep -q "operand out of range" "$TMPDIR/branch-far-out-of-range.log"; then
     cat "$TMPDIR/branch-far-out-of-range.log" >&2
-    fail "missing expected error 'branch out of range' for branch-far-out-of-range.asm"
+    fail "missing expected error 'operand out of range' for branch-far-out-of-range.asm"
 fi
 
 # Test: ASSIGN redefinition with $ captures different PCs
@@ -2473,9 +2453,9 @@ if [ "$status" -ge 128 ]; then
     cat "$TMPDIR/db-undefined-crash.log" >&2
     fail "xasm crashed for undefined symbol in .db (exit $status)"
 fi
-if ! grep -q "expression does not evaluate to integer literal" "$TMPDIR/db-undefined-crash.log"; then
+if ! grep -q "layout value remains unresolved" "$TMPDIR/db-undefined-crash.log"; then
     cat "$TMPDIR/db-undefined-crash.log" >&2
-    fail "missing expected error 'expression does not evaluate to integer literal'"
+    fail "missing expected error 'layout value remains unresolved'"
 fi
 
 # Regression: division by zero in assembler
@@ -2515,6 +2495,7 @@ cat > "$TMPDIR/xlnk-div0.asm" <<'ASM'
 .public div0
 .extrn some_symbol:label
 div0 = some_symbol / 0
+.db div0
 END
 ASM
 cat > "$TMPDIR/xlnk-div0-symbol.asm" <<'ASM'
@@ -2522,21 +2503,8 @@ cat > "$TMPDIR/xlnk-div0-symbol.asm" <<'ASM'
 some_symbol = 10
 END
 ASM
-# We expect xasm to fail here because it can't fold but it tries to write a constant.
-# Actually, let's see if we can make it an expression that xasm MUST pass to linker.
-# If we use a label, xasm can't fold it.
-set +e
-"$XASM" "$TMPDIR/xlnk-div0.asm" -o "$TMPDIR/xlnk-div0.o" > "$TMPDIR/xlnk-div0-xasm.log" 2>&1
-xasm_status=$?
-set -e
-if [ "$xasm_status" -eq 0 ]; then
-    fail "xasm should have failed to generate object with non-constant public EQU"
-fi
-if ! grep -q "does not evaluate to constant" "$TMPDIR/xlnk-div0-xasm.log"; then
-    cat "$TMPDIR/xlnk-div0-xasm.log" >&2
-    fail "missing expected xasm error 'does not evaluate to constant'"
-fi
-
+# Deferred exported expressions are serializable; the consuming fixup fails at link.
+run_expect_success "$TMPDIR/xlnk-div0.asm"
 # Linker regression: division by zero in bytecode expression
 cat > "$TMPDIR/xlnk-div0-bytecode.asm" <<'ASM'
 .extrn some_symbol:label
@@ -2594,35 +2562,12 @@ if [ "$rc" -eq 0 ]; then
     fail "expected xlnk failure for truncated codeseg"
 fi
 # The error might be "failed to load unit" or "failed to read"
-if ! grep -qi "failed to load unit" "$TMPDIR/truncated-codeseg.log" && ! grep -qi "failed to read" "$TMPDIR/truncated-codeseg.log" && ! grep -qi "unexpected end" "$TMPDIR/truncated-codeseg.log"; then
+if ! grep -qi "invalid XOROBJ2 object" "$TMPDIR/truncated-codeseg.log" && ! grep -qi "failed to read" "$TMPDIR/truncated-codeseg.log" && ! grep -qi "unexpected end" "$TMPDIR/truncated-codeseg.log"; then
     cat "$TMPDIR/truncated-codeseg.log" >&2
     fail "missing expected error for truncated codeseg"
 fi
 
-# Regression: invalid bytecode in linker
-# Manually-crafted .o header + invalid bytecode:
-# Magic: 0xFACE (2), Version: 0x14 (1), Consts: 0 (2), Imports: 0 (1), Externs: 0 (2),
-# Data: 0 (3), Code: 1 (3), Exprs: 0 (2), followed by 0xFF (invalid bytecode).
-# Total: 14 (header) + 1 (bytecode) + 2 (expr count) = 17 bytes.
-# Octal: FACE=\372\316, 14=\024, 01=\001, FF=\377
-printf "\372\316\024\000\000\000\000\000\000\000\000\000\000\001\377\000\000" > "$TMPDIR/invalid-bytecode.o"
-cat > "$TMPDIR/invalid-bytecode.script" <<EOF
-output{file=$TMPDIR/invalid-bytecode.bin}
-link{file=$TMPDIR/invalid-bytecode.o}
-EOF
-set +e
-"$XLNK" "$TMPDIR/invalid-bytecode.script" > "$TMPDIR/invalid-bytecode.log" 2>&1
-rc=$?
-set -e
-if [ "$rc" -eq 0 ]; then
-    fail "expected xlnk failure for invalid bytecode"
-fi
-if ! grep -q "invalid bytecode" "$TMPDIR/invalid-bytecode.log"; then
-    cat "$TMPDIR/invalid-bytecode.log" >&2
-    fail "missing expected error 'invalid bytecode'"
-fi
-
-# Regression: bad magic in unit.c
+# Regression: invalid object magic
 printf "NOTXASM" > "$TMPDIR/bad-magic.o"
 cat > "$TMPDIR/bad-magic.script" <<EOF
 output{file=$TMPDIR/bad-magic.bin}
@@ -2635,7 +2580,7 @@ set -e
 if [ "$rc" -eq 0 ]; then
     fail "expected xlnk failure for bad magic"
 fi
-if ! grep -q "failed to load unit" "$TMPDIR/bad-magic.log"; then
+if ! grep -q "invalid XOROBJ2 object" "$TMPDIR/bad-magic.log"; then
     cat "$TMPDIR/bad-magic.log" >&2
     fail "missing expected error 'failed to load unit'"
 fi
@@ -2709,21 +2654,14 @@ ram{start=\$0301,end=\$05FF}
 bank{size=\$100,origin=\$8000}
 link{file=$TMPDIR/link_ram_align_leak.o}
 EOF
-# We use -v to see RAM mapping
 "$XLNK" -v "$TMPDIR/link_ram_align_leak.script" > "$TMPDIR/link_ram_align_leak.log" 2>&1
-# Verify that alignment requirements do not leak RAM.
-# If a block is split for alignment, the padding part must be linked back to the
-# available list and remain eligible for subsequent allocations.
-# In this fixture, var_in_block1 and aligned_var displacement from the first block
-# should leave $0201 available as a padding block for small_var.
-if ! grep -q "small_var" "$TMPDIR/link_ram_align_leak.log"; then
-    cat "$TMPDIR/link_ram_align_leak.log" >&2
-    fail "RAM mapping output missing symbols"
+# The last LDA names small_var; its bytes must retain address $0201 in the
+# prefix split from the aligned allocation.
+if [ "$(od -An -j 6 -N 3 -t x1 "$TMPDIR/link_ram_align_leak.bin" | tr -d '[:space:]')" != ad0102 ]; then
+    fail "small_var not allocated at $0201"
 fi
-# Verify small_var ended up in the expected padding block at $0201.
-if ! grep -q "0201-0201 small_var" "$TMPDIR/link_ram_align_leak.log"; then
-    cat "$TMPDIR/link_ram_align_leak.log" >&2
-    fail "small_var not allocated in the padding block (expected address \$0201)"
+if ! grep -Fq 'link:' "$TMPDIR/link_ram_align_leak.log"; then
+    fail "verbose link progress missing"
 fi
 
 # Linker regression: cross-unit string comparison
@@ -2756,41 +2694,14 @@ if ! od -An -t x1 "$TMPDIR/link_str_cmp.bin" | tr -d '[:space:]' | grep -q "^0b"
     fail "Linker string comparison failed"
 fi
 
-# Linker regression: malformed object files
-# Test 1: Missing XASM_CMD_END in codeseg
-# Header: MAGIC(FACE), VER(14), CONST(0000), UNIT(00), EXTRN(0000), DATA(000001), END(F3), CODE(000004), INSTR(F7), OP(00), EXID(0000)
-printf '\372\316\024\000\000\000\000\000\000\000\001\363\000\000\004\367\000\000\000\000\000' > "$TMPDIR/malformed1.o"
-cat > "$TMPDIR/malformed1.script" <<EOF
-output{file=$TMPDIR/malformed1.bin}
-bank{size=\$100,origin=\$8000}
-link{file=$TMPDIR/malformed1.o}
+# Old-format objects must be refused with an actionable rebuild diagnostic.
+# Current format corruption is covered by test_ir_objects.py.
+printf '\372\316\024\000\000' > "$TMPDIR/legacy.o"
+cat > "$TMPDIR/legacy.script" <<EOF
+output{file=$TMPDIR/legacy.bin}
+link{file=$TMPDIR/legacy.o}
 EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/malformed1.script" "unexpected end of bytecode segment"
-
-# Test 2: Truncated string in constant
-# MAGIC(FACE), VER(14), CONST(0001), STRLEN(05), STR(ABC - truncated)
-printf '\372\316\024\000\001\005ABC' > "$TMPDIR/malformed2.o"
-cat > "$TMPDIR/malformed2.script" <<EOF
-output{file=$TMPDIR/malformed2.bin}
-bank{size=\$100,origin=\$8000}
-link{file=$TMPDIR/malformed2.o}
-EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/malformed2.script" "failed to load unit"
-
-# Test 3: Expression nesting depth limit
-# Header: ... DATA(000001), F3, CODE(000001), F3, EXPR(0001), many OP_PLUS(10)
-# We need enough bytes to satisfy recursive reads if we didn't have depth limit.
-# But with limit it should fail early.
-{
-    printf '\372\316\024\000\000\000\000\000\000\000\001\363\000\000\001\363\000\001'
-    for i in $(seq 1 501); do printf '\020'; done
-} > "$TMPDIR/malformed3.o"
-cat > "$TMPDIR/malformed3.script" <<EOF
-output{file=$TMPDIR/malformed3.bin}
-bank{size=\$100,origin=\$8000}
-link{file=$TMPDIR/malformed3.o}
-EOF
-run_xlnk_expect_error_no_crash "$TMPDIR/malformed3.script" "expression nesting depth limit exceeded"
+run_xlnk_expect_error_no_crash "$TMPDIR/legacy.script" "rebuild"
 
 # Linker regression: debug commands (XASM_CMD_FILE etc) must be correctly skipped
 cat > "$TMPDIR/link_debug.asm" <<'ASM'
@@ -3008,9 +2919,9 @@ log_file="$TMPDIR/exitm-outside.log"
 if ! grep -q "EXITM used outside a macro" "$log_file"; then
     fail ".EXITM outside macro error message missing"
 fi
-# Expected bytes in listing: LDA #1 ($A9 01) twice
-if [ $(grep -c "A9 01" "$lst_file") -ne 2 ]; then
-    grep "A9 01" "$lst_file" >&2
+# Diagnostic rows retain both instructions, but never claim final bytes.
+if [ $(grep -c "LDA #1" "$lst_file") -ne 2 ]; then
+    grep "LDA #1" "$lst_file" >&2
     fail ".EXITM outside macro deleted subsequent code from AST"
 fi
 
@@ -3309,21 +3220,10 @@ cat > "$TMPDIR/public-nonconst.asm" <<'ASM'
 nonconst = ext_label + 1
 END
 ASM
-# xasm should error out when trying to write a non-constant public EQU
-set +e
-"$XASM" "$TMPDIR/public-nonconst.asm" -o "$TMPDIR/public-nonconst.o" > "$TMPDIR/public-nonconst.log" 2>&1
-rc=$?
-set -e
-if [ "$rc" -eq 0 ]; then
-    fail "expected xasm failure for non-constant public EQU"
-fi
-if ! grep -q "does not evaluate to constant" "$TMPDIR/public-nonconst.log"; then
-    cat "$TMPDIR/public-nonconst.log" >&2
-    fail "missing expected error 'does not evaluate to constant'"
-fi
+run_expect_success "$TMPDIR/public-nonconst.asm"
 
 # Regression: mixed-type expressions in assembler public constant evaluation
-# (This test verifies that put_public_constants correctly errors on non-constant publics)
+# The captured string/integer operation must remain a located type error.
 cat > "$TMPDIR/xasm-mixed-types.asm" <<'ASM'
 .public val
 str1 = "abc"
@@ -3337,9 +3237,9 @@ set -e
 if [ "$rc" -eq 0 ]; then
     fail "expected xasm failure for mixed-type public expression"
 fi
-if ! grep -q "does not evaluate to constant" "$TMPDIR/xasm-mixed-types.log"; then
+if ! grep -q "invalid expression operand type" "$TMPDIR/xasm-mixed-types.log"; then
     cat "$TMPDIR/xasm-mixed-types.log" >&2
-    fail "missing expected error 'does not evaluate to constant'"
+    fail "missing expected error 'invalid expression operand type'"
 fi
 
 # Regression: mixed-type expressions in linker
@@ -3371,9 +3271,9 @@ set -e
 if [ "$rc" -eq 0 ]; then
     fail "expected xlnk failure for mixed-type expression"
 fi
-if ! grep -q "incompatible operands" "$TMPDIR/xlnk-mixed-types.log"; then
+if ! grep -q "invalid expression operand type" "$TMPDIR/xlnk-mixed-types.log"; then
     cat "$TMPDIR/xlnk-mixed-types.log" >&2
-    fail "missing expected linker error 'incompatible operands'"
+    fail "missing expected linker error 'invalid expression operand type'"
 fi
 
 # Regression: invalid shift count in assembler
@@ -4800,11 +4700,10 @@ python3 "$ROOT_DIR/tests/test_output_failures.py"
 python3 "$ROOT_DIR/tests/test_linker_outputs.py"
 python3 "$ROOT_DIR/tests/test_inputs.py"
 python3 "$ROOT_DIR/tests/test_build_configuration.py"
-python3 "$ROOT_DIR/tests/test_v2_values.py"
+python3 "$ROOT_DIR/tests/test_ir_values.py"
 
-python3 "$ROOT_DIR/tests/test_v2_layout.py"
-python3 "$ROOT_DIR/tests/test_v2_frontend.py"
-python3 "$ROOT_DIR/tests/test_v2_analysis.py"
-python3 "$ROOT_DIR/tests/test_v2_objects.py"
+python3 "$ROOT_DIR/tests/test_ir_layout.py"
+python3 "$ROOT_DIR/tests/test_ir_frontend.py"
+python3 "$ROOT_DIR/tests/test_ir_objects.py"
 
 echo "All regression tests passed"

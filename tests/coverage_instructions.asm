@@ -17,6 +17,7 @@ BPL +
 BRK
 BVC +
 BVS +
++ NOP
 CLC
 CLD
 CLI
@@ -78,5 +79,5 @@ TSX
 TXA
 TXS
 TYA
-+ NOP
+NOP
 END

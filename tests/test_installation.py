@@ -23,7 +23,7 @@ class Installation(unittest.TestCase):
                 self.assertEqual(reported, f'{name} {VERSION}\n'.encode())
 
     def test_installed_documentation(self):
-        documents = ['README', 'NEWS', 'xorcyst.texinfo',
+        documents = ['README', 'NEWS', 'MIGRATING_TO_2.0.md', 'xorcyst.texinfo',
                      'XASM_ANALYSIS_FEATURES_GUIDE.md',
                      'XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md', 'XASM_DEPENDENCY_MANIFEST_SPEC.md',
                      'XASM_FCEUX_NL_EXPORT_SPEC.md', 'XASM_INDEX_BOUND_ANALYSIS_SPEC.md',

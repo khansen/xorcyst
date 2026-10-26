@@ -20,16 +20,6 @@ def build_tool(name, destination, flag_variable, replacements=None):
     command = [*shlex.split(os.environ.get('CC', 'cc')), '-I', str(REPO), '-Wall',
                *shlex.split(os.environ.get(flag_variable, '-O0 -g')),
                *map(str, sources), '-o', str(destination)]
-    if name == 'xasm' and sys.platform == 'darwin':
-        command += ['-framework', 'CoreFoundation']
     result = subprocess.run(command, capture_output=True, timeout=120)
     if result.returncode:
         raise AssertionError(result.stderr.decode())
-
-
-def object_file(code=b'\xf3', data=b'\xf3', expressions=()):
-    """Encode a minimal object using the documented big-endian object format."""
-    return (bytes.fromhex('face14') + b'\0\0\0\0\0'
-            + len(data).to_bytes(3, 'big') + data
-            + len(code).to_bytes(3, 'big') + code
-            + len(expressions).to_bytes(2, 'big') + b''.join(expressions))

@@ -92,7 +92,6 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = xasm$(EXEEXT) xlnk$(EXEEXT)
-check_PROGRAMS = xasm-v2$(EXEEXT) xlnk-v2$(EXEEXT)
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/configure.ac
@@ -110,40 +109,22 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" \
 	"$(DESTDIR)$(docdir)" "$(DESTDIR)$(docdir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_xasm_OBJECTS = astnode.$(OBJEXT) astproc.$(OBJEXT) \
-	charmap.$(OBJEXT) codegen.$(OBJEXT) opcode.$(OBJEXT) \
-	parser.$(OBJEXT) scanner.$(OBJEXT) symtab.$(OBJEXT) \
-	listing.$(OBJEXT) fceux_nl.$(OBJEXT) output_file.$(OBJEXT) \
-	dependencies.$(OBJEXT) sha256.$(OBJEXT) xasm.$(OBJEXT) \
-	my_getopt.$(OBJEXT)
-xasm_OBJECTS = $(am_xasm_OBJECTS)
-am__DEPENDENCIES_1 =
-xasm_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__dirstamp = $(am__leading_dot)dirstamp
-am_xasm_v2_OBJECTS = xasm_v2-astnode.$(OBJEXT) \
-	v2/xasm_v2-frontend.$(OBJEXT) xasm_v2-charmap.$(OBJEXT) \
-	xasm_v2-codegen.$(OBJEXT) xasm_v2-opcode.$(OBJEXT) \
-	xasm_v2-parser.$(OBJEXT) xasm_v2-scanner.$(OBJEXT) \
-	xasm_v2-symtab.$(OBJEXT) xasm_v2-listing.$(OBJEXT) \
-	xasm_v2-fceux_nl.$(OBJEXT) xasm_v2-output_file.$(OBJEXT) \
-	xasm_v2-dependencies.$(OBJEXT) xasm_v2-sha256.$(OBJEXT) \
-	xasm_v2-xasm.$(OBJEXT) xasm_v2-my_getopt.$(OBJEXT) \
-	v2/xasm_v2-value.$(OBJEXT) v2/xasm_v2-layout.$(OBJEXT) \
-	v2/xasm_v2-heap.$(OBJEXT) v2/xasm_v2-object.$(OBJEXT) \
-	v2/xasm_v2-program.$(OBJEXT)
-xasm_v2_OBJECTS = $(am_xasm_v2_OBJECTS)
-xasm_v2_DEPENDENCIES =
-am_xlnk_OBJECTS = xlnk.$(OBJEXT) output_file.$(OBJEXT) \
-	script.$(OBJEXT) unit.$(OBJEXT) hashtab.$(OBJEXT) \
-	opcode.$(OBJEXT) my_getopt.$(OBJEXT)
+am_xasm_OBJECTS = astnode.$(OBJEXT) ir/frontend.$(OBJEXT) \
+	charmap.$(OBJEXT) opcode.$(OBJEXT) parser.$(OBJEXT) \
+	scanner.$(OBJEXT) symtab.$(OBJEXT) listing.$(OBJEXT) \
+	fceux_nl.$(OBJEXT) output_file.$(OBJEXT) \
+	dependencies.$(OBJEXT) sha256.$(OBJEXT) xasm.$(OBJEXT) \
+	my_getopt.$(OBJEXT) ir/value.$(OBJEXT) ir/layout.$(OBJEXT) \
+	ir/heap.$(OBJEXT) ir/object.$(OBJEXT) ir/program.$(OBJEXT)
+xasm_OBJECTS = $(am_xasm_OBJECTS)
+xasm_DEPENDENCIES =
+am_xlnk_OBJECTS = xlnk.$(OBJEXT) ir/link.$(OBJEXT) ir/object.$(OBJEXT) \
+	ir/value.$(OBJEXT) ir/heap.$(OBJEXT) ir/layout.$(OBJEXT) \
+	script.$(OBJEXT) opcode.$(OBJEXT) output_file.$(OBJEXT) \
+	my_getopt.$(OBJEXT)
 xlnk_OBJECTS = $(am_xlnk_OBJECTS)
-xlnk_LDADD = $(LDADD)
-am_xlnk_v2_OBJECTS = v2/linker.$(OBJEXT) v2/link.$(OBJEXT) \
-	v2/object.$(OBJEXT) v2/value.$(OBJEXT) v2/heap.$(OBJEXT) \
-	v2/layout.$(OBJEXT) script.$(OBJEXT) opcode.$(OBJEXT) \
-	output_file.$(OBJEXT) my_getopt.$(OBJEXT)
-xlnk_v2_OBJECTS = $(am_xlnk_v2_OBJECTS)
-xlnk_v2_DEPENDENCIES =
+xlnk_DEPENDENCIES =
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -159,35 +140,18 @@ am__v_at_1 =
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
-am__depfiles_remade = ./$(DEPDIR)/astnode.Po ./$(DEPDIR)/astproc.Po \
-	./$(DEPDIR)/charmap.Po ./$(DEPDIR)/codegen.Po \
+am__depfiles_remade = ./$(DEPDIR)/astnode.Po ./$(DEPDIR)/charmap.Po \
 	./$(DEPDIR)/dependencies.Po ./$(DEPDIR)/fceux_nl.Po \
-	./$(DEPDIR)/hashtab.Po ./$(DEPDIR)/listing.Po \
-	./$(DEPDIR)/my_getopt.Po ./$(DEPDIR)/opcode.Po \
-	./$(DEPDIR)/output_file.Po ./$(DEPDIR)/parser.Po \
-	./$(DEPDIR)/scanner.Po ./$(DEPDIR)/script.Po \
-	./$(DEPDIR)/sha256.Po ./$(DEPDIR)/symtab.Po \
-	./$(DEPDIR)/unit.Po ./$(DEPDIR)/xasm.Po \
-	./$(DEPDIR)/xasm_v2-astnode.Po ./$(DEPDIR)/xasm_v2-charmap.Po \
-	./$(DEPDIR)/xasm_v2-codegen.Po \
-	./$(DEPDIR)/xasm_v2-dependencies.Po \
-	./$(DEPDIR)/xasm_v2-fceux_nl.Po ./$(DEPDIR)/xasm_v2-listing.Po \
-	./$(DEPDIR)/xasm_v2-my_getopt.Po ./$(DEPDIR)/xasm_v2-opcode.Po \
-	./$(DEPDIR)/xasm_v2-output_file.Po \
-	./$(DEPDIR)/xasm_v2-parser.Po ./$(DEPDIR)/xasm_v2-scanner.Po \
-	./$(DEPDIR)/xasm_v2-sha256.Po ./$(DEPDIR)/xasm_v2-symtab.Po \
-	./$(DEPDIR)/xasm_v2-xasm.Po ./$(DEPDIR)/xlnk.Po \
-	v2/$(DEPDIR)/heap.Po v2/$(DEPDIR)/layout.Po \
-	v2/$(DEPDIR)/link.Po v2/$(DEPDIR)/linker.Po \
-	v2/$(DEPDIR)/object.Po v2/$(DEPDIR)/value.Po \
-	v2/$(DEPDIR)/xasm_v2-frontend.Po v2/$(DEPDIR)/xasm_v2-heap.Po \
-	v2/$(DEPDIR)/xasm_v2-layout.Po v2/$(DEPDIR)/xasm_v2-object.Po \
-	v2/$(DEPDIR)/xasm_v2-program.Po v2/$(DEPDIR)/xasm_v2-value.Po
+	./$(DEPDIR)/listing.Po ./$(DEPDIR)/my_getopt.Po \
+	./$(DEPDIR)/opcode.Po ./$(DEPDIR)/output_file.Po \
+	./$(DEPDIR)/parser.Po ./$(DEPDIR)/scanner.Po \
+	./$(DEPDIR)/script.Po ./$(DEPDIR)/sha256.Po \
+	./$(DEPDIR)/symtab.Po ./$(DEPDIR)/xasm.Po ./$(DEPDIR)/xlnk.Po \
+	ir/$(DEPDIR)/frontend.Po ir/$(DEPDIR)/heap.Po \
+	ir/$(DEPDIR)/layout.Po ir/$(DEPDIR)/link.Po \
+	ir/$(DEPDIR)/object.Po ir/$(DEPDIR)/program.Po \
+	ir/$(DEPDIR)/value.Po
 am__mv = mv -f
-AM_V_lt = $(am__v_lt_@AM_V@)
-am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
-am__v_lt_0 = --silent
-am__v_lt_1 =
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 AM_V_CC = $(am__v_CC_@AM_V@)
@@ -200,10 +164,8 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(xasm_SOURCES) $(xasm_v2_SOURCES) $(xlnk_SOURCES) \
-	$(xlnk_v2_SOURCES)
-DIST_SOURCES = $(xasm_SOURCES) $(xasm_v2_SOURCES) $(xlnk_SOURCES) \
-	$(xlnk_v2_SOURCES)
+SOURCES = $(xasm_SOURCES) $(xlnk_SOURCES)
+DIST_SOURCES = $(xasm_SOURCES) $(xlnk_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -305,7 +267,6 @@ CPPFLAGS = @CPPFLAGS@
 CSCOPE = @CSCOPE@
 CTAGS = @CTAGS@
 CYGPATH_W = @CYGPATH_W@
-DARWIN_LIBS = @DARWIN_LIBS@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 ECHO_C = @ECHO_C@
@@ -398,32 +359,13 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = subdir-objects
-xasm_LDADD = $(LDADD) $(DARWIN_LIBS)
-
-# Use the *generated* files for normal builds
+xasm_LDADD = $(LDADD)
+xlnk_LDADD = $(LDADD)
 xasm_SOURCES = \
   astnode.c astnode.h \
-  astproc.c astproc.h expr_int.h \
+  ir/frontend.c ir/frontend.h astproc.h expr_int.h \
   charmap.c charmap.h \
-  codegen.c codegen.h \
-  loc.h objdef.h \
-  opcode.c opcode.h \
-  parser.c scanner.c \
-  symtab.c symtab.h \
-  listing.c listing.h fceux_nl.c fceux_nl.h \
-  output_file.c output_file.h \
-  dependencies.c dependencies.h sha256.c sha256.h utf8.h \
-  xasm.c xasm.h version.h \
-  my_getopt.c my_getopt.h getopt.h
-
-xasm_v2_CPPFLAGS = $(AM_CPPFLAGS) -DXORCYST_V2_FRONTEND
-xasm_v2_LDADD = $(LDADD)
-xasm_v2_SOURCES = \
-  astnode.c astnode.h \
-  v2/frontend.c v2/frontend.h astproc.h expr_int.h \
-  charmap.c charmap.h \
-  codegen.c codegen.h \
-  loc.h objdef.h \
+  loc.h \
   opcode.c opcode.h \
   parser.c scanner.c \
   symtab.c symtab.h \
@@ -432,31 +374,21 @@ xasm_v2_SOURCES = \
   dependencies.c dependencies.h sha256.c sha256.h utf8.h \
   xasm.c xasm.h version.h \
   my_getopt.c my_getopt.h getopt.h \
-  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h v2/graph.h v2/heap.c v2/heap.h v2/object.c v2/object.h v2/program.c v2/program.h v2/path.h
+  ir/value.c ir/value.h ir/extent.h ir/layout.c ir/layout.h ir/graph.h ir/heap.c ir/heap.h ir/object.c ir/object.h ir/program.c ir/program.h ir/path.h
 
-xlnk_v2_LDADD = $(LDADD)
-xlnk_v2_SOURCES = v2/linker.c v2/link.c v2/link.h v2/object.c v2/object.h v2/path.h \
-  v2/value.c v2/value.h v2/graph.h v2/heap.c v2/heap.h v2/extent.h v2/layout.c v2/layout.h \
+xlnk_SOURCES = xlnk.c ir/link.c ir/link.h ir/object.c ir/object.h ir/path.h \
+  ir/value.c ir/value.h ir/graph.h ir/heap.c ir/heap.h ir/extent.h ir/layout.c ir/layout.h \
   script.c script.h opcode.c opcode.h output_file.c output_file.h \
   my_getopt.c my_getopt.h getopt.h version.h
-
-xlnk_SOURCES = \
-  xlnk.c version.h expr_int.h \
-  output_file.c output_file.h \
-  script.c script.h \
-  unit.c unit.h \
-  hashtab.c hashtab.h \
-  opcode.c opcode.h \
-  my_getopt.c my_getopt.h getopt.h
 
 
 # Install the generated (but checked-in) man pages alongside the tools.
 dist_man1_MANS = man1/xasm.1 man1/xlnk.1
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
-EXTRA_DIST = parser.y scanner.l parser.h \
+EXTRA_DIST = astproc.c parser.y scanner.l parser.h \
   design/v2/object-wire-example.hex \
-  v2/value.c v2/value.h v2/extent.h v2/layout.c v2/layout.h v2/README.md \
+  ir/value.c ir/value.h ir/extent.h ir/layout.c ir/layout.h ir/README.md \
   man1/xasm.h2m man1/xlnk.h2m \
   tests/coverage_directives_control.asm \
   tests/coverage_directives_layout.asm \
@@ -500,11 +432,9 @@ EXTRA_DIST = parser.y scanner.l parser.h \
   tests/test_symtab.c \
   tests/test_symtab.py \
   tests/test_symtab_alloc.c \
-  tests/test_unit_alloc.c \
-  tests/test_v2_alloc.c tests/test_v2_values.c tests/test_v2_values.py \
-  tests/test_v2_layout_alloc.c tests/test_v2_layout.c tests/test_v2_layout.py tests/test_v2_cache.c tests/test_v2_objects.py tests/test_v2_link_io.c tests/test_v2_object_codec.c tests/test_v2_object_failures.c \
-  tests/test_v2_object_alloc.c tests/test_v2_program_alloc.c tests/test_v2_link_alloc.c tests/test_v2_heap.c tests/test_v2_heap_alloc.c tests/test_v2_frontend.py tests/test_v2_analysis.py tests/test_v2_frontend_faults.c tests/test_v2_value_faults.c tests/test_v2_source_locations.c tests/test_v2_source_driver.c tests/test_v2_dependencies.c tests/perf_v2_frontend.py tests/v2_sizeof_cases.json \
-  tests/test_xlnk_io_faults.c \
+  tests/test_ir_alloc.c tests/test_ir_values.c tests/test_ir_values.py \
+  tests/test_ir_layout_alloc.c tests/test_ir_layout.c tests/test_ir_layout.py tests/test_ir_cache.c tests/test_ir_objects.py tests/test_ir_link_io.c tests/test_ir_object_codec.c tests/test_ir_object_failures.c \
+  tests/test_ir_object_alloc.c tests/test_ir_program_alloc.c tests/test_ir_link_alloc.c tests/test_ir_heap.c tests/test_ir_heap_alloc.c tests/test_ir_frontend.py tests/test_ir_frontend_faults.c tests/test_ir_value_faults.c tests/test_ir_source_locations.c tests/test_ir_source_driver.c tests/test_ir_dependencies.c tests/perf_ir_frontend.py tests/ir_sizeof_cases.json \
   tests/tool_test_support.py \
   tests/verify_fceux_projects.py \
   doc/Assembler-Directives.html \
@@ -522,7 +452,7 @@ EXTRA_DIST = parser.y scanner.l parser.h \
 
 
 # Install the current feature documentation alongside the tools.
-dist_doc_DATA = README NEWS xorcyst.texinfo \
+dist_doc_DATA = README NEWS MIGRATING_TO_2.0.md xorcyst.texinfo \
   XORCYST_V2_DESIGN.md \
   XORCYST_V2_CONTRACTS.md \
   XASM_ANALYSIS_FEATURES_GUIDE.md \
@@ -640,64 +570,39 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-$(am__rm_f) $(bin_PROGRAMS)
-
-clean-checkPROGRAMS:
-	-$(am__rm_f) $(check_PROGRAMS)
+ir/$(am__dirstamp):
+	@$(MKDIR_P) ir
+	@: >>ir/$(am__dirstamp)
+ir/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) ir/$(DEPDIR)
+	@: >>ir/$(DEPDIR)/$(am__dirstamp)
+ir/frontend.$(OBJEXT): ir/$(am__dirstamp) ir/$(DEPDIR)/$(am__dirstamp)
+ir/value.$(OBJEXT): ir/$(am__dirstamp) ir/$(DEPDIR)/$(am__dirstamp)
+ir/layout.$(OBJEXT): ir/$(am__dirstamp) ir/$(DEPDIR)/$(am__dirstamp)
+ir/heap.$(OBJEXT): ir/$(am__dirstamp) ir/$(DEPDIR)/$(am__dirstamp)
+ir/object.$(OBJEXT): ir/$(am__dirstamp) ir/$(DEPDIR)/$(am__dirstamp)
+ir/program.$(OBJEXT): ir/$(am__dirstamp) ir/$(DEPDIR)/$(am__dirstamp)
 
 xasm$(EXEEXT): $(xasm_OBJECTS) $(xasm_DEPENDENCIES) $(EXTRA_xasm_DEPENDENCIES) 
 	@rm -f xasm$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(xasm_OBJECTS) $(xasm_LDADD) $(LIBS)
-v2/$(am__dirstamp):
-	@$(MKDIR_P) v2
-	@: >>v2/$(am__dirstamp)
-v2/$(DEPDIR)/$(am__dirstamp):
-	@$(MKDIR_P) v2/$(DEPDIR)
-	@: >>v2/$(DEPDIR)/$(am__dirstamp)
-v2/xasm_v2-frontend.$(OBJEXT): v2/$(am__dirstamp) \
-	v2/$(DEPDIR)/$(am__dirstamp)
-v2/xasm_v2-value.$(OBJEXT): v2/$(am__dirstamp) \
-	v2/$(DEPDIR)/$(am__dirstamp)
-v2/xasm_v2-layout.$(OBJEXT): v2/$(am__dirstamp) \
-	v2/$(DEPDIR)/$(am__dirstamp)
-v2/xasm_v2-heap.$(OBJEXT): v2/$(am__dirstamp) \
-	v2/$(DEPDIR)/$(am__dirstamp)
-v2/xasm_v2-object.$(OBJEXT): v2/$(am__dirstamp) \
-	v2/$(DEPDIR)/$(am__dirstamp)
-v2/xasm_v2-program.$(OBJEXT): v2/$(am__dirstamp) \
-	v2/$(DEPDIR)/$(am__dirstamp)
-
-xasm-v2$(EXEEXT): $(xasm_v2_OBJECTS) $(xasm_v2_DEPENDENCIES) $(EXTRA_xasm_v2_DEPENDENCIES)
-	@rm -f xasm-v2$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(xasm_v2_OBJECTS) $(xasm_v2_LDADD) $(LIBS)
+ir/link.$(OBJEXT): ir/$(am__dirstamp) ir/$(DEPDIR)/$(am__dirstamp)
 
 xlnk$(EXEEXT): $(xlnk_OBJECTS) $(xlnk_DEPENDENCIES) $(EXTRA_xlnk_DEPENDENCIES) 
 	@rm -f xlnk$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(xlnk_OBJECTS) $(xlnk_LDADD) $(LIBS)
-v2/linker.$(OBJEXT): v2/$(am__dirstamp) v2/$(DEPDIR)/$(am__dirstamp)
-v2/link.$(OBJEXT): v2/$(am__dirstamp) v2/$(DEPDIR)/$(am__dirstamp)
-v2/object.$(OBJEXT): v2/$(am__dirstamp) v2/$(DEPDIR)/$(am__dirstamp)
-v2/value.$(OBJEXT): v2/$(am__dirstamp) v2/$(DEPDIR)/$(am__dirstamp)
-v2/heap.$(OBJEXT): v2/$(am__dirstamp) v2/$(DEPDIR)/$(am__dirstamp)
-v2/layout.$(OBJEXT): v2/$(am__dirstamp) v2/$(DEPDIR)/$(am__dirstamp)
-
-xlnk-v2$(EXEEXT): $(xlnk_v2_OBJECTS) $(xlnk_v2_DEPENDENCIES) $(EXTRA_xlnk_v2_DEPENDENCIES)
-	@rm -f xlnk-v2$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(xlnk_v2_OBJECTS) $(xlnk_v2_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
-	-rm -f v2/*.$(OBJEXT)
+	-rm -f ir/*.$(OBJEXT)
 
 distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/astnode.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/astproc.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/charmap.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/codegen.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dependencies.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fceux_nl.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hashtab.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/listing.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/my_getopt.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/opcode.Po@am__quote@ # am--include-marker
@@ -707,35 +612,15 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/script.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sha256.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/symtab.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/unit.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-astnode.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-charmap.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-codegen.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-dependencies.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-fceux_nl.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-listing.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-my_getopt.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-opcode.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-output_file.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-parser.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-scanner.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-sha256.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-symtab.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xasm_v2-xasm.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xlnk.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/heap.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/layout.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/link.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/linker.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/object.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/value.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/xasm_v2-frontend.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/xasm_v2-heap.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/xasm_v2-layout.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/xasm_v2-object.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/xasm_v2-program.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@v2/$(DEPDIR)/xasm_v2-value.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@ir/$(DEPDIR)/frontend.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@ir/$(DEPDIR)/heap.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@ir/$(DEPDIR)/layout.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@ir/$(DEPDIR)/link.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@ir/$(DEPDIR)/object.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@ir/$(DEPDIR)/program.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@ir/$(DEPDIR)/value.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -758,286 +643,6 @@ am--depfiles: $(am__depfiles_remade)
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
-
-xasm_v2-astnode.o: astnode.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-astnode.o -MD -MP -MF $(DEPDIR)/xasm_v2-astnode.Tpo -c -o xasm_v2-astnode.o `test -f 'astnode.c' || echo '$(srcdir)/'`astnode.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-astnode.Tpo $(DEPDIR)/xasm_v2-astnode.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='astnode.c' object='xasm_v2-astnode.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-astnode.o `test -f 'astnode.c' || echo '$(srcdir)/'`astnode.c
-
-xasm_v2-astnode.obj: astnode.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-astnode.obj -MD -MP -MF $(DEPDIR)/xasm_v2-astnode.Tpo -c -o xasm_v2-astnode.obj `if test -f 'astnode.c'; then $(CYGPATH_W) 'astnode.c'; else $(CYGPATH_W) '$(srcdir)/astnode.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-astnode.Tpo $(DEPDIR)/xasm_v2-astnode.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='astnode.c' object='xasm_v2-astnode.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-astnode.obj `if test -f 'astnode.c'; then $(CYGPATH_W) 'astnode.c'; else $(CYGPATH_W) '$(srcdir)/astnode.c'; fi`
-
-v2/xasm_v2-frontend.o: v2/frontend.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-frontend.o -MD -MP -MF v2/$(DEPDIR)/xasm_v2-frontend.Tpo -c -o v2/xasm_v2-frontend.o `test -f 'v2/frontend.c' || echo '$(srcdir)/'`v2/frontend.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-frontend.Tpo v2/$(DEPDIR)/xasm_v2-frontend.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/frontend.c' object='v2/xasm_v2-frontend.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-frontend.o `test -f 'v2/frontend.c' || echo '$(srcdir)/'`v2/frontend.c
-
-v2/xasm_v2-frontend.obj: v2/frontend.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-frontend.obj -MD -MP -MF v2/$(DEPDIR)/xasm_v2-frontend.Tpo -c -o v2/xasm_v2-frontend.obj `if test -f 'v2/frontend.c'; then $(CYGPATH_W) 'v2/frontend.c'; else $(CYGPATH_W) '$(srcdir)/v2/frontend.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-frontend.Tpo v2/$(DEPDIR)/xasm_v2-frontend.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/frontend.c' object='v2/xasm_v2-frontend.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-frontend.obj `if test -f 'v2/frontend.c'; then $(CYGPATH_W) 'v2/frontend.c'; else $(CYGPATH_W) '$(srcdir)/v2/frontend.c'; fi`
-
-xasm_v2-charmap.o: charmap.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-charmap.o -MD -MP -MF $(DEPDIR)/xasm_v2-charmap.Tpo -c -o xasm_v2-charmap.o `test -f 'charmap.c' || echo '$(srcdir)/'`charmap.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-charmap.Tpo $(DEPDIR)/xasm_v2-charmap.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='charmap.c' object='xasm_v2-charmap.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-charmap.o `test -f 'charmap.c' || echo '$(srcdir)/'`charmap.c
-
-xasm_v2-charmap.obj: charmap.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-charmap.obj -MD -MP -MF $(DEPDIR)/xasm_v2-charmap.Tpo -c -o xasm_v2-charmap.obj `if test -f 'charmap.c'; then $(CYGPATH_W) 'charmap.c'; else $(CYGPATH_W) '$(srcdir)/charmap.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-charmap.Tpo $(DEPDIR)/xasm_v2-charmap.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='charmap.c' object='xasm_v2-charmap.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-charmap.obj `if test -f 'charmap.c'; then $(CYGPATH_W) 'charmap.c'; else $(CYGPATH_W) '$(srcdir)/charmap.c'; fi`
-
-xasm_v2-codegen.o: codegen.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-codegen.o -MD -MP -MF $(DEPDIR)/xasm_v2-codegen.Tpo -c -o xasm_v2-codegen.o `test -f 'codegen.c' || echo '$(srcdir)/'`codegen.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-codegen.Tpo $(DEPDIR)/xasm_v2-codegen.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='codegen.c' object='xasm_v2-codegen.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-codegen.o `test -f 'codegen.c' || echo '$(srcdir)/'`codegen.c
-
-xasm_v2-codegen.obj: codegen.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-codegen.obj -MD -MP -MF $(DEPDIR)/xasm_v2-codegen.Tpo -c -o xasm_v2-codegen.obj `if test -f 'codegen.c'; then $(CYGPATH_W) 'codegen.c'; else $(CYGPATH_W) '$(srcdir)/codegen.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-codegen.Tpo $(DEPDIR)/xasm_v2-codegen.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='codegen.c' object='xasm_v2-codegen.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-codegen.obj `if test -f 'codegen.c'; then $(CYGPATH_W) 'codegen.c'; else $(CYGPATH_W) '$(srcdir)/codegen.c'; fi`
-
-xasm_v2-opcode.o: opcode.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-opcode.o -MD -MP -MF $(DEPDIR)/xasm_v2-opcode.Tpo -c -o xasm_v2-opcode.o `test -f 'opcode.c' || echo '$(srcdir)/'`opcode.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-opcode.Tpo $(DEPDIR)/xasm_v2-opcode.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='opcode.c' object='xasm_v2-opcode.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-opcode.o `test -f 'opcode.c' || echo '$(srcdir)/'`opcode.c
-
-xasm_v2-opcode.obj: opcode.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-opcode.obj -MD -MP -MF $(DEPDIR)/xasm_v2-opcode.Tpo -c -o xasm_v2-opcode.obj `if test -f 'opcode.c'; then $(CYGPATH_W) 'opcode.c'; else $(CYGPATH_W) '$(srcdir)/opcode.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-opcode.Tpo $(DEPDIR)/xasm_v2-opcode.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='opcode.c' object='xasm_v2-opcode.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-opcode.obj `if test -f 'opcode.c'; then $(CYGPATH_W) 'opcode.c'; else $(CYGPATH_W) '$(srcdir)/opcode.c'; fi`
-
-xasm_v2-parser.o: parser.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-parser.o -MD -MP -MF $(DEPDIR)/xasm_v2-parser.Tpo -c -o xasm_v2-parser.o `test -f 'parser.c' || echo '$(srcdir)/'`parser.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-parser.Tpo $(DEPDIR)/xasm_v2-parser.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='parser.c' object='xasm_v2-parser.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-parser.o `test -f 'parser.c' || echo '$(srcdir)/'`parser.c
-
-xasm_v2-parser.obj: parser.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-parser.obj -MD -MP -MF $(DEPDIR)/xasm_v2-parser.Tpo -c -o xasm_v2-parser.obj `if test -f 'parser.c'; then $(CYGPATH_W) 'parser.c'; else $(CYGPATH_W) '$(srcdir)/parser.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-parser.Tpo $(DEPDIR)/xasm_v2-parser.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='parser.c' object='xasm_v2-parser.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-parser.obj `if test -f 'parser.c'; then $(CYGPATH_W) 'parser.c'; else $(CYGPATH_W) '$(srcdir)/parser.c'; fi`
-
-xasm_v2-scanner.o: scanner.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-scanner.o -MD -MP -MF $(DEPDIR)/xasm_v2-scanner.Tpo -c -o xasm_v2-scanner.o `test -f 'scanner.c' || echo '$(srcdir)/'`scanner.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-scanner.Tpo $(DEPDIR)/xasm_v2-scanner.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='scanner.c' object='xasm_v2-scanner.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-scanner.o `test -f 'scanner.c' || echo '$(srcdir)/'`scanner.c
-
-xasm_v2-scanner.obj: scanner.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-scanner.obj -MD -MP -MF $(DEPDIR)/xasm_v2-scanner.Tpo -c -o xasm_v2-scanner.obj `if test -f 'scanner.c'; then $(CYGPATH_W) 'scanner.c'; else $(CYGPATH_W) '$(srcdir)/scanner.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-scanner.Tpo $(DEPDIR)/xasm_v2-scanner.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='scanner.c' object='xasm_v2-scanner.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-scanner.obj `if test -f 'scanner.c'; then $(CYGPATH_W) 'scanner.c'; else $(CYGPATH_W) '$(srcdir)/scanner.c'; fi`
-
-xasm_v2-symtab.o: symtab.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-symtab.o -MD -MP -MF $(DEPDIR)/xasm_v2-symtab.Tpo -c -o xasm_v2-symtab.o `test -f 'symtab.c' || echo '$(srcdir)/'`symtab.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-symtab.Tpo $(DEPDIR)/xasm_v2-symtab.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='symtab.c' object='xasm_v2-symtab.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-symtab.o `test -f 'symtab.c' || echo '$(srcdir)/'`symtab.c
-
-xasm_v2-symtab.obj: symtab.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-symtab.obj -MD -MP -MF $(DEPDIR)/xasm_v2-symtab.Tpo -c -o xasm_v2-symtab.obj `if test -f 'symtab.c'; then $(CYGPATH_W) 'symtab.c'; else $(CYGPATH_W) '$(srcdir)/symtab.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-symtab.Tpo $(DEPDIR)/xasm_v2-symtab.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='symtab.c' object='xasm_v2-symtab.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-symtab.obj `if test -f 'symtab.c'; then $(CYGPATH_W) 'symtab.c'; else $(CYGPATH_W) '$(srcdir)/symtab.c'; fi`
-
-xasm_v2-listing.o: listing.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-listing.o -MD -MP -MF $(DEPDIR)/xasm_v2-listing.Tpo -c -o xasm_v2-listing.o `test -f 'listing.c' || echo '$(srcdir)/'`listing.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-listing.Tpo $(DEPDIR)/xasm_v2-listing.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='listing.c' object='xasm_v2-listing.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-listing.o `test -f 'listing.c' || echo '$(srcdir)/'`listing.c
-
-xasm_v2-listing.obj: listing.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-listing.obj -MD -MP -MF $(DEPDIR)/xasm_v2-listing.Tpo -c -o xasm_v2-listing.obj `if test -f 'listing.c'; then $(CYGPATH_W) 'listing.c'; else $(CYGPATH_W) '$(srcdir)/listing.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-listing.Tpo $(DEPDIR)/xasm_v2-listing.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='listing.c' object='xasm_v2-listing.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-listing.obj `if test -f 'listing.c'; then $(CYGPATH_W) 'listing.c'; else $(CYGPATH_W) '$(srcdir)/listing.c'; fi`
-
-xasm_v2-fceux_nl.o: fceux_nl.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-fceux_nl.o -MD -MP -MF $(DEPDIR)/xasm_v2-fceux_nl.Tpo -c -o xasm_v2-fceux_nl.o `test -f 'fceux_nl.c' || echo '$(srcdir)/'`fceux_nl.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-fceux_nl.Tpo $(DEPDIR)/xasm_v2-fceux_nl.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='fceux_nl.c' object='xasm_v2-fceux_nl.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-fceux_nl.o `test -f 'fceux_nl.c' || echo '$(srcdir)/'`fceux_nl.c
-
-xasm_v2-fceux_nl.obj: fceux_nl.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-fceux_nl.obj -MD -MP -MF $(DEPDIR)/xasm_v2-fceux_nl.Tpo -c -o xasm_v2-fceux_nl.obj `if test -f 'fceux_nl.c'; then $(CYGPATH_W) 'fceux_nl.c'; else $(CYGPATH_W) '$(srcdir)/fceux_nl.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-fceux_nl.Tpo $(DEPDIR)/xasm_v2-fceux_nl.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='fceux_nl.c' object='xasm_v2-fceux_nl.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-fceux_nl.obj `if test -f 'fceux_nl.c'; then $(CYGPATH_W) 'fceux_nl.c'; else $(CYGPATH_W) '$(srcdir)/fceux_nl.c'; fi`
-
-xasm_v2-output_file.o: output_file.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-output_file.o -MD -MP -MF $(DEPDIR)/xasm_v2-output_file.Tpo -c -o xasm_v2-output_file.o `test -f 'output_file.c' || echo '$(srcdir)/'`output_file.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-output_file.Tpo $(DEPDIR)/xasm_v2-output_file.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='output_file.c' object='xasm_v2-output_file.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-output_file.o `test -f 'output_file.c' || echo '$(srcdir)/'`output_file.c
-
-xasm_v2-output_file.obj: output_file.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-output_file.obj -MD -MP -MF $(DEPDIR)/xasm_v2-output_file.Tpo -c -o xasm_v2-output_file.obj `if test -f 'output_file.c'; then $(CYGPATH_W) 'output_file.c'; else $(CYGPATH_W) '$(srcdir)/output_file.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-output_file.Tpo $(DEPDIR)/xasm_v2-output_file.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='output_file.c' object='xasm_v2-output_file.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-output_file.obj `if test -f 'output_file.c'; then $(CYGPATH_W) 'output_file.c'; else $(CYGPATH_W) '$(srcdir)/output_file.c'; fi`
-
-xasm_v2-dependencies.o: dependencies.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-dependencies.o -MD -MP -MF $(DEPDIR)/xasm_v2-dependencies.Tpo -c -o xasm_v2-dependencies.o `test -f 'dependencies.c' || echo '$(srcdir)/'`dependencies.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-dependencies.Tpo $(DEPDIR)/xasm_v2-dependencies.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dependencies.c' object='xasm_v2-dependencies.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-dependencies.o `test -f 'dependencies.c' || echo '$(srcdir)/'`dependencies.c
-
-xasm_v2-dependencies.obj: dependencies.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-dependencies.obj -MD -MP -MF $(DEPDIR)/xasm_v2-dependencies.Tpo -c -o xasm_v2-dependencies.obj `if test -f 'dependencies.c'; then $(CYGPATH_W) 'dependencies.c'; else $(CYGPATH_W) '$(srcdir)/dependencies.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-dependencies.Tpo $(DEPDIR)/xasm_v2-dependencies.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dependencies.c' object='xasm_v2-dependencies.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-dependencies.obj `if test -f 'dependencies.c'; then $(CYGPATH_W) 'dependencies.c'; else $(CYGPATH_W) '$(srcdir)/dependencies.c'; fi`
-
-xasm_v2-sha256.o: sha256.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-sha256.o -MD -MP -MF $(DEPDIR)/xasm_v2-sha256.Tpo -c -o xasm_v2-sha256.o `test -f 'sha256.c' || echo '$(srcdir)/'`sha256.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-sha256.Tpo $(DEPDIR)/xasm_v2-sha256.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sha256.c' object='xasm_v2-sha256.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-sha256.o `test -f 'sha256.c' || echo '$(srcdir)/'`sha256.c
-
-xasm_v2-sha256.obj: sha256.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-sha256.obj -MD -MP -MF $(DEPDIR)/xasm_v2-sha256.Tpo -c -o xasm_v2-sha256.obj `if test -f 'sha256.c'; then $(CYGPATH_W) 'sha256.c'; else $(CYGPATH_W) '$(srcdir)/sha256.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-sha256.Tpo $(DEPDIR)/xasm_v2-sha256.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sha256.c' object='xasm_v2-sha256.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-sha256.obj `if test -f 'sha256.c'; then $(CYGPATH_W) 'sha256.c'; else $(CYGPATH_W) '$(srcdir)/sha256.c'; fi`
-
-xasm_v2-xasm.o: xasm.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-xasm.o -MD -MP -MF $(DEPDIR)/xasm_v2-xasm.Tpo -c -o xasm_v2-xasm.o `test -f 'xasm.c' || echo '$(srcdir)/'`xasm.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-xasm.Tpo $(DEPDIR)/xasm_v2-xasm.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xasm.c' object='xasm_v2-xasm.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-xasm.o `test -f 'xasm.c' || echo '$(srcdir)/'`xasm.c
-
-xasm_v2-xasm.obj: xasm.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-xasm.obj -MD -MP -MF $(DEPDIR)/xasm_v2-xasm.Tpo -c -o xasm_v2-xasm.obj `if test -f 'xasm.c'; then $(CYGPATH_W) 'xasm.c'; else $(CYGPATH_W) '$(srcdir)/xasm.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-xasm.Tpo $(DEPDIR)/xasm_v2-xasm.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xasm.c' object='xasm_v2-xasm.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-xasm.obj `if test -f 'xasm.c'; then $(CYGPATH_W) 'xasm.c'; else $(CYGPATH_W) '$(srcdir)/xasm.c'; fi`
-
-xasm_v2-my_getopt.o: my_getopt.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-my_getopt.o -MD -MP -MF $(DEPDIR)/xasm_v2-my_getopt.Tpo -c -o xasm_v2-my_getopt.o `test -f 'my_getopt.c' || echo '$(srcdir)/'`my_getopt.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-my_getopt.Tpo $(DEPDIR)/xasm_v2-my_getopt.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='my_getopt.c' object='xasm_v2-my_getopt.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-my_getopt.o `test -f 'my_getopt.c' || echo '$(srcdir)/'`my_getopt.c
-
-xasm_v2-my_getopt.obj: my_getopt.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT xasm_v2-my_getopt.obj -MD -MP -MF $(DEPDIR)/xasm_v2-my_getopt.Tpo -c -o xasm_v2-my_getopt.obj `if test -f 'my_getopt.c'; then $(CYGPATH_W) 'my_getopt.c'; else $(CYGPATH_W) '$(srcdir)/my_getopt.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xasm_v2-my_getopt.Tpo $(DEPDIR)/xasm_v2-my_getopt.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='my_getopt.c' object='xasm_v2-my_getopt.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o xasm_v2-my_getopt.obj `if test -f 'my_getopt.c'; then $(CYGPATH_W) 'my_getopt.c'; else $(CYGPATH_W) '$(srcdir)/my_getopt.c'; fi`
-
-v2/xasm_v2-value.o: v2/value.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-value.o -MD -MP -MF v2/$(DEPDIR)/xasm_v2-value.Tpo -c -o v2/xasm_v2-value.o `test -f 'v2/value.c' || echo '$(srcdir)/'`v2/value.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-value.Tpo v2/$(DEPDIR)/xasm_v2-value.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/value.c' object='v2/xasm_v2-value.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-value.o `test -f 'v2/value.c' || echo '$(srcdir)/'`v2/value.c
-
-v2/xasm_v2-value.obj: v2/value.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-value.obj -MD -MP -MF v2/$(DEPDIR)/xasm_v2-value.Tpo -c -o v2/xasm_v2-value.obj `if test -f 'v2/value.c'; then $(CYGPATH_W) 'v2/value.c'; else $(CYGPATH_W) '$(srcdir)/v2/value.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-value.Tpo v2/$(DEPDIR)/xasm_v2-value.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/value.c' object='v2/xasm_v2-value.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-value.obj `if test -f 'v2/value.c'; then $(CYGPATH_W) 'v2/value.c'; else $(CYGPATH_W) '$(srcdir)/v2/value.c'; fi`
-
-v2/xasm_v2-layout.o: v2/layout.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-layout.o -MD -MP -MF v2/$(DEPDIR)/xasm_v2-layout.Tpo -c -o v2/xasm_v2-layout.o `test -f 'v2/layout.c' || echo '$(srcdir)/'`v2/layout.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-layout.Tpo v2/$(DEPDIR)/xasm_v2-layout.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/layout.c' object='v2/xasm_v2-layout.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-layout.o `test -f 'v2/layout.c' || echo '$(srcdir)/'`v2/layout.c
-
-v2/xasm_v2-layout.obj: v2/layout.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-layout.obj -MD -MP -MF v2/$(DEPDIR)/xasm_v2-layout.Tpo -c -o v2/xasm_v2-layout.obj `if test -f 'v2/layout.c'; then $(CYGPATH_W) 'v2/layout.c'; else $(CYGPATH_W) '$(srcdir)/v2/layout.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-layout.Tpo v2/$(DEPDIR)/xasm_v2-layout.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/layout.c' object='v2/xasm_v2-layout.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-layout.obj `if test -f 'v2/layout.c'; then $(CYGPATH_W) 'v2/layout.c'; else $(CYGPATH_W) '$(srcdir)/v2/layout.c'; fi`
-
-v2/xasm_v2-heap.o: v2/heap.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-heap.o -MD -MP -MF v2/$(DEPDIR)/xasm_v2-heap.Tpo -c -o v2/xasm_v2-heap.o `test -f 'v2/heap.c' || echo '$(srcdir)/'`v2/heap.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-heap.Tpo v2/$(DEPDIR)/xasm_v2-heap.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/heap.c' object='v2/xasm_v2-heap.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-heap.o `test -f 'v2/heap.c' || echo '$(srcdir)/'`v2/heap.c
-
-v2/xasm_v2-heap.obj: v2/heap.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-heap.obj -MD -MP -MF v2/$(DEPDIR)/xasm_v2-heap.Tpo -c -o v2/xasm_v2-heap.obj `if test -f 'v2/heap.c'; then $(CYGPATH_W) 'v2/heap.c'; else $(CYGPATH_W) '$(srcdir)/v2/heap.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-heap.Tpo v2/$(DEPDIR)/xasm_v2-heap.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/heap.c' object='v2/xasm_v2-heap.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-heap.obj `if test -f 'v2/heap.c'; then $(CYGPATH_W) 'v2/heap.c'; else $(CYGPATH_W) '$(srcdir)/v2/heap.c'; fi`
-
-v2/xasm_v2-object.o: v2/object.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-object.o -MD -MP -MF v2/$(DEPDIR)/xasm_v2-object.Tpo -c -o v2/xasm_v2-object.o `test -f 'v2/object.c' || echo '$(srcdir)/'`v2/object.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-object.Tpo v2/$(DEPDIR)/xasm_v2-object.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/object.c' object='v2/xasm_v2-object.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-object.o `test -f 'v2/object.c' || echo '$(srcdir)/'`v2/object.c
-
-v2/xasm_v2-object.obj: v2/object.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-object.obj -MD -MP -MF v2/$(DEPDIR)/xasm_v2-object.Tpo -c -o v2/xasm_v2-object.obj `if test -f 'v2/object.c'; then $(CYGPATH_W) 'v2/object.c'; else $(CYGPATH_W) '$(srcdir)/v2/object.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-object.Tpo v2/$(DEPDIR)/xasm_v2-object.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/object.c' object='v2/xasm_v2-object.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-object.obj `if test -f 'v2/object.c'; then $(CYGPATH_W) 'v2/object.c'; else $(CYGPATH_W) '$(srcdir)/v2/object.c'; fi`
-
-v2/xasm_v2-program.o: v2/program.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-program.o -MD -MP -MF v2/$(DEPDIR)/xasm_v2-program.Tpo -c -o v2/xasm_v2-program.o `test -f 'v2/program.c' || echo '$(srcdir)/'`v2/program.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-program.Tpo v2/$(DEPDIR)/xasm_v2-program.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/program.c' object='v2/xasm_v2-program.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-program.o `test -f 'v2/program.c' || echo '$(srcdir)/'`v2/program.c
-
-v2/xasm_v2-program.obj: v2/program.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v2/xasm_v2-program.obj -MD -MP -MF v2/$(DEPDIR)/xasm_v2-program.Tpo -c -o v2/xasm_v2-program.obj `if test -f 'v2/program.c'; then $(CYGPATH_W) 'v2/program.c'; else $(CYGPATH_W) '$(srcdir)/v2/program.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) v2/$(DEPDIR)/xasm_v2-program.Tpo v2/$(DEPDIR)/xasm_v2-program.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v2/program.c' object='v2/xasm_v2-program.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xasm_v2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v2/xasm_v2-program.obj `if test -f 'v2/program.c'; then $(CYGPATH_W) 'v2/program.c'; else $(CYGPATH_W) '$(srcdir)/v2/program.c'; fi`
 install-man1: $(dist_man1_MANS)
 	@$(NORMAL_INSTALL)
 	@list1='$(dist_man1_MANS)'; \
@@ -1408,7 +1013,6 @@ distcleancheck: distclean
 	       $(distcleancheck_listfiles) ; \
 	       exit 1; } >&2
 check-am: all-am
-	$(MAKE) $(AM_MAKEFLAGS) $(check_PROGRAMS)
 	$(MAKE) $(AM_MAKEFLAGS) check-local
 check: check-am
 all-am: Makefile $(PROGRAMS) $(MANS) $(DATA) config.h
@@ -1442,26 +1046,22 @@ clean-generic:
 distclean-generic:
 	-$(am__rm_f) $(CONFIG_CLEAN_FILES)
 	-test . = "$(srcdir)" || $(am__rm_f) $(CONFIG_CLEAN_VPATH_FILES)
-	-$(am__rm_f) v2/$(DEPDIR)/$(am__dirstamp)
-	-$(am__rm_f) v2/$(am__dirstamp)
+	-$(am__rm_f) ir/$(DEPDIR)/$(am__dirstamp)
+	-$(am__rm_f) ir/$(am__dirstamp)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-checkPROGRAMS clean-generic \
-	mostlyclean-am
+clean-am: clean-binPROGRAMS clean-generic mostlyclean-am
 
 distclean: distclean-am
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -f ./$(DEPDIR)/astnode.Po
-	-rm -f ./$(DEPDIR)/astproc.Po
 	-rm -f ./$(DEPDIR)/charmap.Po
-	-rm -f ./$(DEPDIR)/codegen.Po
 	-rm -f ./$(DEPDIR)/dependencies.Po
 	-rm -f ./$(DEPDIR)/fceux_nl.Po
-	-rm -f ./$(DEPDIR)/hashtab.Po
 	-rm -f ./$(DEPDIR)/listing.Po
 	-rm -f ./$(DEPDIR)/my_getopt.Po
 	-rm -f ./$(DEPDIR)/opcode.Po
@@ -1471,35 +1071,15 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/script.Po
 	-rm -f ./$(DEPDIR)/sha256.Po
 	-rm -f ./$(DEPDIR)/symtab.Po
-	-rm -f ./$(DEPDIR)/unit.Po
 	-rm -f ./$(DEPDIR)/xasm.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-astnode.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-charmap.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-codegen.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-dependencies.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-fceux_nl.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-listing.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-my_getopt.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-opcode.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-output_file.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-parser.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-scanner.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-sha256.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-symtab.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-xasm.Po
 	-rm -f ./$(DEPDIR)/xlnk.Po
-	-rm -f v2/$(DEPDIR)/heap.Po
-	-rm -f v2/$(DEPDIR)/layout.Po
-	-rm -f v2/$(DEPDIR)/link.Po
-	-rm -f v2/$(DEPDIR)/linker.Po
-	-rm -f v2/$(DEPDIR)/object.Po
-	-rm -f v2/$(DEPDIR)/value.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-frontend.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-heap.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-layout.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-object.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-program.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-value.Po
+	-rm -f ir/$(DEPDIR)/frontend.Po
+	-rm -f ir/$(DEPDIR)/heap.Po
+	-rm -f ir/$(DEPDIR)/layout.Po
+	-rm -f ir/$(DEPDIR)/link.Po
+	-rm -f ir/$(DEPDIR)/object.Po
+	-rm -f ir/$(DEPDIR)/program.Po
+	-rm -f ir/$(DEPDIR)/value.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-hdr distclean-tags
@@ -1549,12 +1129,9 @@ maintainer-clean: maintainer-clean-am
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -rf $(top_srcdir)/autom4te.cache
 	-rm -f ./$(DEPDIR)/astnode.Po
-	-rm -f ./$(DEPDIR)/astproc.Po
 	-rm -f ./$(DEPDIR)/charmap.Po
-	-rm -f ./$(DEPDIR)/codegen.Po
 	-rm -f ./$(DEPDIR)/dependencies.Po
 	-rm -f ./$(DEPDIR)/fceux_nl.Po
-	-rm -f ./$(DEPDIR)/hashtab.Po
 	-rm -f ./$(DEPDIR)/listing.Po
 	-rm -f ./$(DEPDIR)/my_getopt.Po
 	-rm -f ./$(DEPDIR)/opcode.Po
@@ -1564,35 +1141,15 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/script.Po
 	-rm -f ./$(DEPDIR)/sha256.Po
 	-rm -f ./$(DEPDIR)/symtab.Po
-	-rm -f ./$(DEPDIR)/unit.Po
 	-rm -f ./$(DEPDIR)/xasm.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-astnode.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-charmap.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-codegen.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-dependencies.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-fceux_nl.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-listing.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-my_getopt.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-opcode.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-output_file.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-parser.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-scanner.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-sha256.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-symtab.Po
-	-rm -f ./$(DEPDIR)/xasm_v2-xasm.Po
 	-rm -f ./$(DEPDIR)/xlnk.Po
-	-rm -f v2/$(DEPDIR)/heap.Po
-	-rm -f v2/$(DEPDIR)/layout.Po
-	-rm -f v2/$(DEPDIR)/link.Po
-	-rm -f v2/$(DEPDIR)/linker.Po
-	-rm -f v2/$(DEPDIR)/object.Po
-	-rm -f v2/$(DEPDIR)/value.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-frontend.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-heap.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-layout.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-object.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-program.Po
-	-rm -f v2/$(DEPDIR)/xasm_v2-value.Po
+	-rm -f ir/$(DEPDIR)/frontend.Po
+	-rm -f ir/$(DEPDIR)/heap.Po
+	-rm -f ir/$(DEPDIR)/layout.Po
+	-rm -f ir/$(DEPDIR)/link.Po
+	-rm -f ir/$(DEPDIR)/object.Po
+	-rm -f ir/$(DEPDIR)/program.Po
+	-rm -f ir/$(DEPDIR)/value.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
@@ -1619,19 +1176,19 @@ uninstall-man: uninstall-man1
 	am--dist-bzip3 am--dist-gzip am--dist-lzip am--dist-shar \
 	am--dist-tarZ am--dist-xz am--dist-zip am--dist-zstd \
 	am--refresh check check-am check-local clean clean-binPROGRAMS \
-	clean-checkPROGRAMS clean-cscope clean-generic cscope \
-	cscopelist-am ctags ctags-am dist dist-all dist-bzip2 \
-	dist-bzip3 dist-gzip dist-lzip dist-shar dist-tarZ dist-xz \
-	dist-zip dist-zstd distcheck distclean distclean-compile \
-	distclean-generic distclean-hdr distclean-tags distcleancheck \
-	distdir distuninstallcheck dvi dvi-am html html-am info \
-	info-am install install-am install-binPROGRAMS install-data \
-	install-data-am install-dist_docDATA install-dvi \
-	install-dvi-am install-exec install-exec-am install-html \
-	install-html-am install-info install-info-am install-man \
-	install-man1 install-nobase_dist_docDATA install-pdf \
-	install-pdf-am install-ps install-ps-am install-strip \
-	installcheck installcheck-am installcheck-local installdirs \
+	clean-cscope clean-generic cscope cscopelist-am ctags ctags-am \
+	dist dist-all dist-bzip2 dist-bzip3 dist-gzip dist-lzip \
+	dist-shar dist-tarZ dist-xz dist-zip dist-zstd distcheck \
+	distclean distclean-compile distclean-generic distclean-hdr \
+	distclean-tags distcleancheck distdir distuninstallcheck dvi \
+	dvi-am html html-am info info-am install install-am \
+	install-binPROGRAMS install-data install-data-am \
+	install-dist_docDATA install-dvi install-dvi-am install-exec \
+	install-exec-am install-html install-html-am install-info \
+	install-info-am install-man install-man1 \
+	install-nobase_dist_docDATA install-pdf install-pdf-am \
+	install-ps install-ps-am install-strip installcheck \
+	installcheck-am installcheck-local installdirs \
 	maintainer-clean maintainer-clean-generic mostlyclean \
 	mostlyclean-compile mostlyclean-generic pdf pdf-am ps ps-am \
 	tags tags-am uninstall uninstall-am uninstall-binPROGRAMS \

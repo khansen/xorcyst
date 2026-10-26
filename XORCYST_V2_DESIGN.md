@@ -1,7 +1,7 @@
 # XORcyst v2: approved scope and design
 
 Status: **D0 approved by the owner on 2026-10-22; D1 contracts and baselines
-approved on 2026-10-23 after independent review.** The current release is v1.9.12.
+approved on 2026-10-23 after independent review.** The latest published release is v1.9.12; this tree prepares 2.0.0.
 
 Independent review found speculative scope and incompatible layout rules in
 the initial design. This approved scope addresses demonstrated project needs
@@ -10,7 +10,11 @@ owner approval are distinct; the approval record is in section 8.
 
 **Gate:** D0 and D1 review and owner approval are complete. Implementation
 follows the sequence in section 7 after the approved D1 revision is merged.
-Installed `xasm`/`xlnk` stay v1 until cutover.
+I1–I5 are approved and merged. I6 completed independent review and received
+owner approval at `7105ea7` on 2026-10-26. CI, merge and coordinated workflow
+activation remain release gates; no 2.0.0 release is tagged. The source checkout
+records approval and the remaining steps in `design/v2/I6_APPROVAL.md` and
+`design/v2/I6_RELEASE_CHECKLIST.md`.
 
 D1 work and its approval record are in the
 [contracts](XORCYST_V2_CONTRACTS.md) and
@@ -369,11 +373,11 @@ possible nor a valid test of the new format.
 
 | Project / current build entry point | Evidence and baseline status |
 | --- | --- |
-| bombsweeper, `/Users/kenthansen/dev/github/bombsweeper` | `ram{}`, raw header/CHR `copy{}`, `bank{}`, link origin $C000 and vector padding at $FFFA; `.extrn NMI, RESET, IRQ : word` confirms hints cannot enforce provider kind. Independent review built a v1.9.12 ROM of 24,592 bytes, MD5 `b33782b3b961b6fbb8b4aad3a37e3b7e`. |
-| dpadhero, `/Users/kenthansen/Dropbox/nesdev/ntxdev/games/dpadhero/src` | **Non-blocking fixture:** shared sources are present, and independent review reproduced the 262,160-byte ROM (MD5 `6374b615ea1f565c6e3556677a312318`) with v1.9.12, but only by reusing seven precompiled v1 song objects. Per owner direction, do not recover/convert these objects or add legacy-format support. Exclude this full-ROM build from I4, performance and release gates until rebuildable song sources are available. |
-| dpadhero2, `/Users/kenthansen/dev/github/dpadhero2/src` | Mandatory owner acceptance gate: the existing build must succeed and `build/dpadhero2.nes` must be byte-for-byte identical to v1.9.12. Eight 16 KiB PRG banks, imported `mixer_state`/`player_state`, extensive `.dataseg`, `.charmap` and `.char` exercise the object path. Independent review built the working-tree inputs, including the `game.asm` edit: 262,160 bytes, MD5 `841bfe4ef75d0e274ece167cfbd4b8ee`, matching the existing ROM and a repeat build. Preserve its implicit-external warning for `reset`. |
-| ntxdev (Neotoxin), `/Users/kenthansen/dev/ntxdev` | Owner-nominated `make` build of `ntxdev.nes`, using object-mode xasm and `ntxdev.s`. Eight 16 KiB PRG banks, RAM/zero-page allocation, vector padding, raw header/CHR copies, imported user types and records exercise the object/link path. Independent review built the working-tree inputs including `warp2d.h`: 262,160 bytes, MD5 `0ac03c2493892df178053ae553d8a6db`, matching the existing ROM. |
-| nesdev/music, `/Users/kenthansen/dev/github/nesdev/music` | Owner-nominated object/link projects; their Makefiles and scripts exercise multi-unit sound drivers, RAM placement, bank/pad/copy, and generated song data. Independent review successfully built all 12 projects in isolated copies with v1.9.12. Freeze each actual build target, inputs and tools for byte-identical ROM checks and timings. |
+| bombsweeper checkout, `.` | `ram{}`, raw header/CHR `copy{}`, `bank{}`, link origin $C000 and vector padding at $FFFA; `.extrn NMI, RESET, IRQ : word` confirms hints cannot enforce provider kind. Independent review built a v1.9.12 ROM of 24,592 bytes, MD5 `b33782b3b961b6fbb8b4aad3a37e3b7e`. |
+| archived dpadhero checkout, `src/` | **Non-blocking fixture:** shared sources are present, and independent review reproduced the 262,160-byte ROM (MD5 `6374b615ea1f565c6e3556677a312318`) with v1.9.12, but only by reusing seven precompiled v1 song objects. Per owner direction, do not recover/convert these objects or add legacy-format support. Exclude this full-ROM build from I4, performance and release gates until rebuildable song sources are available. |
+| dpadhero2 checkout, `src/` | Mandatory owner acceptance gate: the existing build must succeed and `build/dpadhero2.nes` must be byte-for-byte identical to v1.9.12. Eight 16 KiB PRG banks, imported `mixer_state`/`player_state`, extensive `.dataseg`, `.charmap` and `.char` exercise the object path. Independent review built the working-tree inputs, including the `game.asm` edit: 262,160 bytes, MD5 `841bfe4ef75d0e274ece167cfbd4b8ee`, matching the existing ROM and a repeat build. Preserve its implicit-external warning for `reset`. |
+| ntxdev (Neotoxin) checkout, `.` | Owner-nominated `make` build of `ntxdev.nes`, using object-mode xasm and `ntxdev.s`. Eight 16 KiB PRG banks, RAM/zero-page allocation, vector padding, raw header/CHR copies, imported user types and records exercise the object/link path. Independent review built the working-tree inputs including `warp2d.h`: 262,160 bytes, MD5 `0ac03c2493892df178053ae553d8a6db`, matching the existing ROM. |
+| nesdev checkout, `music/<project>/` | Owner-nominated object/link projects; their Makefiles and scripts exercise multi-unit sound drivers, RAM placement, bank/pad/copy, and generated song data. Independent review successfully built all 12 projects in isolated copies with v1.9.12. Freeze each actual build target, inputs and tools for byte-identical ROM checks and timings. |
 
 The GitHub dpadhero copy is no longer the build fixture. Preserve its historical
 reference ROM (262,160 bytes, MD5 `367256940188bcad697fd9577632a71e`), but do not

@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.9.12.
+<!-- This is the manual for The XORcyst version 2.0.0.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>The Assembler (The XORcyst Manual)</title>
@@ -83,14 +83,7 @@ If all goes well, this will produce a similarly named file of extension <samp cl
 format; the default is text. A diagnostic listing may also be produced after
 an assembly error. Listing write and close failures produce a nonzero exit.
 </p>
-</dd>
-<dt><code class="code">--listing-version 1|2</code></dt>
-<dd><p>Selects the structured listing schema; the default is version 1. Version 2
-requires <code class="code">--pure-binary</code>, <code class="code">--listing</code>, and JSON or NDJSON format.
-It adds segment, byte-count, emission, and zero-fill metadata. Rows that emit
-no binary bytes have null output offsets and empty byte arrays. Diagnostic
-listings explicitly indicate when no new binary was generated. See
-<samp class="file">README</samp> for the version 2 field definitions and join rules.
+<p>Structured listings use schema 2 and require <code class="code">--pure-binary</code>. They include segment, byte-count, emission and zero-fill metadata. Non-emitting rows have null output offsets and empty byte arrays. Diagnostic listings never claim bytes from a previous output. See <samp class="file">README</samp> for field definitions and join rules.
 </p>
 </dd>
 <dt><code class="code">--xref FILE</code></dt>
@@ -390,7 +383,7 @@ is <code class="code">$7FFFFFFF</code>, not <code class="code">-1</code>.
 </p>
 <p><code class="code">sizeof(<var class="var">symbol</var>)</code> gets the size of <var class="var">symbol</var> in bytes.
 </p>
-<p>In the non-installed v2 prototype, label sizes are captured by the source-time scan. An operand unresolved at its data line is checked again before output: its final kind and string length must match the contribution counted by <code class="code">sizeof</code>. Otherwise the original <code class="code">sizeof</code> use reports size unknown. This does not change the installed v1 tool.
+<p>Label sizes are captured by the source-time scan. An operand unresolved at its data line is checked again before output: its final kind and string length must match the contribution counted by <code class="code">sizeof</code>. Otherwise the original <code class="code">sizeof</code> use reports size unknown.
 </p>
 <p>When both operands to an operator are strings, the semantics are as follows: <var class="var">str1</var> + <var class="var">str2</var> concatenates; the relational operators perform string comparison; and all other operators are invalid. When one operand is a string and the other is an integer, the integer is implicitly converted to a string and concatenated with the string operand to produce a string as result.
 </p>
@@ -406,12 +399,10 @@ is <code class="code">$7FFFFFFF</code>, not <code class="code">-1</code>.
 </li><li>Using the <code class="code">.label</code> directive. It is of the form
 
 <div class="example">
-<pre class="example-preformatted">.label <var class="var">identifier</var> <em class="emph">[= <var class="var">address</var>]</em> <em class="emph">[ : <var class="var">type</var>]</em>
+<pre class="example-preformatted">.label <var class="var">identifier</var> <em class="emph">[ : <var class="var">type</var>]</em>
 </pre></div>
 
-<p>The absolute address of the label can be specified in v1. If no address is given, the address is the current Program Counter.
-</p>
-<p>The non-installed v2 prototype rejects <code class="code">.label name = address</code>, including an explicit <code class="code">= $</code>, with a located error. Use an equate for a fixed address. Ordinary <code class="code">.label name</code> remains supported. This corrects v1&rsquo;s inconsistent handling of explicit label addresses and does not change the installed v1 tool.
+<p>The label takes the current Program Counter. An explicit <code class="code">= address</code>, including <code class="code">= $</code>, is rejected with a located error. Use an equate for a fixed address.
 </p>
 <p>The type of data that the label addresses can also be specified. The valid type specifiers are <code class="code">byte</code>, <code class="code">word</code>, <code class="code">dword</code>, or an identifier, which must be the name of a user-defined type.
 </p>

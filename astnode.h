@@ -71,9 +71,7 @@
 #define ASTNODE_H
 
 #include "loc.h"
-#ifdef XORCYST_V2_FRONTEND
 #include <stdint.h>
-#endif
 
 #define LHS(e) astnode_get_child(e, 0)
 #define RHS(e) astnode_get_child(e, 1)
@@ -237,9 +235,7 @@ enum tag_astnode_type {
     PUSH_BRANCH_SCOPE_NODE,
     POP_BRANCH_SCOPE_NODE,
     TOMBSTONE_NODE,
-#ifdef XORCYST_V2_FRONTEND
-    V2_REFERENCE_NODE, /* prototype-only owned expression ID; never serialized */
-#endif
+    IR_REFERENCE_NODE, /* owned expression ID; never serialized */
     FIELD_PADDING_NODE /* internal: count, bytes, field name, minimum; omitted arrays
                           additionally retain element and remainder lists */
 };
@@ -357,17 +353,11 @@ struct tag_astnode {
         long param;
     };
     int flags;
-#ifdef XORCYST_V2_FRONTEND
     /* Distinct domains: analysis provenance versus frontend value/map cache.
      * Together these occupy the old unsigned-long slot on 64-bit hosts. */
     uint32_t analysis_origin_id;
     uint32_t frontend_id;
     location loc;
-#else
-    unsigned long analysis_origin_id;
-    location loc;   /* File location where node was parsed */
-    location source_loc; /* Parsed span, retained when expansion changes loc. */
-#endif
     struct tag_astnode *prev_sibling;
     struct tag_astnode *next_sibling;
     struct tag_astnode *first_child;
@@ -383,11 +373,9 @@ astnode *astnode_create(astnode_type, location);
 /* Parsed source span, independent of a macro/rept use-site location. */
 location astnode_source_location(const astnode *);
 void astnode_set_source_location(astnode *, location);
-#ifdef XORCYST_V2_FRONTEND
 /* Select before parsing. Existing nodes retain their own allocation policy;
  * plain assembly pays no extra per-node source-span allocation. */
 void astnode_capture_source_locations(int enabled);
-#endif
 void astnode_finalize(astnode *);
 void astnode_replace(astnode *, astnode *);
 void astnode_remove(astnode *);

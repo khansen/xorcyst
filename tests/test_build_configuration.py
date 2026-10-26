@@ -24,6 +24,7 @@ class BuildConfiguration(unittest.TestCase):
         build_files = {'configure', 'configure.ac', 'Makefile.am', 'Makefile.in',
                        'aclocal.m4', 'config.h.in', 'config.guess', 'config.sub',
                        'install-sh', 'missing', 'depcomp', 'compile'}
+        shutil.copytree(ROOT / 'ir', cls.source / 'ir', ignore=shutil.ignore_patterns('*.o', '.deps', '.dirstamp'))
         for path in ROOT.iterdir():
             if path.name in build_files or (path.suffix in ('.c', '.h') and path.name != 'config.h'):
                 shutil.copy2(path, cls.source / path.name)
@@ -61,27 +62,6 @@ class BuildConfiguration(unittest.TestCase):
                 reported = subprocess.check_output([str(self.build / program), '--version'])
                 self.assertEqual(reported, f'{program} {version}\n'.encode())
 
-    @unittest.skipUnless(sys.platform == 'darwin', 'Darwin SDK requirement')
-    def test_missing_corefoundation_headers_fail_at_configure(self):
-        headers = self.build / 'sdk'
-        (headers / 'CoreFoundation').mkdir(parents=True)
-        (headers / 'CoreFoundation/CoreFoundation.h').write_text('#error CoreFoundation headers unavailable\n')
-        result = self.configure(CPPFLAGS=f'-I{shlex.quote(str(headers))}')
-        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(b'CoreFoundation headers and framework are required', result.stderr)
-
-    @unittest.skipUnless(sys.platform == 'darwin', 'Darwin SDK requirement')
-    def test_missing_corefoundation_framework_fails_at_configure(self):
-        compiler = self.build / 'cc-without-corefoundation'
-        compiler.write_text('#!/bin/sh\nfor arg do\n'
-                            '  if test "$arg" = CoreFoundation; then\n'
-                            '    echo "test: CoreFoundation framework unavailable" >&2\n'
-                            '    exit 1\n  fi\ndone\n'
-                            + 'exec ' + shlex.join(shlex.split(os.environ.get('CC', 'cc'))) + ' "$@"\n')
-        compiler.chmod(0o755)
-        result = self.configure(CC=str(compiler))
-        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(b'CoreFoundation headers and framework are required', result.stderr)
 
 
 if __name__ == '__main__':

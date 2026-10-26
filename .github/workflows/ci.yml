@@ -53,7 +53,7 @@ jobs:
       TEST_LINKER_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_ASSEMBLER_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       TEST_INPUT_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
-      TEST_V2_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
+      TEST_IR_CFLAGS: -O1 -g -Werror -fsanitize=address,undefined -fno-omit-frame-pointer
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -72,13 +72,12 @@ jobs:
           python3 tests/test_output_failures.py
           python3 tests/test_linker_outputs.py
           python3 tests/test_inputs.py
-      - name: Check isolated v2 values, layout and frontend
+      - name: Check shared values, layout, frontend and objects
         run: |
-          python3 tests/test_v2_values.py
-          python3 tests/test_v2_layout.py
-          python3 tests/test_v2_frontend.py
-          python3 tests/test_v2_analysis.py
-          python3 tests/test_v2_objects.py
+          python3 tests/test_ir_values.py
+          python3 tests/test_ir_layout.py
+          python3 tests/test_ir_frontend.py
+          python3 tests/test_ir_objects.py
       - name: Check procedure instruction-analysis lifetimes
         run: |
           python3 - <<'PYTOOLS'

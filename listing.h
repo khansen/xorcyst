@@ -16,7 +16,6 @@ typedef struct tag_listing_lookup_result {
 int generate_listing(astnode *root,
                      const char *filename,
                      listing_format format,
-                     int version,
                      int binary_generated,
                      const char *source_file,
                      const char *output_file);
@@ -113,7 +112,5 @@ int run_raw_address_audit(astnode *root,
 
 #endif
 
-#ifdef XORCYST_V2_FRONTEND
 void own_xref_analysis_locations(void);
 int bind_xref_instruction_values(astnode *, unsigned *);
-#endif

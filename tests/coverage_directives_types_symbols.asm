@@ -27,5 +27,5 @@ EXTRN extProc:PROC
 EXTRN extLabel:LABEL @ extmod
 EXTRN extWord:WORD
 
-LABEL fixed = $2345 : LABEL
+LABEL ordinary : LABEL
 END

@@ -29,7 +29,7 @@ class Expressions(unittest.TestCase):
         output.write_bytes(b'previous output')
         flags = ['--pure-binary'] if pure else []
         if debug: flags += ['--debug']
-        if listing: flags += ['--listing=listing.json', '--listing-format=json', '--xref=xref.json']
+        if listing and pure: flags += ['--listing=listing.json', '--listing-format=json', '--xref=xref.json']
         result = subprocess.run([str(XASM), *flags, 'input.asm', '-o', output.name],
                                 cwd=self.root, capture_output=True, timeout=10,
                                 preexec_fn=limit_cycle_resources if cyclic else None)
@@ -126,6 +126,9 @@ class Expressions(unittest.TestCase):
                             result, output = self.assemble(source, pure, debug, listing)
                             self.assertEqual(result.returncode, 1, result.stderr.decode())
                             self.assertIn(b"undefined local label `@@x'", result.stderr)
+                            definition_line = 3 if pure else 2
+                            self.assertIn(f"input.asm:{definition_line}: error: undefined local label `@@x'".encode(),
+                                          result.stderr)
                             self.assertEqual(output.read_bytes(), b'previous output')
 
     def test_repeated_local_alias_definitions_compare_the_bound_labels(self):
@@ -240,7 +243,7 @@ class Expressions(unittest.TestCase):
     def test_mask_rejects_invalid_record_widths(self):
         cases = (
             ('', 'Missing', b'is not of constant size'),
-            ('Width .equ Width\n', 'Width', b'circular constant definition'),
+            ('Width .equ Width\n', 'Width', b'circular value definition'),
             ('Width=0\n', 'Width', b'out of range'),
             ('Width=-1\n', 'Width', b'out of range'),
             ('Width=8\n', 'Width', b'out of range'),
@@ -334,7 +337,7 @@ class Expressions(unittest.TestCase):
     def test_invalid_scoped_offsets_fail_without_publishing_output(self):
         cases = (
             ('.struc S\nitems .byte[Count]\ntail .byte\n.ends\n'
-             '.word S::tail\nCount .equ S::tail\n', b'circular constant definition'),
+             '.word S::tail\nCount .equ S::tail\n', b'circular value definition'),
             ('.struc S\nhead .byte\n.ends\n.word S::missing\n', b'unknown symbol'),
             ('.word Missing::tail\n', b'unknown namespace'),
         )
@@ -367,7 +370,7 @@ class Expressions(unittest.TestCase):
                             output.unlink()
                             flags = ['--pure-binary'] if pure else []
                             if debug: flags += ['--debug']
-                            if listing: flags += ['--listing=listing.json', '--listing-format=json',
+                            if listing and pure: flags += ['--listing=listing.json', '--listing-format=json',
                                                   '--xref=xref.json']
                             result = subprocess.run([str(XASM), *flags, 'input.asm', '-o', output.name],
                                                     cwd=self.root, capture_output=True, timeout=10,
@@ -492,6 +495,8 @@ class Expressions(unittest.TestCase):
         result, output = self.assemble(".word Value\nValue .equ Alias\nAlias .equ RemoteLabel\n", False)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"RemoteLabel' undeclared", result.stderr)
+        self.assertIn(b"input.asm:3: warning: `RemoteLabel' undeclared; assuming external label", result.stderr)
+        self.assertEqual(result.stderr.count(b"RemoteLabel' undeclared"), 1)
         (self.root / 'provider.asm').write_text('.public RemoteLabel\nRemoteLabel: .byte $AA\n')
         provider = subprocess.run([str(XASM), 'provider.asm', '-o', 'provider.o'],
                                   cwd=self.root, capture_output=True)
@@ -525,7 +530,7 @@ class Expressions(unittest.TestCase):
                 with self.subTest(definitions=definitions, pure=pure):
                     result, output = self.assemble('.byte Value\n' + definitions, pure)
                     self.assertEqual(result.returncode, 1, result.stderr.decode())
-                    self.assertEqual(result.stderr.count(b'circular constant definition'), 1,
+                    self.assertEqual(result.stderr.count(b'circular value definition'), 1,
                                      result.stderr.decode())
                     self.assertEqual(result.stderr.count(b'error:'), 1, result.stderr.decode())
                     self.assertEqual(output.read_bytes(), b'previous output')

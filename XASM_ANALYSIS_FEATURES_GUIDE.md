@@ -323,8 +323,8 @@ of the binary. It's also how `--compare`'s own mismatch reports get their
 `source`/`cpu_address` fields — same lookup, just run for you automatically at
 the one address that failed.
 
-For joins against emitted binary bytes, opt into `--listing-version=2` with
-JSON or NDJSON and `--pure-binary`. Each row then identifies its segment and
+JSON and NDJSON listings use schema 2 and require `--pure-binary`.
+Each row identifies its segment and
 whether it emits bytes. Non-emitting rows have null output offsets and empty
 bytes; code storage describes its full range with a zero-fill marker. This
 avoids treating RAM declarations as ROM bytes. The complete version 2 contract,

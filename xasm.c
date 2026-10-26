@@ -102,11 +102,8 @@
 #include "getopt.h"
 #include "astnode.h"
 #include "astproc.h"
-#ifdef XORCYST_V2_FRONTEND
-#include "v2/frontend.h"
-#endif
+#include "ir/frontend.h"
 #include "symtab.h"
-#include "codegen.h"
 #include "listing.h"
 #include "xasm.h"
 #include "dependencies.h"
@@ -145,7 +142,6 @@ static struct option long_options[] = {
   { "listing",  required_argument, 0, 'L' },
   { "lst",      required_argument, 0, 'L' },
   { "listing-format", required_argument, 0, 0 },
-  { "listing-version", required_argument, 0, 0 },
   { "xref", required_argument, 0, 0 },
   { "xref-format", required_argument, 0, 0 },
   { "xref-data", required_argument, 0, 0 },
@@ -215,7 +211,6 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--include-path=DIR] [-I DIR] [--swap-parens]\n\
             [--case-insensitive] [--listing=FILE]\n\
             [--listing-format=text|json|ndjson]\n\
-            [--listing-version=1|2]\n\
             [--xref=FILE] [--xref-format=text|csv|json]\n\
             [--xref-data=true|false]\n\
             [--xref-instructions=true|false]\n\
@@ -267,7 +262,6 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
 -o, --output=FILE          Output to FILE instead of standard output\n\
     --listing=FILE         Generate listing file\n\
     --listing-format=FMT   Listing format: text|json|ndjson\n\
-    --listing-version=N    Structured listing version: 1 (default) or 2\n\
     --xref=FILE            Generate cross-reference output\n\
     --xref-format=FMT      Xref format: text|csv|json\n\
     --xref-data=BOOL       Extend JSON xref with data read/write edges\n\
@@ -286,7 +280,7 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
                             ($8000-$BFFF and $C000-$FFFF;\n\
                             requires exactly 16384 PRG bytes)\n\
     --dependency-manifest=FILE\n\
-                            Snapshot/hash consumed inputs (pure-binary v1)\n\
+                            Snapshot/hash consumed inputs (pure binary)\n\
     --xref-include-locals=BOOL\n\
                             Include local labels in xref (default false)\n\
     --xref-include-anon=BOOL\n\
@@ -686,8 +680,6 @@ parse_arguments (int argc, char **argv)
     xasm_args.listing_file = NULL;
     xasm_args.listing_format = LISTING_FORMAT_TEXT;
     xasm_args.listing_format_set = 0;
-    xasm_args.listing_version = 1;
-    xasm_args.listing_version_set = 0;
     xasm_args.compare_file = NULL;
     xasm_args.compare_offset = 0;
     xasm_args.compare_length = -1;
@@ -862,12 +854,6 @@ parse_arguments (int argc, char **argv)
                 }
                 xasm_args.listing_format = fmt;
                 xasm_args.listing_format_set = 1;
-            } else if (strcmp(long_options[index].name, "listing-version") == 0) {
-                if (strcmp(optarg, "1") != 0 && strcmp(optarg, "2") != 0) {
-                    cli_error("invalid value for --listing-version: `%s' (expected 1|2)", optarg);
-                }
-                xasm_args.listing_version = optarg[0] - '0';
-                xasm_args.listing_version_set = 1;
             } else if (strcmp(long_options[index].name, "xref") == 0) {
                 xasm_args.xref_file = optarg;
             } else if (strcmp(long_options[index].name, "xref-format") == 0) {
@@ -1060,12 +1046,12 @@ parse_arguments (int argc, char **argv)
             cli_error("--xref-instructions=true requires --xref=FILE and --xref-format=json");
         }
         if (!xasm_args.pure_binary) {
-            cli_error("--xref-instructions=true requires --pure-binary in version 1");
+            cli_error("--xref-instructions=true requires --pure-binary");
         }
     }
 
     if (xasm_args.instruction_records_file && !xasm_args.dependency_manifest)
-        cli_error("--instruction-records-output requires --dependency-manifest in version 1");
+        cli_error("--instruction-records-output requires --dependency-manifest");
 
     if ((xasm_args.fceux_nl_rom_prefix != NULL || xasm_args.fceux_nl_ram_file != NULL)
         && !xasm_args.pure_binary)
@@ -1077,7 +1063,7 @@ parse_arguments (int argc, char **argv)
 
     if (xasm_args.dependency_manifest && (!xasm_args.pure_binary
         || (xasm_args.xref_file && xasm_args.xref_format != XREF_FORMAT_JSON)))
-        cli_error("--dependency-manifest requires --pure-binary and JSON xref in version 1");
+        cli_error("--dependency-manifest requires --pure-binary and JSON xref");
 
     if (xasm_args.xref_include_owner) {
         if (xasm_args.xref_file == NULL) {
@@ -1090,18 +1076,6 @@ parse_arguments (int argc, char **argv)
 
     if (xasm_args.listing_file == NULL && xasm_args.listing_format_set) {
         warn_global("W0017", "--listing-format is ignored because --listing is not set");
-    }
-    if (xasm_args.listing_file == NULL && xasm_args.listing_version_set
-        && xasm_args.listing_version == 1) {
-        warn_global("W0017", "--listing-version is ignored because --listing is not set");
-    }
-    if (xasm_args.listing_version == 2) {
-        if (xasm_args.listing_file == NULL || xasm_args.listing_format == LISTING_FORMAT_TEXT) {
-            cli_error("--listing-version=2 requires --listing=FILE and --listing-format=json|ndjson");
-        }
-        if (!xasm_args.pure_binary) {
-            cli_error("--listing-version=2 requires --pure-binary");
-        }
     }
     return 1;
 }
@@ -1479,17 +1453,6 @@ static int run_compare(astnode *root)
  */
 /* Diagnostic readers use AST location paths, which can differ from the source
  * resolver's paths. Reserve them before any output can truncate a later read. */
-#ifndef XORCYST_V2_FRONTEND
-static int protect_analysis_sources(const astnode *node)
-{
-    for (; node; node = node->next_sibling) {
-        if (!dependencies_protect_source(node->loc.file)
-            || !protect_analysis_sources(node->first_child)) return 0;
-    }
-    return 1;
-}
-
-#endif
 
 /* The manifest reserves its own destination at startup. Every other output,
    including expanded analysis paths and the binary staging path, is validated
@@ -1572,7 +1535,6 @@ int main(int argc, char *argv[]) {
     if (!parse_arguments(argc, argv)) { exit_code = 1; goto cleanup; }
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
-#ifdef XORCYST_V2_FRONTEND
     if (!xasm_args.pure_binary && (xasm_args.xref_file || xasm_args.instruction_records_file ||
         xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file || xasm_args.xref_summary ||
         xasm_args.analyze_index_patterns || xasm_args.data_consumers || xasm_args.analyze_data_coverage ||
@@ -1583,14 +1545,12 @@ int main(int argc, char *argv[]) {
     if (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.fceux_nl_ram_file)
         astnode_capture_source_locations(1);
     if (xasm_args.listing_file) {
-        if (!xasm_args.pure_binary || (xasm_args.listing_version_set && xasm_args.listing_version != 2)) {
-            fprintf(stderr, "error: I5 prototype listings require --pure-binary and schema 2\n");
+        if (!xasm_args.pure_binary) {
+            fprintf(stderr, "error: listings require --pure-binary\n");
             exit_code = 1;
             goto cleanup;
         }
-        xasm_args.listing_version = 2;
     }
-#endif
 
     /* Whether anything requested needs capture_instruction_provenance()
        installed (see prepare_xref_instruction_provenance): computed once
@@ -1602,9 +1562,7 @@ int main(int argc, char *argv[]) {
 
     needs_output_protection = xasm_args.dependency_manifest
         || xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file;
-#ifdef XORCYST_V2_FRONTEND
     needs_output_protection = 1;
-#endif
     needs_analysis = xasm_args.xref_file || xasm_args.instruction_records_file
         || xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file;
 
@@ -1642,11 +1600,9 @@ int main(int argc, char *argv[]) {
     if (yyparse() != 0) { exit_code = 1; goto cleanup; }
 
     if (root_node == NULL) {
-#ifdef XORCYST_V2_FRONTEND
         if (xasm_args.listing_file)
             root_node = astnode_create(LIST_NODE, loc_preserve);
         if (xasm_args.listing_file && root_node == NULL) { exit_code = 3; goto cleanup; }
-#endif
         if (needs_instruction_provenance || xasm_args.fceux_nl_rom_prefix || xasm_args.dependency_manifest)
             root_node = astnode_create(LIST_NODE, loc_preserve);
         if (root_node == NULL) {
@@ -1662,54 +1618,14 @@ int main(int argc, char *argv[]) {
         err_count++;
     }
 
-#ifdef XORCYST_V2_FRONTEND
-    if (yynerrs == 0) v2_frontend_process(root_node);
+    if (yynerrs == 0) ir_frontend_process(root_node);
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
-#else
-    /* First pass does a lot of stuff. */
-    verbose("First pass...");
-    astproc_first_pass(root_node);
-    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
-    if (xasm_args.xref_file != NULL
-        && xasm_args.xref_format == XREF_FORMAT_JSON
-        && !finish_xref_data_directive_provenance(root_node)) {
-        fprintf(stderr, "error: could not finalize data-directive xref provenance\n");
-        err_count++;
-    }
-
-    if (needs_instruction_provenance && !finish_xref_instruction_provenance(root_node)) {
-        fprintf(stderr, "error: could not finalize instruction provenance\n");
-        err_count++;
-    }
-
-    /* Second pass does more stuff. */
-    verbose("Second pass...");
-    astproc_second_pass(root_node);
-    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
-
-    /* Third pass is fun. */
-    verbose("Third pass...");
-    astproc_third_pass(root_node);
-    if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
-
-    if (xasm_args.pure_binary) {
-        /* Do another pass to prepare for writing pure 6502 */
-        verbose("Fourth pass...");
-        astproc_fourth_pass(root_node);
-        if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
-    }
-
-#endif
 
     /* Print the final AST (debugging) */
 //    astnode_print(root_node, 0);
 
-#ifndef XORCYST_V2_FRONTEND
-    if (needs_output_protection && !protect_analysis_sources(root_node)) goto cleanup;
-#endif
 
-#ifdef XORCYST_V2_FRONTEND
-    /* Exercise the ownership boundary on every prototype invocation. Layout
+    /* Exercise the ownership boundary on every invocation. Layout
      * and encoding must work after both the parser AST and namespace die. */
     if (total_errors() == 0) {
         symtab_pop();
@@ -1717,9 +1633,8 @@ int main(int argc, char *argv[]) {
         symbol_table = NULL;
         astnode_finalize(root_node);
         root_node = NULL;
-        v2_frontend_finish();
+        ir_frontend_finish();
     }
-#endif
 
     /* Diagnostic listings also require a complete destination plan. Their
        analysis collects layout without requiring exportable names or operands. */
@@ -1804,9 +1719,7 @@ int main(int argc, char *argv[]) {
         }
         destinations_validated = 1;
     }
-#ifdef XORCYST_V2_FRONTEND
     if (assembly_ready) output_batch_begin();
-#endif
     if (assembly_ready) {
         output_fp = open_binary_temporary(tmp_outfile);
         if (output_fp == NULL) {
@@ -1815,15 +1728,7 @@ int main(int argc, char *argv[]) {
         } else {
             int output_ok;
             verbose("Generating final output...");
-#ifdef XORCYST_V2_FRONTEND
-            v2_frontend_write(output_fp);
-#else
-            if (xasm_args.pure_binary) {
-                astproc_fifth_pass(root_node, output_fp);
-            } else {
-                codegen_write(root_node, output_fp);
-            }
-#endif
+            ir_frontend_write(output_fp);
             output_ok = !ferror(output_fp);
             if (fclose(output_fp) != 0) output_ok = 0;
             if (!output_ok) {
@@ -1842,11 +1747,7 @@ int main(int argc, char *argv[]) {
                 remove(tmp_outfile);
                 output_generated = 0;
             } else {
-#ifdef XORCYST_V2_FRONTEND
                 if (!output_batch_stage(xasm_args.output_file, tmp_outfile, rename)) {
-#else
-                if (rename(tmp_outfile, xasm_args.output_file) != 0) {
-#endif
                     fprintf(stderr, "error: could not rename `%s' to `%s'\n", tmp_outfile, xasm_args.output_file);
                     err_count++;
                     remove(tmp_outfile);
@@ -1864,7 +1765,6 @@ int main(int argc, char *argv[]) {
         if (!generate_listing(root_node,
                               xasm_args.listing_file,
                               (listing_format)xasm_args.listing_format,
-                              xasm_args.listing_version,
                               output_generated,
                               xasm_args.input_file,
                               xasm_args.output_file)) {
@@ -1968,8 +1868,7 @@ cleanup:
     if (xasm_args.dependency_manifest && exit_code == 0 && total_errors() == 0
         && output_generated && !dependencies_write(xasm_args.dependency_manifest)) exit_code = 3;
     if (dependencies_failed()) exit_code = 3;
-#ifdef XORCYST_V2_FRONTEND
-    if (!v2_frontend_analysis_ok()) exit_code = 3;
+    if (!ir_frontend_analysis_ok()) exit_code = 3;
     {
         /* A comparison mismatch or audit finding is a completed analysis,
          * not an allocation/I/O/serialization failure. Retain its existing
@@ -1977,7 +1876,6 @@ cleanup:
         int publish = (exit_code == 0 || exit_code == 4 || exit_code == 5) && total_errors() == 0;
         if (!output_batch_finish(publish) && publish) exit_code = 3;
     }
-#endif
     free(tmp_outfile);
     dependencies_clear();
 
@@ -1987,9 +1885,7 @@ cleanup:
     symtab_finalize(symbol_table);
     astnode_finalize(root_node);
     clear_xref_instruction_provenance();
-#ifdef XORCYST_V2_FRONTEND
-    v2_frontend_clear();
-#endif
+    ir_frontend_clear();
 
     if (default_outfile)
         free(default_outfile);

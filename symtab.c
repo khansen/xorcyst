@@ -349,10 +349,8 @@ symtab_entry *symtab_enter(const char *id, symbol_type type, astnode *def, int f
         }
         strcpy(e->id, id);
         e->type = type;
-#ifdef XORCYST_V2_FRONTEND
-        e->tag = 0; /* prototype's owned definition/anchor index, plus one */
+        e->tag = 0; /* owned definition/anchor index, plus one */
         e->source_label = type == LABEL_SYMBOL ? def : NULL;
-#endif
         e->flags = flags;
         e->ref_count = 0;
         e->has_assignment_loc = 0;

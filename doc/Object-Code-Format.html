@@ -3,7 +3,7 @@
 <!-- Created by GNU Texinfo 7.3, https://www.gnu.org/software/texinfo/ -->
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<!-- This is the manual for The XORcyst version 1.9.12.
+<!-- This is the manual for The XORcyst version 2.0.0.
 
 Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <title>Object Code Format (The XORcyst Manual)</title>
@@ -23,7 +23,6 @@ Copyright © 2004, 2005, 2007, 2008, 2009 Kent Hansen. -->
 <style type="text/css">
 a.copiable-link {visibility: hidden; text-decoration: none; line-height: 0em}
 span:hover a.copiable-link {visibility: visible}
-ul.mark-bullet {list-style-type: disc}
 </style>
 
 
@@ -35,123 +34,14 @@ ul.mark-bullet {list-style-type: disc}
 <span class="nav-button"><span class="nav-label">Next: </span><span class="nav-link"><a href="Custom-Character-Maps.html" rel="next">Custom Character Maps</a></span></span>, <span class="nav-button"><span class="nav-label">Previous: </span><span class="nav-link"><a href="Linker-Script-Commands.html" rel="prev">Linker Script Commands</a></span></span>, <span class="nav-button"><span class="nav-label">Up: </span><span class="nav-link"><a href="index.html" rel="up">The XORcyst Manual</a></span></span><span class="nav-button"> &nbsp; </span><span class="nav-button">[<a href="index.html#SEC_Contents" title="Table of contents" rel="contents">Contents</a>]</span></p>
 <h2 class="appendix" id="Object-Code-Format-1"><span>Appendix D Object Code Format<a class="copiable-link" href="#Object-Code-Format-1"> &para;</a></span></h2>
 
-<p>An object code file, or unit, produced by the assembler has the following major sections:
+<p>Objects use the portable XOROBJ2 format. The eight-byte magic <code class="code">XOROBJ2</code> followed by a newline identifies the format version; an incompatible format requires new magic. All table fields are unsigned 32-bit little-endian words. Values retain signed 32-bit arithmetic; payload blobs preserve their counted byte lengths.
 </p>
-<ul class="itemize mark-bullet">
-<li>Magic number and assembler version
-
-</li><li>Definitions of exported constants
-
-</li><li>Descriptors for imported symbols
-
-</li><li>Data segment bytecodes
-
-</li><li>Code segment bytecodes
-
-</li><li>Definitions of expressions referred to by bytecodes
-
-</li></ul>
-
-<p>Each of these will be described in the sequel.
+<p>The checked header describes ten tables: blobs, files, source locations, definitions, expressions, extents, anchors, operand fixups, fragments and RAM allocation identities. Table offsets, counts, ownership, references, reserved fields and payload bounds are validated before linking. The reader rejects old object formats; rebuild them from assembly source.
 </p>
-<ul class="mini-toc">
-<li><a href="#Magic-number-and-assembler-version">Magic number and assembler version</a></li>
-<li><a href="#Definitions-of-exported-constants">Definitions of exported constants</a></li>
-<li><a href="#Descriptors-for-imported-symbols">Descriptors for imported symbols</a></li>
-<li><a href="#Data-segment-bytecodes">Data segment bytecodes</a></li>
-<li><a href="#Code-segment-bytecodes">Code segment bytecodes</a></li>
-<li><a href="#Expressions-1">Expressions</a></li>
-</ul>
-<div class="section-level-extent" id="Magic-number-and-assembler-version">
-<h3 class="section"><span>D.1 Magic number and assembler version<a class="copiable-link" href="#Magic-number-and-assembler-version"> &para;</a></span></h3>
-
-<p>The magic number is the 16-bit constant <code class="code">0xFACE</code>. It is followed by the one-byte object-format version, currently <code class="code">0x14</code>. This identifies the file format, independently of the software release version.
+<p>Files carry locations needed for diagnostics, captured character maps and expression graphs. RAM records retain source label order for the specified allocation permutation. Code fragments and operand fixups use the same layout and encoder as direct binary assembly. Source-time expansion and <code class="code">sizeof</code> are completed by the assembler.
 </p>
-</div>
-<div class="section-level-extent" id="Definitions-of-exported-constants">
-<h3 class="section"><span>D.2 Definitions of exported constants<a class="copiable-link" href="#Definitions-of-exported-constants"> &para;</a></span></h3>
-
-<p>This is a series of triplets <var class="var">(identifier, type, value)</var>, each describing a constant made publicly available.
+<p>The exact header, record widths, tags, validation rules and example are documented in <samp class="file">design/v2/OBJECT_WIRE_DRAFT.md</samp>, installed with the tools. The historical filename is retained for stable contract references; it describes the current wire format.
 </p>
-<p>Integer values use the same encoding as integer expression nodes: the 8-,
-16- and 24-bit forms contain nonnegative values, and the 32-bit form contains
-a signed two&rsquo;s-complement value. The assembler uses the 32-bit form for every
-negative integer. Multi-byte integer payloads are stored most-significant
-byte first. These rules apply to both exported constants and expression
-literals, independently of the linker&rsquo;s host word size.
-</p>
-</div>
-<div class="section-level-extent" id="Descriptors-for-imported-symbols">
-<h3 class="section"><span>D.3 Descriptors for imported symbols<a class="copiable-link" href="#Descriptors-for-imported-symbols"> &para;</a></span></h3>
-
-<p>This is a list of descriptors for the symbols used by this unit which are not defined in the unit itself; that is, they are external dependencies.
-</p>
-</div>
-<div class="section-level-extent" id="Data-segment-bytecodes">
-<h3 class="section"><span>D.4 Data segment bytecodes<a class="copiable-link" href="#Data-segment-bytecodes"> &para;</a></span></h3>
-
-<p>Statements in the original assembler file are encoded in a compact bytecode form. The bytecodes here define the labels and data storages located in the unit&rsquo;s <code class="code">dataseg</code> section(s). The bytecode commands are a subset of the ones described in the next section.
-</p>
-</div>
-<div class="section-level-extent" id="Code-segment-bytecodes">
-<h3 class="section"><span>D.5 Code segment bytecodes<a class="copiable-link" href="#Code-segment-bytecodes"> &para;</a></span></h3>
-
-<p>These bytecodes are a compact representation of the contents of the unit&rsquo;s <code class="code">codeseg</code> section(s). The commands and their arguments are as follows:
-</p>
-<dl class="table">
-<dt><code class="code">CMD_END</code></dt>
-<dd><p>Indicates the end of the segment.
-</p>
-</dd>
-<dt><code class="code">CMD_BIN8 <var class="var">count</var> <var class="var">byte1, byte2, ...</var></code></dt>
-<dd><p>The next <var class="var">count</var> bytes are binary data which needn&rsquo;t be processed in any special way. <var class="var">count</var> is an 8-bit quantity.
-</p>
-</dd>
-<dt><code class="code">CMD_BIN16 <var class="var">count</var> <var class="var">byte1, byte2, ...</var></code></dt>
-<dd><p>The next <var class="var">count</var> bytes are binary data which needn&rsquo;t be processed in any special way. <var class="var">count</var> is a 16-bit quantity.
-</p>
-</dd>
-<dt><code class="code">CMD_LABEL <var class="var">flag</var> <var class="var">identifier</var></code></dt>
-<dd><p>Define a label. If bit 0 of the byte <var class="var">flag</var> is set, this is a public variable and its identifier follows.
-</p>
-</dd>
-<dt><code class="code">CMD_INSTR <var class="var">opcode</var> <var class="var">expression-id</var></code></dt>
-<dd><p>An instruction whose operand must ultimately be resolved. <var class="var">opcode</var> is the 6502 operation code. <var class="var">expression-id</var> is a 16-bit quantity which refers to the expression which is the (symbolic) operand of the instruction (see the next section).
-</p>
-</dd>
-<dt><code class="code">CMD_DB <var class="var">expression-id</var></code></dt>
-<dd><p>Define a byte symbolically. <var class="var">expression-id</var> refers to the expression which is the operand.
-</p>
-</dd>
-<dt><code class="code">CMD_DW <var class="var">expression-id</var></code></dt>
-<dd><p>Define a word symbolically. <var class="var">expression-id</var> refers to the expression which is the operand.
-</p>
-</dd>
-<dt><code class="code">CMD_DD <var class="var">expression-id</var></code></dt>
-<dd><p>Define a doubleword symbolically. <var class="var">expression-id</var> refers to the expression which is the operand.
-</p>
-</dd>
-<dt><code class="code">CMD_DSI8 <var class="var">size</var></code></dt>
-<dd><p>Define data storage of <var class="var">size</var> bytes. <var class="var">size</var> is an 8-bit quantity.
-</p>
-</dd>
-<dt><code class="code">CMD_DSI16</code></dt>
-<dd><p>Define data storage of <var class="var">size</var> bytes. <var class="var">size</var> is a 16-bit quantity.
-</p>
-</dd>
-<dt><code class="code">CMD_DSB <var class="var">expression-id</var></code></dt>
-<dd><p>Define data storage of bytes, the size of which is determined by the expression referred to by <var class="var">expression-id</var>.
-</p>
-</dd>
-</dl>
-
-</div>
-<div class="section-level-extent" id="Expressions-1">
-<h3 class="section"><span>D.6 Expressions<a class="copiable-link" href="#Expressions-1"> &para;</a></span></h3>
-
-<p>As you may have noticed in the preceding section, many bytecodes have an expression identifier as argument. This is just an index into the list of expressions defined in the final part of the object file. The main advantages of separating the <em class="emph">use</em> of an expression (through its identifier) from its <em class="emph">definition</em> is ease of parsing and processing (each bytecoded instruction will always occupy 4 bytes), and the ability to share the same expression among several instructions without having to redefine it every time. In most cases, the expression will just be a stand-alone reference to a symbol (local or external). But any expression that the assembler understands can be encoded here.
-</p>
-</div>
 </div>
 <hr>
 <p class="nav-panel">

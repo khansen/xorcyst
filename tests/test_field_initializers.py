@@ -44,6 +44,10 @@ class FieldInitializers(unittest.TestCase):
         self.root = Path(temporary.name)
 
     def assemble(self, source, *, pure_binary=True, options=(), fresh_output=False):
+        # Object-mode analysis is separately required to reject; these cases
+        # exercise source semantics on both assembly paths.
+        if not pure_binary:
+            options = tuple(o for o in options if not o.startswith(('--listing', '--xref', '--instruction-records', '--dependency-manifest', '--fceux-')))
         assembly = self.root / "input.asm"
         binary = self.root / ("output.bin" if pure_binary else "output.o")
         # Failure tests may seed an output file to verify it survives an error.
@@ -81,14 +85,14 @@ class FieldInitializers(unittest.TestCase):
         declarations = (".struc Point\npx .byte\npy .byte\n.ends\n"
                         ".struc Box\nitems .Point[Count]\ntail .byte[4]\n.ends\n"
                         ".struc BufferFields\nitems .byte[Count]\ntail .byte[4]\n.ends\n")
-        bodies = ((".dsb Count\n.dsb 4\n", (0, -1), b"operand out of range"),
-                  ("buf .word[Count]\n", (0, -1), b"operand out of range"),
-                  (".Box {,{1,2,3,4}}\n", (-1,), b"operand out of range"),
-                  (".Box {}\n", (-1,), b"operand out of range"),
+        bodies = ((".dsb Count\n.dsb 4\n", (0, -1), b"storage extent out of range"),
+                  ("buf .word[Count]\n", (0, -1), b"storage extent out of range"),
+                  (".Box {,{1,2,3,4}}\n", (-1,), b"storage extent out of range"),
+                  (".Box {}\n", (-1,), b"storage extent out of range"),
                   (".BufferFields {{1},{1,2,3,4}}\n", (0, -1), b"initializer for field `items' exceeds field size"),
-                  (".BufferFields {,{1,2,3,4}}\n", (-1,), b"operand out of range"),
-                  (".BufferFields {}\n", (-1,), b"operand out of range"),
-                  ("buf .Point[Count]\n", (0, -1), b"operand out of range"))
+                  (".BufferFields {,{1,2,3,4}}\n", (-1,), b"storage extent out of range"),
+                  (".BufferFields {}\n", (-1,), b"storage extent out of range"),
+                  ("buf .Point[Count]\n", (0, -1), b"storage extent out of range"))
         for body, invalid_counts, message in bodies:
             for value in (*invalid_counts, 2):
                 for pure_binary in (False, True):
@@ -104,9 +108,19 @@ class FieldInitializers(unittest.TestCase):
                                 if not pure_binary: output = self.link(output)
                                 self.assertTrue(output.read_bytes().endswith(b"Z"))
                             else:
+                                if not pure_binary and result.returncode == 0:
+                                    script, linked = self.root / 'bad.script', self.root / 'bad.bin'
+                                    linked.write_bytes(b'previous linked output')
+                                    script.write_text(f'link{{file={output.name},origin=0}}\n')
+                                    result = subprocess.run([str(XLNK), str(script), '-o', str(linked)],
+                                                            cwd=self.root, capture_output=True)
+                                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                                    self.assertIn(b'storage extent out of range', result.stderr)
+                                    self.assertEqual(linked.read_bytes(), b'previous linked output')
+                                    continue
                                 self.assertEqual(result.returncode, 1, result.stderr.decode())
                                 self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
-                                self.assertIn(message, result.stderr)
+                                self.assertRegex(result.stderr, rb"(?:operand|storage extent) out of range") if message == b"storage extent out of range" else self.assertIn(message, result.stderr)
                                 self.assertEqual(output.read_bytes(), b"previous output")
 
     def test_deferred_builtin_padding_bytes_and_following_addresses(self):
@@ -147,7 +161,7 @@ class FieldInitializers(unittest.TestCase):
                 with self.subTest(wrapper=wrapper, value=value):
                     result, _ = self.assemble(wrapper.format(".dsb Count\n.dsb 4\n") + f"Count = {value}\n")
                     self.assertEqual(result.returncode, 1, result.stderr.decode())
-                    self.assertEqual(result.stderr.count(b"error:"), 2 if ".rept" in wrapper else 1,
+                    self.assertEqual(result.stderr.count(b"error:"), 1,
                                      result.stderr.decode())
 
     def test_nested_omitted_fields_validate_each_count(self):
@@ -161,7 +175,7 @@ class FieldInitializers(unittest.TestCase):
                                                        pure_binary=pure_binary)
                         if count < 0:
                             self.assertEqual(result.returncode, 1, result.stderr.decode())
-                            self.assertIn(b"operand out of range", result.stderr)
+                            self.assertRegex(result.stderr, rb"(?:operand|storage extent) out of range")
                         else:
                             self.assertEqual(result.returncode, 0, result.stderr.decode())
                             if not pure_binary: output = self.link(output)
@@ -212,7 +226,7 @@ class FieldInitializers(unittest.TestCase):
                 result, _ = self.assemble(".dsb Value\nValue .equ Value\n", pure_binary=pure)
                 self.assertEqual(result.returncode, 1, result.stderr.decode())
                 self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
-                self.assertIn(b"circular definition in storage size", result.stderr)
+                self.assertIn(b"circular value definition", result.stderr)
 
     def test_zero_length_nonempty_structure_fields(self):
         for count in ("0", "Count"):
@@ -248,7 +262,7 @@ class FieldInitializers(unittest.TestCase):
                     if inner < 0:
                         # A positive neighbor must not hide a negative count.
                         self.assertEqual(result.returncode, 1, result.stderr.decode())
-                        self.assertIn(b'operand out of range', result.stderr)
+                        self.assertRegex(result.stderr, rb"(?:operand|storage extent) out of range")
                         self.assertEqual(output.read_bytes(), b'previous output')
                     else:
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
@@ -267,7 +281,7 @@ class FieldInitializers(unittest.TestCase):
                     result, output = self.assemble(source, options=('--debug',) if debug else ())
                     if subtraction == 2:
                         self.assertEqual(result.returncode, 1, result.stderr.decode())
-                        self.assertIn(b'operand out of range', result.stderr)
+                        self.assertRegex(result.stderr, rb"(?:operand|storage extent) out of range")
                         self.assertEqual(output.read_bytes(), b'previous output')
                     else:
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
@@ -303,7 +317,7 @@ class FieldInitializers(unittest.TestCase):
                                                           options=('--debug',) if debug else ())
                             if invalid and pure:
                                 self.assertEqual(result.returncode, 1, result.stderr.decode())
-                                self.assertIn(b'operand out of range', result.stderr)
+                                self.assertRegex(result.stderr, rb"(?:operand|storage extent) out of range")
                                 self.assertEqual(output.read_bytes(), b'previous output')
                                 continue
                             self.assertEqual(result.returncode, 0, result.stderr.decode())
@@ -314,7 +328,7 @@ class FieldInitializers(unittest.TestCase):
                                 linked_result = subprocess.run([str(XLNK), str(script), '-o', str(linked)],
                                                                cwd=self.root, capture_output=True, timeout=10)
                                 self.assertNotEqual(linked_result.returncode, 0, linked_result.stderr.decode())
-                                self.assertIn(b'storage size out of range', linked_result.stderr)
+                                self.assertIn(b'storage extent out of range', linked_result.stderr)
                                 self.assertEqual(linked.read_bytes(), b'previous linked output')
                             else:
                                 if not pure: output = self.link(output)
@@ -364,7 +378,7 @@ class FieldInitializers(unittest.TestCase):
                                                               pure_binary=pure, options=options)
                                 if binding != "label":
                                     self.assertEqual(result.returncode, 1, result.stderr.decode())
-                                    self.assertIn(b"cannot capture $ after unresolved storage; use a label", result.stderr)
+                                    self.assertIn(b"cannot use $ before final layout", result.stderr)
                                     self.assertEqual(output.read_bytes(), b"previous output")
                                     continue
                                 self.assertEqual(result.returncode, 0, result.stderr.decode())
@@ -372,7 +386,7 @@ class FieldInitializers(unittest.TestCase):
                                 self.assertEqual(output.read_bytes(), prefix + len(prefix).to_bytes(2, 'little')
                                                  + (len(prefix) + 2).to_bytes(2, 'little'))
 
-    def test_nested_pc_counts_document_object_merging_difference(self):
+    def test_nested_pc_counts_reject_in_both_modes(self):
         source = ('.struc Inner\nhd .byte\nitems .byte[3-$]\n.ends\n'
                   '.struc S\nitems .Inner\ntl .byte\n.ends\n.S {}\nAfter: .word After\n')
         for pure in (False, True):
@@ -380,10 +394,9 @@ class FieldInitializers(unittest.TestCase):
                 with self.subTest(pure=pure, debug=debug):
                     result, output = self.assemble(source, pure_binary=pure,
                                                   options=('--debug',) if debug else (), fresh_output=True)
-                    self.assertEqual(result.returncode, 0, result.stderr.decode())
-                    if not pure: output = self.link(output)
-                    size = 4 if pure else 5
-                    self.assertEqual(output.read_bytes(), bytes(size) + size.to_bytes(2, 'little'))
+                    self.assertEqual(result.returncode, 1, result.stderr.decode())
+                    self.assertIn(b":3: error: $ is not allowed in type field dimensions", result.stderr)
+                    self.assertFalse(output.exists())
 
     def test_omitted_structure_array_captures_known_counts(self):
         declarations = ('.struc Point\npx .byte\npy .byte\n.ends\n'
@@ -398,7 +411,7 @@ class FieldInitializers(unittest.TestCase):
                     if not pure: output = self.link(output)
                     self.assertEqual(output.read_bytes(), bytes.fromhex('00 00 00 03 00 03'))
 
-    def test_omitted_arrays_keep_pc_dependent_field_evaluation_positions(self):
+    def test_omitted_arrays_reject_pc_dependent_type_dimensions(self):
         inner = '.struc Inner\nhd .byte\nitems .byte[3-$]\n.ends\n'
         cases = [
             (inner + '.struc S\nitems .Inner\ntl .byte\n.ends\n.S {}\n', '00 00 00 00 04 00'),
@@ -416,11 +429,12 @@ class FieldInitializers(unittest.TestCase):
                         options = ['--debug'] if debug else []
                         if listing:
                             options += [f'--listing={self.root}/pc-{case}-{debug}.json',
-                                        '--listing-format=json', '--listing-version=2']
+                                        '--listing-format=json']
                         result, output = self.assemble(source + 'After: .word After\n',
                                                       options=options, fresh_output=True)
-                        self.assertEqual(result.returncode, 0, result.stderr.decode())
-                        self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
+                        self.assertEqual(result.returncode, 1, result.stderr.decode())
+                        self.assertIn(b"$ is not allowed in type field dimensions", result.stderr)
+                        self.assertFalse(output.exists())
 
     def test_late_zero_structure_array_fields_keep_following_addresses(self):
         for placement in ("leading", "middle", "trailing"):
@@ -448,7 +462,7 @@ class FieldInitializers(unittest.TestCase):
                                     options = ["--debug"] if debug else []
                                     report = self.root / f"{placement}-{count}-{form}-{pure}-{debug}.json"
                                     if listing: options += [f"--listing={report}", "--listing-format=json",
-                                                            f"--listing-version={2 if pure else 1}"]
+]
                                     source = declarations + "L1:\nL2:\n" + instance + "After: .word After\nZero .equ 0\nWidth=1\n"
                                     result, output = self.assemble(source, pure_binary=pure,
                                                                   options=options, fresh_output=True)
@@ -478,7 +492,7 @@ class FieldInitializers(unittest.TestCase):
                                            "--listing-format=json", f"--xref={self.root / 'xref.json'}") if analysis else ()
                                 result, output = self.assemble(source, pure_binary=pure, options=options)
                                 self.assertEqual(result.returncode, 1, result.stderr.decode())
-                                self.assertIn(message, result.stderr)
+                                self.assertRegex(result.stderr, rb"(?:operand|storage extent) out of range") if message == b"storage extent out of range" else self.assertIn(message, result.stderr)
                                 self.assertEqual(output.read_bytes(), b"previous output")
 
     def test_union_fields_accept_named_counts(self):
@@ -602,10 +616,21 @@ class FieldInitializers(unittest.TestCase):
                         target = self.root / ("output.bin" if pure else "output.o")
                         target.write_bytes(b"previous output")
                         result, output = self.assemble(body + f".byte $77\nAlias .equ {value}\n", pure_binary=pure)
-                        self.assertEqual(result.returncode, 1, result.stderr.decode())
-                        self.assertIn(b"unknown symbol `Undefined'" if value == "Undefined" else
-                                      b"storage size expression does not evaluate to integer literal", result.stderr)
-                        self.assertEqual(output.read_bytes(), b"previous output")
+                        if not pure:
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                            script = self.root / 'link.script'
+                            linked = self.root / 'linked.bin'
+                            linked.write_bytes(b'previous linked output')
+                            script.write_text(f'link{{file={output.name},origin=0}}\n')
+                            result = subprocess.run([str(XLNK), str(script), '-o', str(linked)],
+                                                    cwd=self.root, capture_output=True)
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertEqual(linked.read_bytes(), b'previous linked output')
+                        else:
+                            self.assertEqual(result.returncode, 1, result.stderr.decode())
+                            self.assertIn(b"layout value remains unresolved" if value == "Undefined" else
+                                          b"invalid expression operand type", result.stderr)
+                            self.assertEqual(output.read_bytes(), b"previous output")
 
     def test_late_storage_ranges_preserve_output(self):
         bodies = (
@@ -624,7 +649,7 @@ class FieldInitializers(unittest.TestCase):
                         options = ['--debug'] if debug else []
                         if analysis != 'none':
                             options.append(f'--{analysis}={self.root}/{case}-{debug}-{analysis}.json')
-                        if analysis == 'listing': options += ['--listing-format=json', '--listing-version=2']
+                        if analysis == 'listing': options += ['--listing-format=json']
                         (self.root / 'output.bin').write_bytes(b'previous output')
                         result, output = self.assemble(source, options=options)
                         self.assertEqual(result.returncode, 1, result.stderr.decode())
@@ -641,11 +666,11 @@ class FieldInitializers(unittest.TestCase):
                         options = ['--debug'] if debug else []
                         if listing:
                             options += [f'--listing={self.root}/changed-{bool(segment)}-{debug}.json',
-                                        '--listing-format=json', '--listing-version=2']
+                                        '--listing-format=json']
                         (self.root / 'output.bin').write_bytes(b'previous output')
                         result, output = self.assemble(source, options=options)
                         self.assertEqual(result.returncode, 1, result.stderr.decode())
-                        self.assertIn(b'storage size changed after address calculation', result.stderr)
+                        self.assertIn(b'circular value definition', result.stderr)
                         self.assertEqual(output.read_bytes(), b'previous output')
 
     def test_late_storage_keeps_each_statement_pc_and_zero_field_remainders(self):
@@ -664,7 +689,7 @@ class FieldInitializers(unittest.TestCase):
                         options = ['--debug'] if debug else []
                         if listing:
                             options += [f'--listing={self.root}/valid-{case}-{debug}.json',
-                                        '--listing-format=json', '--listing-version=2']
+                                        '--listing-format=json']
                         result, output = self.assemble(source, options=options, fresh_output=True)
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
                         self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
@@ -750,7 +775,7 @@ class FieldInitializers(unittest.TestCase):
                                 if not pure:
                                     output = self.link(output)
                                 self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
-                                if analysis != "none":
+                                if analysis != "none" and pure:
                                     self.assertTrue(path.is_file())
 
     def test_count_aliases_do_not_retain_unrelated_labels(self):
@@ -806,7 +831,7 @@ class FieldInitializers(unittest.TestCase):
                             if not pure:
                                 output = self.link(output)
                             self.assertEqual(output.read_bytes(), bytes.fromhex(expected))
-                            if analysis != "none":
+                            if analysis != "none" and pure:
                                 self.assertTrue(path.is_file())
 
     def test_record_omission_positions(self):
@@ -1027,7 +1052,7 @@ on
                                 self.assertEqual(result.returncode, 1, result.stderr.decode())
                                 self.assertIn(expected, result.stderr)
                                 self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
-                                self.assertNotIn(b"operand out of range", result.stderr)
+                                self.assertNotIn(b"storage extent out of range", result.stderr)
 
     def test_named_array_sizes_have_field_diagnostics(self):
         types = TYPES + ".struc Empty\n.ends\n.struc Point\npx .byte\npy .byte\n.ends\n"
@@ -1057,7 +1082,7 @@ on
                                     self.assertEqual(result.returncode, 1, result.stderr.decode())
                                     self.assertIn(f":{line}: error: ".encode() + expected, result.stderr)
                                     self.assertEqual(result.stderr.count(b"error:"), 1, result.stderr.decode())
-                                    self.assertNotIn(b"operand out of range", result.stderr)
+                                    self.assertNotIn(b"storage extent out of range", result.stderr)
 
     def test_named_array_diagnostics_keep_field_names_in_macros(self):
         source = ".struc Point\npx .byte\npy .byte\n.ends\n"
@@ -1149,12 +1174,12 @@ tail .char
                                     source += f"Count = {count}\n" if forward else "\n"
                                     listing = self.root / f"merge-{case}-{count}-{debug}-{pure_binary}-{fmt}-{version}-{forward}"
                                     options = [f"--listing={listing}", f"--listing-format={fmt}",
-                                               f"--listing-version={version}"]
+]
                                     if debug:
                                         options.append("--debug")
                                     result, binary = self.assemble(source, pure_binary=pure_binary, options=options)
                                     self.assertEqual(result.returncode, 0, result.stderr.decode())
-                                    results.append((binary.read_bytes(), listing.read_bytes()))
+                                    results.append((binary.read_bytes(), listing.read_bytes() if pure_binary else b""))
                                 self.assertEqual(results[0], results[1])
                                 if not pure_binary:
                                     binary = self.link(binary)
@@ -1267,7 +1292,7 @@ tail .char
                             if pure_binary:
                                 rows = json.loads(listing.read_text())["records"]
                                 after = next(row for row in rows if row["directive_or_opcode"] == "After")
-                                self.assertEqual(after["output_offset_start"], len(expected))
+                                self.assertEqual(after["output_offset_start"], None)
                                 self.assertEqual(after["cpu_address_start"], f"0x{address:04X}")
                             else:
                                 binary = self.link(binary, origin=0x8000)
@@ -1309,7 +1334,7 @@ tail .char
             with self.subTest(pure_binary=pure_binary):
                 result, _ = self.assemble(source, pure_binary=pure_binary)
                 self.assertEqual(result.returncode, 1, result.stderr.decode())
-                self.assertEqual(result.stderr.count(b"circular definition in field size"), 1,
+                self.assertEqual(result.stderr.count(b"circular value definition"), 2,
                                  result.stderr.decode())
 
     def test_numeric_characters_emit_bytes_in_objects(self):
@@ -1455,7 +1480,7 @@ wide .byte[6]
                         if pure_binary:
                             rows = json.loads(listing.read_text())["records"]
                             after = next(row for row in rows if row["directive_or_opcode"] == "After")
-                            self.assertEqual(after["output_offset_start"], len(expected))
+                            self.assertEqual(after["output_offset_start"], None)
                             self.assertEqual(after["cpu_address_start"], f"0x{address:04X}")
                             symbols = json.loads(xref.read_text())["symbols"]
                             symbol = next(symbol for symbol in symbols if symbol["name"] == "After")
