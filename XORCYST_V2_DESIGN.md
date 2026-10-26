@@ -1,7 +1,7 @@
 # XORcyst v2: approved scope and design
 
 Status: **D0 approved by the owner on 2026-10-22; D1 contracts and baselines
-approved on 2026-10-23 after independent review.** The latest published release is v1.9.12; this tree prepares 2.0.0.
+approved on 2026-10-23 after independent review.** The 2.0.0 implementation is complete.
 
 Independent review found speculative scope and incompatible layout rules in
 the initial design. This approved scope addresses demonstrated project needs
@@ -10,10 +10,9 @@ owner approval are distinct; the approval record is in section 8.
 
 **Gate:** D0 and D1 review and owner approval are complete. Implementation
 follows the sequence in section 7 after the approved D1 revision is merged.
-I1–I5 are approved and merged. I6 completed independent review and received
-owner approval at `7105ea7` on 2026-10-26. CI, merge and coordinated workflow
-activation remain release gates; no 2.0.0 release is tagged. The source checkout
-records approval and the remaining steps in `design/v2/I6_APPROVAL.md` and
+I1–I6 are approved and merged. I6 completed independent review and received
+owner approval at `7105ea7` on 2026-10-26. The source checkout records approval
+and release coordination in `design/v2/I6_APPROVAL.md` and
 `design/v2/I6_RELEASE_CHECKLIST.md`.
 
 D1 work and its approval record are in the

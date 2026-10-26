@@ -2,8 +2,8 @@ The XORcyst is a set of tools for 6502 software development: the `xasm`
 assembler and `xlnk` linker. This source tree targets version 2.0.0.
 Run `xasm --version` or `xlnk --version` to identify an installed build.
 
-Version 2.0.0 cutover candidate
--------------------------------
+Version 2.0.0
+-------------
 
 The normal `xasm` and `xlnk` now use the shared expression, layout and encoding
 implementation. There are no alternate prototype tools or legacy object engine.
@@ -16,9 +16,7 @@ xref and debugger exports require `--pure-binary`. Instruction records retain
 schema 3. See [MIGRATING_TO_2.0.md](MIGRATING_TO_2.0.md) for source, artifact and
 consumer changes, and the listing contract below for field meanings.
 
-This source tree is an unreleased cutover candidate. Local independent review,
-owner approval and release CI must precede the 2.0.0 tag. The approved semantics
-and resource decisions are recorded in
+The approved semantics and resource decisions are recorded in
 [XORCYST_V2_CONTRACTS.md](XORCYST_V2_CONTRACTS.md), with the
 [performance protocol](design/v2/PERFORMANCE.md) and
 [object wire layout](design/v2/OBJECT_WIRE_DRAFT.md).

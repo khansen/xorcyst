@@ -79,13 +79,13 @@ Copyright @copyright{} 2004, 2005, 2007, 2008, 2009 Kent Hansen.
 @node What's New
 @chapter What's New
 
-@heading Version 2.0.0 (unreleased candidate)
+@heading Version 2.0.0
 
 The normal @code{xasm} and @code{xlnk} share expression evaluation, layout and encoding. Rebuild all object files from source: only XOROBJ2 objects are accepted. The prototype targets and the @option{--listing-version} selector have been removed. Structured listings use schema 2; listings and analysis require @option{--pure-binary}. Instruction records retain schema 3.
 
 Forward strings use the character map at their data statement. Every string operand of @code{.char} is mapped once. Kind checks precede integer identities. Binary instruction narrowing follows the linker's repeated in-place walks. Known final source-time @code{$} values remain usable; unresolved layout and @code{$} inside type dimensions are rejected. Explicit-address @code{.label} is rejected; use an equate for a fixed address.
 
-The source-time @code{sizeof(label)} scan checks forward operand kinds and lengths before publication. Imported or still-deferred strings, changed kinds or lengths, and self-sized strings reject at the original use. Numeric changes and captured literals retain their widths. See @file{MIGRATING_TO_2.0.md} and @file{XORCYST_V2_CONTRACTS.md} for the complete compatibility ledger and retained limitations. Local review and release approval are still required for this candidate.
+The source-time @code{sizeof(label)} scan checks forward operand kinds and lengths before publication. Imported or still-deferred strings, changed kinds or lengths, and self-sized strings reject at the original use. Numeric changes and captured literals retain their widths. See @file{MIGRATING_TO_2.0.md} and @file{XORCYST_V2_CONTRACTS.md} for the complete compatibility ledger and retained limitations.
 
 @heading Version 1.9.12
 

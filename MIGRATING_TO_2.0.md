@@ -1,7 +1,6 @@
 # Migrating to XORcyst 2.0
 
-This is an unreleased cutover candidate. Release publication follows local review,
-owner approval and green release checks.
+Rebuild objects and update listing consumers when upgrading from XORcyst 1.x.
 
 Build and install the usual `xasm` and `xlnk`. The alternate `xasm-v2`/`xlnk-v2`
 targets and compile-time frontend selector are gone. Reassemble every object from

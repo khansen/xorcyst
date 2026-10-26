@@ -1,70 +1,84 @@
 # I6 coordination before release and installation
 
-The independent review cleared XORcyst `8e35489` and paired public-master
-Nesrev `c6879021e` with no blockers. The owner approved the cutover at `7105ea7`
-on 2026-10-26; see `I6_APPROVAL.md`. The small follow-up changes and their
-checks are recorded in `I6_REVIEW_FOLLOWUP.md`.
+Updated 2026-10-26. The owner approved I6 at `7105ea7`. The final release
+metadata is being prepared on a local branch; the owner has explicitly asked
+not to open the 2.0.0 release PR yet. No tag or release is published.
 
-## Public producer and tooling
+## Public producer and tooling: merged
 
-1. Owner approval is recorded. Publish the reviewed cutover PR.
-2. Merge XORcyst only after CI is green. Read the actual merge commit from the
-   PR and verify that it is on `origin/master`. Do not assume the reviewed
-   branch SHA survived a squash or rebase merge.
-3. Before publishing Nesrev's tooling PR, set `XORCYST_REVISION` to that actual
-   merged XORcyst commit. Verify the pin is an ancestor of XORcyst
-   `origin/master`, and repeat the paired producer/consumer smoke checks with
-   that checkout. The current local pin is for review only.
-4. Publish only the Nesrev branch based on public master. Merge after green
-   CI and verify the two merged heads. Never publish the private projects
-   branch, its commits, or a branch containing its ancestry.
+- XORcyst [#102](https://github.com/khansen/xorcyst/pull/102) merged as
+  `9a273fa081524e3d55d608b3c9587ad55261aca4` after Ubuntu, macOS and
+  ASan/UBSan CI passed. Its post-merge CI also passed.
+- Nesrev [#171](https://github.com/khansen/nesrev/pull/171) merged as
+  `5b9bf953c0e62173173016b0102e28ec797b0c2e` after Ubuntu and macOS CI passed.
+  Its CI pin names the actual XORcyst merge above, not the reviewed branch SHA.
+- A fresh build of the merged XORcyst tools passed all 33 bundle tests with
+  the paired public tooling. No private projects branch or ancestry was pushed.
+- CI exposed a pre-existing watcher-test cleanup race. The two tests now keep
+  their watchers as direct children and wait before removing their files.
+  Both pass locally; the old launch fails the new lifetime assertion in both
+  scratch controls. Production watcher code is unchanged.
 
-## Private projects workflow: prepared, activation pending
+## Private projects workflow: full rebase prepared
 
-The owner's live Nesrev projects branch is still at `abc8ae3e1`. It has local
-untracked files and has not received the shared listing-2 migration from #170
-or the private project-tool changes reviewed at `4ca95e06d`. Installing 2.0
-as the default assembler now would break some of its consumers.
+The owner requested a full rebase onto public master, replacing the earlier
+cherry-pick integration plan. All 1,189 private commits replayed without
+conflicts onto Nesrev `5b9bf953c`. The reviewed private consumer changes were
+then retained as a separate commit. The prepared result is
+`local/2.0-projects-rebased` at `3b471603b5222fda5bce716471daecf506bb5c16`.
+It is local-only and must never be pushed.
 
-On 2026-10-26 the owner chose to migrate locally before 2.0. The prepared
-integration is `local/2.0-projects-integration` at `1ec16789e`, in
-`/private/tmp/nesrev-2.0-projects-integration`. It contains the two reviewed
-public tooling changes and the project consumer port developed separately on
-the public-master-based `local/2.0-project-tooling` branch at `b240aa806`.
-Both branches are local-only; neither may be pushed. The public tooling PR
-branch contains no project files or private ancestry.
+Before adding the consumer changes, every project file matched the original
+`projects` tree. After adding them, every project file and the listing-consumer
+test matched the reviewed integration at `1ec16789e`. The four consumer fixes
+were developed on the public-master-based branch at `b240aa806`; this rebase
+adds no new project tooling behavior.
 
-All eight producer setups pass with the explicit 2.0 tool path, all five
-affected project PRGs are exact, and Devil World's renderer accepts the real
-setup. Null/fill/corrupt/stale row controls pass. No emulator was launched.
-See `I6_REVIEW_FOLLOWUP.md` for the evidence and scope.
+The rebased workflow passes all eight real producer setups, with five exact
+reference PRGs, including Devil World's renderer with a synthetic palette.
+The two listing-consumer tests (16 subcases) and all 33 bundle tests pass.
+No emulator was launched. Strict playbook checking still reports ten stale
+AGENTS references in historical project review archives; those same ten
+warnings are present in the original project files. This is not a strict-docs
+pass and no archive history was rewritten to hide the warnings.
 
-Before installation/release, recheck the live projects branch for intervening
-user commits or edits, integrate the prepared changes without overwriting them,
-and switch the assembler and projects tooling together. The live checkout was
-intentionally not advanced while its default assembler is still 1.9.12. This
-activation step remains a release gate; preparation alone is not activation.
+A complete Git bundle of the original projects history and earlier migration
+branches is retained outside both repositories. The live checkout remains at
+`abc8ae3e1`; its five untracked files are preserved. System-installed tools
+still report 1.9.12. The root-owned `/usr/local/bin` installation requires
+administrator authorization.
 
-For a local migration:
+## Remaining release gates
 
-- Develop any tooling edits on branches from public master. Do not develop
-  them on the projects branch or merge its history into a public branch.
-- Bring the approved shared tooling into a scratch copy of the projects
-  workflow first. Preserve the owner's untracked files and project edits.
-- Port the I5 listing-row fixes for Clu Clu Land, Devil World and Popeye,
-  including Devil World's `actor_render.render_sequences`. Skip non-emitting
-  rows, handle fill rows, and retain ROM-byte checks. These are four consumer
-  files; no assembly or semantic project changes are needed.
-- Do not blindly replay I5's eight trace-script command edits: they added
-  `--listing-version=2`, which 2.0 rejects. Check all eight producers and ensure
-  none passes the selector. The original projects versions already omit it.
-- Run the listing-consumer controls, including null/fill rows and corrupt or
-  stale setups, and exercise actual 2.0 assembly for the affected projects.
-  Verify exact PRGs and rebuild disposable setup/bundle files. No emulator
-  capture is needed merely to validate the listing migration.
-- Only after those checks, integrate locally as authorized. Record resulting
-  commit IDs and verification; never push the projects branch.
+1. Complete local review of the release metadata. Do not open the release PR,
+   push the release branch, tag, or publish until the owner resumes that work.
+2. Recheck the live projects head and local changes. Activate the verified full
+   rebase without overwriting untracked files, and switch the installed tools
+   together. Preserve the old tool installation for recovery. Never push
+   `projects` or any branch containing private project history.
+3. Verify the actual default `xasm`/`xlnk` paths and versions, the listing
+   consumers, and the exact project PRGs after activation. Preparation alone
+   is not activation, and a PATH assumption is not evidence of installation.
+4. After release approval, publish the metadata PR and merge on green CI.
+   Build the release archive from the exact merged tree, verify its contents
+   and checksum, then tag and publish v2.0.0 as a normal release.
+5. Remove completed integration branches/worktrees after their contents are
+   preserved and the corresponding gates have passed. Keep unrelated unmerged
+   feature work and uncommitted changes.
 
-At activation, verify the resolved `xasm` path/version as well as scripts that
-invoke it by name, re-pin to the actual public merge as above, and rerun the
-bounded setup checks. A PATH assumption is not sufficient evidence of the switch.
+## Local release preparation checks
+
+The release metadata removes candidate wording from NEWS, README, the migration
+guide and the manual. Texinfo 7.3 regenerated the affected HTML. No runtime,
+tests or build rules changed from the approved cutover.
+
+`make distcheck` passed 531 tests (19 regression suites plus installed-tool
+checks), shell regressions, installation, uninstall and distclean. All 176
+regular files in the resulting archive match the prepared tracked source.
+The local archive and SHA256SUMS are outside the worktree under
+`/private/tmp/xorcyst-2.0-release-preparation/`; they are not committed or
+published. The archive SHA-256 is
+`090f6c5bb2434a3e8ced0ee803389fa57b98d84dfdff98ddb80b7ea3be98bdef`.
+
+These checks validate the prepared archive, not a tagged release. Rebuild and
+verify from the final merged release commit before publication.
