@@ -21,6 +21,6 @@ Open product work
 - Investigate unused-label warnings through constant-alias chains. Keep source
   usage separate from references retained only for export or layout.
 
-Release coordination: design/v2/I6_RELEASE_CHECKLIST.md.
+Release coordination: RELEASE_CHECKLIST.md.
 Approved behavior and scope: XORCYST_V2_CONTRACTS.md and XORCYST_V2_DESIGN.md.
-Completed implementation history and validation: design/v2/.
+Completed implementation reviews and validation remain in Git history.

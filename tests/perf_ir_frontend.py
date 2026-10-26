@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Paired I3 plain-output gate; requires the external frozen D1 inputs.
 
-See design/v2/PERFORMANCE.md. This is deliberately outside make check: it
+See doc/performance.md. This is deliberately outside make check: it
 needs release binaries, frozen private project inputs and an idle machine.
 """
 import argparse

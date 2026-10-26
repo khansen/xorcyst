@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Paired I4 assembly, linking and complete-build measurements.
+"""Paired assembly, linking and complete-build measurements.
 
 Inputs are two successful check_object_projects.py captures made with matched
 compiler settings. This runs only in fresh hard-linked copies of those scratch
-builds, with frozen assets and converter traps. See PERFORMANCE.md.
+builds, with frozen assets and converter traps. See doc/performance.md.
 """
 import argparse
 import json

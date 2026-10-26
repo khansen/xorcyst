@@ -1,14 +1,19 @@
-# D1 performance protocol
+# Performance policy and measurement protocol
 
-Status: approved by the owner as part of D1 on 2026-10-23.
-This defines how to apply D0's **no slower than
-v1** requirement, not a relaxation of it. Implementation-stage measurements
-are recorded separately and do not constitute a completed cutover gate.
-Single capture-build elapsed times are feasibility evidence, not benchmark samples.
+The default target is no slowdown against matched v1.9.12 builds, with the
+specific owner-approved memory and small absolute-time exceptions below. The
+exceptions do not establish a blanket allowance for later regressions. Report
+absolute costs alongside ratios and distinguish a bounded survey from a formal
+performance pass. Single capture-build times are not benchmark samples.
+
+The implementation stages are complete. Their reports and raw measurement
+manifests remain in [Git history](https://github.com/khansen/xorcyst/tree/9a273fa081524e3d55d608b3c9587ad55261aca4/design/v2); this document retains the policy
+and the reasoning needed for future changes.
 
 ## Inputs and builds
 
-Use the frozen baseline manifests in `design/v2/BASELINES.md` in the source checkout (not shipped). Build
+Use `tests/projects/baselines.json` and its README in the source checkout to
+identify the frozen inputs and external manifests. Build
 v1.9.12 and the candidate from clean sources with the same compiler, flags,
 linker, dependencies, architecture and optimization level. Hash executables;
 record source revisions, compiler/OS versions and dynamic libraries. Do not
@@ -67,7 +72,7 @@ For games/music, report separately:
 
 For analysis report producer-only time, downstream validation time and complete
 bundle time separately. Baseline uses its frozen consumer; candidate uses the
-reviewed migrated consumer. All three gates must pass. Record peak resident
+reviewed migrated consumer. Apply the decision rule and explicit exceptions to all three stages. Record peak resident
 memory and artifact sizes for every mode. Counts of emitted instructions,
 records, references and fill extents prevent measuring reduced output instead
 of equal useful work.
@@ -99,10 +104,25 @@ Other configurations retain the existing limit unless explicitly reviewed.
 Reviewers should look for unnecessary storage and simple, measured improvements,
 including simpler alternatives to existing machinery. Do not introduce
 disproportionate allocator/representation complexity just to shave small amounts.
-The detailed accounting is in `I4_VALIDATION.md`, with review instructions in
-`I4_REVIEW.md` in the source checkout. Neither this decision nor a smaller
-complete-build peak waives correctness, timing, leak checks or review of
-unexplained/pathological memory growth. I4 implementation approval is pending.
+The historical I4 report preserves the detailed accounting. The layout and
+expression graph retain dependency/cache state, definition identities and
+source spans for consistent evaluation and located errors. Peak RSS occurs
+while translating the largest object, when its raw wire buffer overlaps the
+translated representation; a post-layout allocation snapshot misses that cost.
+
+The fixed-width wire format favors a checked reader and direct table access,
+but makes objects substantially larger than v1's bytecode. Sharing identical
+leaves and omitting unused reference/address spans reduced dpadhero2 objects
+from 1,116,264 to 972,884 bytes and DPadHero3Proto from 466,764 to 389,128 bytes.
+V1 totals were 190,624 and 40,968 bytes respectively. The format was retained:
+variable-length decoding would add machinery and would not automatically
+reduce the in-memory representation. Review found that the small-block heap
+reduced peak RSS compared with plain malloc; mmap input did not. The heap's
+reuse and pooling limit ASan/LeakSanitizer visibility, so explicit live-count
+checks remain necessary.
+
+Neither this acceptance nor a smaller complete-build peak waives correctness,
+timing review, leak checks or investigation of unexplained/pathological growth.
 
 ## Sampling
 
@@ -118,7 +138,7 @@ practical acceptance, not a claim that the commands became faster.
 
 For the remaining small object projects, first run a bounded five-pair survey
 of assembly, standalone link and complete build, with one invocation per sample
-and absolute elapsed/CPU deltas. `measure_object_projects.py --survey` labels
+and absolute elapsed/CPU deltas. `tests/projects/measure_object_projects.py --survey` labels
 this separately from a formal session and makes no confidence-interval or
 no-slowdown-pass claim. Escalate material costs to focused measurement; do not
 automatically expand every sub-millisecond difference to 30/60-pair sessions.
@@ -135,9 +155,11 @@ owner chose to document small absolute costs for local review and focus further
 work on material regressions, rather than continue solely to cross the strict
 per-configuration timing ratio. Complete the inventory survey and report all
 three stages separately. This does not assert a formal no-slowdown pass or set
-a universal tolerance, and it does not approve I5. The original analysis memory
+a universal tolerance, and was separate from the subsequent I5 approval. The original analysis memory
 limit, equal useful work, exact ROMs, safety and independent review still apply.
-Contract section 14 and the I5 validation record identify the scope and evidence.
+Semantic contract section 14 and the historical I5 validation record identify
+the scope and evidence. Independent review measured combined-xref costs around
+17 ms on Metroid; this remained within the accepted small-cost decision.
 
 Run on an otherwise idle machine with stable power/thermal settings. No parallel
 builds, competing benchmarks, profiler, CI queue time or filesystem cache flush
@@ -189,7 +211,7 @@ interval can be a chance finding: report all comparisons, and require independen
 confirmation before calling one a regression. There is no inherited 5%/20 ms
 allowance, no averaging across workflows, and no speedup elsewhere to pay for a
 regression. The complete protocol is included in the section 8 D1 approval
-record in `XORCYST_V2_CONTRACTS.md`.
+record in [semantic contract](../XORCYST_V2_CONTRACTS.md).
 
 Instruction counts are explanatory only. Record memory and artifact sizes
 even when time passes; apply the memory policy and its explicit current-I4
@@ -202,6 +224,5 @@ supplement, and never replace, the required real-project gate.
 Keep machine/tool/input manifests, command arrays, exit codes, full raw timings,
 output hashes, correctness-validation results and profiles with the reviewed
 candidate revision. Project assets/ROMs remain in the owner's local archive;
-commit the manifests and concise report. Repeat final combined-tree comparisons
-after the consumer migration and before cutover. A green CI test suite alone is
+commit the manifests and concise report. Repeat combined-tree comparisons when producer or consumer behavior changes. A green CI test suite alone is
 not a performance pass.

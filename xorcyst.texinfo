@@ -1734,7 +1734,7 @@ The checked header describes ten tables: blobs, files, source locations, definit
 
 Files carry locations needed for diagnostics, captured character maps and expression graphs. RAM records retain source label order for the specified allocation permutation. Code fragments and operand fixups use the same layout and encoder as direct binary assembly. Source-time expansion and @code{sizeof} are completed by the assembler.
 
-The exact header, record widths, tags, validation rules and example are documented in @file{design/v2/OBJECT_WIRE_DRAFT.md}, installed with the tools. The historical filename is retained for stable contract references; it describes the current wire format.
+The exact header, record widths, tags, validation rules and example are documented in @file{doc/object-format.md}, installed with the tools.
 
 @node Custom Character Maps
 @appendix Custom Character Maps

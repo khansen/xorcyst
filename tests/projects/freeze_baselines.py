@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Freeze owner-local D1 inputs and rebuild v1.9.12 in isolated directories.
+"""Freeze private baseline inputs and rebuild v1.9.12 in isolated directories.
 
 This captures source/converter provenance, not a reproducible XORcyst gate.
 Use freeze_gate_assets.py for verified frozen-asset builds: converter outputs
 (specially Wishmaster xm2nes) can depend on the environment.
-This is evidence tooling, not a v2 implementation or a performance benchmark.
+This captures provenance, not performance measurements.
 The destination must be new. Original project directories are only read.
-Private project sources/ROMs stay outside the committed contract directory.
+Private project sources/ROMs stay outside the repository.
 """
 import argparse
 import hashlib

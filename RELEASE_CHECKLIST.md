@@ -1,4 +1,4 @@
-# I6 coordination before release and installation
+# 2.0.0 release coordination
 
 Updated 2026-10-26. The owner approved I6 at `7105ea7`. The final release
 metadata is being prepared on a local branch; the owner has explicitly asked
@@ -69,16 +69,32 @@ administrator authorization.
 ## Local release preparation checks
 
 The release metadata removes candidate wording from NEWS, README, the migration
-guide and the manual. Texinfo 7.3 regenerated the affected HTML. No runtime,
-tests or build rules changed from the approved cutover.
+guide and the manual. The completed migration records were removed from the
+working tree; their history is preserved in Git. Maintained object-format and
+performance documents now live in `doc/`, project checks and portable fixture
+identities in `tests/projects/`, and the wire example in `tests/fixtures/`.
+The root semantic/design contracts remain. No assembler or linker source changed.
 
-`make distcheck` passed 531 tests (19 regression suites plus installed-tool
-checks), shell regressions, installation, uninstall and distclean. All 176
-regular files in the resulting archive match the prepared tracked source.
-The local archive and SHA256SUMS are outside the worktree under
-`/private/tmp/xorcyst-2.0-release-preparation/`; they are not committed or
-published. The archive SHA-256 is
-`090f6c5bb2434a3e8ced0ee803389fa57b98d84dfdff98ddb80b7ea3be98bdef`.
+Automake 1.19 regenerated the packaging rules; Texinfo 7.3 regenerated the
+manual. `make distcheck` passed 531 tests (19 regression suites plus installed-tool
+checks), shell regressions, installation, uninstall and distclean, with no skips.
+The first sandboxed run could not bind the socket used by an output-safety test;
+the successful run had the required permission. The install tests also verify
+the two relocated public documents.
+
+The moved project runner rebuilt all 15 required ROMs from 451 source-built
+objects byte-for-byte. Its executable Python syntax is unchanged, as are the
+other four project tools. The independent 244-byte wire fixture is byte-identical;
+its checker and all five project-tool imports work from the source archive.
+Local document links and frozen-input identities were checked.
+
+All 184 regular files in the archive match the prepared tracked source. No
+historical `design/` directory, private evidence or owner-local filesystem paths
+are included. The local archive, SHA256SUMS and validation record are outside the
+worktree under `/private/tmp/xorcyst-2.0-release-preparation/`; the previous
+metadata-only archive is retained in `previous-2181add/`. None is committed or
+published. The current archive SHA-256 is
+`5736a9fb23c469b3cf6fa9d27a5fbededf1c1b094eef80879f5a6188eee95963`.
 
 These checks validate the prepared archive, not a tagged release. Rebuild and
 verify from the final merged release commit before publication.

@@ -18,8 +18,8 @@ consumer changes, and the listing contract below for field meanings.
 
 The approved semantics and resource decisions are recorded in
 [XORCYST_V2_CONTRACTS.md](XORCYST_V2_CONTRACTS.md), with the
-[performance protocol](design/v2/PERFORMANCE.md) and
-[object wire layout](design/v2/OBJECT_WIRE_DRAFT.md).
+[performance protocol](doc/performance.md) and
+[object wire layout](doc/object-format.md).
 
 Build and test
 --------------
@@ -260,7 +260,7 @@ The owner accepted small absolute costs for review, while material regressions
 and large-project costs still require attention. Do not spend disproportionate
 effort tuning single-digit milliseconds. The accepted small-link memory overhead
 is documented separately; analysis retains its below-1.30× memory gate. See
-`design/v2/PERFORMANCE.md` and contract sections 12, 13 and 15 for the decisions.
+`doc/performance.md` and contract sections 12, 13 and 15 for the decisions.
 
 Maintainer builds
 -----------------

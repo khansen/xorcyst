@@ -1,5 +1,5 @@
 {
-  "origin": "D1 design/core/sizeof-capture-observations.json; approved v2 expectations",
+  "origin": "D1 sizeof-capture observations (Git history at 9a273fa, design/v2/sizeof-capture-observations.json); approved expectations",
   "cases": [
     {
       "id": "ram-adjacent",
