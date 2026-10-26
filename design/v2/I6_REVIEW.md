@@ -63,7 +63,9 @@ suite does exercise its word-conversion helper. Existing allocation/collector,
 RAM-PC and verbose-output limitations are described rather than concealed.
 
 Report blockers separately from optional improvements. A review is not owner
-approval. After approval: publish XORcyst first, run CI, then publish the
-master-based Nesrev tooling branch with its exact producer pin; verify both
-merged heads before tagging 2.0.0. No tag or system installation is authorized
-by the local-review handoff itself.
+approval. After approval: publish XORcyst first, run CI and merge, then re-pin
+the master-based Nesrev tooling branch to the actual merged producer commit
+before publishing it. Verify both merged heads and complete the private
+projects-workflow gate in `I6_RELEASE_CHECKLIST.md` before release or system
+installation. No tag or system installation is authorized by the local-review
+handoff itself.

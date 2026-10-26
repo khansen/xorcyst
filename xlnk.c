@@ -254,8 +254,16 @@ int main(int argc, char **argv)
         }
         else if (key == 'h')
         {
-            puts("Usage: xlnk [-qsv] [-o FILE] SCRIPT\nLinks XOROBJ2 objects; v1 objects are "
-                 "not supported.");
+            puts("Usage: xlnk [OPTION...] SCRIPT\n"
+                 "Link XOROBJ2 objects using SCRIPT. Rebuild older objects with xasm.\n"
+                 "\n"
+                 "  -o, --output=FILE          Set the default output file\n"
+                 "  -q, -s, --quiet, --silent  Suppress warnings and progress output\n"
+                 "  -v, --verbose             Report linked, copied and output files\n"
+                 "  -h, --help, --usage        Display this help and exit\n"
+                 "  -V, --version             Print the program version and exit\n"
+                 "\n"
+                 "Arguments required by long options are also required by their short forms.");
             return 0;
         }
         else

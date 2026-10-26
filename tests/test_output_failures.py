@@ -387,16 +387,10 @@ class OutputFailures(unittest.TestCase):
                         blocked.chmod(0)
                     try:
                         result = self.run_xasm(*flags, nl=protection == 'nl', umask=0o027)
-                        if False:
-                            self.assertEqual(result.returncode, 0, result.stderr.decode())
-                            self.assertFalse(listing.is_symlink())
-                            self.assertEqual(stat.S_IMODE(listing.stat().st_mode), 0o640)
-                            json.loads(listing.read_text())
-                        else:
-                            self.assertEqual(result.returncode, 3, result.stderr.decode())
-                            self.assertIn(b'cannot resolve output path', result.stderr)
-                            self.assertTrue(listing.is_symlink())
-                            self.assertEqual({path: path.read_bytes() for path in previous}, previous)
+                        self.assertEqual(result.returncode, 3, result.stderr.decode())
+                        self.assertIn(b'cannot resolve output path', result.stderr)
+                        self.assertTrue(listing.is_symlink())
+                        self.assertEqual({path: path.read_bytes() for path in previous}, previous)
                         self.assert_no_temporary_files()
                     finally:
                         blocked.chmod(0o700)

@@ -36,6 +36,17 @@ require linking. CPU addresses are not file offsets.
 `xlnk --verbose` reports linked/copied inputs and published output paths. It
 no longer prints the old RAM symbol-map dump.
 
+Linker errors remain located, but some messages are less specific: backward
+padding and bank overflows report a layout limit, invalid RAM ranges report
+`invalid RAM block`, and missing bank sizes report `invalid bank size or origin`.
+Scripts must use a distinct path for each `output{}` and cannot `copy{}` an
+output of the same invocation. Write an intermediate file in a separate link
+invocation when a later step needs to consume it.
+
+Missing local names and implicit external names reached through captured aliases
+are diagnosed at the alias definition, rather than at its later use. Multiple
+missing-local diagnostics can appear in reverse source order.
+
 ## Analysis consumers
 
 Remove `--listing-version` from invocations. JSON and NDJSON listings always use

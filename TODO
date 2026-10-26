@@ -10,6 +10,11 @@
   Nesrev tool pin and shared tooling changes on a branch from public master.
   Never push Nesrev projects-branch history. No release tag or system install
   precedes owner approval and green CI.
+- Re-pin Nesrev to the actual XORcyst merge commit before publishing its PR;
+  the local review commit may change under squash/rebase. Before release or
+  installation, activate the tested local projects integration together with
+  the tool switch. See design/v2/I6_RELEASE_CHECKLIST.md; migration is prepared
+  locally, while the live checkout remains on its current toolchain.
 - Required gates: exact frozen Metroid/Zelda products and all 15 source-built
   ROMs (dpadhero2 is mandatory), Nesrev consumers/bundles, clean source archive,
   installed normal tools, tests and sanitizers. Frozen converter assets and

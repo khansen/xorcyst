@@ -17,16 +17,18 @@ Historical contracts, decisions and review evidence remain in `design/v2/`.
 This is more than a target rename. Review the removed conditionals and tests
 against `I6_TEST_MIGRATION.md`. Existing expression controls also exposed
 captured aliases bypassing undeclared-name checks: missing scoped locals now
-reject, and implicit external aliases warn at their use. The prototype's
+reject, and implicit external aliases warn at their alias definition. The prototype's
 ineffective linker verbose flag now reports file progress; the old verbose RAM
 symbol-map dump is not retained. Both changes are described in the review
 prompt and user documentation.
 
 Nesrev's five shared producers drop `--listing-version=2`. Its docs require the
-normal 2.0 tools and its CI pin is set to the local XORcyst commit after that
-commit exists. Publish the producer first after approval. This avoids a cyclic
-commit reference; the validation manifest hashes the eight paired tooling/docs
-files, while the pin is visible directly in the paired commit.
+normal 2.0 tools. The current CI pin identifies the local reviewed XORcyst commit;
+after XORcyst merges, re-pin to the actual merged commit before publishing the
+Nesrev PR. A squash/rebase merge may change the ID. The validation manifest
+hashes the eight paired tooling/docs files, while the pin is visible directly
+in the paired commit. See `I6_RELEASE_CHECKLIST.md` for the separate private
+projects-workflow gate before release or system installation.
 
 ## Build, package and tests
 

@@ -126,6 +126,9 @@ class Expressions(unittest.TestCase):
                             result, output = self.assemble(source, pure, debug, listing)
                             self.assertEqual(result.returncode, 1, result.stderr.decode())
                             self.assertIn(b"undefined local label `@@x'", result.stderr)
+                            definition_line = 3 if pure else 2
+                            self.assertIn(f"input.asm:{definition_line}: error: undefined local label `@@x'".encode(),
+                                          result.stderr)
                             self.assertEqual(output.read_bytes(), b'previous output')
 
     def test_repeated_local_alias_definitions_compare_the_bound_labels(self):
@@ -492,6 +495,8 @@ class Expressions(unittest.TestCase):
         result, output = self.assemble(".word Value\nValue .equ Alias\nAlias .equ RemoteLabel\n", False)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn(b"RemoteLabel' undeclared", result.stderr)
+        self.assertIn(b"input.asm:3: warning: `RemoteLabel' undeclared; assuming external label", result.stderr)
+        self.assertEqual(result.stderr.count(b"RemoteLabel' undeclared"), 1)
         (self.root / 'provider.asm').write_text('.public RemoteLabel\nRemoteLabel: .byte $AA\n')
         provider = subprocess.run([str(XASM), 'provider.asm', '-o', 'provider.o'],
                                   cwd=self.root, capture_output=True)
