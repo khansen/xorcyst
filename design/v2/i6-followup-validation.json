@@ -2,7 +2,8 @@
   "base": "8e354892d4915d2861872b3d06ab43ebdf235d56",
   "date": "2026-10-26",
   "documentation_only_updates": [
-    "TODO trimmed to unresolved product work after review; runtime and recorded test evidence unchanged."
+    "TODO trimmed to unresolved product work after review; runtime and recorded test evidence unchanged.",
+    "Owner approved 7105ea7 on 2026-10-26; approval and coordination status recorded. Runtime and test evidence unchanged."
   ],
   "evidence": {
     "build.log": {
@@ -144,6 +145,11 @@
       }
     }
   },
+  "owner_approval": {
+    "commit": "7105ea792fc373057cbd74fdec548ef47aa7a4b3",
+    "date": "2026-10-26",
+    "record": "design/v2/I6_APPROVAL.md"
+  },
   "source_hashes": {
     ".github/workflows/ci.yml": {
       "sha256": "b0e0007fb6e3a4a79169c4fe06074bf296acf415e0b052d80c0fa3fe590bdbd5",
@@ -178,12 +184,12 @@
       "size": 53218
     },
     "XORCYST_V2_CONTRACTS.md": {
-      "sha256": "2111ffe6a68e3097efec262ad620ed9ffe37ed0167c08e902a01e9243f0f46a3",
-      "size": 53894
+      "sha256": "33a05c478246a7517e5872f6701d53cf7188e59bcc55f143ac39479d56e33b87",
+      "size": 54096
     },
     "XORCYST_V2_DESIGN.md": {
-      "sha256": "1741374ffd4453f69a71deef4a5036de4f9dac13b37ef4445763c57979a7489b",
-      "size": 50095
+      "sha256": "21fdb657d755f6b5c9aca408d815b0a219622569b7183466d4059d0a4f0b39fc",
+      "size": 50291
     },
     "astnode.c": {
       "sha256": "8a5cbc22a00860c18c002c09bc866d5293ca154727d3d7f367d074dde261ffbb",
@@ -229,13 +235,17 @@
       "sha256": "32b07765bda77e739697eb20fbcd0dd45794166ba098036c8bc202e3730c2a89",
       "size": 878
     },
+    "design/v2/I6_APPROVAL.md": {
+      "sha256": "7793e8991b2bec86b963c19a3370299f41565083ca9f3294eee90d71d15d26f6",
+      "size": 1244
+    },
     "design/v2/I6_ARTIFACT_SIZES.json": {
       "sha256": "a800093a8fead8a8cebec6c9f7e1efaf8ddff6198f11e4d8228880ac6ce25739",
       "size": 20872
     },
     "design/v2/I6_RELEASE_CHECKLIST.md": {
-      "sha256": "4730a90d1ec671cc6839d8b38c376f68720ec1f6eeacce5dd42a883efd13e12c",
-      "size": 4123
+      "sha256": "31945d204cae84cdabf6c6b36ce0389e15b4a1856368eea033f8d592f21b852d",
+      "size": 4165
     },
     "design/v2/I6_REVIEW.md": {
       "sha256": "c54e99723cb8cd1470985f5d7f974ba9768dbd203fe00bc538d4d83d4f41023d",
@@ -810,7 +820,7 @@
       "size": 106587
     }
   },
-  "status": "Local review follow-up; I6 approval and activation pending",
+  "status": "I6 owner-approved at 7105ea7; CI, merge and coordinated activation pending",
   "tools": {
     "xasm": {
       "sha256": "ae9458f2d02af77f12a541e133079e195f5673946f3cf2acdca597f5e3bd94e0",

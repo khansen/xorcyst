@@ -1,12 +1,13 @@
 # I6 coordination before release and installation
 
 The independent review cleared XORcyst `8e35489` and paired public-master
-Nesrev `c6879021e` with no blockers. This is not owner approval. The small
-follow-up changes and their checks are recorded in `I6_REVIEW_FOLLOWUP.md`.
+Nesrev `c6879021e` with no blockers. The owner approved the cutover at `7105ea7`
+on 2026-10-26; see `I6_APPROVAL.md`. The small follow-up changes and their
+checks are recorded in `I6_REVIEW_FOLLOWUP.md`.
 
 ## Public producer and tooling
 
-1. Obtain owner approval of the reviewed cutover before publishing its PR.
+1. Owner approval is recorded. Publish the reviewed cutover PR.
 2. Merge XORcyst only after CI is green. Read the actual merge commit from the
    PR and verify that it is on `origin/master`. Do not assume the reviewed
    branch SHA survived a squash or rebase merge.

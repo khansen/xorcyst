@@ -10,8 +10,11 @@ owner approval are distinct; the approval record is in section 8.
 
 **Gate:** D0 and D1 review and owner approval are complete. Implementation
 follows the sequence in section 7 after the approved D1 revision is merged.
-I1–I5 are approved and merged. I6 replaces the installed targets locally and
-awaits independent review and owner approval; no 2.0.0 release is tagged.
+I1–I5 are approved and merged. I6 completed independent review and received
+owner approval at `7105ea7` on 2026-10-26. CI, merge and coordinated workflow
+activation remain release gates; no 2.0.0 release is tagged. The source checkout
+records approval and the remaining steps in `design/v2/I6_APPROVAL.md` and
+`design/v2/I6_RELEASE_CHECKLIST.md`.
 
 D1 work and its approval record are in the
 [contracts](XORCYST_V2_CONTRACTS.md) and
