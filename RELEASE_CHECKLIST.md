@@ -1,8 +1,8 @@
 # 2.0.0 release coordination
 
-Updated 2026-10-26. The owner approved I6 at `7105ea7`. The final release
-metadata is being prepared on a local branch; the owner has explicitly asked
-not to open the 2.0.0 release PR yet. No tag or release is published.
+Updated 2026-10-26. The owner approved I6 at `7105ea7` and has now authorized
+creating the 2.0.0 release. Publish the prepared metadata through a PR, merge
+on green CI, and build the release archive from that exact merged commit.
 
 ## Public producer and tooling: merged
 
@@ -19,7 +19,7 @@ not to open the 2.0.0 release PR yet. No tag or release is published.
   Both pass locally; the old launch fails the new lifetime assertion in both
   scratch controls. Production watcher code is unchanged.
 
-## Private projects workflow: full rebase prepared
+## Private projects workflow: full rebase activated
 
 The owner requested a full rebase onto public master, replacing the earlier
 cherry-pick integration plan. All 1,189 private commits replayed without
@@ -43,28 +43,26 @@ warnings are present in the original project files. This is not a strict-docs
 pass and no archive history was rewritten to hide the warnings.
 
 A complete Git bundle of the original projects history and earlier migration
-branches is retained outside both repositories. The live checkout remains at
-`abc8ae3e1`; its five untracked files are preserved. System-installed tools
-still report 1.9.12. The root-owned `/usr/local/bin` installation requires
-administrator authorization.
+branches is retained outside both repositories. The live `projects` checkout
+now uses the verified full rebase at `3b471603b`; all five untracked files are
+preserved byte-for-byte, and the branch has no upstream. Nothing private was
+pushed. Both system-installed tools report 2.0.0, and their disassembled code
+matches the reviewed release build. The eight producer setups were repeated
+from the live checkout with those installed tools: all five reference PRGs
+match, listing schema 2 is validated against their bytes, and Devil World's
+renderer passes with a synthetic palette. No emulator was launched.
+The live checkout also passes the two listing-consumer tests (16 subcases)
+and all 33 analysis-bundle tests with the installed tools.
 
 ## Remaining release gates
 
-1. Complete local review of the release metadata. Do not open the release PR,
-   push the release branch, tag, or publish until the owner resumes that work.
-2. Recheck the live projects head and local changes. Activate the verified full
-   rebase without overwriting untracked files, and switch the installed tools
-   together. Preserve the old tool installation for recovery. Never push
-   `projects` or any branch containing private project history.
-3. Verify the actual default `xasm`/`xlnk` paths and versions, the listing
-   consumers, and the exact project PRGs after activation. Preparation alone
-   is not activation, and a PATH assumption is not evidence of installation.
-4. After release approval, publish the metadata PR and merge on green CI.
+1. Publish the owner-approved metadata PR and merge on green CI.
    Build the release archive from the exact merged tree, verify its contents
    and checksum, then tag and publish v2.0.0 as a normal release.
-5. Remove completed integration branches/worktrees after their contents are
+2. Remove completed integration branches/worktrees after their contents are
    preserved and the corresponding gates have passed. Keep unrelated unmerged
-   feature work and uncommitted changes.
+   feature work and uncommitted changes. Never push `projects` or any branch
+   containing private project history.
 
 ## Local release preparation checks
 
