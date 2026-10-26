@@ -7,8 +7,7 @@ These contracts implement the decisions in [the approved D0 scope](XORCYST_V2_DE
 merged as `162dacc`. They define interfaces and acceptance cases, not C APIs or
 runtime code. I1–I6 are approved and merged. I6 uses the normal tool names and
 received owner approval at `7105ea7` on 2026-10-26 after independent review.
-Release coordination is recorded in the source checkout's
-`RELEASE_CHECKLIST.md`. The frozen-input identities in
+The frozen-input identities in
 `tests/projects/baselines.json` and
 [performance protocol](doc/performance.md) are included in this approval.
 Private sources, ROMs and raw baseline evidence are not included in release

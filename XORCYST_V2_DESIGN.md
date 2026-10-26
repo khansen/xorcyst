@@ -11,8 +11,7 @@ owner approval are distinct; the approval record is in section 8.
 **Gate:** D0, D1 and I1–I6 are approved and merged. I6 received owner approval
 at `7105ea7` on 2026-10-26 after independent review. Section 7 preserves the
 completed implementation sequence. Historical approval and review records
-remain in [Git history](https://github.com/khansen/xorcyst/tree/9a273fa081524e3d55d608b3c9587ad55261aca4/design/v2); current release coordination is in
-`RELEASE_CHECKLIST.md` in the source checkout.
+remain in [Git history](https://github.com/khansen/xorcyst/tree/9a273fa081524e3d55d608b3c9587ad55261aca4/design/v2).
 
 D1 work and its approval record are in the
 [contracts](XORCYST_V2_CONTRACTS.md) and
