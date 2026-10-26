@@ -2,9 +2,9 @@
 
 Maintainer guidance distilled from the 2.0 implementation and independent
 reviews. This document concerns future 2.x work. Existing semantic decisions
-remain in [the contract](XORCYST_V2_CONTRACTS.md), resource policy in
-[the performance protocol](doc/performance.md), and release coordination in
-`RELEASE_CHECKLIST.md`. The differential harness proposed below is future work.
+remain in [the contract](XORCYST_V2_CONTRACTS.md) and resource policy in
+[the performance protocol](doc/performance.md). The differential harness
+proposed below is future work.
 This source-only document is not installed or included in the release archive.
 
 ## Start with evidence and a cost model
