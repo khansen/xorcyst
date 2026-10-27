@@ -36,6 +36,17 @@ EXTRA_DIST = astproc.c parser.y scanner.l parser.h \
   tests/projects/freeze_baselines.py tests/projects/freeze_gate_assets.py \
   tests/projects/check_object_projects.py tests/projects/measure_object_projects.py \
   tests/projects/measure_analysis.py \
+  tests/test_differential.py \
+  tests/differential/README.md tests/differential/provenance.json \
+  tests/differential/baseline.json tests/differential/build_reference.py \
+  tests/differential/analysis_gen.py tests/differential/link_gen.py \
+  tests/differential/assignment_gen.py tests/differential/cases.py \
+  tests/differential/common.py tests/differential/products.py \
+  tests/differential/run.py tests/differential/replay.py tests/differential/reporting.py \
+  tests/differential/fixtures/analysis.asm tests/differential/fixtures/captures.asm \
+  tests/differential/fixtures/invalid.asm tests/differential/fixtures/map.txt \
+  tests/differential/fixtures/link/0.asm tests/differential/fixtures/link/1.asm \
+  tests/differential/fixtures/link/link.s \
   ir/value.c ir/value.h ir/extent.h ir/layout.c ir/layout.h ir/README.md \
   man1/xasm.h2m man1/xlnk.h2m \
   tests/coverage_directives_control.asm \
@@ -124,6 +135,16 @@ check-local:
 
 installcheck-local:
 	python3 "$(srcdir)/tests/test_installation.py" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(docdir)" "$(DESTDIR)$(mandir)/man1"
+
+# Optional: the default baseline build needs local Git history. Ordinary check
+# only validates the harness against the current tools and deliberate mutants.
+# Set DIFFERENTIAL_OUTPUT to a new directory for each run.
+DIFFERENTIAL_OUTPUT = differential-results
+check-differential:
+	PYTHONDONTWRITEBYTECODE=1 python3 "$(srcdir)/tests/differential/run.py" \
+	  --candidate-dir "$(abs_builddir)" --output "$(DIFFERENTIAL_OUTPUT)" $(DIFFERENTIAL_FLAGS)
+
+.PHONY: check-differential
 
 DISTCHECK_CONFIGURE_FLAGS = --disable-maintainer-mode YACC=: LEX=: HELP2MAN=:
 

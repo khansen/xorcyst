@@ -28,7 +28,7 @@ Normal builds use the checked-in parser, scanner, man pages, and configure
 script. A C compiler, make, and a POSIX shell are required; Bison, Flex, and
 help2man are not required.
 On macOS, the command-line developer tools provide the CoreFoundation framework
-used for filesystem path comparison. The test suite also requires Python 3.
+used for filesystem path comparison. The test suite also requires Python 3.9+.
 
     ./configure --disable-maintainer-mode
     make -j2
@@ -41,6 +41,14 @@ the complete regression suite, and checks installation and uninstallation.
 Symbol-table, AST/JSON, malformed-input, and output-failure tests also run under
 ASan/UBSan on Linux. Tests use generated
 fixtures and do not require game ROMs or a NESrev checkout.
+
+For generated-program comparisons against the pinned 2.0.0 release, run
+`make check-differential DIFFERENTIAL_OUTPUT=/absolute/new/results` from a Git
+checkout. It builds the reference from local history and checks 100 binary and
+100 multi-unit programs with a five-minute runtime budget, excluding compilation.
+The optional check needs Python 3.9 or later; ordinary `make check` requires no
+reference build. See [tests/differential/README.md](tests/differential/README.md)
+for coverage, replay, reduction and explicit baseline/candidate tool paths.
 
 See xorcyst.texinfo and the doc/ directory for the assembly language and linker
 script reference. `xasm --help` lists all current command-line options, as do

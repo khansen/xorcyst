@@ -5,6 +5,15 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      differential_cases:
+        description: Generated programs per path (larger campaigns are opt-in)
+        default: '100'
+        type: string
+      differential_budget:
+        description: Differential wall-clock budget in seconds (excludes builds)
+        default: '300'
+        type: string
 
 permissions:
   contents: read
@@ -40,6 +49,59 @@ jobs:
           make -j2
       - name: Test source archive, installed tools, and uninstall
         run: make distcheck
+
+  differential:
+    name: Differential (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 45 || 15 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    env:
+      CC: cc
+      CFLAGS: -O2 -g -Werror
+      DIFFERENTIAL_CASES: ${{ inputs.differential_cases || '100' }}
+      DIFFERENTIAL_BUDGET: ${{ inputs.differential_budget || '300' }}
+    steps:
+      - name: Validate campaign limits
+        run: |
+          python3 - <<'PY'
+          import math, os
+          budget = float(os.environ['DIFFERENTIAL_BUDGET'])
+          cases = int(os.environ['DIFFERENTIAL_CASES'])
+          if not math.isfinite(budget) or not 0 < budget <= 1800 or not 1 <= cases <= 10000:
+              raise SystemExit('CI requires 1..10000 cases per path and a budget in (0, 1800] seconds')
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Build candidate from checked-in sources
+        run: |
+          ./configure --disable-maintainer-mode YACC=: LEX=: HELP2MAN=:
+          make -j2
+      - name: Validate the differential harness
+        run: python3 -B tests/test_differential.py
+      - name: Build pinned reference and compare generated programs
+        run: |
+          python3 -B tests/differential/run.py \
+            --candidate-dir "$GITHUB_WORKSPACE" \
+            --cache "$RUNNER_TEMP/xorcyst-reference-cache" \
+            --output "$RUNNER_TEMP/differential-results" \
+            --binary-cases "$DIFFERENTIAL_CASES" --link-cases "$DIFFERENTIAL_CASES" \
+            --budget "$DIFFERENTIAL_BUDGET"
+      - name: Retain coverage, generated sources and failure bundles
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: differential-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/differential-results
+            ${{ runner.temp }}/xorcyst-reference-cache/*.log
+            ${{ runner.temp }}/xorcyst-reference-cache/*/build.json
+          if-no-files-found: warn
+          retention-days: 14
 
   sanitizers:
     name: ASan and UBSan
