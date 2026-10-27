@@ -169,7 +169,11 @@ def execute(case, inputs, tools, work, timeout, deadline):
     if accepted and case['kind'] == 'binary' and 'o.bin' in artifacts:
         reference = next((arg.split('=', 1)[1] for arg in args if arg.startswith('--compare=')), None)
         if reference in inputs:
-            expected_status = 0 if artifacts['o.bin'] == inputs[reference] else 5
+            # Default --compare checks only the common prefix. Reductions may
+            # shorten the binary while retaining the original reference input.
+            assembled, expected = artifacts['o.bin'], inputs[reference]
+            overlap = min(len(assembled), len(expected))
+            expected_status = 0 if assembled[:overlap] == expected[:overlap] else 5
             if steps[-1]['returncode'] != expected_status:
                 errors.append('comparison status disagrees with emitted/reference bytes')
     content = {}

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build a pinned reference from local Git history; never downloads or installs."""
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
@@ -8,10 +10,13 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import tarfile
 import tempfile
+
+from common import stop_process
 
 ROOT = Path(__file__).resolve().parents[2]
 PIN = json.loads(Path(__file__).with_name('baseline.json').read_text())
@@ -72,6 +77,34 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+@contextmanager
+def reference_lock(path):
+    """Keep one persistent lock inode per key, including across failed builds."""
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        require_owned(path)
+        fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+    else:
+        os.fchmod(fd, 0o600)
+    with os.fdopen(fd, 'r+b') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def run_build_command(command, timeout=180, **kwargs):
+    """Stop descendants and reap the build driver before scratch cleanup."""
+    proc = subprocess.Popen(command, start_new_session=True, **kwargs)
+    try:
+        returncode = proc.wait(timeout=timeout)
+        if returncode:
+            raise subprocess.CalledProcessError(returncode, command)
+    except BaseException:
+        stop_process(proc)
+        proc.wait()
+        raise
+
+
 def build_reference(cache, repo=ROOT):
     compiler = shlex.split(os.environ.get('CC', 'cc'))
     if not compiler or not shutil.which(compiler[0]):
@@ -88,6 +121,13 @@ def build_reference(cache, repo=ROOT):
     }
     key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     cache = private_cache(cache)
+    # Hold the lock through lookup, compilation, logging and publication. A
+    # waiting caller validates and reuses the winner instead of building twice.
+    with reference_lock(cache / (key + '.lock')):
+        return build_locked_reference(cache, key, identity, repo)
+
+
+def build_locked_reference(cache, key, identity, repo):
     target = cache / key
     receipt = target / 'build.json'
     if target.exists() or target.is_symlink():
@@ -122,7 +162,7 @@ def build_reference(cache, repo=ROOT):
                 tar.extract(member, source)
         env = {k: v for k, v in os.environ.items() if k in
                ('PATH', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET', 'CPPFLAGS', 'LDFLAGS')}
-        env.update(CC=shlex.join(compiler), CFLAGS=flags, LC_ALL='C', TZ='UTC',
+        env.update(CC=shlex.join(identity['compiler']), CFLAGS=identity['cflags'], LC_ALL='C', TZ='UTC',
                    HOME=str(work), TMPDIR=str(work))
         commands = [
             ['./configure', '--disable-maintainer-mode', 'YACC=:', 'LEX=:', 'HELP2MAN=:'],
@@ -133,8 +173,8 @@ def build_reference(cache, repo=ROOT):
             os.fchmod(log.fileno(), 0o644)
             for command in commands:
                 log.write((shlex.join(command) + '\n').encode()); log.flush()
-                subprocess.run(command, cwd=source, env=env, stdout=log,
-                               stderr=subprocess.STDOUT, check=True, timeout=180)
+                run_build_command(command, cwd=source, env=env, stdout=log,
+                                  stderr=subprocess.STDOUT)
         packaged = work / 'tools'
         packaged.mkdir(mode=0o700)
         packaged.chmod(0o700)
@@ -149,7 +189,12 @@ def build_reference(cache, repo=ROOT):
     return target
 
 
+def interrupted(signum, frame):
+    raise KeyboardInterrupt(f'received signal {signum}')
+
+
 if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cache', type=Path, required=True)
     args = parser.parse_args()

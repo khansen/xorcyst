@@ -82,12 +82,17 @@ same compiler and settings for the candidate. CI does this explicitly. Cache
 keys include source revision, compiler command/version, flags, host/architecture
 and recipe hash. A receipt records the commands and executable checksums; cached
 executables are checked before reuse. Build logs survive a failed compilation.
+Concurrent builds of the same cache key share a lock: the first caller builds,
+and waiting callers validate and reuse its result. Each configure/make command
+has a 180-second limit; timeout or interruption kills its process group and
+reaps the driver before removing the temporary build directory.
 The default cache is under the current user's cache directory:
 `~/Library/Caches/xorcyst/reference` on macOS, or
 `${XDG_CACHE_HOME:-~/.cache}/xorcyst/reference` on Linux. Explicit `--cache` paths
 must also be owned by the current user and protected from other users' writes.
 New cache directories (including missing parents) use mode `0700`, tools use
-`0755`, and receipts and build logs use `0644`, independent of the umask.
+`0755`, receipts and build logs use `0644`, and lock files use `0600`, independent
+of the umask.
 Existing directories are checked without changing their permissions.
 Symlinked cache entries and unsafe writable parents are rejected. Checksums
 detect corruption within this trusted directory; they do not authenticate an

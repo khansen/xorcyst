@@ -7,10 +7,13 @@ import io
 import json
 import os
 from pathlib import Path
+import select
+import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import textwrap
 import time
 import unittest
 from unittest.mock import patch, Mock
@@ -21,7 +24,7 @@ from cases import controls, generate
 from common import OLD, compare, execute, invoke, normalize, structural_diff
 from products import CONFIGS, check_products, product_metrics
 from replay import reduce_lines, signature, replay
-from build_reference import build_reference, default_cache, private_cache, require_owned
+from build_reference import build_reference, default_cache, private_cache, require_owned, run_build_command
 from reporting import rejection_categories, zero_success_errors
 import run as runner
 
@@ -242,6 +245,13 @@ class ReviewRegressions(unittest.TestCase):
             (self.baseline / name).symlink_to(path)
         self.number = 0
 
+    def wait_for(self, predicate):
+        deadline = time.monotonic() + 10
+        while not predicate():
+            if time.monotonic() >= deadline:
+                self.fail('test process did not reach its synchronization point')
+            time.sleep(0.01)
+
     def mutant(self, body, run_real=True):
         self.number += 1
         directory = self.root / f'mutant-{self.number}'
@@ -461,6 +471,30 @@ class ReviewRegressions(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual([r['candidate']['steps'][0]['returncode'] for r in report['results']], [0, 5, 0, 5, 0])
 
+    def test_compare_status_uses_the_common_prefix_after_source_reduction(self):
+        tools = {name: {'path': path} for name, path in self.actual.items()}
+        for fmt in ('text', 'json'):
+            case = {'kind': 'binary', 'config': 'compare', 'existing': False,
+                    'args': ['--compare=ref.bin', '--compare-format=' + fmt]}
+            for source, reference, expected in (
+                    (b'nop\n', b'\xea\x60', 0),
+                    (b'nop\nrts\n', b'\xea', 0),
+                    (b'nop\n', b'', 0),
+                    (b'', b'\xea', 0),
+                    (b'nop\n', b'\x60\xea', 5)):
+                with self.subTest(format=fmt, source=source, reference=reference):
+                    inputs = {'p.asm': b'.org $8000\n' + source, 'ref.bin': reference}
+                    outcome = execute(case, inputs, tools, self.root / 'prefix', 2,
+                                      time.monotonic() + 5)
+                    self.assertTrue(outcome['accepted'])
+                    self.assertEqual(outcome['steps'][-1]['returncode'], expected)
+                    self.assertEqual(outcome['errors'], [])
+        candidate = self.mutant('status=5')
+        tools['xasm']['path'] = str(candidate / 'xasm')
+        outcome = execute(case, {'p.asm': b'.org $8000\nnop\n', 'ref.bin': b'\xea\x60'},
+                          tools, self.root / 'prefix', 2, time.monotonic() + 5)
+        self.assertIn('comparison status disagrees with emitted/reference bytes', outcome['errors'])
+
     def test_identical_tools_pass_the_complete_product_matrix(self):
         status, report, _ = self.workload(self.baseline, CONFIGS)
         self.assertEqual(status, 0, report['failures'])
@@ -535,7 +569,8 @@ class ReviewRegressions(unittest.TestCase):
             with self.subTest(umask=oct(mask)), \
                     patch('build_reference.shutil.which', return_value='/test/cc'), \
                     patch('build_reference.subprocess.check_output', return_value='test compiler\n'), \
-                    patch('build_reference.subprocess.run', side_effect=build) as commands:
+                    patch('build_reference.subprocess.run', side_effect=build) as commands, \
+                    patch('build_reference.run_build_command', commands):
                 previous = os.umask(mask)
                 try:
                     cache = self.root / f'explicit-{mask:o}' / 'cache'
@@ -544,7 +579,8 @@ class ReviewRegressions(unittest.TestCase):
                     modes = {cache.parent: 0o700, cache: 0o700, target: 0o700,
                              target / 'xasm': 0o755, target / 'xlnk': 0o755,
                              target / 'build.json': 0o644,
-                             cache / (target.name + '.log'): 0o644}
+                             cache / (target.name + '.log'): 0o644,
+                             cache / (target.name + '.lock'): 0o600}
                     for path, mode in modes.items():
                         self.assertEqual(path.stat().st_mode & 0o777, mode, str(path))
                     commands.reset_mock()
@@ -552,7 +588,8 @@ class ReviewRegressions(unittest.TestCase):
                     commands.assert_not_called()
                     # A cache hit must still reject entries made writable after
                     # publication, without silently repairing them or rebuilding.
-                    for path in (target, target / 'xasm', target / 'xlnk', target / 'build.json'):
+                    for path in (target, target / 'xasm', target / 'xlnk', target / 'build.json',
+                                 cache / (target.name + '.lock')):
                         path.chmod(modes[path] | 0o020)
                         with self.assertRaisesRegex(ValueError, 'not writable by others'):
                             build_reference(cache, repo=self.root)
@@ -561,6 +598,153 @@ class ReviewRegressions(unittest.TestCase):
                     commands.assert_not_called()
                 finally:
                     os.umask(previous)
+
+    def test_build_timeout_and_interruption_stop_descendants_and_reap_driver(self):
+        for interrupted in (False, True):
+            with self.subTest(interrupted=interrupted):
+                ready = self.root / f'child-{interrupted}'
+                reader, writer = os.pipe()
+                writer_open = True
+                launched = []
+                popen = subprocess.Popen
+                child_code = ('import os,sys,time\nfrom pathlib import Path\n'
+                              'Path(sys.argv[1]).write_text(str(os.getpid()))\ntime.sleep(10)\n')
+                driver_code = ('import subprocess,sys,time\n'
+                               f'subprocess.Popen([sys.executable,"-BI","-c",{child_code!r},sys.argv[1]],'
+                               'pass_fds=(int(sys.argv[2]),))\ntime.sleep(10)\n')
+
+                def launch(*args, **kwargs):
+                    nonlocal writer_open
+                    proc = popen(*args, **kwargs)
+                    launched.append(proc)
+                    os.close(writer)
+                    writer_open = False
+                    wait = proc.wait
+
+                    def synchronized_wait(timeout=None):
+                        if timeout is not None:
+                            self.wait_for(lambda: ready.exists() and ready.stat().st_size > 0)
+                            if interrupted:
+                                raise KeyboardInterrupt('test interruption')
+                        return wait(timeout=timeout)
+
+                    proc.wait = synchronized_wait
+                    return proc
+
+                try:
+                    exception = KeyboardInterrupt if interrupted else subprocess.TimeoutExpired
+                    with patch('build_reference.subprocess.Popen', side_effect=launch), \
+                            self.assertRaises(exception):
+                        run_build_command([sys.executable, '-BI', '-c', driver_code, str(ready), str(writer)],
+                                          timeout=0.05, pass_fds=(writer,),
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                    self.assertEqual(len(launched), 1)
+                    self.assertLess(launched[0].returncode, 0)
+                    with self.assertRaises(ChildProcessError):
+                        os.waitpid(launched[0].pid, os.WNOHANG)
+                    # Both driver and descendant inherited this pipe. EOF proves
+                    # they closed it, even if an orphan briefly remains a zombie.
+                    self.assertTrue(select.select([reader], [], [], 2)[0], 'build descendant survived')
+                    self.assertEqual(os.read(reader, 1), b'')
+                finally:
+                    if writer_open:
+                        os.close(writer)
+                    os.close(reader)
+                    for proc in launched:
+                        if proc.poll() is None:
+                            proc.kill()
+                        proc.wait()
+                    if ready.exists():
+                        try:
+                            os.kill(int(ready.read_text()), signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+
+    def test_concurrent_reference_builds_share_one_publication_and_log(self):
+        script = self.root / 'concurrent.py'
+        script.write_text(textwrap.dedent('''\
+            from contextlib import contextmanager
+            import os
+            from pathlib import Path
+            import sys
+            import tarfile
+            import time
+            from unittest.mock import patch
+            harness, cache, control = map(Path, sys.argv[1:])
+            sys.path.insert(0, str(harness))
+            import build_reference as builder
+            original_lock = builder.reference_lock
+            @contextmanager
+            def lock(path):
+                (control / f'lock-{os.getpid()}').touch()
+                with original_lock(path):
+                    yield
+            def git(command, **kwargs):
+                if command[0] != 'git':
+                    raise AssertionError(command)
+                if command[3] == 'archive':
+                    with tarfile.open(fileobj=kwargs['stdout'], mode='w'):
+                        pass
+                elif command[3] != 'cat-file':
+                    raise AssertionError(command)
+            def build(command, **kwargs):
+                if command[0] == './configure':
+                    (control / f'build-{os.getpid()}').touch()
+                    kwargs['stdout'].write(f'owner={os.getpid()}\\n'.encode())
+                    kwargs['stdout'].flush()
+                    deadline = time.monotonic() + 10
+                    while not (control / 'release').exists():
+                        if time.monotonic() > deadline:
+                            raise RuntimeError('test build was not released')
+                        time.sleep(0.01)
+                elif command == ['make', '-j2']:
+                    for name in ('xasm', 'xlnk'):
+                        tool = Path(kwargs['cwd']) / name
+                        tool.write_text(f'reference {name}\\n')
+                        tool.chmod(0o775)
+                else:
+                    raise AssertionError(command)
+            with patch.object(builder, 'reference_lock', lock), patch.object(builder, 'run_build_command', build), \\
+                    patch.object(builder.shutil, 'which', return_value='/test/cc'), \\
+                    patch.object(builder.subprocess, 'check_output', return_value='test compiler\\n'), \\
+                    patch.object(builder.subprocess, 'run', git):
+                print(builder.build_reference(cache))
+            '''))
+        control = self.root / 'concurrent-control'
+        control.mkdir()
+        cache = self.root / 'concurrent-cache'
+        command = [sys.executable, '-BI', str(script), str(Path(__file__).with_name('differential')),
+                   str(cache), str(control)]
+        processes = []
+        try:
+            processes.append(subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE))
+            self.wait_for(lambda: len(list(control.glob('build-*'))) == 1)
+            processes.append(subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE))
+            self.wait_for(lambda: len(list(control.glob('lock-*'))) == 2)
+            time.sleep(0.05)
+            self.assertEqual(len(list(control.glob('build-*'))), 1)
+            self.assertTrue(all(proc.poll() is None for proc in processes))
+            (control / 'release').touch()
+            targets = []
+            for proc in processes:
+                stdout, stderr = proc.communicate(timeout=10)
+                self.assertEqual(proc.returncode, 0, stderr.decode())
+                targets.append(Path(stdout.decode().strip()))
+            self.assertEqual(targets[0], targets[1])
+            builders = list(control.glob('build-*'))
+            self.assertEqual(len(builders), 1)
+            log = (cache / (targets[0].name + '.log')).read_text()
+            self.assertEqual(log.count('owner='), 1)
+            self.assertIn('owner=' + builders[0].name.split('-')[1], log)
+            self.assertIn('make -j2', log)
+            self.assertTrue((targets[0] / 'build.json').is_file())
+            self.assertEqual((targets[0] / 'xasm').read_text(), 'reference xasm\n')
+        finally:
+            (control / 'release').touch()
+            for proc in processes:
+                if proc.poll() is None:
+                    proc.kill()
+                proc.communicate()
 
 
 if __name__ == '__main__':
