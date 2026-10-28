@@ -13,7 +13,7 @@ import traceback
 
 from build_reference import build_reference, default_cache
 from cases import controls, generate, jobs
-from common import compare, execute, save_raw, summary, tool_identity
+from common import compare, execute, interrupted, save_raw, summary, tool_identity
 from products import CONFIGS
 from reporting import aggregate, write_json, zero_success_errors
 
@@ -180,10 +180,6 @@ def main():
             not math.isfinite(n) or n <= 0 for n in (args.timeout, args.budget)):
         parser.error('counts must be nonnegative and time limits finite and positive')
     return run(args)
-
-
-def interrupted(signum, frame):
-    raise KeyboardInterrupt(f'received signal {signum}')
 
 
 if __name__ == '__main__':

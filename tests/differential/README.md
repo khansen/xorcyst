@@ -191,8 +191,10 @@ row-count magnitudes may shrink, but their paths and difference types remain.
 Defaults are 200 attempts and 60 seconds; minimality is not guaranteed.
 An explicit `--baseline-dir` or `--candidate-dir` permits replay with replacement
 builds. Replay returns 1 when the recorded signature reproduces, 0 when there are
-no differences, and 2 for a different signature or an incomplete replay. Its
-report identifies missing and newly observed difference classes.
+no differences, and 2 for a different signature or an incomplete replay. SIGINT
+or SIGTERM stops and reaps the active tool process group and exits 130 during
+replay or reduction. Its report identifies missing and newly observed difference
+classes.
 
 Classify a difference before changing code: regression, inherited defect,
 harness defect, or proposed semantic change. Add minimized regressions to the

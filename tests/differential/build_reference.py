@@ -16,7 +16,7 @@ import subprocess
 import tarfile
 import tempfile
 
-from common import stop_process
+from common import interrupted, stop_process
 
 ROOT = Path(__file__).resolve().parents[2]
 PIN = json.loads(Path(__file__).with_name('baseline.json').read_text())
@@ -187,10 +187,6 @@ def build_locked_reference(cache, key, identity, repo):
         (packaged / 'build.json').chmod(0o644)
         packaged.rename(target)
     return target
-
-
-def interrupted(signum, frame):
-    raise KeyboardInterrupt(f'received signal {signum}')
 
 
 if __name__ == '__main__':

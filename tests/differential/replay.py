@@ -5,10 +5,11 @@ import json
 import math
 from pathlib import Path
 import shutil
+import signal
 import sys
 import time
 
-from common import compare, execute, save_raw, tool_identity
+from common import compare, execute, interrupted, save_raw, tool_identity
 
 
 def reduce_lines(inputs, predicate, attempts=200):
@@ -140,6 +141,7 @@ def replay(args):
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bundle', type=Path)
     parser.add_argument('--output', type=Path, required=True)
@@ -154,6 +156,9 @@ if __name__ == '__main__':
         parser.error('attempts must be nonnegative and time limits positive')
     try:
         sys.exit(replay(args))
+    except KeyboardInterrupt:
+        print('Replay interrupted', file=sys.stderr)
+        sys.exit(130)
     except (ValueError, OSError, KeyError) as exc:
         print(f'Replay could not run: {exc}', file=sys.stderr)
         sys.exit(2)

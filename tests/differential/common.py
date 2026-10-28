@@ -33,6 +33,10 @@ def environment(work):
             'LC_ALL': 'C', 'TZ': 'UTC'}
 
 
+def interrupted(signum, frame):
+    raise KeyboardInterrupt(f'received signal {signum}')
+
+
 def stop_process(proc):
     """Kill the invocation's process group, tolerating exit/reap races on macOS."""
     try:

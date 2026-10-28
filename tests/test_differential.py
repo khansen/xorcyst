@@ -440,6 +440,47 @@ class ReviewRegressions(unittest.TestCase):
                 proc.kill()
             proc.communicate()
 
+    def test_sigterm_during_replay_and_reduction_stops_the_active_tool(self):
+        mutation = "p=Path('o.bin'); p.write_bytes(p.read_bytes()+b'X')"
+        status, report, original = self.workload(self.mutant(mutation))
+        self.assertEqual(status, 1)
+        bundle = original / report['failures'][0]
+        for reducing in (False, True):
+            with self.subTest(reducing=reducing):
+                counter = self.root / f'invocations-{reducing}'
+                threshold = 2 if reducing else 1
+                candidate = self.mutant(mutation + '\n' +
+                    f'p=Path({str(counter)!r}); n=int(p.read_text())+1 if p.exists() else 1\n'
+                    f'p.write_text(str(n))\nif n >= {threshold}:\n'
+                    " Path('running').write_text(str(os.getpid()))\n time.sleep(30)")
+                output = self.root / f'signal-replay-{reducing}'
+                command = [sys.executable, '-B', str(Path(runner.__file__).with_name('replay.py')),
+                           str(bundle), '--candidate-dir', str(candidate), '--output', str(output),
+                           '--timeout', '20'] + (['--reduce'] if reducing else [])
+                proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                child_pid = None
+                try:
+                    ready = output / 'work/running'
+                    self.wait_for(lambda: ready.exists() and ready.stat().st_size > 0)
+                    child_pid = int(ready.read_text())
+                    self.assertEqual(int(counter.read_text()), threshold)
+                    proc.terminate()
+                    stdout, stderr = proc.communicate(timeout=5)
+                    self.assertEqual(proc.returncode, 130, stdout + stderr)
+                    self.assertIn(b'Replay interrupted', stderr)
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(child_pid, 0)
+                    child_pid = None
+                finally:
+                    if proc.poll() is None:
+                        proc.kill()
+                    if child_pid is not None:
+                        try:
+                            os.kill(child_pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                    proc.communicate()
+
     def test_content_counts_and_all_configuration_rejections(self):
         self.assertEqual(product_metrics('i.json', b'[]')['records'], {'records': 0})
         self.assertEqual(product_metrics('i.json', b'[{"site_addr":"0x8000"}]')['records'], {'records': 1})
