@@ -1,10 +1,11 @@
 Open product work
 
-- Integrate the preserved reviewer tools into a portable, versioned differential
-  suite: 100 pure-binary and 100 multi-unit programs, coverage reporting and
-  reduction, targeting five minutes. Add Linux/macOS CI and reproducible pinned
-  baseline builds; then integrate fault injection and object fuzzing. See the
-  integration plan and completion criteria in DEVELOPMENT_STRATEGY.md.
+- Extend the generated-program differential suite with the preserved allocation,
+  publication and object-mutation tools. The bounded 100 binary / 100 multi-unit
+  runner, coverage, reduction, pinned reference build and Linux/macOS CI wiring
+  are in tests/differential/. Complete portable fault-tool integration and
+  validate fresh-host CI before retiring the broader integration item; see
+  DEVELOPMENT_STRATEGY.md and the suite's provenance map.
 - Report parser and analysis allocation failures reliably. Summary, text
   scope/source and xref data provenance can silently omit facts; index,
   consumer and coverage collectors can fail without explaining why.

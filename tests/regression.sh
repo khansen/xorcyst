@@ -4700,6 +4700,7 @@ python3 "$ROOT_DIR/tests/test_output_failures.py"
 python3 "$ROOT_DIR/tests/test_linker_outputs.py"
 python3 "$ROOT_DIR/tests/test_inputs.py"
 python3 "$ROOT_DIR/tests/test_build_configuration.py"
+python3 "$ROOT_DIR/tests/test_differential.py"
 python3 "$ROOT_DIR/tests/test_ir_values.py"
 
 python3 "$ROOT_DIR/tests/test_ir_layout.py"

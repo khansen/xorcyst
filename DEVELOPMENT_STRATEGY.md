@@ -3,8 +3,9 @@
 Maintainer guidance distilled from the 2.0 implementation and independent
 reviews. This document concerns future 2.x work. Existing semantic decisions
 remain in [the contract](XORCYST_V2_CONTRACTS.md) and resource policy in
-[the performance protocol](doc/performance.md). The differential harness
-proposed below is future work.
+[the performance protocol](doc/performance.md). The bounded generated-program differential is implemented in
+[tests/differential/](tests/differential/README.md); portable fault-tool integration
+remains future work.
 This source-only document is not installed or included in the release archive.
 
 ## Start with evidence and a cost model
@@ -41,21 +42,22 @@ frozen 1.9.12 sources, binaries and reviewed generators outside scratch storage.
 Record revisions, executable hashes, compiler flags, host requirements, seeds
 and invocation details. Keep generated reproducers, not only their seeds.
 
-For future 2.x comparisons, freeze a reference build from the actual 2.0.0
-release commit once it is published. Before publication, identify any reference
-by its exact candidate commit; do not call it a released baseline. Retain 1.9.12
-as a secondary oracle for compatibility investigations. Approved 2.0 corrections
+For future 2.x comparisons, use the pinned actual 2.0.0 release commit in
+`tests/differential/baseline.json`. The reference build recipe records its compiler,
+flags, host and executable hashes. Retain 1.9.12 as a secondary oracle for
+compatibility investigations. Approved 2.0 corrections
 must not be mistaken for regressions against v1.
 
-### Planned optional maintainer harness
+### Optional maintainer harness
 
-Adapt the useful reviewed generators into a small, reproducible check under
-`tests/`. Use explicit baseline/candidate tool paths, deterministic seeds,
-bounded case counts and timeouts, a minimal environment, and fresh scratch
-outputs. Generated cases should run without private ROMs. Port and test the
-generators before treating their output as trusted evidence.
+The maintained check is documented in [the suite README](tests/differential/README.md).
+It accepts explicit baseline/candidate tool directories or builds the pinned
+reference, uses deterministic seeds, bounded case counts and timeouts, a minimal
+environment and fresh outputs. Generated cases run without private ROMs. Its
+ordinary-suite controls exercise identical tools and intentional output,
+diagnostic and artifact mutations.
 
-The first deliverable is one optional command with two checks: 100 generated
+The optional command runs two generated checks: 100 generated
 pure-binary programs across every supported analysis product/format, and 100
 generated multi-unit object/link programs. Use fixed, recorded seeds and a
 five-minute wall-clock budget on the recorded maintainer machine, excluding
@@ -65,10 +67,10 @@ or a case timeout prevents completion, mark the run incomplete and identify
 what was omitted; do not silently shrink the matrix to claim a pass. Keep
 larger campaigns separately selectable.
 
-Preserved reviewer tools are starting points for that deliverable. Prefer the
-I6-era `adiff56.py` and `linki56.py` for two current-tool builds: they use the
-normal executable names and omit the removed listing selector. Their inherited
-comments still use some v1/v2 terminology. The earlier analysis set includes
+The maintained suite adapts the I6-era `adiff56.py` and `linki56.py`. Their
+originals omit the removed listing selector, but retain v1/v2 terminology and
+prototype baseline names in the linker runner; the adaptation uses normal tool
+names throughout. The earlier analysis set includes
 `agen.py`, `adiff.py`, `selfcheck.py`, `injsweep.py`, `stagetest.py` and
 `diagasan.py`, with `failalloc.c` and `failfs.c` interposers. The earlier linker
 set includes `linkdiff.py`, `objfuzz2.py` and `assigngen.py`. Also retain
@@ -128,12 +130,12 @@ An all-equal result can therefore cover little successful output. Report those
 denominators and uncovered categories rather than presenting equality as broad
 coverage.
 
-Once available, run the 200-program check before local review of runtime
-changes. Broaden the option combinations and failure cases for shared binding,
-evaluation, layout or publication changes and for release cutovers. Until the
-harness exists, identify the actual selected checks and their gaps. Longer
-campaigns belong to risky changes or an observed failure; documentation-only
-edits do not need them.
+Run the 200-program check before local review of runtime changes. Broaden the
+option combinations and failure cases for shared binding, evaluation, layout or
+publication changes and for release cutovers. Identify the actual selected
+checks and their gaps, including incomplete runs or omitted configurations.
+Longer campaigns belong to risky changes or an observed failure;
+documentation-only edits do not need them.
 
 Existing checks to reuse:
 
@@ -142,45 +144,31 @@ Existing checks to reuse:
   diagnostics and analysis products across several modes.
 - `tests/test_output_failures.py` and the IR allocation/ownership harnesses
   provide fault-injection controls. Keep test hooks out of production builds.
-- The missing reusable component is the generated-program differential across
-  analysis options and multi-unit linking. The project ROM gate alone does not
-  provide it. A timing script's built-in threshold is not a substitute for the
-  owner-approved performance policy.
+- The generated-program differential now covers analysis options and multi-unit
+  linking; its reports distinguish rejected cases from emitted products. The
+  project ROM gate alone does not provide it. A timing script's built-in threshold
+  is not a substitute for the owner-approved performance policy.
 
 ### Integration plan and completion criteria
 
-The harness is an active item in [TODO](TODO) and the next validation-tooling
-task. The external backup is a preservation step; usable tests belong in the
-repository. Implement this as separately reviewed tooling work, keeping the
-2.0 release preparation independent of a new test-framework project.
+The bounded differential, reducer, coverage report, pinned reference recipe and
+Linux/macOS workflow wiring are implemented in `tests/differential/`. The
+[provenance map](tests/differential/README.md#provenance-and-remaining-integration)
+identifies the preserved inputs and their maintained replacements. Normal runs
+never read the external evidence archive. The remaining integration work is:
 
-1. **Land the bounded differential.** Adapt `adiff56.py`, `linki56.py` and their
-   generator into `tests/differential/`, with the 200-program command and
-   coverage report described above. Include small public fixtures, structural
-   comparison, a reducer and reproducible failing-case bundles. Fold useful
-   assignment and self-consistency controls into this suite. Remove hard-coded
-   paths and audit normalizations and exclusions. Validate the harness using
-   identical builds and deliberately changed output, diagnostics and artifacts.
-2. **Make it reproducible and automatic.** Track a baseline source commit and
-   build recipe; build that reference and the candidate with matched settings.
-   Use an explicitly identified candidate until the actual 2.0.0 release commit
-   is available. Cache reference builds by revision, compiler, flags and host;
-   binaries on one developer's machine must not be required. After local review,
-   add the bounded fixed-seed check to Linux and macOS PR CI, with coverage and
-   failure bundles retained as artifacts. Keep larger campaigns manually
-   selectable. Keep ordinary `make check` usable without a reference build.
-3. **Integrate failure and malformed-input checks.** Adapt the allocation,
-   publication, backtrace and object-mutation tools into the existing fault and
-   object suites where practical. Track their synthetic fixtures. Prefer the
-   existing portable test hooks; add platform-specific interposers only where
-   necessary and validate each platform. Preserve the path/destination conditions
-   needed to reproduce individual failures. Keep expensive sweeps opt-in.
-4. **Retire dependence on the backup.** Record which maintained test or helper
-   replaces each useful reviewer tool, and which older variants are superseded.
-   Keep the original snapshot for provenance; normal development and CI must
-   never read it. Mark the TODO complete only when a fresh checkout on supported
-   Linux/macOS hosts can build the declared baseline and run the documented
-   checks without private projects, review scratchpads or owner-local files.
+1. Validate the configured PR workflow on fresh Linux/macOS hosts, retaining
+   coverage, failure bundles and reference-build receipts. Ordinary `make check`
+   must remain independent of a reference build.
+2. Adapt allocation, publication, backtrace and object-mutation tools into the
+   existing fault and object suites where practical. Track synthetic fixtures.
+   Prefer existing portable test hooks; validate any necessary platform-specific
+   interposers separately. Preserve exact path/destination conditions needed to
+   reproduce failures, and keep expensive sweeps opt-in.
+3. Update the provenance map when the remaining tools have maintained replacements
+   or are explicitly superseded. Keep the original snapshot for provenance.
+   Mark the broader TODO complete only when the declared checks run from fresh
+   Linux/macOS checkouts without private projects, scratchpads or owner-local files.
 
 For later 2.x releases, retain the pinned 2.0 reference for cumulative behavior
 checks and compare with the immediate base for changes under review. Update

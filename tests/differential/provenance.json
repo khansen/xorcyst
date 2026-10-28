@@ -1,0 +1,33 @@
+{
+  "archive_date": "2026-10-26",
+  "sources": {
+    "i6.sy6uP7/scripts/agen.py": {
+      "bytes": 14275,
+      "sha256": "32c2fb826765e7571fb9bea1b205bfbd5aa0829155d61929085d9ba5e23ae5b7"
+    },
+    "i6.sy6uP7/scripts/linki56.py": {
+      "bytes": 7861,
+      "sha256": "8b526ae0508d01af0a789947416b7293361ace56a17f548cd9c85eff7b06b97d"
+    },
+    "i6.sy6uP7/scripts/adiff56.py": {
+      "bytes": 7052,
+      "sha256": "efafe7bf4ee30467b5b98a42f5851238791fc2fe7ea59440351c0b7678240379"
+    },
+    "i5.zymPZV/scripts/ddmin.py": {
+      "bytes": 980,
+      "sha256": "1b5b425f80bae84c1e7306b44e410f24aad4129b51ddb17d9b0311e27f624fba"
+    },
+    "i5.zymPZV/scripts/jdiff.py": {
+      "bytes": 956,
+      "sha256": "849582ab7ba24f3f9f8652ac96922fe07c1c4d1c4469ea37be61d588fc9f6cad"
+    },
+    "i4.1VN84Z/scripts/assigngen.py": {
+      "bytes": 2080,
+      "sha256": "150919cb98a99be9e0453c5210ac0dfde516a0169b8f692d0d3d1ee2e1ec91d1"
+    },
+    "i5.zymPZV/scripts/selfcheck.py": {
+      "bytes": 3986,
+      "sha256": "98e5cafec18eec10eb9a526124a714d436f7f4ed755e05114298b60ece8f463b"
+    }
+  }
+}

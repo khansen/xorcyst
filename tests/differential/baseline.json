@@ -1,0 +1,5 @@
+{
+  "release": "2.0.0",
+  "revision": "8e2257f89827d0a274105a19a76cac7ffc42d2e5",
+  "cflags": "-O2 -g -Werror"
+}
