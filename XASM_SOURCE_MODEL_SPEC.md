@@ -1,6 +1,6 @@
 # xasm lossless source model
 
-Status: draft for independent review, 2026-11-01. Specification only; no public
+Status: revision 2 draft for focused independent review, 2026-11-01. Specification only; no public
 source-model interface is implemented by this branch. Baseline: XORcyst 2.0.0
 and repository commit `51dd295b89073b7858e4c6cf9a19776af7e9bbc7`.
 
@@ -29,6 +29,8 @@ layout, emitted operand ranges and diagnostics. A consumer may index, paginate,
 present, search text fields, and make edits using these records. It must not
 reparse assembly or evaluate expressions to fill a missing production fact.
 Independent test evaluators are useful cross-checks, not a production fallback.
+The saved-model validator and reconstructor in xasm's `tests/`, specified in §10,
+exercise that boundary without the exporter or original source as a reader.
 
 The consuming service owns edit transactions, stale-preimage checks, document
 ownership, generations, persistence, access permissions, review and Git. xasm
@@ -53,11 +55,11 @@ It types the following constructs, including literal-only and unreferenced cases
 | Construct | Required information |
 | --- | --- |
 | Global, `@@` local and anonymous labels | Every declaration; native scope and symbol identity; every reference and its binding |
-| `.EQU` | Declaration, complete expression, dependencies and resolved value; immutable single declaration per symbol |
+| `EQU` token in an EQU declaration | Declaration, complete expression, dependencies and resolved value; immutable single declaration per symbol; anonymous references in its expression are refused |
 | 6502 instructions | Parsed form, explicit `.W`, complete operand expression, final opcode/mode, access facts and emitted bytes |
-| `.DB`, `.BYTE`, `.DW` | Original directive spelling, statement boundaries, every operand, native operand ranges and bytes |
-| `.ORG` | Expression/value and segment transition, including repeated CPU origins |
-| `.END` | Explicit syntax record even though the current parser discards it; no implied emission |
+| `BYTE` or `WORD` token in an unnamed data statement with an expression list | Original spelling (including `.DB`, `.BYTE`, `.DW`, `.WORD` and undotted aliases), statement boundaries, every operand, native operand ranges and bytes |
+| `ORG` token | Expression/value and segment transition, including the implicit initial segment and repeated CPU origins |
+| `END` token | Explicit syntax record even though the current parser discards it; no implied emission |
 | Trivia and punctuation | Exhaustive byte coverage, including comments, whitespace and newline spelling |
 
 Integer expressions include nested arithmetic, bit operations, comparisons,
@@ -66,14 +68,27 @@ strings in byte data are included. The expression vocabulary in §6 is exhaustiv
 for this profile; other value kinds or operators cannot be hidden in a generic
 successful expression node. String-valued EQUs, string arithmetic and word-string
 expansion are outside this initial profile even if ordinary assembly accepts them.
+Any anonymous forward/backward reference in an EQU expression, including a nested
+one, is outside v1: its native binding can depend on each later EQU use. Refuse it
+even when the EQU is unused or currently has only one use. `@@` locals and `$` in
+supported EQUs keep their native declaration-context binding; they are not excluded.
 
 Includes, binary includes, character maps, macros, conditionals, loops, assignments
 and redefinition, `.DEFINE`/`.UNDEF`, structures, procedures, enums, reserve/fill
 directives, explicit code/data segment switches, imports/exports and object/link
-models are later profiles. Command-line symbol definitions are also outside v1;
-otherwise a symbol could lack the source declaration the editing contract needs.
-Other harmless CLI options retain their ordinary meaning. Any option that creates
-unmodelled semantic inputs must refuse certification rather than be ignored.
+models are later profiles. Named variable declarations and implicit/reserved storage
+are outside v1 even when written with a data token: `Foo .DB 1`, `.DB` alone and
+`.DB [3]` must refuse. `Foo: .DB 1` is a supported label followed by data.
+Command-line symbol definitions are outside v1; §3 assigns them CLI exit 2.
+
+Support is determined by native token **and grammar form**, not a directive's
+surface spelling or lowered AST kind alone. `.WORD` and `.DW` share `WORD`;
+undotted `DB` and `ORG` share their dotted forms' tokens and are supported.
+`DEFINE` is distinct from `EQU` even though both become `EQU_NODE`: `.DEFINE V 7`
+and `.DEFINE F` must refuse before that distinction is lost. The latter's synthetic
+zero has no authored expression span and must not be certified as an EQU literal.
+V1 does not broaden the accepted source grammar; byte preservation on a rejected
+input produces a diagnostic model, not acceptance (§10's byte-fixture table).
 
 The lexer/parser must inventory actual constructs before lowering discards them.
 A syntactically valid but unsupported construct returns
@@ -138,6 +153,7 @@ Schema versions and the executable release number are independent.
 | Strict single-declaration/construct profile | Only the explicitly requested new model | Additive; do not reject ordinary assembly globally |
 | Source identity and byte-offset spans in the new model | No existing schema field is reinterpreted | New schema; not instruction-record schema 4 by implication |
 | New native per-operand ranges | New model; existing data-reference meaning remains | Additive facts |
+| Byte preservation of rejected syntax | Empty files, bare CRLF, BOMs, missing final newlines and tokens after END remain subject to the existing grammar | Diagnostic capture only; making these accepted source is not proposed and would require an explicit v3 decision |
 | Data-row grouping | Spike capture disables adjacent-data grouping | Production must preserve existing listing grouping, including combined invocations, using separate statement identity; otherwise declare this a v3 change |
 | Replacement/removal of existing exports, changed field meanings or global declaration rules | Existing consumers or valid sources | Not proposed here; requires an explicit spec amendment and v3 |
 
@@ -147,6 +163,32 @@ switches to avoid a major release. This draft identifies no intentional existing
 public break. Final release numbering waits for the reviewed compatibility ledger
 and differential results. Prototype sidecars are private and need no compatibility
 adapter. The branch is a local specification proposal, not release approval.
+
+### CLI option policy for `asm-edit-v1`
+
+The table covers the baseline option families. Existing validation of each option
+still applies; newly introduced options need a profile classification before being
+accepted with a model request. An unsupported CLI combination exits 2 before
+assembly; unsupported source constructs exit 1 with a model capability diagnostic.
+
+| Options | Policy |
+| --- | --- |
+| `--pure-binary`, input path, `-o`/`--output`, new model/profile/diagnostics options | Required mode and explicit destinations; validate paths and profile before reading source |
+| `-D`/`--define` | Refuse with CLI exit 2, even if the supplied symbol would be unused; no source declaration exists for the edit model |
+| `--case-insensitive` | Supported; record in effective semantic options/input identity; `name` is the native normalized identifier, while `spelling` and source bytes remain exact |
+| `--swap-parens` | Supported; record in effective semantic options/input identity; lexical tokens/AST retain the native swapped interpretation, without rewriting source bytes |
+| `-I`/`--include-path` | Accepted and recorded in invocation/search order; unused search paths do not affect v1 facts. An encountered include is an unsupported source construct, not silently accepted through this option |
+| `--debug`, `-q`/`--quiet`, `-s`/`--silent`, `-v`/`--verbose` | Supported; retain ordinary output behavior; do not change model identities, coverage, binding or layout |
+| `--no-warn`, `--warn-unused-equ`, `--Werror=unused-equ`, `--Wno-unused-equ` | Supported with ordinary warning policy; record it, and preserve warning counts and failure behavior. Analysis-only resolution must not mark unused symbols used |
+| `-L`/`--listing`/`--lst`, `--listing-format`, `--xref` and `--xref-*`, `--instruction-records-output`, `--dependency-manifest` | Supported subject to their existing requirements. Formatting/filtering applies only to the selected old product; model coverage stays complete |
+| `--xref-summary*`, `--analyze-index-patterns`, `--index-patterns-*`, `--data-consumers*`, `--analyze-data-coverage`, `--data-coverage-*`, `--include-locals`, `--include-anon`, `--include-overlaps` | Supported existing analysis selections; cannot prune source-model records |
+| `--audit-*`, `--compare`/`--compare-*`, `--fceux-nl-*` | Supported existing analyses/exports; comparison inputs and outcomes are recorded separately. Findings exits 4/5 follow §8, not semantic-certification failure |
+| `--help`, `--usage`, `-V`/`--version` | Existing early-exit informational commands; no model is produced |
+
+For case-insensitive identifiers, binding/name validation uses the native case
+normalization, not raw `name == spelling`. The validator independently applies
+that documented normalization to the identifier bytes. Both case and paren modes
+need positive and wrong-binding/interpretation controls.
 
 ## 4. Acquisition and capture inside normal assembly
 
@@ -161,9 +203,12 @@ Resolution attaches bindings to occurrences using the same namespace/scope and
 resolution result as assembly. Lowering preserves syntax identities through
 replacement and merging. Final layout/emission attaches values and byte ranges.
 No extra assembly, source parser or post-hoc name-based rebinding is allowed.
-Capture must not change reference counts, unused warnings, evaluation order,
-diagnostics or output bytes. Forward fixups must attach their actual resolved
-declaration; a final-table lookup alone is not sufficient evidence.
+Unused EQUs use the explicit side-effect-free native resolution path in §6;
+they are not required to invent an assembly event that never happened. Capture
+must not change ordinary reference counts, unused warnings, evaluation order,
+diagnostics or output bytes. Profile certification can add its own refusal.
+Forward fixups must attach their actual resolved declaration; a final-table lookup
+alone is not sufficient evidence.
 
 The lossless file snapshot covers every byte even when parsing fails. A failed
 parse may leave unclassified intervals, explicitly marked in an uncertified
@@ -191,6 +236,7 @@ with implementation; the field contract below is the review authority.
 | --- | --- |
 | `schema`, `version`, `profile`, `target` | `xasm-source-model`, `1`, `asm-edit-v1`, `mos6502` |
 | `status` | `certified` or `diagnostic`; only the former is usable for semantic edits |
+| `analysis_outcomes` | Comparison: `not_requested`, `not_run`, `equal` or `mismatch`; raw-address audit: `not_requested`, `not_run`, `clear` or `findings`. `not_run` means requested but not completed. A certified model may carry comparison `not_run` only on exit 4, where audit findings skip the comparison; every other `not_run` is diagnostic-only. A certified model makes no parity claim (§8) |
 | `identity` | Input identity, producer digest, schema/profile IDs and model identity, as below |
 | `invocation`, `dependencies` | Exact diagnostic command/cwd plus consumed file hashes, sizes, roles and missing probes |
 | `files`, `units`, `syntax`, `scopes`, `declarations` | Source bytes, lexical partition, parsed nodes and native names/scopes |
@@ -207,9 +253,14 @@ Bytes are stored once per file. A unit has `id`, `file_id`, `byte_start`,
 the stored bytes. Unit kinds are `token`, `comment`, `whitespace`, `newline`,
 and diagnostic-only `unclassified`. Token records also carry the lexer token
 kind, using published symbolic names, never generated lexer rule numbers.
+`newline` means the single LF byte (`0a`) in the current grammar. A CR byte
+consumed by a semicolon comment belongs to that comment unit, not to a CRLF
+newline unit. A bare CR or BOM retains the parser's invalid-character behavior;
+its bytes are preserved only in diagnostic capture when the source is rejected.
 
 For every file, ordered nonempty units partition `[0, byte_length)` exactly.
-No gaps or overlaps are permitted; an empty file has no units. A syntax span may
+No gaps or overlaps are permitted; an empty file has no units and is diagnostic-only
+under the current grammar. A syntax span may
 contain many units; a reference's spelling span can be a subspan of a token.
 All spans are file ID plus half-open **byte** offsets. Optional line/column
 coordinates are one-based byte coordinates with tabs counting as one byte;
@@ -271,7 +322,7 @@ kind's payload. V1 kinds/payloads are:
 | Kind | Payload |
 | --- | --- |
 | `integer` | Parsed signed 32-bit value; original literal remains in source units |
-| `string` | Decoded bytes, for supported byte-data literals |
+| `string` | Decoded bytes in `bytes_base64`, for supported byte-data literals; no UTF-8 interpretation of string contents |
 | `symbol`, `local`, `anonymous_forward`, `anonymous_backward` | Exactly one `reference_id` |
 | `pc` | Evaluation contexts identify the native PC; never substituted by a consumer |
 | `unary` | `complement`, `not`, `negate`, `low`, `high`; one child |
@@ -284,23 +335,45 @@ this schema does not authorize a new evaluator. Pre-fold trees remain visible
 even when a whole expression evaluates to a constant.
 
 Each reference occurrence has `id`, `expression_id`, `span`, `spelling`,
-`context_syntax_id`, `scope_id`, `declaration_id`, and `diagnostic_id`.
-Exactly one of the last two is non-null. A certified model has no diagnosed
+`context_syntax_id`, `scope_id`, `declaration_id`, `resolution_origin` and `diagnostic_id`.
+Exactly one of `declaration_id` and `diagnostic_id` is non-null; unresolved leaves
+have null `resolution_origin`. A certified model has no diagnosed
 reference. Count every symbol/local/anonymous leaf independently from the parsed
 tree, excluding declaration names, and compare exact occurrence sets. This
 includes nested masks/strides, data pointers and EQU-to-EQU expressions; counting
 only additive terms or only references already exported is invalid.
 
-Bindings must agree with the native declaration kind, scoped name and selected
-definition. Anonymous references must identify the actual native forward/backward
-binding. Capture resolution from the assembly path, including forward-resolution
-events; the spike's post-pass symbol-table lookup is not the production contract.
-The binding used for evaluation and the exported binding must be the same.
+Bindings must agree with the native declaration kind, normalized scoped name and
+selected definition. Supported anonymous references identify the actual native
+forward/backward binding. Anonymous leaves inside EQU expressions are refused
+with `SOURCE_MODEL_UNSUPPORTED_CONSTRUCT`: one such leaf can bind to different
+labels at different uses, or have no resolution when unused. A later profile
+would need per-use instantiation identity; v1 must not select one target.
+
+Capture ordinary resolution from the assembly path, including forward fixups,
+with `resolution_origin=assembly`. For a supported unused EQU, invoke the **same
+native resolver/evaluator functions** in an analysis-only mode after the necessary
+scope and layout facts are available, using the EQU's captured declaration
+context. Mark these events `resolution_origin=analysis`. This mode must not change
+symbol use counts, warnings, binding epochs, source values, layout or ordinary
+diagnostics; work on isolated resolver state as needed. It is not a new consumer
+evaluator or a direct lookup in the final name table. Reuse native recursion/cycle
+handling, reporting unresolved or cyclic definitions as profile diagnostics.
+
+The producer exports every unused declaration and expression, but certifies only
+when this native resolution succeeds. `V .EQU Missing+1`, `V .EQU @@none`, and
+`V .EQU W` with `W .EQU V` therefore refuse certification even if ordinary assembly
+exits 0. Missing references report `SOURCE_MODEL_UNBOUND_REFERENCE`; a cyclic or
+otherwise unavailable value reports `SOURCE_MODEL_VALUE_UNAVAILABLE`. A used/unused
+pair of the same well-defined EQU must have the same target binding and value
+(compare semantic identities/spans, not cross-edit ordinal IDs). For evaluated
+uses, the binding used for evaluation and the exported binding must be the same.
 
 Evaluations have `id`, `expression_id`, `context_syntax_id`, optional
 `operand_index`, `pc_context`, `value`, and `reference_values`. Values are tagged
-`integer` or `bytes`; each reference-value entry identifies its reference and
-declaration. Export native resolved EQU values and complete operand/ORG evaluations.
+`integer` or `bytes`, with byte payloads in `bytes_base64`; each reference-value
+entry identifies its reference and declaration. Export native resolved EQU values
+and complete operand/ORG evaluations, recording assembly versus analysis origin.
 When one source expression has multiple native evaluation contexts, distinguish
 them; do not overwrite one value with another. Evaluating unused declarations for
 analysis must not change use counts; an unavailable value blocks certification
@@ -321,7 +394,10 @@ An instruction has `syntax_id`, `location_id`, parsed mnemonic/addressing form,
 `emission_ids`, `memory_access` and `control_flow`. Operand records link the full
 expression, native evaluation and native encoded byte range. Implied/accumulator
 forms have no fictitious expression. A relative branch reports both the resolved
-target and encoded displacement. Final zero-page narrowing and `.W` are explicit.
+target and encoded displacement. `forced_absolute` records whether the `.W`
+suffix was written, not a promise of absolute encoding: `DEX.W` still emits `ca`
+and `LDA.W #1` emits `a9 01`. The final opcode/mode determines the actual encoding;
+zero-page narrowing is reported independently.
 
 Use the producer's [memory-access contract](XASM_INSTRUCTION_RECORDS_V2_SPEC.md):
 report data `read`, `write`, `read_modify_write` or none, and pointer-byte reads
@@ -344,12 +420,17 @@ operand ranges likewise exclude the opcode and describe actual encoded bytes.
 Source statement/operand identities must survive any backend merging; `--debug`
 must not change them. The model is not a dump of grouped listing rows.
 
-Segments have `id`, `start_syntax_id`, address space and origin. Each `.ORG`
-creates a distinct segment even when its origin repeats. Locations have
+Segments have `id`, `start_syntax_id`, address space and origin. Every certified
+model begins with an implicit segment at origin 0 and `start_syntax_id=null`,
+even if no bytes are emitted there. Each `.ORG` creates a distinct segment with
+that directive's syntax ID, even when its origin repeats. Locations have
 `syntax_id`, `segment_id`, `cpu_address` and optional `output_offset`.
 Every label, instruction and data statement has exactly one location in the
 certified v1 model. EQU values are not label locations. Non-emitting declarations
-may denote an output position, but have no fictitious emitted byte.
+may denote an output position, but have no fictitious emitted byte. Source order
+is decisive: in `L: .ORG $8000`, `L` belongs to the preceding segment at the
+preceding PC (0 if initial); it is not moved to the new origin. `.ORG` gaps do not
+emit padding in the current backend; successive output bytes are concatenated.
 
 Address keys are `(segment_id, cpu_address)`. Segment IDs express assembly layout,
 not inferred cartridge bank numbers. An integer pointer without segment evidence
@@ -381,8 +462,9 @@ enumerated expected sets, not counts alone:
 4. Every reference occurrence has exactly one native binding; no extras, missing
    leaves or diagnosed references; kinds, names, scopes and spans agree.
 5. Every instruction/data/label joins to exactly its own syntax and layout record.
-6. Every supported operand/EQU has its native expression, evaluation and ranges;
-   reference identity is checked independently of value equality.
+6. Every supported operand/EQU has its native expression and evaluation; emitted
+   operands also have native ranges. Reference identity is checked independently
+   of value equality.
 7. Emissions cover the binary once, match its bytes, and respect segment identity.
 8. Foreign keys, bounds, ordering, declared lengths, hashes and profile agree.
 
@@ -390,7 +472,14 @@ Warnings preserve the normal warning policy. Certification cannot turn a failed
 assembly into success. Exit 0 means assembly and all requested success products
 completed; exit 1 is an assembly or source-model/profile error; exit 2 is invalid
 CLI usage; exit 3 is input-snapshot, model collection/serialization or publication
-failure. Existing unrelated comparison/audit exits retain their documented meaning.
+failure. Existing comparison/audit exits retain their documented meaning:
+exit 4 (audit findings) or 5 (comparison mismatch) can publish a **certified** model
+when assembly, profile checks and publication all completed successfully. Its
+embedded dependency evidence must be current even if a separately requested
+legacy manifest is not published on that exit. The model's `analysis_outcomes`
+must report those findings; certification asserts facts about the assembled input,
+not equality to a reference binary. A parity-preserving edit service must accept
+only comparison `equal`, even though a static query can use the model.
 Internal capture failures are distinct from a user's invalid source: use
 `SOURCE_MODEL_INTERNAL_ERROR`, not a misleading unresolved-symbol diagnostic.
 
@@ -420,8 +509,11 @@ aliases. Stage binary and successful analysis products; any model failure preven
 their successful publication and preserves the previous output set under the
 existing rollback contract. The diagnostic path is separate and explicitly
 non-certified. Revalidate consumed/missing inputs around staging and publication.
-Atomic rename is not a promise of multi-file crash durability: require a successful
-invocation and matching identities/digests; stale files alone are not evidence.
+Atomic rename is not a promise of multi-file crash durability: require completed
+assembly/certification/publication (exit 0, or the documented findings-only 4/5),
+matching identities/digests and explicit analysis outcomes. Stale files alone are
+not evidence. Exits 1/2/3 never authorize consuming a previous certified model as
+the result of the current invocation.
 
 All allocations and table/range arithmetic are checked. Resource limits must be
 documented and refuse with a named diagnostic; never truncate tables or return
@@ -452,29 +544,116 @@ temporary storage. No blanket speedup or two-second full-amend promise is made.
 
 Tests below are requirements, not claims about this draft. Use neutral, hand-checked
 fixtures in the normal suite; private corpus results are additional evidence.
-Each completeness guard needs a failing-direction case, with valid controls that
-prove the setup exercised the intended path.
 
-| Surface | Required proof and failing direction |
+### Independent saved-model reader
+
+Implement a **test-only** validator and reconstructor in
+`tests/source_model_support.py`, exercised by `tests/test_source_model.py`.
+These read the saved JSON alone. They do not call xasm, load its symbol table,
+invoke its exporter/checker, open original source/checkout/Git paths, or consult
+golden answers at validation time. Reconstruction first validates the lexical
+partition and then joins unit slices from the embedded file bytes. It works for
+both certified and explicitly diagnostic models; semantic checks require certified
+status. The harness separately compares reconstruction with a pre-recorded digest
+of the input and controls access to originals. This test API is not an installed
+source-export command or a production service fallback.
+
+The validator independently checks status-appropriate fields (including diagnostic
+nulls), byte hashes/partitions/spans, typed coverage,
+ID uniqueness and joins, scope/segment consistency, expressions, values and native
+emission ranges against the saved binary. Its test-only expression evaluator is
+independent of the producer's evaluator. Binding checks compare each reference's
+own spelling (with the recorded native case normalization), declaration name/kind,
+lexical scope and anonymous direction, exact spelling and order (`+` and `++`
+are separate chains). Infer expected scope and anonymous
+ordering from the saved typed syntax/declarations, not the exported target alone.
+A same-valued wrong global, wrong-scope local or wrong anonymous target must fail
+`MODEL_BINDING_TARGET` even if value/byte checks pass. It does not parse the saved
+assembly text to reconstruct a missing fact; exact identifier slices are allowed
+for spelling checks.
+
+Model integrity tests are not proof against coordinated fabrication of every
+table and its evidence. Hand-checked fixtures, baseline differentials and producer
+fault controls separately establish that export reflects native assembly. Do not
+let the exporter checking its own output stand in for this reader.
+
+### Byte fixtures and expected model status
+
+In this table `\n`, `\r` and hex byte names denote literal input bytes, not escape
+sequences typed into assembly. All cases reconstruct exactly. Status below is
+the proposed model's expected result, retaining xasm 2.0.0 source acceptance.
+
+| Input bytes | Expected model status and reason |
 | --- | --- |
-| Lossless bytes | Delete/make unavailable source, checkout copies and Git access before reconstructing; tabs, mixed case, CRLF/LF, UTF-8/comment bytes, blanks, missing final newline, empty file and parse errors. Corrupt/drop/reorder a unit or byte and require a named refusal. |
-| Coverage | `.BYTE`, `.END`, anonymous labels, `.W`, same-line constructs and all supported expressions. Unsupported directive/operator in otherwise valid input blocks certification; missing entire record families cannot pass with zero counts. |
-| Bindings | Repeated `@@loop` scopes, forward EQUs, nearest forward/backward anonymous labels, `.DW Entry`, `Alias .EQU Cell+1`, `#(MaskA|MaskB)`, `Base+(Stride*2),X`; remove/duplicate/redirect one leaf. Redirecting to a same-valued wrong declaration must fail. |
-| Duplicate symbols | Identical/conflicting EQUs, label/EQU collision, unreferenced duplicates; all locations returned. Same local spelling in distinct native scopes succeeds. |
-| Expressions and bytes | Hand-computed integers, projections, PC-dependent operands, strings and truncation; independently compare values and bytes. Corrupt a value plus its bytes together so a simple byte comparison cannot hide the bad binding/expression. |
-| Native operand ranges | Adjacent data directives, multi-operand rows, literal-only data and strings, `.DW`, empty string and branch displacement; change one range or omit one operand. Debug and analysis-option combinations keep identical identities/ranges. |
-| Access classes | CMP, BIT, RMW, indirect pointer reads, `STA Base+Field,X`, immediate label differences and aliases. Missing structural base must not erase read/write kind. |
-| Segments | Two `.ORG $8000` segments with same-address labels, same-segment aliases and cross-segment symbolic references. Swapping/omitting a segment is detected; address-only queries cannot pick a bank. |
-| Identity | Rebuild in another checkout/output directory with the same producer and inputs; IDs agree. Edit one source byte or effective option and input identity changes. Change producer/schema and model identity changes. |
-| Capture independence | Model option alone succeeds; disabling old listing/xref/record outputs cannot empty it. Exporting must not change existing warnings/use counts or binaries. |
-| Repair and publication | Success -> syntax error -> repair, each in fresh processes and reused output paths; no stale successful facts in diagnostic output. Inject allocation/write/rename failure; previous successful outputs remain identifiable and no partial model is certified. |
-| Input integrity | Same-size/timestamp-preserving source edit, symlink retarget, disappearing input and newly present missing probe; model cannot claim freshness from mtime alone. |
-| Compatibility | Generated-program differential against pinned 2.0.0 and immediate base for bytes, diagnostics, all existing output formats and option combinations; explicitly inventory every intentional difference. Model grouping cannot silently change existing listings. |
+| `NOP\n`, tab-indented/mixed-case valid instructions, LF blank lines, valid UTF-8 comment bytes | `certified` when the rest of the source is in profile |
+| A single `\n` | `certified`, empty binary; an accepted blank statement is not an empty input file |
+| `NOP ; c\r\n` | `certified`; CR belongs to the comment, LF is the newline unit |
+| `.DB "` followed by bytes `ff fe` followed by `"\n` | `certified`; byte-string value is base64, binary is `ff fe` |
+| `NOP\n.END\n` | `certified`; END is recorded, with no ignored suffix |
+| Empty input | `diagnostic`, existing syntax error |
+| `NOP` or a comment-only file with no final LF | `diagnostic`, existing syntax error |
+| `NOP\r\n` | `diagnostic`, bare CR is an invalid character |
+| UTF-8 BOM followed by `NOP\n` | `diagnostic`, BOM is not stripped or accepted |
+| `.END\n\n`, `.END\n; tail\n`, and both with `NOP\n` prepended | `diagnostic`, existing syntax error; do not drop trailing bytes |
 
-For review, compare exported declaration/name/scope/value evidence against the
-assembler's actual resolution/emission path, not just two consumers of the same
-export. Prove joins by set equality and uniqueness. Runtime trace completeness,
-game identity and agent permission enforcement are outside xasm's acceptance.
+### Acceptance matrix and negative-control execution
+
+**Model mutation** means corrupt an otherwise saved valid model and run the
+independent test validator, expecting the named failure. Maintain unrelated
+checksums/structure where needed to reach the targeted semantic check; test digest
+failures separately. **Producer fault** means use test-only collector/resolver/
+guard/publication fault injection following the existing `tests/test_*_faults.c`
+pattern, and observe the real CLI/export result. No fault hooks ship in production.
+Positive and ordinary refusal fixtures accompany both kinds. Source-policy
+guards must also be disabled in a test build to prove the refusal test has teeth.
+
+| Surface | Negative-control kind | Positive/refusal fixtures and failing direction |
+| --- | --- | --- |
+| Lossless bytes | Model mutation | Use the status table above with originals unavailable. Corrupt/drop/reorder a unit or byte: `MODEL_SOURCE_PARTITION` or `MODEL_SOURCE_HASH`. Diagnostic reconstruction never licenses semantic edits. |
+| Coverage | Producer fault | `.BYTE`/`.WORD`, undotted `DB`/`ORG`, END, anonymous labels, `.W` and `Foo: .DB 1` succeed. `.DEFINE V 7`, `.DEFINE F`, `.DB` alone, `.DB [3]`, `Foo .DB 1`, unsupported operators/directives and anonymous EQU leaves refuse. Drop token/form inventory or its guard: the expected `SOURCE_MODEL_UNSUPPORTED_CONSTRUCT` check must fail, rather than accepting a plausible lowered node. |
+| Reference inventory and bindings | Model mutation | Repeated `@@loop` scopes, forward EQUs, anonymous uses outside EQUs, `.DW Entry`, `Alias .EQU Cell+1`, nested masks and strides. Remove/duplicate a leaf: `MODEL_REFERENCE_COVERAGE`; redirect it to a same-valued wrong declaration/scope/directional target: `MODEL_BINDING_TARGET`. Include `.ORG $8000\nJMP +\n++ NOP\n+ NOP\n- NOP\n-- NOP\nJMP -\nJMP --\n`, whose bytes are `4c 04 80 ea ea ea ea 4c 05 80 4c 06 80`. Redirect `JMP +` to the nearer `++`, changing its value and bytes to match: still require `MODEL_BINDING_TARGET` because the spelling differs. |
+| Native binding events | Producer fault | Redirect a resolver/collector binding while retaining the real emitted bytes; independent name/scope/value checks must fail. Golden native targets prevent two exports of the same wrong value from passing. |
+| Anonymous EQUs | Producer fault | Refuse all three cases below; disabling the capability guard must fail the expected refusal. No single-target export can certify them. |
+| Unused EQUs | Producer fault | Well-defined used/unused pairs have equal semantic targets/values and unchanged ordinary unused-warning counts. The three unresolved/cyclic examples in §6 refuse. Skip analysis-only resolution or allow it to increment usage: the fixture must fail. |
+| Duplicate symbols | Producer fault | Identical/conflicting and unreferenced duplicate EQUs, label/EQU collisions return all sites. Distinct local scopes succeed. Disable the duplicate guard: refusal test fails. |
+| Expressions and bytes | Model mutation | Hand-computed projections, truncation, strings and per-operand PC (`.DW $,$` at `$8000` gives `$8000,$8002`). Corrupt a value and matching bytes together: independent evaluation fails `MODEL_VALUE`. |
+| Native operand ranges | Model mutation | Adjacent directives, literal-only/multi-operand rows, strings including empty string, words and relative branches. Drop or move a range: `MODEL_EMISSION_RANGE`; debug/analysis combinations preserve source identities. |
+| Access classes and suffix | Producer fault | CMP, BIT, RMW, indirect pointer reads, `STA Base+Field,X`, immediates and aliases; `DEX.W`/`LDA.W #1` preserve suffix but not absolute encoding. Change the captured class/mode: explicit fixture assertion fails. |
+| Segments | Model mutation | Include the two initial-segment examples below plus repeated `.ORG $8000`, same-segment aliases and cross-segment symbols. Drop/swap a location's segment: `MODEL_SEGMENT`; check syntax-order transitions independently. |
+| Identity | Model mutation | Rebuild at another checkout/output path; IDs agree. Change source/options/producer/schema; the appropriate identity changes. Substitute an old identity/options map: `MODEL_IDENTITY`. |
+| Capture independence | Producer fault | Model alone works; old export filters do not prune it. Disable collector activation unless old exports are requested: model-only completeness assertions fail. Preserve old warnings, counts and bytes. |
+| Repair and publication | Producer fault | Success -> syntax error -> repair in fresh processes/reused paths; inject allocation/write/rename failures and stale previous tables. No failed/diagnostic output is certified. Exit 5 comparison mismatch and exit 4 audit findings can retain a certified model with explicit outcomes; a stale external manifest cannot be borrowed. Include `.ORG $8000\nL: NOP\nJMP $8000\nJMP L\n` with `xasm --pure-binary --audit-raw-addresses --audit-level=error --compare=ref.bin x.asm -o x.bin` and the model option: exit 4 publishes a certified model with audit `findings` and comparison `not_run`, since comparison was skipped. A parity-preserving service must reject it even when `ref.bin` matches the emitted binary. |
+| Input integrity | Producer fault | Mutate a captured input with same size/mtime, retarget a symlink, remove an input or satisfy a recorded missing probe; use the dependency suite's deterministic pause/fault pattern. Publication refuses rather than certifying stale inputs. |
+| Compatibility and CLI modes | Producer fault | Run the bounded 2.0.0 differential and option table, with a deliberate ordinary-output/status mutant as harness control. Case-insensitive and swapped-paren fixtures test native bindings/interpretation and input identity. No grammar widening to make byte fixtures green. |
+
+Anonymous-EQU refusal fixtures (all assemble normally today):
+
+```asm
+.ORG $8000
+V .EQU +
+NOP
++ NOP
+JMP V
++ NOP
+```
+
+Ordinary binary: `ea ea 4c 05 80 ea`; the `+` at the EQU's declaration is not its
+use-time target. A second fixture, starting at `$8000`, contains `- NOP`,
+`V .EQU -`, `- NOP`, `JMP V`, `- NOP`, `JMP V` on successive LF-terminated lines:
+the jumps target `$8001` and `$8005`. A third is only `V .EQU +\n`, unused with no
+anonymous target. All three requested models are diagnostic-only with
+`SOURCE_MODEL_UNSUPPORTED_CONSTRUCT`. Add supported local/PC EQU controls proving
+declaration-context behavior (including `V .EQU F-$` with repeated uses).
+
+Initial-segment fixtures: `NOP\nL: JMP L\n` is certified with implicit origin 0
+and bytes `ea 4c 01 00`. `L: .ORG $8000\nNOP\n.DW L\n` is certified with `L` in
+the initial segment at 0, the later statements in the new segment, and bytes
+`ea 00 00`. Segment changes do not retroactively move preceding labels.
+
+For review, compare exported declaration/name/scope/value evidence against native
+resolution/emission, not just two consumers of the same export. Prove joins by
+set equality and uniqueness. Runtime traces, game identity and agent permission
+enforcement remain outside xasm's acceptance.
 
 ## 11. Implementation sequence and promotion gates
 
@@ -493,6 +672,8 @@ game identity and agent permission enforcement are outside xasm's acceptance.
 6. Obtain independent xasm review of implementation and evidence. Update release
    notes, CLI/man pages, schema examples and migration documentation together.
    If any public break is accepted, release as 3.0.0 and update consumers in lockstep.
+   Before any PR, omit local review prompts from the proposed tree;
+   review approval alone does not authorize a push or release.
 
 Completion means the contract and its negative controls pass, supported records
 come from the normal assembler, unsupported work refuses explicitly, and the
