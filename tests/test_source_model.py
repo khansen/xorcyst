@@ -86,6 +86,30 @@ class SourceModelTests(unittest.TestCase):
                     model = self.assemble(source, options, expected=1)
                     self.assertIn("SOURCE_MODEL_UNSUPPORTED_CONSTRUCT", {d["code"] for d in model["diagnostics"]})
 
+    def test_statement_spans_preserve_line_tails(self):
+        for origin, equ, tail in (
+            (b".ORG $8000", b"K .EQU 3", b"\n"),
+            (b".ORG ($8000)", b"K .EQU (1+2)", b" \t; retained comment\r\n"),
+            (b".ORG ($8000)", b"K .EQU (1+2)", b" : "),
+            (b".ORG $8000", b"K .EQU 3", b":"),
+        ):
+            source = origin + tail + equ + tail + b"LDA #K\n"
+            with self.subTest(source=source):
+                model = self.assemble(source)
+                saved = reconstruct(model)["input.asm"]
+                statements = [s for s in model["syntax"] if s["kind"] in ("ORG_NODE", "EQU_NODE")]
+                self.assertEqual([saved[s["span"]["byte_start"]:s["span"]["byte_end_exclusive"]]
+                                  for s in statements], [origin, equ])
+                for node in statements:
+                    self.assert_mutation(model, lambda x: next(s for s in x["syntax"] if s["id"] == node["id"])
+                        ["span"].update(byte_end_exclusive=node["span"]["byte_end_exclusive"] + 1), "MODEL_SOURCE_PARTITION")
+                for node, replacement in reversed(list(zip(statements, (b".ORG $8000", b"K .EQU 3")))):
+                    span = node["span"]
+                    saved = saved[:span["byte_start"]] + replacement + saved[span["byte_end_exclusive"]:]
+                self.assertEqual(saved, b".ORG $8000" + tail + b"K .EQU 3" + tail + b"LDA #K\n")
+                edited = self.assemble(saved)
+                self.assertEqual(model["binary"], edited["binary"])
+
     def test_diagnostic_consumed_files_with_equal_basenames(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

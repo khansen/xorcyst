@@ -63,6 +63,10 @@ expressions. An unused unresolved or cyclic EQU refuses certification even when
 ordinary assembly accepts it. Local names retain declaration scope; anonymous
 spellings form separate forward/backward chains (`+` and `++` are distinct).
 
+EQU and ORG statement spans end at the final expression token, including any
+closing parentheses. Trailing whitespace, comments and the newline or colon
+separator stay outside the span, so a statement replacement preserves them.
+
 `evaluations` record native values and PC contexts for every expression, with
 reference-value evidence. In an EQU expression containing no syntactic `$`,
 `pc_context.cpu_address` is null: the value does not depend on that context's PC,
@@ -135,7 +139,7 @@ installed service fallback or a second production assembler.
 `tests/test_source_model_consumer.py` demonstrates model-only reconstruction,
 a declaration-bound rename, refreshed assembly, parity checking and a structured
 before/after review with the original source unavailable. The fixture uses no
-game-specific names or paths. It is a migration example; NESrev's production
+game-specific names or paths. It is a migration example; the consumer's production
 service extraction, permissions, budget accounting and broader edit operations
 remain changes in the consumer repository.
 

@@ -154,6 +154,9 @@ def check_units(model, syntax, raw):
         us = by_file[sp["file_id"]]
         a = bisect_left(starts[sp["file_id"]], sp["byte_start"])
         b = bisect_left(starts[sp["file_id"]], sp["byte_end_exclusive"])
+        if node["kind"] in ("EQU_NODE", "ORG_NODE"):
+            require(a < b and us[b - 1]["byte_end_exclusive"] == sp["byte_end_exclusive"]
+                    and us[b - 1]["token_kind"] != "COLON", "MODEL_SOURCE_PARTITION")
         for at in range(a, b):
             u = us[at]
             if u["byte_end_exclusive"] <= sp["byte_end_exclusive"]: owners[u["id"]] = node["id"]

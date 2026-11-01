@@ -3113,7 +3113,7 @@ yyreduce:
 
   case 47: /* org_statement: ORG expression line_tail  */
 #line 234 "parser.y"
-                             { (yyval.node) = astnode_create_org((yyvsp[-1].node), (yyloc)); }
+                             { location source = (yyloc); (yyval.node) = astnode_create_org((yyvsp[-1].node), source); source.last_line = (yylsp[-1]).last_line; source.last_column = (yylsp[-1]).last_column; if ((yyval.node)) astnode_set_source_location((yyval.node), source); }
 #line 3118 "parser.c"
     break;
 
@@ -4049,7 +4049,7 @@ yyreduce:
 
   case 203: /* equ_statement: identifier EQU extended_expression line_tail  */
 #line 594 "parser.y"
-                                                 { (yyval.node) = astnode_create_equ((yyvsp[-3].node), (yyvsp[-1].node), (yyloc)); }
+                                                 { location source = (yyloc); (yyval.node) = astnode_create_equ((yyvsp[-3].node), (yyvsp[-1].node), source); source.last_line = (yylsp[-1]).last_line; source.last_column = (yylsp[-1]).last_column; if ((yyval.node)) astnode_set_source_location((yyval.node), source); }
 #line 4054 "parser.c"
     break;
 

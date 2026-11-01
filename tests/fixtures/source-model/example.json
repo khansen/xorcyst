@@ -13,8 +13,8 @@
     "schema_id": "xasm-source-model:1",
     "profile_id": "asm-edit-v1",
     "input_id": "1fde43feb1e41ccc8118ea618881730e955c84a3b8ca4b8cd89c7cff5c6bf8ca",
-    "producer_sha256": "c2d824ccb6a99f1fbfa2418685a51adf179d3bab11dc539ced08368a876c04a5",
-    "model_id": "b1edcf0dc62956d8612653a61dcf7d7d375de919e26d469adf2b187e8ca7b432"
+    "producer_sha256": "b837eb590b86d927f6bf20e403621140bb86ed5ff9d9a447caad4cf682fd2cba",
+    "model_id": "a102515bf78a4fa9665d8c40f0a427102c8322dd261f88ae6f1d767650fdd583"
   },
   "semantic_options": {
     "case_insensitive": false,
@@ -45,7 +45,7 @@
       "path": "/usr/local/bin/xasm",
       "missing": false,
       "byte_length": 677432,
-      "sha256": "c2d824ccb6a99f1fbfa2418685a51adf179d3bab11dc539ced08368a876c04a5",
+      "sha256": "b837eb590b86d927f6bf20e403621140bb86ed5ff9d9a447caad4cf682fd2cba",
       "roles": [
         "producer"
       ]
@@ -406,7 +406,7 @@
       "span": {
         "file_id": "f1",
         "byte_start": 0,
-        "byte_end_exclusive": 11
+        "byte_end_exclusive": 10
       },
       "parent_id": "s1",
       "scope_id": "q1",
@@ -432,7 +432,7 @@
       "span": {
         "file_id": "f1",
         "byte_start": 11,
-        "byte_end_exclusive": 25
+        "byte_end_exclusive": 24
       },
       "parent_id": "s1",
       "scope_id": "q1",

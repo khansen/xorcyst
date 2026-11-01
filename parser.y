@@ -231,7 +231,7 @@ statement:
     ;
 
 org_statement:
-    ORG expression line_tail { $$ = astnode_create_org($2, @$); }
+    ORG expression line_tail { location source = @$; $$ = astnode_create_org($2, source); source.last_line = @2.last_line; source.last_column = @2.last_column; if ($$) astnode_set_source_location($$, source); }
     ;
 
 align_statement:
@@ -591,7 +591,7 @@ identifier_list:
     ;
 
 equ_statement:
-    identifier EQU extended_expression line_tail { $$ = astnode_create_equ($1, $3, @$); }
+    identifier EQU extended_expression line_tail { location source = @$; $$ = astnode_create_equ($1, $3, source); source.last_line = @3.last_line; source.last_column = @3.last_column; if ($$) astnode_set_source_location($$, source); }
     ;
 
 undef_statement:
