@@ -105,6 +105,10 @@ class SourceModelTests(unittest.TestCase):
                     model = self.assemble(source, options, expected=1)
                     expected = "SOURCE_MODEL_VALUE_UNAVAILABLE" if b"W .EQU V" in source else "SOURCE_MODEL_UNBOUND_REFERENCE"
                     self.assertIn(expected, {d["code"] for d in model["diagnostics"]})
+        for expression, suffix in ((b"K1/0", b""), (b"K1 % 0", b""), (b"K1<<40", b""),
+                                   (b"K1>>32", b""), (b"K1<<-1", b""), (b"K1/K2", b"K2 .EQU 0\n")):
+            model = self.assemble(b"KA .EQU " + expression + b"\nK1 .EQU 2\n" + suffix, expected=1)
+            self.assertIn("SOURCE_MODEL_VALUE_UNAVAILABLE", {d["code"] for d in model["diagnostics"]})
         for tail in (b"", b"LDA #V\n"):
             model = self.assemble(b"Cell .EQU 7\nV .EQU Cell+1\n" + tail, ("--warn-unused-equ",))
             ref = next(r for r in model["references"] if r["name"] == "Cell")
@@ -227,6 +231,109 @@ Later: NOP
         model = self.assemble(b"LDA ($10),Y\nLDA [$10],Y\n", ("--swap-parens",))
         self.assertEqual(base64.b64decode(model["binary"]["bytes_base64"]), bytes.fromhex("b110b91000"))
         self.assemble(b"Value .EQU 1\nVALUE .EQU 1\n", ("--case-insensitive",), 1)
+        for options, source in ((("--case-insensitive",), b"Cell .EQU $10\nOther .EQU $10\nLDA cell\n"),
+                                (("--swap-parens",), b"Cell .EQU $10\nOther .EQU $10\nLDA (Cell),Y\n")):
+            m = self.assemble(source, options)
+            other = next(d["id"] for d in m["declarations"] if d["name"].upper() == "OTHER")
+            self.assert_mutation(m, lambda x: x["references"][0].update(declaration_id=other), "MODEL_BINDING_TARGET")
+
+    def test_encoded_addresses_keep_native_evaluations(self):
+        for source, encoded, address, target, value in (
+            (b"LDA [-1],Y\n", "b1ff", 255, None, -1),
+            (b".ORG $8000\nL: LDA L*2\n", "ad0000", 0, None, 65536),
+            (b".ORG $8000\nL: JMP L*2\n", "4c0000", None, 0, 65536),
+            (b"BNE -1\n", "d0fd", None, 65535, -1),
+        ):
+            with self.subTest(source=source):
+                m = self.assemble(source)
+                self.assertEqual(base64.b64decode(m["binary"]["bytes_base64"]).hex(), encoded)
+                row = m["instructions"][0]
+                self.assertEqual(row["control_flow"]["target"], target)
+                if row["memory_access"]:
+                    access = row["memory_access"]["pointer"] or row["memory_access"]["data"]
+                    self.assertEqual(access["address"], address)
+                evaluation = next(v for v in m["evaluations"] if v["id"] == row["operands"][0]["evaluation_id"])
+                self.assertEqual(evaluation["value"]["value"], value)
+
+    def test_equ_resolution_origins(self):
+        for prefix, tail in ((b"V .EQU 7\n", b"LDA #V\n"),
+                             (b"V .EQU L+1\nL: NOP\n", b"JMP V\n"),
+                             (b"Cell .EQU 7\nV .EQU Cell+1\n", b"LDA #V\n"),
+                             (b"Cell .EQU 7\nV .EQU Cell+1\nAlias .EQU V\n", b".DW Alias\n")):
+            for used in (False, True):
+                m = self.assemble(prefix + (tail if used else b""))
+                contexts = {d["syntax_id"] for d in m["declarations"] if d["kind"] == "equ"}
+                for row in m["evaluations"] + m["references"]:
+                    if row["context_syntax_id"] in contexts:
+                        self.assertEqual(row["resolution_origin"], "assembly" if used else "analysis")
+
+    def test_acquisition_and_output_diagnostics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = subprocess.run([str(XASM), "--pure-binary", "--source-model=m", "--source-model-diagnostics=d", "none.asm", "-o", "o"], cwd=root, capture_output=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(b"SOURCE_MODEL_IO_ERROR", result.stderr)
+            self.assertEqual(list(root.iterdir()), [])
+            (root / "in.asm").write_bytes(b"NOP\n")
+            result = subprocess.run([str(XASM), "--pure-binary", "--source-model=none/m", "in.asm", "-o", "o"], cwd=root, capture_output=True)
+            self.assertEqual(result.returncode, 3)
+            self.assertIn(b"SOURCE_MODEL_IO_ERROR", result.stderr)
+            self.assertFalse((root / "o").exists())
+        empty = self.assemble(b"\n")
+        empty.update(files=[], units=[])
+        with self.assertRaisesRegex(ModelError, "MODEL_SOURCE_PARTITION"): validate(empty)
+
+    def test_context_join_mutations(self):
+        m = self.assemble(b".ORG $8000\nOne .EQU 8\nOther .EQU 8\nFirst: LDA #One\nLDA #One\nNOP\nNOP\nShared1:\nShared2:\nJMP First\n.DW First,Other\n.END\n")
+        def swap(rows, field):
+            rows[0][field], rows[1][field] = rows[1][field], rows[0][field]
+        mutations = [
+            ("reference span", lambda x: x["references"][0].update(span=x["references"][1]["span"]), "MODEL_REFERENCE_COVERAGE"),
+            ("reference spelling", lambda x: x["references"][0].update(spelling="Other"), "MODEL_BINDING_TARGET"),
+            ("reference context", lambda x: x["references"][0].update(context_syntax_id=x["references"][1]["context_syntax_id"]), "MODEL_REFERENCE_COVERAGE"),
+            ("expression context", lambda x: x["expressions"][0].update(context_syntax_id=x["expressions"][-1]["context_syntax_id"]), "MODEL_REFERENCE_COVERAGE"),
+            ("expression span", lambda x: x["expressions"][0].update(span=x["expressions"][1]["span"]), "MODEL_REFERENCE_COVERAGE"),
+            ("evaluation context", lambda x: x["evaluations"][0].update(context_syntax_id=x["evaluations"][-1]["context_syntax_id"]), "MODEL_VALUE"),
+            ("evaluation operand", lambda x: x["evaluations"][-1].update(operand_index=19), "MODEL_VALUE"),
+            ("evaluation origin", lambda x: x["evaluations"][0].update(resolution_origin="analysis"), "MODEL_VALUE"),
+            ("EQU syntax", lambda x: swap([d for d in x["declarations"] if d["kind"] == "equ"], "syntax_id"), "MODEL_BINDING_TARGET"),
+            ("EQU expression", lambda x: swap([d for d in x["declarations"] if d["kind"] == "equ"], "expression_id"), "MODEL_BINDING_TARGET"),
+            ("alias locations", lambda x: swap([d for d in x["declarations"] if d["name"].startswith("Shared")], "location_id"), "MODEL_SEGMENT"),
+            ("NOP locations", lambda x: swap([r for r in x["instructions"] if r["mnemonic"] == "NOP"], "location_id"), "MODEL_SEGMENT"),
+            ("token relabel", lambda x: next(u for u in x["units"] if u["kind"] == "token").update(kind="comment"), "MODEL_SOURCE_PARTITION"),
+            ("whitespace relabel", lambda x: next(u for u in x["units"] if u["kind"] == "whitespace").update(kind="token"), "MODEL_SOURCE_PARTITION"),
+            ("unclassified", lambda x: x["units"][0].update(kind="unclassified"), "MODEL_SOURCE_PARTITION"),
+            ("token kind", lambda x: x["units"][0].update(token_kind="COMMA"), "MODEL_SOURCE_PARTITION"),
+            ("token join", lambda x: x["units"][0].update(syntax_id=None), "MODEL_SOURCE_PARTITION"),
+            ("emission PC", lambda x: x["emissions"][0].update(cpu_address=42), "MODEL_EMISSION_RANGE"),
+            ("flow kind", lambda x: x["instructions"][0]["control_flow"].update(kind="return"), "MODEL_VALUE"),
+            ("flow target", lambda x: x["instructions"][-1]["control_flow"].update(target=42), "MODEL_VALUE"),
+            ("compare absent", lambda x: x["analysis_outcomes"].update(comparison="equal"), "MODEL_DIAGNOSTIC_STATE"),
+            ("mismatch absent", lambda x: x.update(exit_status=5), "MODEL_DIAGNOSTIC_STATE"),
+        ]
+        for name, mutate, code in mutations:
+            with self.subTest(name=name): self.assert_mutation(m, mutate, code)
+        def drop_end(x):
+            node = next(s for s in x["syntax"] if s["kind"] == "END_NODE")
+            x["syntax"].remove(node); x["syntax"][0]["children"].remove(node["id"])
+            x["coverage"]["syntax"] -= 1
+            for u in x["units"]:
+                if u["syntax_id"] == node["id"]: u["syntax_id"] = x["syntax"][0]["id"]
+        self.assert_mutation(m, drop_end, "MODEL_REFERENCE_COVERAGE")
+
+    def test_equ_pc_coordinated_corruption(self):
+        self.assemble(b".ORG 0\nLDA Forward\nV .EQU 7\nForward: NOP\n")
+        self.assemble(b".ORG 0\nLDA Forward\nV .EQU $\nForward: NOP\n", expected=1)
+        m = self.assemble(b".ORG $8000\nNOP\nP .EQU $\n.DW P\n")
+        def corrupt(x):
+            for v in x["evaluations"]:
+                if v["value"]["value"] == 0x8001: v["value"]["value"] = 0x8005
+                for rv in v["reference_values"]: rv["value"]["value"] = 0x8005
+            pe = next(d for d in x["declarations"] if d["name"] == "P")["expression_id"]
+            next(v for v in x["evaluations"] if v["expression_id"] == pe)["pc_context"]["cpu_address"] = 0x8005
+            binary = bytes.fromhex("ea0580")
+            x["binary"].update(bytes_base64=base64.b64encode(binary).decode(), sha256=sha(binary))
+        self.assert_mutation(m, corrupt, "MODEL_VALUE")
 
     def test_old_products_and_capture_independence(self):
         source = b".ORG $8000\nUnused .EQU 7\nCell .EQU $10\nAlias .EQU Cell+1\nEntry: LDA #Alias\nSTA Cell,X\n.DW Entry\n.DB 1,2\n.DB 3\n"
@@ -274,12 +381,14 @@ Later: NOP
             (root / "input.asm").write_bytes(b".DB " + b"1+" * 520 + b"1\n")
             (root / "out").write_bytes(b"old binary")
             (root / "model").write_bytes(b"old model")
-            result = subprocess.run([str(XASM), "--pure-binary", "input.asm", "-o", "out", "--source-model=model"],
-                                    cwd=root, capture_output=True)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn(b"SOURCE_MODEL_RESOURCE_LIMIT", result.stderr)
-            self.assertEqual((root / "out").read_bytes(), b"old binary")
-            self.assertEqual((root / "model").read_bytes(), b"old model")
+            for options in ([], ["--source-model-diagnostics=diag"]):
+                result = subprocess.run([str(XASM), "--pure-binary", "input.asm", "-o", "out", "--source-model=model", *options],
+                                        cwd=root, capture_output=True)
+                self.assertEqual(result.returncode, 3)
+                self.assertIn(b"SOURCE_MODEL_RESOURCE_LIMIT", result.stderr)
+                self.assertEqual((root / "out").read_bytes(), b"old binary")
+                self.assertEqual((root / "model").read_bytes(), b"old model")
+                self.assertFalse((root / "diag").exists())
 
     def test_cli_and_path_refusals(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -320,6 +429,9 @@ Later: NOP
             self.assertEqual(result.returncode, 0, result.stderr)
             good = (root / "model").read_bytes()
             self.assertEqual(json.loads(good)["analysis_outcomes"]["comparison"], "equal")
+            def remove_comparison_evidence(m):
+                m["dependencies"] = [d for d in m["dependencies"] if "comparison" not in d["roles"]]
+            self.assert_mutation(json.loads(good), remove_comparison_evidence, "MODEL_DIAGNOSTIC_STATE")
             source.write_bytes(b"NOP")
             result = subprocess.run(command, cwd=root, capture_output=True)
             self.assertEqual(result.returncode, 1, result.stderr)

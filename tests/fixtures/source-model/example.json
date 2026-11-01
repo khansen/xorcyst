@@ -13,8 +13,8 @@
     "schema_id": "xasm-source-model:1",
     "profile_id": "asm-edit-v1",
     "input_id": "1fde43feb1e41ccc8118ea618881730e955c84a3b8ca4b8cd89c7cff5c6bf8ca",
-    "producer_sha256": "9a84b76e8cb50830d0e703f0daa5f9b5ce80da39aca089e312b356b75e87b181",
-    "model_id": "7643bb4a717327459bc2d12ad3bbf6e306a71e4844fb3f61278de42a5bf1f9f0"
+    "producer_sha256": "c69a872ca2ae88c1af4d2daaa0f547c7ad08535e467266529ac11d02b84fc182",
+    "model_id": "8d5edc5f0ff9d3e36d0e809726caa2dff1e5987edce72c09bcfb5be04d945bf0"
   },
   "semantic_options": {
     "case_insensitive": false,
@@ -44,8 +44,8 @@
     {
       "path": "/usr/local/bin/xasm",
       "missing": false,
-      "byte_length": 659768,
-      "sha256": "9a84b76e8cb50830d0e703f0daa5f9b5ce80da39aca089e312b356b75e87b181",
+      "byte_length": 677432,
+      "sha256": "c69a872ca2ae88c1af4d2daaa0f547c7ad08535e467266529ac11d02b84fc182",
       "roles": [
         "producer"
       ]
@@ -964,7 +964,7 @@
         "kind": "integer",
         "value": 16
       },
-      "resolution_origin": "analysis",
+      "resolution_origin": "assembly",
       "reference_values": []
     },
     {

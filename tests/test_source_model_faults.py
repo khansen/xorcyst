@@ -2,6 +2,7 @@
 """Real producer fault controls, kept outside the installed producer."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -18,6 +19,10 @@ class FaultTests(unittest.TestCase):
         cls.tool = Path(cls.directory.name) / "xasm-model-faults"
         build_tool("xasm", cls.tool, "TEST_SOURCE_MODEL_CFLAGS",
                    {"source_model.c": "tests/test_source_model_faults.c"})
+        cls.usage = Path(cls.directory.name) / "xasm-usage-faults"
+        build_tool("xasm", cls.usage, "TEST_SOURCE_MODEL_CFLAGS",
+                   {"source_model.c": "tests/test_source_model_faults.c",
+                    "ir/frontend.c": "tests/test_source_model_frontend_faults.c"})
         cls.io = Path(cls.directory.name) / "xasm-io-faults"
         build_tool("xasm", cls.io, "TEST_SOURCE_MODEL_CFLAGS",
                    {"xasm.c": "tests/test_io_faults.c", "output_file.c": None, "fceux_nl.c": None})
@@ -74,7 +79,7 @@ class FaultTests(unittest.TestCase):
             source = b'.INCLUDE "late.inc"\nNOP\n' if mutation == "input-missing" else b"NOP\n"
             result, after, _, _ = self.run_case(source, {"XASM_TEST_MODEL_MUTATION": mutation})
             self.assertEqual(result.returncode, 3, (mutation, result.stderr))
-            self.assertIn(b"input changed or became unavailable", result.stderr)
+            self.assertIn(b"SOURCE_MODEL_INPUT_CHANGED", result.stderr)
             self.assertEqual(after, (b"old model", b"old binary"))
 
     def test_wrong_native_binding(self):
@@ -88,6 +93,31 @@ class FaultTests(unittest.TestCase):
         else:
             self.assertEqual(result.returncode, 1, result.stderr)
 
+    def test_internal_layout_failure(self):
+        result, after, diagnostic, _ = self.run_case(b"NOP\n", {"XASM_TEST_MODEL_MUTATION": "layout"})
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn(b"SOURCE_MODEL_INTERNAL_ERROR", result.stderr)
+        self.assertIn("SOURCE_MODEL_INTERNAL_ERROR", {d["code"] for d in diagnostic["diagnostics"]})
+        self.assertEqual(after, (b"old model", b"old binary"))
+
+    def test_analysis_usage_fault(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "in.asm").write_bytes(b"Cell .EQU 7\nAlias .EQU Cell+1\nLDA #Alias\n")
+            for mutation in (None, "usage"):
+                env = dict(os.environ)
+                if mutation: env["XASM_TEST_MODEL_MUTATION"] = mutation
+                r = subprocess.run([str(self.usage), "--pure-binary", "in.asm", "-o", "out", "--source-model=model"], cwd=root, env=env, capture_output=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                deltas = [int(n) for n in re.findall(rb"SHADOW_USE_DELTA (-?[0-9]+)", r.stderr)]
+                self.assertTrue(deltas, "native shadow path was not observed")
+                def unchanged():
+                    self.assertTrue(all(n == 0 for n in deltas), "ANALYSIS_CHANGED_USAGE")
+                if mutation:
+                    self.assertIn(b"INJECT_ANALYSIS_USAGE", r.stderr)
+                    with self.assertRaisesRegex(AssertionError, "ANALYSIS_CHANGED_USAGE"): unchanged()
+                else: unchanged()
+
     def test_allocation_failures_preserve_previous_artifacts(self):
         source = b".ORG $8000\nOne .EQU 8\nEntry: LDA #One\n.DW Entry\n"
         reached_end = False
@@ -96,7 +126,8 @@ class FaultTests(unittest.TestCase):
             if b"INJECT_MODEL_ALLOC" not in result.stderr:
                 self.assertEqual(result.returncode, 0, result.stderr)
                 validate(model); reached_end = True; break
-            self.assertNotEqual(result.returncode, 0, (at, result.stderr))
+            self.assertEqual(result.returncode, 3, (at, result.stderr))
+            self.assertIn(b"SOURCE_MODEL_RESOURCE_LIMIT", result.stderr)
             self.assertEqual(after, (b"old model", b"old binary"), (at, result.stderr))
         self.assertTrue(reached_end, "allocation walk did not reach the successful control")
 
@@ -107,6 +138,7 @@ class FaultTests(unittest.TestCase):
                 result, after, _, _ = self.run_case(b"NOP\n",
                     {"XASM_TEST_IO_FAILURE": operation, "XASM_TEST_OUTPUT_PATH": "model"}, self.io)
                 self.assertIn(b"INJECT_IO", result.stderr)
+                self.assertIn(b"SOURCE_MODEL_IO_ERROR", result.stderr)
                 self.assertEqual(result.returncode, 3, result.stderr)
                 self.assertEqual(after, (b"old model", b"old binary"))
 

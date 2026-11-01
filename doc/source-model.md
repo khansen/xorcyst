@@ -40,7 +40,9 @@ Successful static models can accompany exits 0, 4 (audit findings) and 5
 (comparison mismatch). Check `analysis_outcomes` explicitly. In particular,
 exit 4 can skip a requested comparison and record `not_run`. A parity-preserving
 edit service must require comparison **`equal`**, not merely a certified model
-or matching output length. Certification makes no reference-ROM parity claim.
+or matching output length. Require a whole-binary comparison: `equal` with
+`--compare-length` or offset/window options certifies only the requested window.
+Certification makes no reference-ROM parity claim.
 Exits 1, 2, 3 and fatal internal failures authorize no certified output. Diagnostic
 models have null evaluations, segments, locations, instructions, data, emissions
 and binary; they may be used for source reconstruction and repair only.
@@ -75,7 +77,9 @@ into positive ranges for instruction opcodes, instruction operands and data
 operands. Existing listing grouping is independent of these source identities.
 `forced_absolute` records that `.W` was written; it is true even for `DEX.W` or
 `LDA.W #1`, whose encoding is not absolute. Access classes use the same native
-classification as instruction records, including pointer reads and RMW.
+classification as instruction records, including pointer reads and RMW, but
+addresses and control-flow targets describe the encoded operand (branch targets
+wrap to 16 bits). Expression evaluations retain their native untruncated values.
 
 IDs are deterministic preorder/collection ordinals within one model, not stable
 cross-edit symbol identifiers. Prefixes distinguish files (`f`), units (`u`),
@@ -136,7 +140,12 @@ overflow or depth exhaustion refuses with `SOURCE_MODEL_RESOURCE_LIMIT` and does
 not publish a truncated diagnostic capture. The normal parser/backend may reject
 inputs earlier under their existing limits. Unresolved facts use
 `SOURCE_MODEL_UNBOUND_REFERENCE` / `SOURCE_MODEL_VALUE_UNAVAILABLE`; coverage
-failures use `SOURCE_MODEL_INCOMPLETE`.
+failures use `SOURCE_MODEL_INCOMPLETE`. Collection exhaustion exits 3, with or
+without a diagnostics path. Failed source acquisition reports
+`SOURCE_MODEL_IO_ERROR` and publishes no empty capture. Output I/O failures use
+the same code; changed captured inputs use `SOURCE_MODEL_INPUT_CHANGED`.
+Internal layout/capture invariant failures use `SOURCE_MODEL_INTERNAL_ERROR`,
+separately from an invalid or unsupported source expression.
 
 Outputs are staged through the existing output batch. Detected I/O, input-change
 and publication failures preserve the previous successful set. This is not

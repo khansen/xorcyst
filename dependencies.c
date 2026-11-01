@@ -25,7 +25,7 @@ typedef struct dependency {
 } dependency;
 
 static dependency *inputs, **tail = &inputs;
-static int active, protect_outputs, failed, argument_count;
+static int active, protect_outputs, failed, argument_count, input_changed;
 static char **arguments, *directory;
 static const char *producer_version;
 static char *manifest_path;
@@ -384,6 +384,7 @@ int dependencies_validate(void)
         int missing = !exists && (errno == ENOENT || errno == ENOTDIR);
         free(bytes);
         if (entry->missing ? !missing : (!exists || size != entry->size || strcmp(hash, entry->hash))) {
+            input_changed = 1;
             failure("input changed or became unavailable", entry->path);
             return 0;
         }
@@ -571,6 +572,8 @@ int dependencies_write(const char *path)
     return ok;
 }
 
+int dependencies_input_changed(void) { return input_changed; }
+
 int dependencies_failed(void)
 {
     return (active || protect_outputs) && failed;
@@ -598,5 +601,5 @@ void dependencies_clear(void)
     free(arguments); free(directory); free(manifest_path);
     manifest_path = NULL;
     arguments = NULL; directory = NULL; tail = &inputs;
-    argument_count = active = protect_outputs = failed = 0;
+    argument_count = active = protect_outputs = failed = input_changed = 0;
 }

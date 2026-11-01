@@ -1479,12 +1479,13 @@ static void model_values(unsigned syntax, ir_id pc)
         }
         copy = astnode_clone(prepared, loc_preserve);
         if (!copy) { err(prepared->loc, "out of memory resolving source model"); return; }
+        analysis_shadow_error = 0;
         copy = astproc_analysis_reduce(copy, ASTPROC_INSTRUCTION_TRANSLATED, model_binding_sink, &i);
         analysis_shadow_active = 1;
         value = expression(copy, use_pc);
         finish_captures();
         analysis_shadow_active = 0;
-        source_model_value(i, value, use_pc);
+        if (!analysis_shadow_error) source_model_value(i, value, use_pc);
         astnode_finalize(copy);
     }
 }

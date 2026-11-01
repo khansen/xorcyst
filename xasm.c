@@ -1625,6 +1625,7 @@ int main(int argc, char *argv[]) {
                  xasm_args.swap_parens,
                  xasm_args.case_insensitive)) {
         fprintf(stderr, "error: could not open `%s' for reading\n", xasm_args.input_file);
+        if (source_model_enabled()) fprintf(stderr, "error: SOURCE_MODEL_IO_ERROR: root source could not be acquired\n");
         exit_code = dependencies_failed() ? 3 : 1;
         goto cleanup;
     }
@@ -1657,7 +1658,7 @@ int main(int argc, char *argv[]) {
         err_count++;
     }
 
-    if (!source_model_capture(root_node)) { exit_code = 1; goto cleanup; }
+    if (!source_model_capture(root_node)) { exit_code = source_model_collection_failed() ? 3 : 1; goto cleanup; }
     if (yynerrs == 0) ir_frontend_process(root_node);
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
@@ -1909,7 +1910,8 @@ cleanup:
     clear_xref_data_directive_provenance();
     if (xasm_args.dependency_manifest && exit_code == 0 && total_errors() == 0
         && output_generated && !dependencies_write(xasm_args.dependency_manifest)) exit_code = 3;
-    if (source_model_enabled() && model_destinations && !dependencies_failed()) {
+    if (source_model_enabled() && source_model_collection_failed()) exit_code = 3;
+    if (source_model_enabled() && source_model_has_source() && model_destinations && !dependencies_failed()) {
         int certified = output_generated && !total_errors() && !source_model_failed() &&
                         (exit_code == 0 || exit_code == 4 || exit_code == 5);
         if (!dependencies_validate()) exit_code = 3;
@@ -1954,8 +1956,13 @@ model_done:
          * not an allocation/I/O/serialization failure. Retain its existing
          * exit status and valid artifacts. */
         int publish = (exit_code == 0 || exit_code == 4 || exit_code == 5) && total_errors() == 0;
-        if (!output_batch_finish(publish) && publish) exit_code = 3;
+        if (!output_batch_finish(publish) && publish) {
+            if (source_model_enabled()) fprintf(stderr, "error: SOURCE_MODEL_IO_ERROR: could not publish output batch\n");
+            exit_code = 3;
+        }
     }
+    if (source_model_enabled() && dependencies_input_changed())
+        fprintf(stderr, "error: SOURCE_MODEL_INPUT_CHANGED: input changed or became unavailable\n");
     free(tmp_outfile);
     source_model_clear();
     dependencies_clear();

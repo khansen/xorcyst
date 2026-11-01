@@ -26,11 +26,15 @@ static char *model_strdup(const char *s) { return allocation_fault() ? NULL : st
 #define source_model_prepare prepare_real
 #define source_model_binding binding_real
 #define source_model_write write_real
+#define source_model_bound bound_real
+#define source_model_finish finish_real
 #include "../source_model.c"
 #undef source_model_capture
 #undef source_model_prepare
 #undef source_model_binding
 #undef source_model_write
+#undef source_model_bound
+#undef source_model_finish
 #undef malloc
 #undef calloc
 #undef realloc
@@ -121,4 +125,20 @@ void source_model_binding(size_t i, const location *loc)
             if (nodes[j].is_declaration && !strcmp(declaration_name(j), "Other"))
                 nodes[i].declaration = (unsigned)j + 1;
     }
+}
+
+void source_model_bound(const astnode *node, const symtab_entry *symbol, int analysis)
+{
+    const char *mutation = getenv("XASM_TEST_MODEL_MUTATION");
+    if (analysis && mutation && !strcmp(mutation, "usage")) {
+        ++((symtab_entry *)symbol)->ref_count;
+        fprintf(stderr, "INJECT_ANALYSIS_USAGE\n");
+    }
+    bound_real(node, symbol, analysis);
+}
+int source_model_finish(ir_unit *values, ir_layout *layout)
+{
+    const char *mutation = getenv("XASM_TEST_MODEL_MUTATION");
+    if (mutation && !strcmp(mutation, "layout") && range_count) ranges[0].end = SIZE_MAX;
+    return finish_real(values, layout);
 }

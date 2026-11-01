@@ -133,6 +133,7 @@ static astproc_instruction_stage_hook instruction_stage_hook = NULL;
  * terms beside each real operand. Shadow work must be invisible: it prints no
  * diagnostics and leaves error, warning and symbol use counts alone. */
 static int analysis_shadow_active = 0;
+static int analysis_shadow_error = 0;
 static astnode *analysis_shadow_root = NULL;
 static astproc_binding_sink analysis_binding_sink = NULL;
 static void *analysis_binding_arg = NULL;
@@ -381,7 +382,7 @@ static int branch_level(astnode *n, char marker, const char *kind, int *level_ou
 static void err(location loc, const char *fmt, ...)
 {
     va_list ap;
-    if (analysis_shadow_active) return;
+    if (analysis_shadow_active) { analysis_shadow_error = 1; return; }
     va_start(ap, fmt);
 
     fprintf(stderr, "%s:", loc.file);

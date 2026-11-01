@@ -29,5 +29,7 @@ int source_model_finish(ir_unit *, ir_layout *);
 int source_model_write(const char *, int, const char *, const char *, int);
 void source_model_report(void);
 int source_model_failed(void);
+int source_model_collection_failed(void);
+int source_model_has_source(void);
 void source_model_clear(void);
 #endif

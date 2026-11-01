@@ -10,6 +10,7 @@ from mos6502_oracle import OPCODES, expected_memory_access
 import base64
 import hashlib
 import json
+import re
 
 
 class ModelError(ValueError):
@@ -45,6 +46,7 @@ def sha(data):
 def reconstruct(model):
     """Return logical path -> bytes; no pathname in the model is ever opened."""
     files = index(model["files"])
+    require(bool(files), "MODEL_SOURCE_PARTITION")
     data = {}
     for fid, f in files.items():
         raw = decode(f["bytes_base64"])
@@ -109,6 +111,60 @@ def integer_operator(op, args):
     return i32(result)
 
 
+def check_units(model, syntax, raw):
+    """Check lexical labels against embedded bytes, not a second source parse."""
+    punctuation = dict(zip(
+        [b",", b":", b"#", b"(", b")", b"[", b"]", b"+", b"-", b"*", b"/", b"%", b"&", b"|", b"^", b"<", b">", b"~", b"!", b"$",
+         b"<<", b">>", b"<=", b">=", b"==", b"!=", b"A", b"X", b"Y"],
+        ["COMMA", "COLON", "IMMEDIATE", "LPAREN", "RPAREN", "LBRACKET", "RBRACKET", "PLUS", "MINUS", "STAR", "SLASH", "PERCENT", "AMPERSAND", "PIPE", "CARET", "LESS", "GREATER", "TILDE", "BANG", "CURRENT_PC",
+         "SHL_OP", "SHR_OP", "LE_OP", "GE_OP", "EQ_OP", "NE_OP", "ACCUMULATOR", "REGISTER_X", "REGISTER_Y"]))
+    if model["semantic_options"]["swap_parens"]:
+        for a, b in ((b"(", b"["), (b")", b"]")): punctuation[a], punctuation[b] = punctuation[b], punctuation[a]
+    directives = {b"DB": "BYTE", b"BYTE": "BYTE", b"DW": "WORD", b"WORD": "WORD",
+                  b"ORG": "ORG", b"EQU": "EQU", b"END": "END"}
+    mnemonics = {m.encode() for m, _ in OPCODES.values()} | {b"BLT", b"BGE"}
+    counts, by_file = defaultdict(int), defaultdict(list)
+    for u in model["units"]:
+        b = raw[u["file_id"]][u["byte_start"]:u["byte_end_exclusive"]]
+        kind = "newline" if b == b"\n" else "comment" if b.startswith(b";") else "whitespace" if not b.strip(b" \t") else "token"
+        require(u["kind"] == kind, "MODEL_SOURCE_PARTITION")
+        if kind != "token":
+            require(u["syntax_id"] is None and u["token_kind"] == ("NEWLINE" if kind == "newline" else None), "MODEL_SOURCE_PARTITION")
+            continue
+        text = b.strip(b" \t").upper()
+        if text.endswith(b":"): expected = "LOCAL_LABEL" if text.startswith(b"@@") else "LABEL"
+        elif text in punctuation: expected = punctuation[text]
+        elif text.lstrip(b".") in directives: expected = directives[text.lstrip(b".")]
+        elif text.removesuffix(b".W") in mnemonics: expected = "MNEMONIC"
+        elif text.startswith(b'"') and text.endswith(b'"'): expected = "STRING_LITERAL"
+        elif re.fullmatch(rb"(?:%[01]+|[01]+B|0[0-7]*|[1-9][0-9]*|0X[0-9A-F]+|\$[0-9A-F]+|[0-9][0-9A-F]*H|'.')", text): expected = "INTEGER_LITERAL"
+        elif text.startswith(b"@@"): expected = "LOCAL_ID"
+        elif set(text) == {43}: expected = "FORWARD_BRANCH"
+        elif set(text) == {45}: expected = "BACKWARD_BRANCH"
+        else: expected = "IDENTIFIER"
+        require(u["token_kind"] == expected, "MODEL_SOURCE_PARTITION")
+        counts[expected] += 1
+        by_file[u["file_id"]].append(u)
+    # Independently derive the smallest containing syntax span for every token.
+    starts = {fid: [u["byte_start"] for u in us] for fid, us in by_file.items()}
+    owners = {}
+    for node in syntax.values():
+        sp = node["span"]
+        if not sp or sp["file_id"] not in by_file: continue
+        us = by_file[sp["file_id"]]
+        a = bisect_left(starts[sp["file_id"]], sp["byte_start"])
+        b = bisect_left(starts[sp["file_id"]], sp["byte_end_exclusive"])
+        for at in range(a, b):
+            u = us[at]
+            if u["byte_end_exclusive"] <= sp["byte_end_exclusive"]: owners[u["id"]] = node["id"]
+    for us in by_file.values():
+        for u in us: require(u["syntax_id"] == owners.get(u["id"]) and u["syntax_id"] in syntax, "MODEL_SOURCE_PARTITION")
+    for tokens, kinds in ((["END"], ["END_NODE"]), (["EQU"], ["EQU_NODE"]), (["ORG"], ["ORG_NODE"]),
+                         (["MNEMONIC"], ["INSTRUCTION_NODE"]), (["BYTE", "WORD"], ["DATA_NODE"]),
+                         (["LABEL"], ["LABEL_NODE"]), (["LOCAL_LABEL"], ["LOCAL_LABEL_NODE"])):
+        require(sum(counts[t] for t in tokens) == sum(n["kind"] in kinds for n in syntax.values()), "MODEL_REFERENCE_COVERAGE")
+
+
 def validate(model):
     require(model.get("schema") == "xasm-source-model" and model.get("version") == 1
             and model.get("profile") == "asm-edit-v1" and model.get("target") == "mos6502", "MODEL_SCHEMA")
@@ -157,21 +213,26 @@ def validate(model):
     reference_kinds = {"IDENTIFIER_NODE", "LOCAL_ID_NODE", "FORWARD_BRANCH_NODE", "BACKWARD_BRANCH_NODE"}
     expression_kinds = reference_kinds | {"INTEGER_NODE", "STRING_NODE", "CURRENT_PC_NODE", "ARITHMETIC_NODE"}
     expected_expressions, expected_reference_syntax = set(), set()
-    roots_by_context = {}
+    roots_by_context, context_by_syntax, operand_by_syntax = {}, {}, {}
     for sid, node in syntax.items():
         children = node["children"]
         roots = (children[1:] if node["kind"] in ("EQU_NODE", "DATA_NODE") else
                  children if node["kind"] in ("ORG_NODE", "INSTRUCTION_NODE") else [])
         roots_by_context[sid] = roots
-        todo = list(roots)
+        context = sid
+        while syntax[context]["parent_id"] and syntax[syntax[context]["parent_id"]]["kind"] != "LIST_NODE":
+            context = syntax[context]["parent_id"]
+        todo = [(child, pos) for pos, child in enumerate(roots)]
         while todo:
-            child = todo.pop()
+            child, pos = todo.pop()
+            context_by_syntax[child] = context
+            operand_by_syntax[child] = pos if node["kind"] in ("DATA_NODE", "INSTRUCTION_NODE", "ORG_NODE") else None
             if syntax[child]["kind"] in expression_kinds:
                 require(child not in expected_expressions, "MODEL_REFERENCE_COVERAGE")
                 expected_expressions.add(child)
                 if syntax[child]["kind"] in reference_kinds:
                     expected_reference_syntax.add(child)
-            todo.extend(syntax[child]["children"])
+            todo.extend((c, pos) for c in syntax[child]["children"])
     expr_by_syntax = {e["syntax_id"]: e for e in expressions.values()}
     require(len(expr_by_syntax) == len(expressions) and set(expr_by_syntax) == expected_expressions,
             "MODEL_REFERENCE_COVERAGE")
@@ -192,9 +253,25 @@ def validate(model):
                          "ARITHMETIC_NODE": "unary" if len(node["children"]) == 1 else "binary"}[node["kind"]]
         require(e["kind"] == expected_kind and [expressions[c]["syntax_id"] for c in e["children"]] == node["children"],
                 "MODEL_REFERENCE_COVERAGE")
+        require(e["span"] == node["span"] and e["context_syntax_id"] == context_by_syntax[e["syntax_id"]], "MODEL_REFERENCE_COVERAGE")
         span_bytes(e["span"])
     for d in declarations.values():
         require(d["syntax_id"] in syntax, "MODEL_BINDING_TARGET")
+        node = syntax[d["syntax_id"]]
+        expected_kind = {"EQU_NODE": "equ", "LABEL_NODE": "global", "LOCAL_LABEL_NODE": "local",
+                         "FORWARD_BRANCH_DECL_NODE": "anonymous", "BACKWARD_BRANCH_DECL_NODE": "anonymous"}[node["kind"]]
+        require(d["kind"] == expected_kind and d["symbol_id"] == d["id"], "MODEL_BINDING_TARGET")
+        if d["kind"] == "equ":
+            require(d["name_span"] == syntax[node["children"][0]]["span"] and
+                    d["expression_id"] in expressions and
+                    expressions[d["expression_id"]]["syntax_id"] == node["children"][1] and
+                    d["location_id"] is None, "MODEL_BINDING_TARGET")
+        else:
+            raw = span_bytes(node["span"])
+            start = node["span"]["byte_start"] + len(raw) - len(raw.lstrip(b" \t"))
+            require(d["name_span"] == {"file_id": node["span"]["file_id"], "byte_start": start,
+                                       "byte_end_exclusive": start + len(d["name"])} and
+                    d["expression_id"] is None, "MODEL_BINDING_TARGET")
         spelling = span_bytes(d["name_span"]).decode("ascii")
         require((spelling.upper() if opts["case_insensitive"] else spelling) == d["name"], "MODEL_BINDING_TARGET")
     global_anchors, anon_chains = defaultdict(list), defaultdict(list)
@@ -214,7 +291,11 @@ def validate(model):
     for rid, ref in references.items():
         require(ref["expression_id"] in expressions and expressions[ref["expression_id"]]["reference_id"] == rid,
                 "MODEL_REFERENCE_COVERAGE")
+        expression = expressions[ref["expression_id"]]
+        require(ref["span"] == expression["span"] and ref["context_syntax_id"] == expression["context_syntax_id"],
+                "MODEL_REFERENCE_COVERAGE")
         spelling = span_bytes(ref["span"]).decode("ascii")
+        require(ref["spelling"] == spelling, "MODEL_BINDING_TARGET")
         require((spelling.upper() if opts["case_insensitive"] else spelling) == ref["name"], "MODEL_BINDING_TARGET")
         if ref["declaration_id"] is None:
             require(model["status"] == "diagnostic" and ref["diagnostic_id"] in diagnostics, "MODEL_BINDING_TARGET")
@@ -257,7 +338,38 @@ def validate(model):
     for ref in references.values():
         require(ref["scope_id"] == scope_by_owner[owner(ref["span"])] and ref["diagnostic_id"] is None,
                 "MODEL_BINDING_TARGET")
+    check_units(model, syntax, source_bytes)
     require(model["exit_status"] in (0, 4, 5), "MODEL_DIAGNOSTIC_STATE")
+    comparison, audit = model["analysis_outcomes"]["comparison"], model["analysis_outcomes"]["audit"]
+    require(comparison in ("not_requested", "not_run", "equal", "mismatch") and
+            audit in ("not_requested", "not_run", "clear", "findings"), "MODEL_DIAGNOSTIC_STATE")
+    compared = [d for d in model["dependencies"] if "comparison" in d["roles"]]
+    requested_compare = any(a == "--compare" or a.startswith("--compare=") for a in model["invocation"]["argv"])
+    require(requested_compare == (comparison != "not_requested"), "MODEL_DIAGNOSTIC_STATE")
+    require(comparison not in ("equal", "mismatch") or any(not d["missing"] for d in compared), "MODEL_DIAGNOSTIC_STATE")
+    require((model["exit_status"] == 5) == (comparison == "mismatch"), "MODEL_DIAGNOSTIC_STATE")
+    require(model["exit_status"] != 4 or audit == "findings", "MODEL_DIAGNOSTIC_STATE")
+    for f in files.values():
+        require(any("source" in d["roles"] and d["sha256"] == f["sha256"] and not d["missing"]
+                    for d in model["dependencies"]), "MODEL_IDENTITY")
+    require(any("producer" in d["roles"] and d["sha256"] == identity["producer_sha256"]
+                for d in model["dependencies"]), "MODEL_IDENTITY")
+    # Reachability, not incidental first-pass folding, determines EQU origins.
+    equ_by_syntax = {d["syntax_id"]: d for d in declarations.values() if d["kind"] == "equ"}
+    refs_by_context = defaultdict(list)
+    for r in references.values(): refs_by_context[r["context_syntax_id"]].append(r)
+    pending = [r["declaration_id"] for r in references.values() if r["context_syntax_id"] not in equ_by_syntax]
+    reached = set()
+    while pending:
+        did = pending.pop()
+        if did in reached: continue
+        reached.add(did)
+        decl = declarations[did]
+        if decl["kind"] == "equ": pending.extend(r["declaration_id"] for r in refs_by_context[decl["syntax_id"]])
+    def origin(context):
+        return "assembly" if context not in equ_by_syntax or equ_by_syntax[context]["id"] in reached else "analysis"
+    for ref in references.values():
+        require(ref["resolution_origin"] == origin(ref["context_syntax_id"]), "MODEL_VALUE")
     if model["analysis_outcomes"]["comparison"] == "not_run":
         require(model["exit_status"] == 4 and model["analysis_outcomes"]["audit"] == "findings", "MODEL_DIAGNOSTIC_STATE")
     locations = index(model["locations"])
@@ -274,6 +386,14 @@ def validate(model):
             and counts["evaluated_expressions"] == len(expressions)
             and counts["instruction_statements"] == len(model["instructions"])
             and counts["data_statements"] == len(model["data"]), "MODEL_REFERENCE_COVERAGE")
+    for d in declarations.values():
+        if d["kind"] != "equ":
+            require(d["location_id"] in locations and locations[d["location_id"]]["syntax_id"] == d["syntax_id"], "MODEL_SEGMENT")
+    for row in evaluations.values():
+        e = expressions[row["expression_id"]]
+        require(row["context_syntax_id"] == e["context_syntax_id"] and
+                row["operand_index"] == operand_by_syntax[e["syntax_id"]] and
+                row["resolution_origin"] == origin(e["context_syntax_id"]), "MODEL_VALUE")
     cache, active = {}, set()
     def evaluate(eid):
         if eid in cache:
@@ -316,12 +436,17 @@ def validate(model):
         require(emission["output_start"] == offset and emission["output_end_exclusive"] > offset, "MODEL_EMISSION_RANGE")
         offset = emission["output_end_exclusive"]
         require(offset <= len(binary) and emission["syntax_id"] in syntax, "MODEL_EMISSION_RANGE")
-        require(emission["segment_id"] == by_syntax[emission["syntax_id"]]["segment_id"], "MODEL_SEGMENT")
+        loc = by_syntax[emission["syntax_id"]]
+        require(emission["segment_id"] == loc["segment_id"], "MODEL_SEGMENT")
+        require(emission["cpu_address"] == loc["cpu_address"] + emission["output_start"] - loc["output_offset"], "MODEL_EMISSION_RANGE")
     require(offset == len(binary), "MODEL_EMISSION_RANGE")
     segment_list = list(segments.values())
     require(segment_list[0] == {"id": "g1", "start_syntax_id": None, "address_space": "cpu", "origin": 0, "output_offset": 0}, "MODEL_SEGMENT")
     segment_at, pc, output = 0, 0, 0
+    lexical_pc = {}
     for s in syntax.values():
+        if s["kind"] in ("EQU_NODE", "ORG_NODE"):
+            lexical_pc[s["id"]] = {"cpu_address": pc, "segment_id": segment_list[segment_at]["id"]}
         if s["id"] not in by_syntax:
             continue
         loc = by_syntax[s["id"]]
@@ -337,16 +462,26 @@ def validate(model):
         else:
             pc += loc["byte_length"]; output += loc["byte_length"]
     require(output == len(binary) and segment_at + 1 == len(segment_list), "MODEL_SEGMENT")
+    pc_contexts = {e["context_syntax_id"] for e in expressions.values() if e["kind"] == "pc"}
+    for v in evaluations.values():
+        context = v["context_syntax_id"]
+        # EQUs without $ can retain an irrelevant first-pass PC estimate after
+        # a forward operand shrinks. Native xasm refuses $ at such an unstable
+        # declaration point. Check every PC-dependent EQU and every ORG.
+        if context in lexical_pc and (context in pc_contexts or syntax[context]["kind"] == "ORG_NODE"):
+            require(v["pc_context"] == lexical_pc[context], "MODEL_VALUE")
     for table, kind in (("data", "DATA_NODE"), ("instructions", "INSTRUCTION_NODE")):
         rows = index(model[table])
         require(len({r["syntax_id"] for r in rows.values()}) == len(rows) and
                 {r["syntax_id"] for r in rows.values()} ==
                 {sid for sid, node in syntax.items() if node["kind"] == kind}, "MODEL_REFERENCE_COVERAGE")
         for row in rows.values():
+            require(row["location_id"] in locations and locations[row["location_id"]]["syntax_id"] == row["syntax_id"], "MODEL_SEGMENT")
             require(row["emission_ids"] == [e["id"] for e in emissions_by_syntax[row["syntax_id"]]], "MODEL_EMISSION_RANGE")
             require([expressions[o["expression_id"]]["syntax_id"] for o in row["operands"]] ==
                     roots_by_context[row["syntax_id"]], "MODEL_REFERENCE_COVERAGE")
-            for operand in row["operands"]:
+            for pos, operand in enumerate(row["operands"]):
+                require(operand["index"] == pos, "MODEL_EMISSION_RANGE")
                 require(evaluations[operand["evaluation_id"]]["expression_id"] == operand["expression_id"], "MODEL_VALUE")
                 loc = locations[row["location_id"]]
                 start = operand.get("output_offset", loc["output_offset"] + 1)
@@ -378,6 +513,12 @@ def validate(model):
         require(mnemonic == row["mnemonic"] and row["final_mode"] == mode.upper()+"_MODE", "MODEL_VALUE")
         native_operand = int.from_bytes(code[1:], "little") if len(code) > 1 else 0
         require(row["memory_access"] == expected_memory_access({"opcode": row["opcode"], "operand_value": native_operand}), "MODEL_VALUE")
+        kind = ("branch" if mode == "relative" else "jump" if mnemonic == "JMP" else "call" if mnemonic == "JSR"
+                else "return" if mnemonic in ("RTS", "RTI") else "trap" if mnemonic == "BRK" else "none")
+        displacement = int.from_bytes(code[1:], "little", signed=True) if kind == "branch" else None
+        target = ((loc["cpu_address"] + 2 + displacement) & 0xffff if kind == "branch" else
+                  native_operand if kind in ("call", "jump") and mode != "indirect" else None)
+        require(row["control_flow"] == {"kind": kind, "target": target, "encoded_displacement": displacement}, "MODEL_VALUE")
         if row["operand_ids"]:
             val = evaluate(row["operands"][0]["expression_id"])
             require(type(val) is int, "MODEL_VALUE")

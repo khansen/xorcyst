@@ -35,7 +35,7 @@ typedef struct {
     int is_end;
     int expression, reference, is_declaration, operand, observed, prepared_pc;
     ir_id value, pc;
-    int value_set, located;
+    int value_set, located, reachable;
     unsigned segment, address, offset, length;
     unsigned char opcode;
     int operand_value;
@@ -59,7 +59,7 @@ static model_diagnostic *diagnostics;
 static size_t file_count, unit_count, unit_capacity, node_count, node_capacity;
 static size_t range_count, range_capacity, diagnostic_count, diagnostic_capacity;
 static size_t last_match = SIZE_MAX;
-static int failed, oom, finished;
+static int failed, oom, internal_error, finished;
 static ir_unit *native_values;
 static const unsigned char *binary;
 static size_t binary_size;
@@ -68,6 +68,8 @@ static unsigned *declaration_lookup;
 static size_t declaration_capacity;
 
 int source_model_failed(void) { return failed || oom; }
+int source_model_collection_failed(void) { return oom || internal_error; }
+int source_model_has_source(void) { return file_count != 0; }
 
 static int grow(void **p, size_t *capacity, size_t needed, size_t item)
 {
@@ -141,6 +143,7 @@ static void diagnose(const char *code, const char *message, size_t f, size_t b, 
                      unsigned syntax, unsigned related)
 {
     failed = 1;
+    if (!strcmp(code, "SOURCE_MODEL_INTERNAL_ERROR")) internal_error = 1;
     if (!grow((void **)&diagnostics, &diagnostic_capacity, diagnostic_count + 1, sizeof(*diagnostics))) return;
     diagnostics[diagnostic_count++] = (model_diagnostic){code, message, f, b, e, syntax, related};
 }
@@ -156,7 +159,7 @@ void source_model_match(location loc, size_t length)
     if (!source_model_enabled()) return;
     f = file_at(loc); b = offset_at(f, loc.last_line, loc.last_column);
     if (b == SIZE_MAX || f >= file_count || length > files[f].snapshot.size - b) {
-        diagnose("SOURCE_MODEL_INCOMPLETE", "lexer span outside snapshot", f, b, b, 0, 0); return;
+        diagnose("SOURCE_MODEL_INTERNAL_ERROR", "lexer span outside snapshot", f, b, b, 0, 0); return;
     }
     if (!grow((void **)&units, &unit_capacity, unit_count + 1, sizeof(*units))) return;
     last_match = unit_count;
@@ -413,7 +416,7 @@ void source_model_binding(size_t i, const location *loc)
     if (i >= node_count || !nodes[i].reference) return;
     d = declaration_at(loc);
     if (nodes[i].declaration && d != nodes[i].declaration)
-        node_error(i, "SOURCE_MODEL_INCOMPLETE", "native reference resolution changed");
+        node_error(i, "SOURCE_MODEL_INTERNAL_ERROR", "native reference resolution changed");
     nodes[i].declaration = d;
 }
 void source_model_bound(const astnode *a, const symtab_entry *s, int analysis)
@@ -473,13 +476,16 @@ int source_model_finish(ir_unit *values, ir_layout *layout)
             offset += fact.length;
             if (r->operand == -1 && fact.kind == IR_FACT_INSTRUCTION) {
                 nodes[r->syntax - 1].opcode = fact.opcode;
-                nodes[r->syntax - 1].operand_value = fact.operand;
+                /* Memory/control-flow facts describe the encoded operand. Native
+                 * expression evaluations retain their untruncated value. */
+                nodes[r->syntax - 1].operand_value = fact.length > 1 ? binary[fact.output_offset + 1] : 0;
+                if (fact.length > 2) nodes[r->syntax - 1].operand_value |= binary[fact.output_offset + 2] << 8;
             }
         }
         r->length = offset - r->offset;
         if (r->operand == -1) {
             model_node *n = &nodes[r->syntax - 1];
-            if (n->located) node_error(r->syntax - 1, "SOURCE_MODEL_INCOMPLETE", "duplicate statement layout");
+            if (n->located) node_error(r->syntax - 1, "SOURCE_MODEL_INTERNAL_ERROR", "duplicate statement layout");
             n->located = 1; n->address = r->address; n->offset = r->offset;
             n->length = r->length; n->segment = r->segment;
         }
@@ -492,10 +498,10 @@ int source_model_finish(ir_unit *values, ir_layout *layout)
         if (n->expression && (!n->value_set || ir_evaluate(values, n->value).state != IR_KNOWN))
             node_error(i, "SOURCE_MODEL_VALUE_UNAVAILABLE", "native expression value is unavailable");
         if ((is_label(n->source->type) || n->source->type == DATA_NODE || n->source->type == INSTRUCTION_NODE) && !n->located)
-            node_error(i, "SOURCE_MODEL_INCOMPLETE", "missing native statement location");
+            node_error(i, "SOURCE_MODEL_INTERNAL_ERROR", "missing native statement location");
     }
     if (failed && !diagnostic_count)
-        diagnose("SOURCE_MODEL_INCOMPLETE", "native layout ranges are incomplete", 0, 0, 0, 0, 0);
+        diagnose("SOURCE_MODEL_INTERNAL_ERROR", "native layout ranges are incomplete", 0, 0, 0, 0, 0);
     finished = !source_model_failed();
     return finished;
 }
@@ -570,6 +576,33 @@ static void digest(const void *p, size_t size, char hex[65])
 {
     sha256_context c; sha256_init(&c); sha256_update(&c, p, size); sha256_finish(&c, hex);
 }
+static void mark_reachable_equ(unsigned declaration, unsigned *queue, size_t *count)
+{
+    if (declaration && nodes[declaration - 1].source->type == EQU_NODE && !nodes[declaration - 1].reachable) {
+        nodes[declaration - 1].reachable = 1;
+        queue[(*count)++] = declaration;
+    }
+}
+static int resolution_origins(void)
+{
+    size_t i, at = 0, count = 0;
+    unsigned *queue = node_count ? malloc(node_count * sizeof(*queue)) : NULL;
+    if (node_count && !queue) { oom = 1; return 0; }
+    for (i = 0; i < node_count; ++i) nodes[i].reachable = 0;
+    for (i = 0; i < node_count; ++i)
+        if (nodes[i].reference && !source_model_equ_context(i)) mark_reachable_equ(nodes[i].declaration, queue, &count);
+    while (at < count) {
+        size_t context = queue[at++] - 1;
+        for (i = context + 1; i < nodes[context].subtree_end; ++i)
+            if (nodes[i].reference) mark_reachable_equ(nodes[i].declaration, queue, &count);
+    }
+    free(queue);
+    return 1;
+}
+static const char *resolution_origin(size_t i)
+{
+    return !source_model_equ_context(i) || nodes[nodes[i].context - 1].reachable ? "assembly" : "analysis";
+}
 static void write_nodes(FILE *f, int certified)
 {
     size_t i; int comma = 0;
@@ -638,7 +671,7 @@ static void write_nodes(FILE *f, int certified)
         fputs(",\"scope_id\":", f); id(f, 'q', n->scope + 1);
         fputs(",\"declaration_id\":", f); id(f, 'd', n->declaration);
         fputs(",\"resolution_origin\":", f);
-        if (n->declaration) string(f, n->observed ? "assembly" : "analysis"); else fputs("null", f);
+        if (n->declaration) string(f, resolution_origin(i)); else fputs("null", f);
         fputs(",\"diagnostic_id\":", f); id(f, 'z', n->declaration ? 0 : n->diagnostic); fputc('}', f);
     }
     fputs("],\"evaluations\":", f);
@@ -653,7 +686,7 @@ static void write_nodes(FILE *f, int certified)
         fprintf(f, ",\"pc_context\":{\"cpu_address\":%d,\"segment_id\":", pc);
         id(f, 'g', nodes[n->context - 1].segment + 1);
         fputs("},\"value\":", f); value(f, ir_evaluate(native_values, n->value));
-        fputs(",\"resolution_origin\":", f); string(f, n->observed || !source_model_equ_context(i) ? "assembly" : "analysis");
+        fputs(",\"resolution_origin\":", f); string(f, resolution_origin(i));
         fputs(",\"reference_values\":[", f);
         size_t j; int rc = 0;
         for (j = i; j < n->subtree_end; ++j) if (nodes[j].reference) {
@@ -733,7 +766,8 @@ static void write_layout(FILE *f, int certified)
                   mnemonic == BRK_MNEMONIC ? "trap" : "none");
         fputs(",\"target\":", f);
         if (mode == RELATIVE_MODE || (mode != INDIRECT_MODE && (mnemonic == JMP_MNEMONIC || mnemonic == JSR_MNEMONIC)))
-            fprintf(f, "%d", n->operand_value);
+            fprintf(f, "%u", mode == RELATIVE_MODE ?
+                    (n->address + 2 + (int)(int8_t)n->operand_value) & 0xffffu : (unsigned)n->operand_value);
         else fputs("null", f);
         fputs(",\"encoded_displacement\":", f);
         if (mode == RELATIVE_MODE) fprintf(f, "%d", (int)(int8_t)binary[n->offset + 1]);
@@ -752,7 +786,9 @@ static void write_layout(FILE *f, int certified)
         for (j = i + 2; j < nodes[i].subtree_end; j = nodes[j].subtree_end) {
             model_range *range = &ranges[nodes[i].operand_range_first + (size_t)operands];
             ir_result v = ir_evaluate(native_values, nodes[j].value);
-            if (range->syntax != i + 1 || range->operand != operands) { failed = 1; break; }
+            if (range->syntax != i + 1 || range->operand != operands) {
+                node_error(i, "SOURCE_MODEL_INTERNAL_ERROR", "native data operand range does not match its statement"); break;
+            }
             if (operands++) fputc(',', f);
             fprintf(f, "{\"id\":\"o%zu-%d\",\"index\":%d,\"expression_id\":\"e%zu\",\"evaluation_id\":\"v%zu\",\"element_count\":%zu,\"output_offset\":%u,\"byte_length\":%u,\"emission_ranges\":[{\"output_start\":%u,\"output_end_exclusive\":%u}]}",
                     i + 1, operands - 1, operands - 1, j + 1, j + 1, v.value.kind == IR_STRING ? v.value.as.string.length : (size_t)1,
@@ -854,9 +890,10 @@ int source_model_write(const char *path, int certified, const char *comparison, 
     sha256_context hash; char input_id[65], model_id[65];
     if (!source_model_enabled()) return 1;
     dependencies_visit(add_file, NULL);
-    if (oom) return 0;
+    if (oom || !resolution_origins()) return 0;
+    if (!file_count) { fprintf(stderr, "error: SOURCE_MODEL_IO_ERROR: root source was not captured\n"); return 0; }
     if (certified && !finished) {
-        diagnose("SOURCE_MODEL_INCOMPLETE", "native layout capture did not complete", 0, 0, 0, 0, 0);
+        diagnose("SOURCE_MODEL_INTERNAL_ERROR", "native layout capture did not complete", 0, 0, 0, 0, 0);
         return 0;
     }
     if (!certified) {
@@ -874,7 +911,9 @@ int source_model_write(const char *path, int certified, const char *comparison, 
     sha256_finish(&hash, input_id);
     sha256_init(&hash); hash_field(&hash, "xasm-source-model:1:asm-edit-v1");
     hash_field(&hash, input_id); hash_field(&hash, producer_hash); sha256_finish(&hash, model_id);
-    if (!output_file_open(&out, path)) return 0;
+    if (!output_file_open(&out, path)) {
+        fprintf(stderr, "error: SOURCE_MODEL_IO_ERROR: could not open model output\n"); return 0;
+    }
     f = out.stream;
     fprintf(f, "{\"schema\":\"xasm-source-model\",\"version\":1,\"profile\":\"asm-edit-v1\",\"target\":\"mos6502\",\"status\":\"%s\",\"analysis_outcomes\":{\"comparison\":\"%s\",\"audit\":\"%s\"},",
             certified ? "certified" : "diagnostic", comparison, audit);
@@ -918,10 +957,17 @@ int source_model_write(const char *path, int certified, const char *comparison, 
         fputs(",\"related_declaration_id\":", f); id(f, 'd', d->related); fputc('}', f);
     }
     fputs("]}\n", f);
-    if (ferror(f) || (certified && source_model_failed()) || !dependencies_validate()) {
+    if (ferror(f)) {
+        fprintf(stderr, "error: SOURCE_MODEL_IO_ERROR: could not write model output\n");
         output_file_discard(&out); return 0;
     }
-    return output_file_finish(&out, 1);
+    if ((certified && source_model_failed()) || !dependencies_validate()) {
+        output_file_discard(&out); return 0;
+    }
+    if (!output_file_finish(&out, 1)) {
+        fprintf(stderr, "error: SOURCE_MODEL_IO_ERROR: could not stage model output\n"); return 0;
+    }
+    return 1;
 }
 void source_model_report(void)
 {
@@ -949,7 +995,7 @@ void source_model_clear(void)
     files = NULL; nodes = NULL; units = NULL; ranges = NULL; diagnostics = NULL;
     file_count = node_count = unit_count = range_count = diagnostic_count = 0;
     node_capacity = unit_capacity = range_capacity = diagnostic_capacity = 0;
-    failed = oom = finished = 0; last_match = SIZE_MAX;
+    failed = oom = internal_error = finished = 0; last_match = SIZE_MAX;
     native_values = NULL; binary = NULL; binary_size = 0;
     declaration_lookup = NULL; declaration_capacity = 0;
 }

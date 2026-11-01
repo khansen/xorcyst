@@ -19,6 +19,7 @@ FILE *dependencies_open(const char *path, const char *mode, unsigned role);
 int dependencies_validate(void);
 int dependencies_write(const char *path);
 int dependencies_failed(void);
+int dependencies_input_changed(void);
 /* Borrow immutable consumed snapshots while the invocation is alive. */
 typedef struct {
     const char *path;

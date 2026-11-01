@@ -124,8 +124,9 @@ xasm --pure-binary --source-model=model.json \
 source snapshots and native layout metadata; it must not depend on requesting
 instruction records, debug output or any other analysis product. Xref filters
 must not remove declarations or uses from the model. The diagnostics path is
-optional and requires `--source-model`. Empty/colliding paths, unknown
-profiles, unsupported CLI combinations and object-mode requests are usage errors.
+optional and requires `--source-model`. Empty paths, unknown profiles, unsupported
+CLI combinations and object-mode requests are usage errors (exit 2). Colliding
+paths use the existing output-collision refusal (exit 3), as in §8.
 There is no environment-variable API or hidden `XASM_SOURCE_PROBE_*` prerequisite.
 
 The model is one UTF-8 JSON document with schema `xasm-source-model` and integer
