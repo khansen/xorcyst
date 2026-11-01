@@ -155,8 +155,13 @@ def check_units(model, syntax, raw):
         a = bisect_left(starts[sp["file_id"]], sp["byte_start"])
         b = bisect_left(starts[sp["file_id"]], sp["byte_end_exclusive"])
         if node["kind"] in ("EQU_NODE", "ORG_NODE"):
+            text = raw[sp["file_id"]]
+            line_end = text.find(b"\n", sp["byte_end_exclusive"])
+            tail = text[sp["byte_end_exclusive"]:None if line_end < 0 else line_end].lstrip(b" \t")
             require(a < b and us[b - 1]["byte_end_exclusive"] == sp["byte_end_exclusive"]
-                    and us[b - 1]["token_kind"] != "COLON", "MODEL_SOURCE_PARTITION")
+                    and b"\n" not in text[sp["byte_start"]:sp["byte_end_exclusive"]]
+                    and all(u["token_kind"] != "COLON" for u in us[a:b])
+                    and tail[:1] in (b"", b":", b";"), "MODEL_SOURCE_PARTITION")
         for at in range(a, b):
             u = us[at]
             if u["byte_end_exclusive"] <= sp["byte_end_exclusive"]: owners[u["id"]] = node["id"]

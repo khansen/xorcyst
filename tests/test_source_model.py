@@ -110,6 +110,17 @@ class SourceModelTests(unittest.TestCase):
                 edited = self.assemble(saved)
                 self.assertEqual(model["binary"], edited["binary"])
 
+    def test_statement_span_end_mutations(self):
+        for statement, kind in ((b"K .EQU 1+2", "EQU_NODE"), (b".ORG 1+2", "ORG_NODE")):
+            for separator in (b" ; c\n", b" : "):
+                source = statement + separator + b"LDA #3\n"
+                model = self.assemble(source)
+                node = next(s for s in model["syntax"] if s["kind"] == kind)
+                for end in (source.index(b"+2"), source.index(b"LDA") + 3, len(source) - 1):
+                    with self.subTest(statement=statement, separator=separator, end=end):
+                        self.assert_mutation(model, lambda x: next(s for s in x["syntax"] if s["id"] == node["id"])
+                            ["span"].update(byte_end_exclusive=end), "MODEL_SOURCE_PARTITION")
+
     def test_diagnostic_consumed_files_with_equal_basenames(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
