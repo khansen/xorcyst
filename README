@@ -21,6 +21,11 @@ The approved semantics and resource decisions are recorded in
 [performance protocol](doc/performance.md) and
 [object wire layout](doc/object-format.md).
 
+The draft [lossless source model specification](XASM_SOURCE_MODEL_SPEC.md) and
+its [independent review request](XASM_SOURCE_MODEL_REVIEW.md) describe proposed
+structured-editing support. They are source-only design documents, not implemented
+command-line options or a release commitment.
+
 Build and test
 --------------
 
