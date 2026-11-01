@@ -4953,7 +4953,7 @@ static const char *instruction_index_register(addressing_mode mode)
     }
 }
 
-static void emit_memory_access(FILE *fp, unsigned char opcode, int operand_value)
+void analysis_write_memory_access(FILE *fp, unsigned char opcode, int operand_value)
 {
     addressing_mode mode = opcode_addressing_mode(opcode);
     memory_access_kind kind = instruction_data_access(opcode);
@@ -5198,7 +5198,7 @@ static int emit_instruction_records_body(FILE *fp, const xref_build_context *ctx
         if (length > 1) fprintf(fp, ",%u", (unsigned int)encoded & 0xff);
         if (length > 2) fprintf(fp, ",%u", ((unsigned int)encoded >> 8) & 0xff);
         fprintf(fp, "],\"memory_access\":");
-        emit_memory_access(fp, opcode, record->operand_value);
+        analysis_write_memory_access(fp, opcode, record->operand_value);
         fprintf(fp, ",\"additive_terms\":");
         if (!emit_additive_terms(fp, record)) return 0;
         fprintf(fp, "}");

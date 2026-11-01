@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise both installed tools without relying on build-tree executables."""
 from pathlib import Path
+import base64
+import json
 import re
 import subprocess
 import sys
@@ -25,6 +27,7 @@ class Installation(unittest.TestCase):
     def test_installed_documentation(self):
         documents = ['README', 'NEWS', 'MIGRATING_TO_2.0.md', 'xorcyst.texinfo',
                      'doc/object-format.md', 'doc/performance.md',
+                     'doc/source-model.md', 'doc/source-model.schema.json', 'XASM_SOURCE_MODEL_SPEC.md',
                      'XASM_ANALYSIS_FEATURES_GUIDE.md',
                      'XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md', 'XASM_DEPENDENCY_MANIFEST_SPEC.md',
                      'XASM_FCEUX_NL_EXPORT_SPEC.md', 'XASM_INDEX_BOUND_ANALYSIS_SPEC.md',
@@ -74,6 +77,13 @@ class Installation(unittest.TestCase):
                 '--fceux-nl-rom-prefix=game.nes.')
             self.assertEqual((root / 'raw.bin').read_bytes(), expected)
             self.assertEqual((root / 'game.nes.0.nl').read_text(), '$8000#Entry#\n')
+            run('xasm', '--pure-binary', 'input.asm', '-o', 'raw.bin', '--source-model=model.json')
+            original = (root / 'input.asm').read_bytes()
+            (root / 'input.asm').unlink()
+            model = json.loads((root / 'model.json').read_bytes())
+            self.assertEqual(model['status'], 'certified')
+            self.assertEqual(base64.b64decode(model['files'][0]['bytes_base64']), original)
+            self.assertEqual(base64.b64decode(model['binary']['bytes_base64']), expected)
 
 
 if __name__ == '__main__':

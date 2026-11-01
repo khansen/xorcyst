@@ -1,3 +1,15 @@
+[LOSSLESS SOURCE MODEL]
+The opt-in --source-model=FILE interface exports lossless source units, parsed
+syntax, native bindings, values and segment-aware byte ranges in JSON schema 1.
+Its asm-edit-v1 profile requires pure-binary mode and refuses unsupported source
+forms without changing ordinary assembly. --source-model-diagnostics=FILE writes
+a separate non-certified repair model on failure.
+.PP
+Static queries may use certified models from exits 0, 4 and 5. Parity-preserving
+services must require analysis_outcomes.comparison equal: exit 4 can skip the
+comparison, and exit 5 means mismatch. See source-model.md and
+source-model.schema.json in the installed documentation.
+
 [SEE ALSO]
 The complete manual \(em the full assembly language, every analysis and
 reverse-engineering output format, and the linker script language \(em

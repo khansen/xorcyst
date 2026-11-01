@@ -62,6 +62,7 @@ const char *maybe_ignorecase(char *);
 #include "xasm.h"
 #include "listing.h"
 #include "dependencies.h"
+#include "source_model.h"
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
@@ -84,7 +85,8 @@ static int mnemonic_wide(instr_mnemonic mnc)
 }
 
 /* Each time we match a string, move the end cursor to its end. */
-#define YY_USER_ACTION  yylloc.last_column += yyleng;
+#define YY_USER_ACTION  if (source_model_enabled()) source_model_match(yylloc, (size_t)yyleng); yylloc.last_column += yyleng;
+#define YY_DECL static int scan_token(void)
 %}
 whitespace      [ \t]+
 comment         ";"[^\n]*
@@ -105,8 +107,8 @@ label_prefix        ^[ \t]*
     start of the next token.  */
 LOCATION_STEP (yylloc);
 %}
-{whitespace}        { LOCATION_STEP (yylloc); }
-{comment}       { LOCATION_STEP (yylloc); }
+{whitespace}        { if (source_model_enabled()) source_model_trivia("whitespace"); LOCATION_STEP (yylloc); }
+{comment}       { if (source_model_enabled()) source_model_trivia("comment"); LOCATION_STEP (yylloc); }
 "%"{binary_literal} { yylval.integer = strtol(&yytext[1], NULL, 2); return(INTEGER_LITERAL); }
 {binary_literal}"B" { yylval.integer = strtol(yytext, NULL, 2); return(INTEGER_LITERAL); }
 {octal_literal}     { yylval.integer = strtol(yytext, NULL, 8); return(INTEGER_LITERAL); }
@@ -297,8 +299,14 @@ LOCATION_STEP (yylloc);
 "!="                    { return(NE_OP); }
 "$"         { return('$'); }
 "@"         { return('@'); }
-.           { yyerror("Skipping invalid character(s)"); LOCATION_STEP (yylloc); }
+.           { source_model_trivia("unclassified"); yyerror("Skipping invalid character(s)"); LOCATION_STEP (yylloc); }
 %%
+int yylex(void)
+{
+    int token = scan_token();
+    if (source_model_enabled()) source_model_token(token);
+    return token;
+}
 /**
  * Describes a file stack record.
  * It holds name, location and buffer state for it.
@@ -558,6 +566,7 @@ void yyerror(const char *s) {
         LOCATION_PRINT(stderr, file_stack[i].loc);
         fprintf(stderr, ")\n");
     }
+    source_model_parse_error(yylloc, s);
     ++yynerrs;
 }
 

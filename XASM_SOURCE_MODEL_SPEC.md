@@ -1,7 +1,7 @@
 # xasm lossless source model
 
-Status: revision 2 draft for focused independent review, 2026-11-01. Specification only; no public
-source-model interface is implemented by this branch. Baseline: XORcyst 2.0.0
+Status: approved contract (2878072), implemented on a local branch; external
+implementation review and release are pending. Baseline: XORcyst 2.0.0
 and repository commit `51dd295b89073b7858e4c6cf9a19776af7e9bbc7`.
 
 ## 1. Purpose and boundary

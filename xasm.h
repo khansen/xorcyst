@@ -83,6 +83,10 @@ typedef enum tag_data_coverage_format data_coverage_format;
 struct tag_xasm_arguments {
     const char *input_file;
     const char *dependency_manifest;
+    const char *source_model;
+    const char *source_model_diagnostics;
+    const char *source_model_profile;
+    int command_line_definitions;
     int debug;
     int silent;
     int verbose;

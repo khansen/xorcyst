@@ -2,6 +2,8 @@
 #define LISTING_H
 
 #include <stdio.h>
+/* Shared final-opcode access semantics used by both wire formats. */
+void analysis_write_memory_access(FILE *, unsigned char opcode, int operand_value);
 #include "astnode.h"
 #include "xasm.h"
 

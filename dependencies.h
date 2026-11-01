@@ -19,6 +19,17 @@ FILE *dependencies_open(const char *path, const char *mode, unsigned role);
 int dependencies_validate(void);
 int dependencies_write(const char *path);
 int dependencies_failed(void);
+/* Borrow immutable consumed snapshots while the invocation is alive. */
+typedef struct {
+    const char *path;
+    unsigned roles;
+    int missing;
+    const unsigned char *bytes;
+    size_t size;
+    const char *sha256;
+} dependency_snapshot;
+int dependencies_visit(int (*visit)(const dependency_snapshot *, void *), void *);
+int dependencies_write_evidence(FILE *);
 void dependencies_clear(void);
 
 #endif

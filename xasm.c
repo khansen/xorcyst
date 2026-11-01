@@ -107,6 +107,7 @@
 #include "listing.h"
 #include "xasm.h"
 #include "dependencies.h"
+#include "source_model.h"
 #include "output_file.h"
 #include "version.h"
 
@@ -137,6 +138,9 @@ xasm_arguments xasm_args;
 static struct option long_options[] = {
   { "define",   required_argument, 0, 'D' },
   { "dependency-manifest", required_argument, 0, 0 },
+  { "source-model", required_argument, 0, 0 },
+  { "source-model-profile", required_argument, 0, 0 },
+  { "source-model-diagnostics", required_argument, 0, 0 },
   { "include-path", required_argument, 0, 'I' },
   { "output",   required_argument, 0, 'o' },
   { "listing",  required_argument, 0, 'L' },
@@ -217,6 +221,8 @@ Usage: xasm [-gqsvV] [-D IDENT[=VALUE]] [--define=IDENT]\n\
             [--instruction-records-output=FILE]\n\
             [--fceux-nl-rom-prefix=PREFIX] [--fceux-nl-ram-output=FILE]\n\
             [--fceux-nl-mirror-16k]\n\
+            [--source-model=FILE] [--source-model-profile=asm-edit-v1]\n\
+            [--source-model-diagnostics=FILE]\n\
             [--dependency-manifest=FILE]\n\
             [--xref-include-owner=true|false]\n\
             [--xref-include-locals=true|false]\n\
@@ -279,6 +285,11 @@ The XORcyst Assembler -- it kicks the 6502's ass\n\
     --fceux-nl-mirror-16k  Name both CPU windows of a 16KB NROM image\n\
                             ($8000-$BFFF and $C000-$FFFF;\n\
                             requires exactly 16384 PRG bytes)\n\
+    --source-model=FILE    Lossless source model (requires pure binary)\n\
+    --source-model-profile=asm-edit-v1\n\
+                            Explicit capability profile (default asm-edit-v1)\n\
+    --source-model-diagnostics=FILE\n\
+                            Separate non-certified repair model on failure\n\
     --dependency-manifest=FILE\n\
                             Snapshot/hash consumed inputs (pure binary)\n\
     --xref-include-locals=BOOL\n\
@@ -743,6 +754,7 @@ parse_arguments (int argc, char **argv)
             break;
 
             case 'D': {
+                xasm_args.command_line_definitions = 1;
                 char *id;
                 char *str;
                 astnode *val;
@@ -805,7 +817,16 @@ parse_arguments (int argc, char **argv)
 
             case 0:
             /* Use index to differentiate between options */
-            if (strcmp(long_options[index].name, "dependency-manifest") == 0) {
+            if (strcmp(long_options[index].name, "source-model") == 0) {
+                if (!*optarg) cli_error("--source-model requires a nonempty output path");
+                xasm_args.source_model = optarg;
+            } else if (strcmp(long_options[index].name, "source-model-profile") == 0) {
+                if (strcmp(optarg, "asm-edit-v1")) cli_error("unsupported source-model profile");
+                xasm_args.source_model_profile = optarg;
+            } else if (strcmp(long_options[index].name, "source-model-diagnostics") == 0) {
+                if (!*optarg) cli_error("--source-model-diagnostics requires a nonempty output path");
+                xasm_args.source_model_diagnostics = optarg;
+            } else if (strcmp(long_options[index].name, "dependency-manifest") == 0) {
                 if (!optarg[0]) cli_error("--dependency-manifest requires a nonempty output path");
                 xasm_args.dependency_manifest = optarg;
             } else if (strcmp(long_options[index].name, "usage") == 0) {
@@ -1032,6 +1053,10 @@ parse_arguments (int argc, char **argv)
         xasm_args.input_file = argv[optind];
     }
 
+    if ((xasm_args.source_model_profile || xasm_args.source_model_diagnostics) && !xasm_args.source_model)
+        cli_error("source-model profile/diagnostics require --source-model");
+    if (xasm_args.source_model && (!xasm_args.pure_binary || xasm_args.command_line_definitions))
+        cli_error("--source-model requires --pure-binary and forbids -D/--define");
     if (xasm_args.xref_data) {
         if (xasm_args.xref_file == NULL) {
             cli_error("--xref-data=true requires --xref=FILE");
@@ -1518,6 +1543,8 @@ int main(int argc, char *argv[]) {
     char *tmp_outfile = NULL;
     analysis_result *analysis = NULL;
     analysis_output_plan *analysis_outputs = NULL;
+    const char *model_comparison = "not_requested", *model_audit = "not_requested";
+    int model_destinations = 0;
 
     /* Working directory is needed for include statements */
     xasm_path = getcwd(NULL, 0);
@@ -1533,6 +1560,8 @@ int main(int argc, char *argv[]) {
     /* Parse our arguments. */
     dependencies_arguments(argc, argv);
     if (!parse_arguments(argc, argv)) { exit_code = 1; goto cleanup; }
+    if (xasm_args.compare_file) model_comparison = "not_run";
+    if (xasm_args.audit_raw_addresses) model_audit = "not_run";
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
     if (!xasm_args.pure_binary && (xasm_args.xref_file || xasm_args.instruction_records_file ||
@@ -1542,8 +1571,9 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "error: structured analysis requires --pure-binary\n");
         exit_code = 1; goto cleanup;
     }
-    if (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.fceux_nl_ram_file)
+    if (xasm_args.xref_instructions || xasm_args.instruction_records_file || xasm_args.fceux_nl_ram_file || source_model_enabled())
         astnode_capture_source_locations(1);
+    if (source_model_enabled()) astnode_capture_source_model(1);
     if (xasm_args.listing_file) {
         if (!xasm_args.pure_binary) {
             fprintf(stderr, "error: listings require --pure-binary\n");
@@ -1566,13 +1596,13 @@ int main(int argc, char *argv[]) {
     needs_analysis = xasm_args.xref_file || xasm_args.instruction_records_file
         || xasm_args.fceux_nl_rom_prefix || xasm_args.fceux_nl_ram_file;
 
-    if (xasm_args.dependency_manifest
+    if ((xasm_args.dependency_manifest || source_model_enabled())
         && !dependencies_start(program_version, xasm_args.dependency_manifest)) {
         exit_code = 3;
         goto cleanup;
     }
 
-    if (!xasm_args.dependency_manifest && needs_output_protection
+    if (!xasm_args.dependency_manifest && !source_model_enabled() && needs_output_protection
         && !dependencies_start_output_protection()) {
         exit_code = 3;
         goto cleanup;
@@ -1585,6 +1615,11 @@ int main(int argc, char *argv[]) {
         err_count++;
     }
 
+    if (source_model_enabled()) {
+        if (!dependencies_output(xasm_args.source_model) ||
+            !dependencies_output(xasm_args.source_model_diagnostics)) { exit_code = 3; goto cleanup; }
+        model_destinations = 1;
+    }
     /* Open input for scanning */
     if (!yybegin(xasm_args.input_file,
                  xasm_args.swap_parens,
@@ -1597,8 +1632,12 @@ int main(int argc, char *argv[]) {
  /* Parse it into a syntax tree */
     //yydebug = -1;
     verbose("Parsing input...");
-    if (yyparse() != 0) { exit_code = 1; goto cleanup; }
+    if (yyparse() != 0) {
+        source_model_capture(root_node);
+        exit_code = 1; goto cleanup;
+    }
 
+    if (root_node == NULL && source_model_enabled()) root_node = astnode_create(LIST_NODE, loc_preserve);
     if (root_node == NULL) {
         if (xasm_args.listing_file)
             root_node = astnode_create(LIST_NODE, loc_preserve);
@@ -1618,6 +1657,7 @@ int main(int argc, char *argv[]) {
         err_count++;
     }
 
+    if (!source_model_capture(root_node)) { exit_code = 1; goto cleanup; }
     if (yynerrs == 0) ir_frontend_process(root_node);
     if (symtab_failed()) { exit_code = 1; goto symbol_failure; }
 
@@ -1846,6 +1886,7 @@ int main(int argc, char *argv[]) {
                                          xasm_args.audit_rom_range_set,
                                          xasm_args.audit_rom_lo,
                                          xasm_args.audit_rom_hi);
+        if (findings >= 0) model_audit = findings ? "findings" : "clear";
         if (findings < 0) {
             exit_code = 3;
         } else if (xasm_args.audit_level_error && findings > 0) {
@@ -1856,6 +1897,7 @@ int main(int argc, char *argv[]) {
     if ((exit_code == 0) && output_generated && xasm_args.compare_file != NULL) {
         verbose("Comparing output...");
         exit_code = run_compare(root_node);
+        model_comparison = exit_code == 0 ? "equal" : exit_code == 5 ? "mismatch" : "not_run";
     }
 
     goto cleanup;
@@ -1867,6 +1909,44 @@ cleanup:
     clear_xref_data_directive_provenance();
     if (xasm_args.dependency_manifest && exit_code == 0 && total_errors() == 0
         && output_generated && !dependencies_write(xasm_args.dependency_manifest)) exit_code = 3;
+    if (source_model_enabled() && model_destinations && !dependencies_failed()) {
+        int certified = output_generated && !total_errors() && !source_model_failed() &&
+                        (exit_code == 0 || exit_code == 4 || exit_code == 5);
+        if (!dependencies_validate()) exit_code = 3;
+        else if (certified) {
+            if (!source_model_write(xasm_args.source_model, 1, model_comparison, model_audit, exit_code)) exit_code = 3;
+        } else if (xasm_args.source_model_diagnostics) {
+            if (!destinations_validated) {
+                /* A parser error can precede normal output planning. Reserve
+                 * every fixed destination before a diagnostic file is written. */
+                const char *out = xasm_args.output_file;
+                if (!out) {
+                    size_t size = strlen(xasm_args.input_file) + 3;
+                    default_outfile = malloc(size);
+                    if (!default_outfile) { exit_code = 3; goto model_done; }
+                    change_extension(xasm_args.input_file, "o", default_outfile, size);
+                    out = default_outfile;
+                }
+                size_t size = strlen(out) + 5;
+                tmp_outfile = malloc(size);
+                if (!tmp_outfile) { exit_code = 3; goto model_done; }
+                snprintf(tmp_outfile, size, "%s.tmp", out);
+                if (!validate_output_destinations(&xasm_args, NULL, out, tmp_outfile) ||
+                    !dependencies_output(xasm_args.xref_file) ||
+                    !dependencies_output(xasm_args.instruction_records_file) ||
+                    !dependencies_output(xasm_args.fceux_nl_ram_file)) {
+                    exit_code = 3; goto model_done;
+                }
+            }
+            /* Discard the successful-output set before independently publishing
+             * a non-executable diagnostic model. */
+            output_batch_finish(0);
+            if (!source_model_write(xasm_args.source_model_diagnostics, 0, model_comparison, model_audit,
+                                    exit_code ? exit_code : 1)) exit_code = 3;
+        }
+    }
+model_done:
+    if (source_model_enabled()) source_model_report();
     if (dependencies_failed()) exit_code = 3;
     if (!ir_frontend_analysis_ok()) exit_code = 3;
     {
@@ -1877,6 +1957,7 @@ cleanup:
         if (!output_batch_finish(publish) && publish) exit_code = 3;
     }
     free(tmp_outfile);
+    source_model_clear();
     dependencies_clear();
 
     /* Cleanup */
@@ -1899,7 +1980,7 @@ cleanup:
 
     free(xasm_path);
 
-    if (xasm_args.dependency_manifest && exit_code == 3) return 3;
+    if ((xasm_args.dependency_manifest || source_model_enabled()) && exit_code == 3) return 3;
     if (total_errors() != 0) {
         return 1;
     }

@@ -6,6 +6,7 @@
 #include "program.h"
 #include "graph.h"
 #include "../listing.h"
+#include "../source_model.h"
 static uint64_t binding_epoch = 1;
 static astnode *frontend_capture_constant(astnode *, symtab_entry *);
 static astnode *frontend_fold_reference(astnode *);
@@ -238,7 +239,7 @@ static ir_id capture_symbol(symtab_entry *s, location loc)
         captures[capture_count] = (captured_constant){0, IR_NONE};
         s->tag = (int)++capture_count;
     }
-    ++s->ref_count;
+    if (!analysis_shadow_active) ++s->ref_count;
     c = &captures[s->tag - 1];
     if (c->epoch == binding_epoch)
         return c->reference;
@@ -405,6 +406,7 @@ static astnode *frontend_capture_constant(astnode *use, symtab_entry *s)
 {
     astnode *p = use->parent;
     ir_id value;
+    if (source_model_enabled()) source_model_bound(use, s, analysis_shadow_active);
     /* Type/member bases still need their source spelling for structural
      * lowering. Ordinary operands and index arguments capture values. */
     if (s->def->type == INTEGER_NODE)
@@ -443,7 +445,7 @@ static void resolve_pending(void)
                 value = capture_symbol(s, p->loc);
             else if (s->type == LABEL_SYMBOL || s->type == VAR_SYMBOL || s->type == PROC_SYMBOL)
             {
-                ++s->ref_count;
+                if (!analysis_shadow_active) ++s->ref_count;
                 value = ir_address(values, symbol_anchor(s, p->loc), owned_location(p->loc));
             }
             if (value != IR_NONE)
@@ -1069,10 +1071,11 @@ static ir_id expression(astnode *e, ir_id pc)
     case IDENTIFIER_NODE:
     {
         symtab_entry *s = symtab_lookup(e->ident);
+        if (source_model_enabled()) source_model_bound(e, s, analysis_shadow_active);
         if (declarations_complete && s && !(s->flags & EXTRN_FLAG) &&
             (s->type == LABEL_SYMBOL || s->type == VAR_SYMBOL || s->type == PROC_SYMBOL))
         {
-            ++s->ref_count;
+            if (!analysis_shadow_active) ++s->ref_count;
             return ir_address(values, symbol_anchor(s, e->loc), loc);
         }
         if (s && s->type == CONSTANT_SYMBOL && !(s->flags & EXTRN_FLAG))
@@ -1452,13 +1455,56 @@ static unsigned char *append_literals(size_t size, location loc)
 /* Plain output coalesces consecutive literal data, before lowering.
  * Labels, instructions, placement changes, and dynamic operands flush the run.
  * Dynamic operands retain individual fixups and their use anchors. */
+static void model_binding_sink(void *arg, const char *kind, const location *loc, const char *owner)
+{
+    (void)kind; (void)owner;
+    source_model_binding(*(const size_t *)arg, loc);
+}
+/* Run the existing resolver and value graph with native declaration context.
+ * Shadow resolution suppresses warning/use-count side effects. Layout anchors
+ * are shared with the real operand; source-model expressions never choose an
+ * opcode, advance the cursor, or supply an emitted byte. */
+static void model_values(unsigned syntax, ir_id pc)
+{
+    size_t i, end;
+    if (!source_model_enabled() || !syntax) return;
+    end = source_model_subtree_end(syntax - 1);
+    for (i = syntax - 1; i < end; ++i) {
+        astnode *prepared = source_model_prepared(i), *copy;
+        ir_id value, use_pc = pc;
+        if (!source_model_expression(i) || !prepared) continue;
+        if (use_pc == IR_NONE) {
+            use_pc = ir_anchor(values, owned_location(prepared->loc));
+            ir_place(values, use_pc, 1, source_model_context_pc(i));
+        }
+        copy = astnode_clone(prepared, loc_preserve);
+        if (!copy) { err(prepared->loc, "out of memory resolving source model"); return; }
+        copy = astproc_analysis_reduce(copy, ASTPROC_INSTRUCTION_TRANSLATED, model_binding_sink, &i);
+        analysis_shadow_active = 1;
+        value = expression(copy, use_pc);
+        finish_captures();
+        analysis_shadow_active = 0;
+        source_model_value(i, value, use_pc);
+        astnode_finalize(copy);
+    }
+}
 static void lower_data(astnode *n, int ram)
 {
     astnode *e = RHS(n);
     unsigned width = element_width(LHS(n)->datatype);
     const unsigned char *map = n->frontend_id ? maps[n->frontend_id - 1].map : NULL;
+    int operand_index = 0;
     while (e)
     {
+        size_t model_first = 0;
+        if (source_model_enabled()) {
+            ir_id use_pc;
+            flush_literals();
+            model_first = ir_layout_fragment_count(layout);
+            use_pc = ir_anchor(values, owned_location(e->loc));
+            ir_layout_mark(layout, use_pc, owned_location(e->loc));
+            model_values(astnode_source_model_root(e), use_pc);
+        }
         if (!ram && (e->type == INTEGER_NODE || e->type == STRING_NODE))
         {
             astnode *end = e;
@@ -1474,6 +1520,7 @@ static void lower_data(astnode *n, int ram)
                 }
                 size += count * width;
                 end = end->next_sibling;
+                if (source_model_enabled()) break;
             }
             bytes = append_literals(size, e->loc);
             if (err_count)
@@ -1553,6 +1600,11 @@ static void lower_data(astnode *n, int ram)
                 ir_layout_data(layout, pc, expr, width, !fixed_data_width(e), map, use);
             e = e->next_sibling;
         }
+        if (source_model_enabled()) {
+            flush_literals();
+            source_model_range(astnode_source_model_id(n), operand_index++, model_first,
+                               ir_layout_fragment_count(layout));
+        }
     }
 }
 static astnode *analysis_marker(const astnode *source)
@@ -1608,7 +1660,18 @@ static void lower(astnode *root)
         ir_id pc, expr, extent;
         source_row *row = NULL;
         int transferred = 0;
+        size_t model_first = 0;
+        unsigned model_syntax = source_model_enabled() ? astnode_source_model_id(n) : 0;
         next = n->next_sibling;
+        if (source_model_enabled()) {
+            flush_literals();
+            model_first = ir_layout_fragment_count(layout);
+            if (n->type == INSTRUCTION_NODE || n->type == ORG_NODE) {
+                ir_id use_pc = ir_anchor(values, loc);
+                ir_layout_mark(layout, use_pc, loc);
+                model_values(model_syntax, use_pc);
+            }
+        }
         if (collect_source_rows && (n->type == DATASEG_NODE || n->type == CODESEG_NODE ||
             n->type == ORG_NODE || n->type == LABEL_NODE || n->type == INSTRUCTION_NODE ||
             n->type == DATA_NODE || n->type == STORAGE_NODE || n->type == BINARY_NODE))
@@ -1823,6 +1886,10 @@ static void lower(astnode *root)
             flush_literals();
             row->end = ir_layout_fragment_count(layout);
         }
+        if (source_model_enabled()) {
+            flush_literals();
+            source_model_range(model_syntax, -1, model_first, ir_layout_fragment_count(layout));
+        }
         /* Preserve existing non-debug listing grouping without merging AST
          * operands or losing their independently captured maps/PC anchors. */
         join_source_row = row && !xasm_args.debug && n->type == DATA_NODE &&
@@ -1957,7 +2024,7 @@ void ir_frontend_process(astnode *root)
     collect_symbol_snapshot = collect_analysis_rows ||
         (xasm_args.listing_file && xasm_args.listing_format == LISTING_FORMAT_TEXT);
     collect_source_rows = xasm_args.pure_binary && (xasm_args.listing_file ||
-        collect_analysis_rows || xasm_args.compare_file);
+        collect_analysis_rows || xasm_args.compare_file || source_model_enabled());
     values = ir_unit_create();
     if (!values)
     {
@@ -2015,6 +2082,14 @@ void ir_frontend_process(astnode *root)
     warn_unused_equates();
     if (err_count || symtab_failed())
         return;
+    if (source_model_enabled()) {
+        size_t i;
+        for (i = 0; i < source_model_node_count(); ++i)
+            if (source_model_expression(i) && source_model_equ_context(i)) {
+                model_values((unsigned)i + 1, IR_NONE);
+                i = source_model_subtree_end(i) - 1;
+            }
+    }
     lower(root);
     finish_captures();
     resolve_pending();
@@ -2079,6 +2154,8 @@ void ir_frontend_finish(void)
             warn(parser_location(facts[i].location), "operand out of range; truncated");
     if (collect_source_rows && !err_count && !ir_frontend_visit_rows(validate_source_row, NULL))
         err(parser_location(ir_no_location()), "incomplete source layout facts");
+    if (!err_count && !source_model_finish(values, layout))
+        err(parser_location(ir_no_location()), "source model certification failed");
 }
 void ir_frontend_write(FILE *stream)
 {

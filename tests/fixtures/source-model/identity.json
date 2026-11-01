@@ -1,0 +1,33 @@
+[
+  {
+    "fields": [],
+    "wire_hex": "",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "fields": [
+      ""
+    ],
+    "wire_hex": "303a",
+    "sha256": "ba768b331fd86cec803be04e56ab2b3d4c0e98ef4ee4fcd4e72ad7cce61a1d1f"
+  },
+  {
+    "fields": [
+      "abc",
+      "æ"
+    ],
+    "wire_hex": "333a616263323ac3a6",
+    "sha256": "3003f34f8ba4a0e302bfc0cbead938a8061b9c1768c688e44366f6dc684af540"
+  },
+  {
+    "fields": [
+      "xasm-source-model-input-v1",
+      "case-sensitive",
+      "native-parens",
+      "input.asm",
+      "e5951c08cd41bd1cd633739871a91e012cbc9b920872075af9f5f57a660b8de9"
+    ],
+    "wire_hex": "32363a7861736d2d736f757263652d6d6f64656c2d696e7075742d763131343a636173652d73656e73697469766531333a6e61746976652d706172656e73393a696e7075742e61736d36343a65353935316330386364343162643163643633333733393837316139316530313263626339623932303837323037356166396635663537613636306238646539",
+    "sha256": "dc4cacf5a4965d84995dae9bb68f46a3c5d0d22b9d8dc2ca4264a265544ab365"
+  }
+]

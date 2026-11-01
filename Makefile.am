@@ -7,7 +7,7 @@ xasm_LDADD = $(LDADD)
 xlnk_LDADD = $(LDADD)
 
 xasm_SOURCES = \
-  astnode.c astnode.h \
+  astnode.c astnode.h source_model.c source_model.h \
   ir/frontend.c ir/frontend.h astproc.h expr_int.h \
   charmap.c charmap.h \
   loc.h \
@@ -31,11 +31,14 @@ dist_man1_MANS = man1/xasm.1 man1/xlnk.1
 
 # Distribute the grammar/lexer sources, but don’t use them by default to build
 EXTRA_DIST = astproc.c parser.y scanner.l parser.h \
+  tests/fixtures/source-model/example.asm tests/fixtures/source-model/example.json tests/fixtures/source-model/identity.json \
+  tests/source_model_support.py tests/source_model_schema.py tests/mos6502_oracle.py tests/test_source_model.py \
+  tests/test_source_model_faults.py tests/test_source_model_faults.c tests/test_source_model_consumer.py \
   tests/fixtures/object-wire-example.hex tests/check_wire_example.py \
   tests/projects/README.md tests/projects/baselines.json \
   tests/projects/freeze_baselines.py tests/projects/freeze_gate_assets.py \
   tests/projects/check_object_projects.py tests/projects/measure_object_projects.py \
-  tests/projects/measure_analysis.py \
+  tests/projects/measure_analysis.py tests/projects/check_source_models.py tests/projects/measure_source_models.py \
   tests/test_differential.py \
   tests/differential/README.md tests/differential/provenance.json \
   tests/differential/baseline.json tests/differential/build_reference.py \
@@ -116,6 +119,7 @@ dist_doc_DATA = README NEWS MIGRATING_TO_2.0.md xorcyst.texinfo \
   XASM_ANALYSIS_FEATURES_GUIDE.md \
   XASM_DATA_DIRECTIVE_REFERENCES_SPEC.md \
   XASM_DEPENDENCY_MANIFEST_SPEC.md \
+  XASM_SOURCE_MODEL_SPEC.md \
   XASM_FCEUX_NL_EXPORT_SPEC.md \
   XASM_INDEX_BOUND_ANALYSIS_SPEC.md \
   XASM_INSTRUCTION_RECORDS_SPEC.md \
@@ -126,7 +130,7 @@ dist_doc_DATA = README NEWS MIGRATING_TO_2.0.md xorcyst.texinfo \
 # Install maintained public protocols; private captures and historical review
 # records are not part of the release.
 nobase_dist_doc_DATA = doc/performance.md \
-  doc/object-format.md
+  doc/object-format.md doc/source-model.md doc/source-model.schema.json
 
 # Use the build-tree tools even when distcheck builds outside the source tree.
 check-local:
