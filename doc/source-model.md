@@ -64,7 +64,14 @@ ordinary assembly accepts it. Local names retain declaration scope; anonymous
 spellings form separate forward/backward chains (`+` and `++` are distinct).
 
 `evaluations` record native values and PC contexts for every expression, with
-reference-value evidence. `locations` identify a syntax record by segment,
+reference-value evidence. In an EQU expression containing no syntactic `$`,
+`pc_context.cpu_address` is null: the value does not depend on that context's PC,
+and a native first-pass estimate may be stale after address-mode narrowing.
+This includes aliases of other EQUs; the referenced EQU retains its own context.
+All other evaluation contexts carry the exact PC, including every subexpression
+of an EQU containing `$`. Native xasm refuses `$` at an unstable EQU declaration
+point. `segment_id` remains present even when the PC is null.
+`locations` identify a syntax record by segment,
 CPU address, output offset and length. Always qualify a CPU address by segment.
 Segment `g1` starts implicitly at address/output offset zero. Every `.ORG` starts
 a new segment, even when origins repeat. A label before an `.ORG` remains at

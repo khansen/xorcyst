@@ -132,7 +132,7 @@ def check_units(model, syntax, raw):
             require(u["syntax_id"] is None and u["token_kind"] == ("NEWLINE" if kind == "newline" else None), "MODEL_SOURCE_PARTITION")
             continue
         text = b.strip(b" \t").upper()
-        if text.endswith(b":"): expected = "LOCAL_LABEL" if text.startswith(b"@@") else "LABEL"
+        if text != b":" and text.endswith(b":"): expected = "LOCAL_LABEL" if text.startswith(b"@@") else "LABEL"
         elif text in punctuation: expected = punctuation[text]
         elif text.lstrip(b".") in directives: expected = directives[text.lstrip(b".")]
         elif text.removesuffix(b".W") in mnemonics: expected = "MNEMONIC"
@@ -331,6 +331,30 @@ def validate(model):
     scope_by_owner = {q["anchor_declaration_id"]: q["id"] for q in scopes.values()}
     globals_ = {d["id"] for d in declarations.values() if d["kind"] == "global"}
     require(len(scope_by_owner) == len(scopes) and set(scope_by_owner) == globals_ | {None}, "MODEL_BINDING_TARGET")
+    root_scope = roots[0]["id"]
+    require(len(files) == 1 and roots[0]["extent"] == {
+        "file_id": next(iter(files)), "byte_start": 0,
+        "byte_end_exclusive": len(next(iter(source_bytes.values())))}, "MODEL_BINDING_TARGET")
+    scope_anchors = defaultdict(list)
+    for did in globals_:
+        sp = syntax[declarations[did]["syntax_id"]]["span"]
+        # A label's parsed span may begin before its name, at indentation.
+        scope_anchors[sp["file_id"]].append((sp["byte_start"], did))
+    for fid, chain in scope_anchors.items():
+        chain.sort()
+        for at, (start, did) in enumerate(chain):
+            q = scopes[scope_by_owner[did]]
+            end = chain[at + 1][0] if at + 1 < len(chain) else len(source_bytes[fid])
+            require(q["kind"] == "global" and q["parent_id"] == root_scope and q["extent"] == {
+                "file_id": fid, "byte_start": start, "byte_end_exclusive": end}, "MODEL_BINDING_TARGET")
+    for node in syntax.values():
+        expected_scope = root_scope
+        if node["parent_id"] is not None:
+            sp = node["span"]
+            chain = scope_anchors[sp["file_id"]]
+            at = bisect_right(chain, (sp["byte_start"], "\uffff")) - 1
+            if at >= 0: expected_scope = scope_by_owner[chain[at][1]]
+        require(node["scope_id"] == expected_scope, "MODEL_BINDING_TARGET")
     for decl in declarations.values():
         expected_owner = owner(decl["name_span"])
         require(decl["scope_id"] == scope_by_owner[expected_owner]
@@ -465,11 +489,11 @@ def validate(model):
     pc_contexts = {e["context_syntax_id"] for e in expressions.values() if e["kind"] == "pc"}
     for v in evaluations.values():
         context = v["context_syntax_id"]
-        # EQUs without $ can retain an irrelevant first-pass PC estimate after
-        # a forward operand shrinks. Native xasm refuses $ at such an unstable
-        # declaration point. Check every PC-dependent EQU and every ORG.
-        if context in lexical_pc and (context in pc_contexts or syntax[context]["kind"] == "ORG_NODE"):
-            require(v["pc_context"] == lexical_pc[context], "MODEL_VALUE")
+        if context in lexical_pc:
+            expected_pc = dict(lexical_pc[context])
+            if syntax[context]["kind"] == "EQU_NODE" and context not in pc_contexts:
+                expected_pc["cpu_address"] = None
+            require(v["pc_context"] == expected_pc, "MODEL_VALUE")
     for table, kind in (("data", "DATA_NODE"), ("instructions", "INSTRUCTION_NODE")):
         rows = index(model[table])
         require(len({r["syntax_id"] for r in rows.values()}) == len(rows) and

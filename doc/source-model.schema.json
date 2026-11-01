@@ -1117,7 +1117,14 @@
           "type": "object",
           "properties": {
             "cpu_address": {
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "segment_id": {
               "type": "string",

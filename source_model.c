@@ -35,7 +35,7 @@ typedef struct {
     int is_end;
     int expression, reference, is_declaration, operand, observed, prepared_pc;
     ir_id value, pc;
-    int value_set, located, reachable;
+    int value_set, located, reachable, has_pc_expression;
     unsigned segment, address, offset, length;
     unsigned char opcode;
     int operand_value;
@@ -250,6 +250,7 @@ static unsigned capture_node(astnode *a, unsigned parent, unsigned context, unsi
     n->end = offset_at(n->file, loc.last_line, loc.last_column);
     n->name_begin = n->begin; n->name_end = n->end;
     n->expression = expr && is_expression(a->type);
+    if (n->expression && a->type == CURRENT_PC_NODE) nodes[n->context - 1].has_pc_expression = 1;
     n->reference = n->expression && is_reference(a->type);
     n->is_declaration = is_label(a->type) || a->type == EQU_NODE;
     n->value = n->pc = IR_NONE;
@@ -683,7 +684,10 @@ static void write_nodes(FILE *f, int certified)
         if (comma++) fputc(',', f);
         fprintf(f, "{\"id\":\"v%zu\",\"expression_id\":\"e%zu\",\"context_syntax_id\":\"s%u\",\"operand_index\":", i + 1, i + 1, n->context);
         if (n->operand < 0) fputs("null", f); else fprintf(f, "%d", n->operand);
-        fprintf(f, ",\"pc_context\":{\"cpu_address\":%d,\"segment_id\":", pc);
+        fputs(",\"pc_context\":{\"cpu_address\":", f);
+        if (source_model_equ_context(i) && !nodes[n->context - 1].has_pc_expression) fputs("null", f);
+        else fprintf(f, "%d", pc);
+        fputs(",\"segment_id\":", f);
         id(f, 'g', nodes[n->context - 1].segment + 1);
         fputs("},\"value\":", f); value(f, ir_evaluate(native_values, n->value));
         fputs(",\"resolution_origin\":", f); string(f, resolution_origin(i));

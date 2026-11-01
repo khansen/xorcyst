@@ -48,6 +48,9 @@ class SourceModelTests(unittest.TestCase):
             (b"NOP\n", b"\xea"), (b"\tnOp\n\n; utf8 \xc3\xa6\n", b"\xea"),
             (b"\n", b""), (b"NOP ; c\r\n", b"\xea"),
             (b'.DB "\xff\xfe"\n', b"\xff\xfe"), (b"NOP\n.END\n", b"\xea"),
+            (b"NOP\n.END:", b"\xea"), (b"-: NOP\nBNE -\n", b"\xea\xd0\xfd"),
+            (b"- : NOP\nBNE -\n", b"\xea\xd0\xfd"), (b"++: NOP\n", b"\xea"),
+            (b"+: NOP\n- NOP\nJMP +\n+ NOP\n", b"\xea\xea\x4c\x05\x00\xea"),
         ]
         for source, output in accepted:
             with self.subTest(source=source):
@@ -321,8 +324,55 @@ Later: NOP
                 if u["syntax_id"] == node["id"]: u["syntax_id"] = x["syntax"][0]["id"]
         self.assert_mutation(m, drop_end, "MODEL_REFERENCE_COVERAGE")
 
+    def test_equ_pc_context_null_without_current_pc(self):
+        for count in (1, 3):
+            with self.subTest(forward_loads=count):
+                m = self.assemble(b".ORG 0\n" + b"LDA Forward\n" * count + b"V .EQU 7\nForward: NOP\n")
+                self.assertEqual(base64.b64decode(m["binary"]["bytes_base64"]),
+                                 bytes([0xa5, 2 * count]) * count + b"\xea")
+                context = next(d["syntax_id"] for d in m["declarations"] if d["name"] == "V")
+                rows = [v for v in m["evaluations"] if v["context_syntax_id"] == context]
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["pc_context"], {"cpu_address": None, "segment_id": "g2"})
+                for address in (2 * count, 3 * count):
+                    self.assert_mutation(m, lambda x: next(v for v in x["evaluations"]
+                        if v["context_syntax_id"] == context)["pc_context"].update(cpu_address=address), "MODEL_VALUE")
+                self.assert_mutation(m, lambda x: next(v for v in x["evaluations"]
+                    if v["context_syntax_id"] == context)["pc_context"].update(segment_id="g1"), "MODEL_VALUE")
+        m = self.assemble(b".ORG $8000\nNOP\nP .EQU $+1\nAlias .EQU P+1\n.DW Alias\n.ORG $9000\nNOP\n")
+        context = {d["name"]: d["syntax_id"] for d in m["declarations"]}
+        for row in m["evaluations"]:
+            if row["context_syntax_id"] in (context["P"], context["Alias"]):
+                self.assertEqual(row["pc_context"], {"segment_id": "g2", "cpu_address":
+                    0x8001 if row["context_syntax_id"] == context["P"] else None})
+            else:
+                self.assertIsInstance(row["pc_context"]["cpu_address"], int)
+        for pos, row in enumerate(m["evaluations"]):
+            if row["pc_context"]["cpu_address"] is not None:
+                self.assert_mutation(m, lambda x: x["evaluations"][pos]["pc_context"].update(cpu_address=None), "MODEL_VALUE")
+
+    def test_scope_consistency(self):
+        source = b"Seed .EQU 7\nNOP\n  First: NOP\n@@loop: BNE @@loop\n\tSecond:\n\t@@loop: BNE @@loop\n.END\n"
+        m = self.assemble(source)
+        root = next(q for q in m["scopes"] if q["kind"] == "root")
+        scopes = [q for q in m["scopes"] if q["kind"] == "global"]
+        starts = [source.index(b"  First"), source.index(b"\tSecond")]
+        self.assertEqual([q["extent"] for q in scopes], [
+            {"file_id": "f1", "byte_start": starts[0], "byte_end_exclusive": starts[1]},
+            {"file_id": "f1", "byte_start": starts[1], "byte_end_exclusive": len(source)}])
+        for pos, row in enumerate(m["syntax"]):
+            with self.subTest(syntax=row["id"]):
+                wrong = root["id"] if row["scope_id"] != root["id"] else scopes[0]["id"]
+                self.assert_mutation(m, lambda x: x["syntax"][pos].update(scope_id=wrong), "MODEL_BINDING_TARGET")
+        for pos, row in enumerate(m["scopes"]):
+            with self.subTest(scope=row["id"]):
+                wrong = None if row["kind"] == "global" else scopes[0]["id"]
+                self.assert_mutation(m, lambda x: x["scopes"][pos].update(parent_id=wrong), "MODEL_BINDING_TARGET")
+                for field in ("byte_start", "byte_end_exclusive"):
+                    self.assert_mutation(m, lambda x: x["scopes"][pos]["extent"].update(
+                        {field: row["extent"][field] - 1}), "MODEL_BINDING_TARGET")
+
     def test_equ_pc_coordinated_corruption(self):
-        self.assemble(b".ORG 0\nLDA Forward\nV .EQU 7\nForward: NOP\n")
         self.assemble(b".ORG 0\nLDA Forward\nV .EQU $\nForward: NOP\n", expected=1)
         m = self.assemble(b".ORG $8000\nNOP\nP .EQU $\n.DW P\n")
         def corrupt(x):
