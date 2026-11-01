@@ -1,3 +1,13 @@
+Unreleased:
+
+- Add opt-in --source-model=FILE and the asm-edit-v1 profile: lossless input
+  bytes, parsed syntax, native bindings and evaluated expressions, segment-aware
+  layout and native instruction/data operand ranges in one certified JSON model.
+  Unsupported or ambiguous source refuses model certification without changing
+  ordinary assembly. A separate --source-model-diagnostics=FILE supports repair.
+- Existing source acceptance, binary/object formats and analysis schemas remain
+  unchanged. No v3 compatibility break is intended. See doc/source-model.md.
+
 Version 2.0.0:
 
 - Deliberate v2 linker-script correction: numeric arguments must consume the

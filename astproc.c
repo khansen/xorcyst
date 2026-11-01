@@ -133,6 +133,7 @@ static astproc_instruction_stage_hook instruction_stage_hook = NULL;
  * terms beside each real operand. Shadow work must be invisible: it prints no
  * diagnostics and leaves error, warning and symbol use counts alone. */
 static int analysis_shadow_active = 0;
+static int analysis_shadow_error = 0;
 static astnode *analysis_shadow_root = NULL;
 static astproc_binding_sink analysis_binding_sink = NULL;
 static void *analysis_binding_arg = NULL;
@@ -381,7 +382,7 @@ static int branch_level(astnode *n, char marker, const char *kind, int *level_ou
 static void err(location loc, const char *fmt, ...)
 {
     va_list ap;
-    if (analysis_shadow_active) return;
+    if (analysis_shadow_active) { analysis_shadow_error = 1; return; }
     va_start(ap, fmt);
 
     fprintf(stderr, "%s:", loc.file);
@@ -953,6 +954,7 @@ astnode *astproc_fold_constants(astnode *expr)
  */
 static void reference_constant(astnode *expr, symtab_entry *symbol)
 {
+    if (source_model_enabled()) source_model_bound(expr, symbol, analysis_shadow_active);
     if (!analysis_shadow_active) symbol->ref_count++;
     else if (expr == analysis_shadow_root) analysis_bind_symbol(symbol);
 }
@@ -2420,6 +2422,7 @@ static int inc_pc_by_binary(astnode *node, void *arg, astnode **next)
  */
 static int process_instruction(astnode *instr, void *arg, astnode **next)
 {
+    if (source_model_enabled()) source_model_prepare(instr, codeseg_pc);
     astnode *expr;
     if (in_dataseg) {
         err(instr->loc, "instructions not allowed in data segment");
@@ -2558,6 +2561,7 @@ static astnode *find_omitted_array_element(astnode *expr)
  */
 static int process_data(astnode *data, void *arg, astnode **next)
 {
+    if (source_model_enabled()) source_model_prepare(data, codeseg_pc);
     int j;
     int k;
     astnode *type;
@@ -3050,6 +3054,7 @@ static astnode *clone_equate_expression(astnode *value, location loc)
  */
 static int process_equ(astnode *equ, void *arg, astnode **next)
 {
+    if (source_model_enabled()) source_model_prepare(equ, codeseg_pc);
     ++binding_epoch;
     symtab_entry *e;
     astnode *id;
@@ -3282,6 +3287,7 @@ static int process_codeseg(astnode *codeseg, void *arg, astnode **next)
  */
 static int process_org(astnode *org, void *arg, astnode **next)
 {
+    if (source_model_enabled()) source_model_prepare(org, codeseg_pc);
     if (!xasm_args.pure_binary) {
         err(org->loc, "org directive can only be used when output format is pure 6502 binary");
     } else {
@@ -5166,6 +5172,7 @@ void astproc_second_pass(astnode *root)
         && !xasm_args.xref_summary
         && !xasm_args.analyze_index_patterns
         && !xasm_args.data_consumers
+        && !source_model_enabled()
         && !xasm_args.analyze_data_coverage) {
         report_unused_labels(1);
     } else {

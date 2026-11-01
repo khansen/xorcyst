@@ -1,0 +1,1436 @@
+{
+  "schema": "xasm-source-model",
+  "version": 1,
+  "profile": "asm-edit-v1",
+  "target": "mos6502",
+  "status": "certified",
+  "analysis_outcomes": {
+    "comparison": "not_requested",
+    "audit": "not_requested"
+  },
+  "exit_status": 0,
+  "identity": {
+    "schema_id": "xasm-source-model:1",
+    "profile_id": "asm-edit-v1",
+    "input_id": "1fde43feb1e41ccc8118ea618881730e955c84a3b8ca4b8cd89c7cff5c6bf8ca",
+    "producer_sha256": "b837eb590b86d927f6bf20e403621140bb86ed5ff9d9a447caad4cf682fd2cba",
+    "model_id": "a102515bf78a4fa9665d8c40f0a427102c8322dd261f88ae6f1d767650fdd583"
+  },
+  "semantic_options": {
+    "case_insensitive": false,
+    "swap_parens": false
+  },
+  "files": [
+    {
+      "id": "f1",
+      "path": "example.asm",
+      "byte_length": 93,
+      "sha256": "b9da733f2d0bf48a170b24292a0763f9724a786575a453342cfe77e98b1984b9",
+      "bytes_base64": "Lk9SRyAkODAwMApDZWxsIC5FUVUgJDEwCkVudHJ5OiBMREEgQ2VsbApAQGFnYWluOiBCTkUgQEBhZ2FpbgouREIgImFiIiw8RW50cnkKLkRXIEVudHJ5Ci5FTkQK"
+    }
+  ],
+  "invocation": {
+    "cwd": "/example",
+    "argv": [
+      "/usr/local/bin/xasm",
+      "--pure-binary",
+      "example.asm",
+      "-o",
+      "output.bin",
+      "--source-model=model.json"
+    ]
+  },
+  "dependencies": [
+    {
+      "path": "/usr/local/bin/xasm",
+      "missing": false,
+      "byte_length": 677432,
+      "sha256": "b837eb590b86d927f6bf20e403621140bb86ed5ff9d9a447caad4cf682fd2cba",
+      "roles": [
+        "producer"
+      ]
+    },
+    {
+      "path": "/example/example.asm",
+      "missing": false,
+      "byte_length": 93,
+      "sha256": "b9da733f2d0bf48a170b24292a0763f9724a786575a453342cfe77e98b1984b9",
+      "roles": [
+        "source"
+      ]
+    }
+  ],
+  "units": [
+    {
+      "id": "u1",
+      "file_id": "f1",
+      "byte_start": 0,
+      "byte_end_exclusive": 4,
+      "kind": "token",
+      "token_kind": "ORG",
+      "syntax_id": "s2"
+    },
+    {
+      "id": "u2",
+      "file_id": "f1",
+      "byte_start": 4,
+      "byte_end_exclusive": 5,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u3",
+      "file_id": "f1",
+      "byte_start": 5,
+      "byte_end_exclusive": 10,
+      "kind": "token",
+      "token_kind": "INTEGER_LITERAL",
+      "syntax_id": "s3"
+    },
+    {
+      "id": "u4",
+      "file_id": "f1",
+      "byte_start": 10,
+      "byte_end_exclusive": 11,
+      "kind": "newline",
+      "token_kind": "NEWLINE",
+      "syntax_id": null
+    },
+    {
+      "id": "u5",
+      "file_id": "f1",
+      "byte_start": 11,
+      "byte_end_exclusive": 15,
+      "kind": "token",
+      "token_kind": "IDENTIFIER",
+      "syntax_id": "s5"
+    },
+    {
+      "id": "u6",
+      "file_id": "f1",
+      "byte_start": 15,
+      "byte_end_exclusive": 16,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u7",
+      "file_id": "f1",
+      "byte_start": 16,
+      "byte_end_exclusive": 20,
+      "kind": "token",
+      "token_kind": "EQU",
+      "syntax_id": "s4"
+    },
+    {
+      "id": "u8",
+      "file_id": "f1",
+      "byte_start": 20,
+      "byte_end_exclusive": 21,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u9",
+      "file_id": "f1",
+      "byte_start": 21,
+      "byte_end_exclusive": 24,
+      "kind": "token",
+      "token_kind": "INTEGER_LITERAL",
+      "syntax_id": "s6"
+    },
+    {
+      "id": "u10",
+      "file_id": "f1",
+      "byte_start": 24,
+      "byte_end_exclusive": 25,
+      "kind": "newline",
+      "token_kind": "NEWLINE",
+      "syntax_id": null
+    },
+    {
+      "id": "u11",
+      "file_id": "f1",
+      "byte_start": 25,
+      "byte_end_exclusive": 31,
+      "kind": "token",
+      "token_kind": "LABEL",
+      "syntax_id": "s9"
+    },
+    {
+      "id": "u12",
+      "file_id": "f1",
+      "byte_start": 31,
+      "byte_end_exclusive": 32,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u13",
+      "file_id": "f1",
+      "byte_start": 32,
+      "byte_end_exclusive": 35,
+      "kind": "token",
+      "token_kind": "MNEMONIC",
+      "syntax_id": "s10"
+    },
+    {
+      "id": "u14",
+      "file_id": "f1",
+      "byte_start": 35,
+      "byte_end_exclusive": 36,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u15",
+      "file_id": "f1",
+      "byte_start": 36,
+      "byte_end_exclusive": 40,
+      "kind": "token",
+      "token_kind": "IDENTIFIER",
+      "syntax_id": "s11"
+    },
+    {
+      "id": "u16",
+      "file_id": "f1",
+      "byte_start": 40,
+      "byte_end_exclusive": 41,
+      "kind": "newline",
+      "token_kind": "NEWLINE",
+      "syntax_id": null
+    },
+    {
+      "id": "u17",
+      "file_id": "f1",
+      "byte_start": 41,
+      "byte_end_exclusive": 49,
+      "kind": "token",
+      "token_kind": "LOCAL_LABEL",
+      "syntax_id": "s12"
+    },
+    {
+      "id": "u18",
+      "file_id": "f1",
+      "byte_start": 49,
+      "byte_end_exclusive": 50,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u19",
+      "file_id": "f1",
+      "byte_start": 50,
+      "byte_end_exclusive": 53,
+      "kind": "token",
+      "token_kind": "MNEMONIC",
+      "syntax_id": "s13"
+    },
+    {
+      "id": "u20",
+      "file_id": "f1",
+      "byte_start": 53,
+      "byte_end_exclusive": 54,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u21",
+      "file_id": "f1",
+      "byte_start": 54,
+      "byte_end_exclusive": 61,
+      "kind": "token",
+      "token_kind": "LOCAL_ID",
+      "syntax_id": "s14"
+    },
+    {
+      "id": "u22",
+      "file_id": "f1",
+      "byte_start": 61,
+      "byte_end_exclusive": 62,
+      "kind": "newline",
+      "token_kind": "NEWLINE",
+      "syntax_id": null
+    },
+    {
+      "id": "u23",
+      "file_id": "f1",
+      "byte_start": 62,
+      "byte_end_exclusive": 65,
+      "kind": "token",
+      "token_kind": "BYTE",
+      "syntax_id": "s16"
+    },
+    {
+      "id": "u24",
+      "file_id": "f1",
+      "byte_start": 65,
+      "byte_end_exclusive": 66,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u25",
+      "file_id": "f1",
+      "byte_start": 66,
+      "byte_end_exclusive": 70,
+      "kind": "token",
+      "token_kind": "STRING_LITERAL",
+      "syntax_id": "s17"
+    },
+    {
+      "id": "u26",
+      "file_id": "f1",
+      "byte_start": 70,
+      "byte_end_exclusive": 71,
+      "kind": "token",
+      "token_kind": "COMMA",
+      "syntax_id": "s15"
+    },
+    {
+      "id": "u27",
+      "file_id": "f1",
+      "byte_start": 71,
+      "byte_end_exclusive": 72,
+      "kind": "token",
+      "token_kind": "LESS",
+      "syntax_id": "s18"
+    },
+    {
+      "id": "u28",
+      "file_id": "f1",
+      "byte_start": 72,
+      "byte_end_exclusive": 77,
+      "kind": "token",
+      "token_kind": "IDENTIFIER",
+      "syntax_id": "s19"
+    },
+    {
+      "id": "u29",
+      "file_id": "f1",
+      "byte_start": 77,
+      "byte_end_exclusive": 78,
+      "kind": "newline",
+      "token_kind": "NEWLINE",
+      "syntax_id": null
+    },
+    {
+      "id": "u30",
+      "file_id": "f1",
+      "byte_start": 78,
+      "byte_end_exclusive": 81,
+      "kind": "token",
+      "token_kind": "WORD",
+      "syntax_id": "s21"
+    },
+    {
+      "id": "u31",
+      "file_id": "f1",
+      "byte_start": 81,
+      "byte_end_exclusive": 82,
+      "kind": "whitespace",
+      "token_kind": null,
+      "syntax_id": null
+    },
+    {
+      "id": "u32",
+      "file_id": "f1",
+      "byte_start": 82,
+      "byte_end_exclusive": 87,
+      "kind": "token",
+      "token_kind": "IDENTIFIER",
+      "syntax_id": "s22"
+    },
+    {
+      "id": "u33",
+      "file_id": "f1",
+      "byte_start": 87,
+      "byte_end_exclusive": 88,
+      "kind": "newline",
+      "token_kind": "NEWLINE",
+      "syntax_id": null
+    },
+    {
+      "id": "u34",
+      "file_id": "f1",
+      "byte_start": 88,
+      "byte_end_exclusive": 92,
+      "kind": "token",
+      "token_kind": "END",
+      "syntax_id": "s23"
+    },
+    {
+      "id": "u35",
+      "file_id": "f1",
+      "byte_start": 92,
+      "byte_end_exclusive": 93,
+      "kind": "newline",
+      "token_kind": "NEWLINE",
+      "syntax_id": null
+    }
+  ],
+  "syntax": [
+    {
+      "id": "s1",
+      "kind": "LIST_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 0,
+        "byte_end_exclusive": 93
+      },
+      "parent_id": null,
+      "scope_id": "q1",
+      "children": [
+        "s2",
+        "s4",
+        "s7",
+        "s10",
+        "s12",
+        "s13",
+        "s15",
+        "s20",
+        "s23"
+      ]
+    },
+    {
+      "id": "s2",
+      "kind": "ORG_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 0,
+        "byte_end_exclusive": 10
+      },
+      "parent_id": "s1",
+      "scope_id": "q1",
+      "children": [
+        "s3"
+      ]
+    },
+    {
+      "id": "s3",
+      "kind": "INTEGER_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 5,
+        "byte_end_exclusive": 10
+      },
+      "parent_id": "s2",
+      "scope_id": "q1",
+      "children": []
+    },
+    {
+      "id": "s4",
+      "kind": "EQU_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 11,
+        "byte_end_exclusive": 24
+      },
+      "parent_id": "s1",
+      "scope_id": "q1",
+      "children": [
+        "s5",
+        "s6"
+      ]
+    },
+    {
+      "id": "s5",
+      "kind": "IDENTIFIER_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 11,
+        "byte_end_exclusive": 15
+      },
+      "parent_id": "s4",
+      "scope_id": "q1",
+      "children": []
+    },
+    {
+      "id": "s6",
+      "kind": "INTEGER_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 21,
+        "byte_end_exclusive": 24
+      },
+      "parent_id": "s4",
+      "scope_id": "q1",
+      "children": []
+    },
+    {
+      "id": "s7",
+      "kind": "LABEL_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 25,
+        "byte_end_exclusive": 31
+      },
+      "parent_id": "s1",
+      "scope_id": "q8",
+      "children": [
+        "s8",
+        "s9"
+      ]
+    },
+    {
+      "id": "s8",
+      "kind": "DATATYPE_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 25,
+        "byte_end_exclusive": 31
+      },
+      "parent_id": "s7",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s9",
+      "kind": "CURRENT_PC_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 25,
+        "byte_end_exclusive": 31
+      },
+      "parent_id": "s7",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s10",
+      "kind": "INSTRUCTION_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 32,
+        "byte_end_exclusive": 40
+      },
+      "parent_id": "s1",
+      "scope_id": "q8",
+      "children": [
+        "s11"
+      ]
+    },
+    {
+      "id": "s11",
+      "kind": "IDENTIFIER_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 36,
+        "byte_end_exclusive": 40
+      },
+      "parent_id": "s10",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s12",
+      "kind": "LOCAL_LABEL_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 41,
+        "byte_end_exclusive": 49
+      },
+      "parent_id": "s1",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s13",
+      "kind": "INSTRUCTION_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 50,
+        "byte_end_exclusive": 61
+      },
+      "parent_id": "s1",
+      "scope_id": "q8",
+      "children": [
+        "s14"
+      ]
+    },
+    {
+      "id": "s14",
+      "kind": "LOCAL_ID_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 54,
+        "byte_end_exclusive": 61
+      },
+      "parent_id": "s13",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s15",
+      "kind": "DATA_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 62,
+        "byte_end_exclusive": 77
+      },
+      "parent_id": "s1",
+      "scope_id": "q8",
+      "children": [
+        "s16",
+        "s17",
+        "s18"
+      ]
+    },
+    {
+      "id": "s16",
+      "kind": "DATATYPE_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 62,
+        "byte_end_exclusive": 65
+      },
+      "parent_id": "s15",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s17",
+      "kind": "STRING_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 66,
+        "byte_end_exclusive": 70
+      },
+      "parent_id": "s15",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s18",
+      "kind": "ARITHMETIC_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 71,
+        "byte_end_exclusive": 77
+      },
+      "parent_id": "s15",
+      "scope_id": "q8",
+      "children": [
+        "s19"
+      ]
+    },
+    {
+      "id": "s19",
+      "kind": "IDENTIFIER_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 72,
+        "byte_end_exclusive": 77
+      },
+      "parent_id": "s18",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s20",
+      "kind": "DATA_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 78,
+        "byte_end_exclusive": 87
+      },
+      "parent_id": "s1",
+      "scope_id": "q8",
+      "children": [
+        "s21",
+        "s22"
+      ]
+    },
+    {
+      "id": "s21",
+      "kind": "DATATYPE_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 78,
+        "byte_end_exclusive": 81
+      },
+      "parent_id": "s20",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s22",
+      "kind": "IDENTIFIER_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 82,
+        "byte_end_exclusive": 87
+      },
+      "parent_id": "s20",
+      "scope_id": "q8",
+      "children": []
+    },
+    {
+      "id": "s23",
+      "kind": "END_NODE",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 88,
+        "byte_end_exclusive": 92
+      },
+      "parent_id": "s1",
+      "scope_id": "q8",
+      "children": []
+    }
+  ],
+  "scopes": [
+    {
+      "id": "q1",
+      "kind": "root",
+      "parent_id": null,
+      "anchor_declaration_id": null,
+      "extent": {
+        "file_id": "f1",
+        "byte_start": 0,
+        "byte_end_exclusive": 93
+      }
+    },
+    {
+      "id": "q8",
+      "kind": "global",
+      "parent_id": "q1",
+      "anchor_declaration_id": "d7",
+      "extent": {
+        "file_id": "f1",
+        "byte_start": 25,
+        "byte_end_exclusive": 93
+      }
+    }
+  ],
+  "declarations": [
+    {
+      "id": "d4",
+      "syntax_id": "s4",
+      "symbol_id": "d4",
+      "name": "Cell",
+      "kind": "equ",
+      "name_span": {
+        "file_id": "f1",
+        "byte_start": 11,
+        "byte_end_exclusive": 15
+      },
+      "scope_id": "q1",
+      "lexical_owner_id": null,
+      "expression_id": "e6",
+      "location_id": null
+    },
+    {
+      "id": "d7",
+      "syntax_id": "s7",
+      "symbol_id": "d7",
+      "name": "Entry",
+      "kind": "global",
+      "name_span": {
+        "file_id": "f1",
+        "byte_start": 25,
+        "byte_end_exclusive": 30
+      },
+      "scope_id": "q8",
+      "lexical_owner_id": "d7",
+      "expression_id": null,
+      "location_id": "l7"
+    },
+    {
+      "id": "d12",
+      "syntax_id": "s12",
+      "symbol_id": "d12",
+      "name": "@@again",
+      "kind": "local",
+      "name_span": {
+        "file_id": "f1",
+        "byte_start": 41,
+        "byte_end_exclusive": 48
+      },
+      "scope_id": "q8",
+      "lexical_owner_id": "d7",
+      "expression_id": null,
+      "location_id": "l12"
+    }
+  ],
+  "expressions": [
+    {
+      "id": "e3",
+      "syntax_id": "s3",
+      "context_syntax_id": "s2",
+      "kind": "integer",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 5,
+        "byte_end_exclusive": 10
+      },
+      "children": [],
+      "value": 32768
+    },
+    {
+      "id": "e6",
+      "syntax_id": "s6",
+      "context_syntax_id": "s4",
+      "kind": "integer",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 21,
+        "byte_end_exclusive": 24
+      },
+      "children": [],
+      "value": 16
+    },
+    {
+      "id": "e11",
+      "syntax_id": "s11",
+      "context_syntax_id": "s10",
+      "kind": "symbol",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 36,
+        "byte_end_exclusive": 40
+      },
+      "children": [],
+      "reference_id": "r11"
+    },
+    {
+      "id": "e14",
+      "syntax_id": "s14",
+      "context_syntax_id": "s13",
+      "kind": "local",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 54,
+        "byte_end_exclusive": 61
+      },
+      "children": [],
+      "reference_id": "r14"
+    },
+    {
+      "id": "e17",
+      "syntax_id": "s17",
+      "context_syntax_id": "s15",
+      "kind": "string",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 66,
+        "byte_end_exclusive": 70
+      },
+      "children": [],
+      "bytes_base64": "YWI="
+    },
+    {
+      "id": "e18",
+      "syntax_id": "s18",
+      "context_syntax_id": "s15",
+      "kind": "unary",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 71,
+        "byte_end_exclusive": 77
+      },
+      "children": [
+        "e19"
+      ],
+      "operator": "low"
+    },
+    {
+      "id": "e19",
+      "syntax_id": "s19",
+      "context_syntax_id": "s15",
+      "kind": "symbol",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 72,
+        "byte_end_exclusive": 77
+      },
+      "children": [],
+      "reference_id": "r19"
+    },
+    {
+      "id": "e22",
+      "syntax_id": "s22",
+      "context_syntax_id": "s20",
+      "kind": "symbol",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 82,
+        "byte_end_exclusive": 87
+      },
+      "children": [],
+      "reference_id": "r22"
+    }
+  ],
+  "references": [
+    {
+      "id": "r11",
+      "expression_id": "e11",
+      "context_syntax_id": "s10",
+      "name": "Cell",
+      "spelling": "Cell",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 36,
+        "byte_end_exclusive": 40
+      },
+      "scope_id": "q8",
+      "declaration_id": "d4",
+      "resolution_origin": "assembly",
+      "diagnostic_id": null
+    },
+    {
+      "id": "r14",
+      "expression_id": "e14",
+      "context_syntax_id": "s13",
+      "name": "@@again",
+      "spelling": "@@again",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 54,
+        "byte_end_exclusive": 61
+      },
+      "scope_id": "q8",
+      "declaration_id": "d12",
+      "resolution_origin": "assembly",
+      "diagnostic_id": null
+    },
+    {
+      "id": "r19",
+      "expression_id": "e19",
+      "context_syntax_id": "s15",
+      "name": "Entry",
+      "spelling": "Entry",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 72,
+        "byte_end_exclusive": 77
+      },
+      "scope_id": "q8",
+      "declaration_id": "d7",
+      "resolution_origin": "assembly",
+      "diagnostic_id": null
+    },
+    {
+      "id": "r22",
+      "expression_id": "e22",
+      "context_syntax_id": "s20",
+      "name": "Entry",
+      "spelling": "Entry",
+      "span": {
+        "file_id": "f1",
+        "byte_start": 82,
+        "byte_end_exclusive": 87
+      },
+      "scope_id": "q8",
+      "declaration_id": "d7",
+      "resolution_origin": "assembly",
+      "diagnostic_id": null
+    }
+  ],
+  "evaluations": [
+    {
+      "id": "v3",
+      "expression_id": "e3",
+      "context_syntax_id": "s2",
+      "operand_index": 0,
+      "pc_context": {
+        "cpu_address": 0,
+        "segment_id": "g1"
+      },
+      "value": {
+        "kind": "integer",
+        "value": 32768
+      },
+      "resolution_origin": "assembly",
+      "reference_values": []
+    },
+    {
+      "id": "v6",
+      "expression_id": "e6",
+      "context_syntax_id": "s4",
+      "operand_index": null,
+      "pc_context": {
+        "cpu_address": null,
+        "segment_id": "g2"
+      },
+      "value": {
+        "kind": "integer",
+        "value": 16
+      },
+      "resolution_origin": "assembly",
+      "reference_values": []
+    },
+    {
+      "id": "v11",
+      "expression_id": "e11",
+      "context_syntax_id": "s10",
+      "operand_index": 0,
+      "pc_context": {
+        "cpu_address": 32768,
+        "segment_id": "g2"
+      },
+      "value": {
+        "kind": "integer",
+        "value": 16
+      },
+      "resolution_origin": "assembly",
+      "reference_values": [
+        {
+          "reference_id": "r11",
+          "declaration_id": "d4",
+          "value": {
+            "kind": "integer",
+            "value": 16
+          }
+        }
+      ]
+    },
+    {
+      "id": "v14",
+      "expression_id": "e14",
+      "context_syntax_id": "s13",
+      "operand_index": 0,
+      "pc_context": {
+        "cpu_address": 32770,
+        "segment_id": "g2"
+      },
+      "value": {
+        "kind": "integer",
+        "value": 32770
+      },
+      "resolution_origin": "assembly",
+      "reference_values": [
+        {
+          "reference_id": "r14",
+          "declaration_id": "d12",
+          "value": {
+            "kind": "integer",
+            "value": 32770
+          }
+        }
+      ]
+    },
+    {
+      "id": "v17",
+      "expression_id": "e17",
+      "context_syntax_id": "s15",
+      "operand_index": 0,
+      "pc_context": {
+        "cpu_address": 32772,
+        "segment_id": "g2"
+      },
+      "value": {
+        "kind": "bytes",
+        "bytes_base64": "YWI="
+      },
+      "resolution_origin": "assembly",
+      "reference_values": []
+    },
+    {
+      "id": "v18",
+      "expression_id": "e18",
+      "context_syntax_id": "s15",
+      "operand_index": 1,
+      "pc_context": {
+        "cpu_address": 32774,
+        "segment_id": "g2"
+      },
+      "value": {
+        "kind": "integer",
+        "value": 0
+      },
+      "resolution_origin": "assembly",
+      "reference_values": [
+        {
+          "reference_id": "r19",
+          "declaration_id": "d7",
+          "value": {
+            "kind": "integer",
+            "value": 32768
+          }
+        }
+      ]
+    },
+    {
+      "id": "v19",
+      "expression_id": "e19",
+      "context_syntax_id": "s15",
+      "operand_index": 1,
+      "pc_context": {
+        "cpu_address": 32774,
+        "segment_id": "g2"
+      },
+      "value": {
+        "kind": "integer",
+        "value": 32768
+      },
+      "resolution_origin": "assembly",
+      "reference_values": [
+        {
+          "reference_id": "r19",
+          "declaration_id": "d7",
+          "value": {
+            "kind": "integer",
+            "value": 32768
+          }
+        }
+      ]
+    },
+    {
+      "id": "v22",
+      "expression_id": "e22",
+      "context_syntax_id": "s20",
+      "operand_index": 0,
+      "pc_context": {
+        "cpu_address": 32775,
+        "segment_id": "g2"
+      },
+      "value": {
+        "kind": "integer",
+        "value": 32768
+      },
+      "resolution_origin": "assembly",
+      "reference_values": [
+        {
+          "reference_id": "r22",
+          "declaration_id": "d7",
+          "value": {
+            "kind": "integer",
+            "value": 32768
+          }
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "id": "g1",
+      "start_syntax_id": null,
+      "address_space": "cpu",
+      "origin": 0,
+      "output_offset": 0
+    },
+    {
+      "id": "g2",
+      "start_syntax_id": "s2",
+      "address_space": "cpu",
+      "origin": 32768,
+      "output_offset": 0
+    }
+  ],
+  "locations": [
+    {
+      "id": "l2",
+      "syntax_id": "s2",
+      "segment_id": "g1",
+      "cpu_address": 0,
+      "output_offset": 0,
+      "byte_length": 0
+    },
+    {
+      "id": "l7",
+      "syntax_id": "s7",
+      "segment_id": "g2",
+      "cpu_address": 32768,
+      "output_offset": 0,
+      "byte_length": 0
+    },
+    {
+      "id": "l10",
+      "syntax_id": "s10",
+      "segment_id": "g2",
+      "cpu_address": 32768,
+      "output_offset": 0,
+      "byte_length": 2
+    },
+    {
+      "id": "l12",
+      "syntax_id": "s12",
+      "segment_id": "g2",
+      "cpu_address": 32770,
+      "output_offset": 2,
+      "byte_length": 0
+    },
+    {
+      "id": "l13",
+      "syntax_id": "s13",
+      "segment_id": "g2",
+      "cpu_address": 32770,
+      "output_offset": 2,
+      "byte_length": 2
+    },
+    {
+      "id": "l15",
+      "syntax_id": "s15",
+      "segment_id": "g2",
+      "cpu_address": 32772,
+      "output_offset": 4,
+      "byte_length": 3
+    },
+    {
+      "id": "l20",
+      "syntax_id": "s20",
+      "segment_id": "g2",
+      "cpu_address": 32775,
+      "output_offset": 7,
+      "byte_length": 2
+    }
+  ],
+  "instructions": [
+    {
+      "id": "i10",
+      "syntax_id": "s10",
+      "location_id": "l10",
+      "mnemonic": "LDA",
+      "parsed_mode": "ABSOLUTE_MODE",
+      "final_mode": "ZEROPAGE_MODE",
+      "forced_absolute": false,
+      "opcode": 165,
+      "operand_ids": [
+        "o10-0"
+      ],
+      "operands": [
+        {
+          "id": "o10-0",
+          "index": 0,
+          "expression_id": "e11",
+          "evaluation_id": "v11",
+          "emission_ranges": [
+            {
+              "output_start": 1,
+              "output_end_exclusive": 2
+            }
+          ]
+        }
+      ],
+      "emission_ids": [
+        "m3-opcode",
+        "m3-operand"
+      ],
+      "memory_access": {
+        "data": {
+          "kind": "read",
+          "address": 16,
+          "index_register": null,
+          "via_pointer": false
+        },
+        "pointer": null
+      },
+      "control_flow": {
+        "kind": "none",
+        "target": null,
+        "encoded_displacement": null
+      }
+    },
+    {
+      "id": "i13",
+      "syntax_id": "s13",
+      "location_id": "l13",
+      "mnemonic": "BNE",
+      "parsed_mode": "ABSOLUTE_MODE",
+      "final_mode": "RELATIVE_MODE",
+      "forced_absolute": false,
+      "opcode": 208,
+      "operand_ids": [
+        "o13-0"
+      ],
+      "operands": [
+        {
+          "id": "o13-0",
+          "index": 0,
+          "expression_id": "e14",
+          "evaluation_id": "v14",
+          "emission_ranges": [
+            {
+              "output_start": 3,
+              "output_end_exclusive": 4
+            }
+          ]
+        }
+      ],
+      "emission_ids": [
+        "m5-opcode",
+        "m5-operand"
+      ],
+      "memory_access": null,
+      "control_flow": {
+        "kind": "branch",
+        "target": 32770,
+        "encoded_displacement": -2
+      }
+    }
+  ],
+  "data": [
+    {
+      "id": "b15",
+      "syntax_id": "s15",
+      "location_id": "l15",
+      "element_width": 1,
+      "directive_token": "BYTE",
+      "emission_ids": [
+        "m6",
+        "m7"
+      ],
+      "operands": [
+        {
+          "id": "o15-0",
+          "index": 0,
+          "expression_id": "e17",
+          "evaluation_id": "v17",
+          "element_count": 2,
+          "output_offset": 4,
+          "byte_length": 2,
+          "emission_ranges": [
+            {
+              "output_start": 4,
+              "output_end_exclusive": 6
+            }
+          ]
+        },
+        {
+          "id": "o15-1",
+          "index": 1,
+          "expression_id": "e18",
+          "evaluation_id": "v18",
+          "element_count": 1,
+          "output_offset": 6,
+          "byte_length": 1,
+          "emission_ranges": [
+            {
+              "output_start": 6,
+              "output_end_exclusive": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b20",
+      "syntax_id": "s20",
+      "location_id": "l20",
+      "element_width": 2,
+      "directive_token": "WORD",
+      "emission_ids": [
+        "m9"
+      ],
+      "operands": [
+        {
+          "id": "o20-0",
+          "index": 0,
+          "expression_id": "e22",
+          "evaluation_id": "v22",
+          "element_count": 1,
+          "output_offset": 7,
+          "byte_length": 2,
+          "emission_ranges": [
+            {
+              "output_start": 7,
+              "output_end_exclusive": 9
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "emissions": [
+    {
+      "id": "m3-opcode",
+      "syntax_id": "s10",
+      "operand_id": null,
+      "segment_id": "g2",
+      "cpu_address": 32768,
+      "output_start": 0,
+      "output_end_exclusive": 1,
+      "kind": "opcode"
+    },
+    {
+      "id": "m3-operand",
+      "syntax_id": "s10",
+      "operand_id": "o10-0",
+      "segment_id": "g2",
+      "cpu_address": 32769,
+      "output_start": 1,
+      "output_end_exclusive": 2,
+      "kind": "instruction_operand"
+    },
+    {
+      "id": "m5-opcode",
+      "syntax_id": "s13",
+      "operand_id": null,
+      "segment_id": "g2",
+      "cpu_address": 32770,
+      "output_start": 2,
+      "output_end_exclusive": 3,
+      "kind": "opcode"
+    },
+    {
+      "id": "m5-operand",
+      "syntax_id": "s13",
+      "operand_id": "o13-0",
+      "segment_id": "g2",
+      "cpu_address": 32771,
+      "output_start": 3,
+      "output_end_exclusive": 4,
+      "kind": "instruction_operand"
+    },
+    {
+      "id": "m6",
+      "syntax_id": "s15",
+      "operand_id": "o15-0",
+      "segment_id": "g2",
+      "cpu_address": 32772,
+      "output_start": 4,
+      "output_end_exclusive": 6,
+      "kind": "data_operand",
+      "operand_index": 0
+    },
+    {
+      "id": "m7",
+      "syntax_id": "s15",
+      "operand_id": "o15-1",
+      "segment_id": "g2",
+      "cpu_address": 32774,
+      "output_start": 6,
+      "output_end_exclusive": 7,
+      "kind": "data_operand",
+      "operand_index": 1
+    },
+    {
+      "id": "m9",
+      "syntax_id": "s20",
+      "operand_id": "o20-0",
+      "segment_id": "g2",
+      "cpu_address": 32775,
+      "output_start": 7,
+      "output_end_exclusive": 9,
+      "kind": "data_operand",
+      "operand_index": 0
+    }
+  ],
+  "binary": {
+    "byte_length": 9,
+    "sha256": "e94a98a8b3b915956b75dbbbafb0a2f689b2c0d4ae4066b7a575e94b543710d6",
+    "bytes_base64": "pRDQ/mFiAACA"
+  },
+  "coverage": {
+    "units": 35,
+    "syntax": 23,
+    "expressions": 8,
+    "declarations": 3,
+    "expected_references": 4,
+    "bound_references": 4,
+    "instruction_statements": 2,
+    "data_statements": 2,
+    "expected_locations": 7,
+    "located_statements": 7,
+    "evaluated_expressions": 8
+  },
+  "diagnostics": []
+}

@@ -241,6 +241,7 @@ enum tag_astnode_type {
 };
 
 typedef enum tag_astnode_type astnode_type;
+const char *addressing_mode_to_string(addressing_mode);
 
 /**
  * The possible data types.
@@ -376,6 +377,11 @@ void astnode_set_source_location(astnode *, location);
 /* Select before parsing. Existing nodes retain their own allocation policy;
  * plain assembly pays no extra per-node source-span allocation. */
 void astnode_capture_source_locations(int enabled);
+/* Opt-in provenance lives after the node, not in the ordinary allocation. */
+void astnode_capture_source_model(int enabled);
+uint32_t astnode_source_model_id(const astnode *);
+uint32_t astnode_source_model_root(const astnode *);
+void astnode_set_source_model_ids(astnode *, uint32_t syntax, uint32_t root);
 void astnode_finalize(astnode *);
 void astnode_replace(astnode *, astnode *);
 void astnode_remove(astnode *);

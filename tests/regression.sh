@@ -4686,6 +4686,9 @@ ASM
 run_expect_data_coverage
 
 python3 "$ROOT_DIR/tests/test_instruction_records.py" "$XASM"
+python3 "$ROOT_DIR/tests/test_source_model.py" "$XASM"
+python3 "$ROOT_DIR/tests/test_source_model_faults.py"
+python3 "$ROOT_DIR/tests/test_source_model_consumer.py" "$XASM"
 python3 "$ROOT_DIR/tests/test_listing_offsets.py" "$XASM"
 python3 "$ROOT_DIR/tests/test_field_initializers.py" "$XASM"
 python3 "$ROOT_DIR/tests/test_expressions.py" "$XASM"

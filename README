@@ -21,6 +21,10 @@ The approved semantics and resource decisions are recorded in
 [performance protocol](doc/performance.md) and
 [object wire layout](doc/object-format.md).
 
+The draft [lossless source model specification](XASM_SOURCE_MODEL_SPEC.md)
+describes proposed structured-editing support. It is a source-only design document,
+not implemented command-line options or a release commitment.
+
 Build and test
 --------------
 
@@ -309,3 +313,15 @@ To prepare and validate a source archive (including tests and feature specs):
 This produces `xorcyst-1.9.12.tar.gz`. No parser or scanner regeneration is
 needed to build the archive. The installation checks use a temporary prefix;
 they do not replace the system installation.
+
+Lossless source model
+---------------------
+
+    xasm --pure-binary input.asm -o output.bin --source-model=model.json
+
+The opt-in asm-edit-v1 profile exports complete source units, parsed syntax,
+native symbol bindings, values and segment-aware byte ranges. Reconstruction
+from the model alone preserves input bytes exactly. Unsupported constructs
+refuse certification; ordinary assembly remains unchanged. See
+doc/source-model.md, doc/source-model.schema.json and XASM_SOURCE_MODEL_SPEC.md
+for the public contract, status/parity rules, migration and measured limitations.

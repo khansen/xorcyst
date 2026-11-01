@@ -25,7 +25,7 @@ typedef struct dependency {
 } dependency;
 
 static dependency *inputs, **tail = &inputs;
-static int active, protect_outputs, failed, argument_count;
+static int active, protect_outputs, failed, argument_count, input_changed;
 static char **arguments, *directory;
 static const char *producer_version;
 static char *manifest_path;
@@ -152,6 +152,7 @@ static int same_file(const char *a, const char *b)
     struct stat sa, sb;
     char *left, *right, *a_slash, *b_slash;
     int same = 0;
+    if (!a || !b) return 0;
     if (strcmp(a, b) == 0) return 1;
     {
         int a_exists = stat(a, &sa) == 0;
@@ -325,8 +326,10 @@ int dependencies_start(const char *version, const char *manifest)
             return 0;
         }
     }
-    manifest_path = absolute_path(manifest);
-    if (!manifest_path) return 0;
+    if (manifest) {
+        manifest_path = absolute_path(manifest);
+        if (!manifest_path) return 0;
+    }
     executable = executable_path();
     if (!executable) { failure("cannot identify running producer", NULL); return 0; }
     entry = capture(executable, DEP_PRODUCER);
@@ -356,6 +359,18 @@ FILE *dependencies_open(const char *path, const char *mode, unsigned role)
     return fp;
 }
 
+int dependencies_visit(int (*visit)(const dependency_snapshot *, void *), void *arg)
+{
+    dependency *entry;
+    if (!active || !visit) return 0;
+    for (entry = inputs; entry; entry = entry->next) {
+        dependency_snapshot s = {entry->path, entry->roles, entry->missing,
+                                 entry->bytes, entry->size, entry->hash};
+        if (!visit(&s, arg)) return 0;
+    }
+    return 1;
+}
+
 int dependencies_validate(void)
 {
     dependency *entry;
@@ -369,6 +384,7 @@ int dependencies_validate(void)
         int missing = !exists && (errno == ENOENT || errno == ENOTDIR);
         free(bytes);
         if (entry->missing ? !missing : (!exists || size != entry->size || strcmp(hash, entry->hash))) {
+            input_changed = 1;
             failure("input changed or became unavailable", entry->path);
             return 0;
         }
@@ -408,6 +424,36 @@ static int aliases_input(const char *path)
     for (entry = source_paths; entry; entry = entry->next)
         if (same_file(path, entry->path)) return 1;
     return 0;
+}
+
+int dependencies_write_evidence(FILE *fp)
+{
+    dependency *entry;
+    int i, comma = 0;
+    fputs("\"invocation\":{\"cwd\":", fp); json_string(fp, directory);
+    fputs(",\"argv\":[", fp);
+    for (i = 0; i < argument_count; ++i) {
+        if (i) fputc(',', fp);
+        json_string(fp, arguments[i]);
+    }
+    fputs("]},\"dependencies\":[", fp);
+    for (entry = inputs; entry; entry = entry->next) {
+        static const char *roles[] = {"source","binary","charmap","analysis_source","comparison","producer"};
+        int rc = 0;
+        if (comma++) fputc(',', fp);
+        fputs("{\"path\":", fp); json_string(fp, entry->path);
+        fprintf(fp, ",\"missing\":%s,\"byte_length\":", entry->missing ? "true" : "false");
+        if (entry->missing) fputs("null,\"sha256\":null", fp);
+        else fprintf(fp, "%zu,\"sha256\":\"%s\"", entry->size, entry->hash);
+        fputs(",\"roles\":[", fp);
+        for (i = 0; i < 6; ++i) if (entry->roles & (1u << i)) {
+            if (rc++) fputc(',', fp);
+            json_string(fp, roles[i]);
+        }
+        fputs("]}", fp);
+    }
+    fputc(']', fp);
+    return !ferror(fp);
 }
 
 int dependencies_protect_source(const char *path)
@@ -526,6 +572,8 @@ int dependencies_write(const char *path)
     return ok;
 }
 
+int dependencies_input_changed(void) { return input_changed; }
+
 int dependencies_failed(void)
 {
     return (active || protect_outputs) && failed;
@@ -553,5 +601,5 @@ void dependencies_clear(void)
     free(arguments); free(directory); free(manifest_path);
     manifest_path = NULL;
     arguments = NULL; directory = NULL; tail = &inputs;
-    argument_count = active = protect_outputs = failed = 0;
+    argument_count = active = protect_outputs = failed = input_changed = 0;
 }

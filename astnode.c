@@ -406,7 +406,35 @@ void astnode_print(const astnode *n, int level)
  * @return The newly created node
  */
 #define AST_SOURCE_LOCATION_FLAG 0x80000
+#define AST_SOURCE_MODEL_FLAG 0x200000
 static int capture_source_locations;
+static int capture_source_model;
+typedef struct { uint32_t syntax_id, root_id; } source_model_ids;
+void astnode_capture_source_model(int enabled)
+{
+    capture_source_model = enabled != 0;
+}
+static source_model_ids *model_ids(const astnode *n)
+{
+    if (!(n->flags & AST_SOURCE_MODEL_FLAG)) return NULL;
+    return (source_model_ids *)((unsigned char *)(n + 1) +
+                               ((n->flags & AST_SOURCE_LOCATION_FLAG) ? sizeof(location) : 0));
+}
+uint32_t astnode_source_model_id(const astnode *n)
+{
+    const source_model_ids *ids = model_ids(n);
+    return ids ? ids->syntax_id : 0;
+}
+uint32_t astnode_source_model_root(const astnode *n)
+{
+    const source_model_ids *ids = model_ids(n);
+    return ids ? ids->root_id : 0;
+}
+void astnode_set_source_model_ids(astnode *n, uint32_t syntax, uint32_t root)
+{
+    source_model_ids *ids = model_ids(n);
+    if (ids) { ids->syntax_id = syntax; ids->root_id = root; }
+}
 void astnode_capture_source_locations(int enabled)
 {
     capture_source_locations = enabled != 0;
@@ -437,10 +465,12 @@ astnode *astnode_create(astnode_type type, location loc)
     }
     size_t size = sizeof(astnode);
     if (capture_source_locations) size += sizeof(location);
+    if (capture_source_model) size += sizeof(source_model_ids);
     astnode *n = (astnode *)calloc(1, size);
     if (n != NULL) {
         n->type = type;
         n->loc = loc;
+        if (capture_source_model) n->flags |= AST_SOURCE_MODEL_FLAG;
         if (capture_source_locations) {
             location *source = (location *)(n + 1);
             n->flags |= AST_SOURCE_LOCATION_FLAG;
@@ -523,6 +553,13 @@ void astnode_replace(astnode *old_node, astnode *new_node)
     }
     if (new_node->analysis_origin_id == 0)
         new_node->analysis_origin_id = old_node->analysis_origin_id;
+    if (old_node->flags & AST_SOURCE_MODEL_FLAG) {
+        source_model_ids *old_ids = model_ids(old_node), *new_ids = model_ids(new_node);
+        if (new_ids) {
+            if (!new_ids->syntax_id) new_ids->syntax_id = old_ids->syntax_id;
+            if (old_ids->root_id) new_ids->root_id = old_ids->root_id;
+        }
+    }
     /* The replacement is a detached chain. Set its parents before joining
      * the old suffix, so only the new nodes need to be visited. */
     last = astnode_get_last_sibling(new_node);
@@ -885,6 +922,8 @@ astnode *astnode_clone(const astnode *n, location loc)
     if (c->flags & AST_SOURCE_LOCATION_FLAG)
         *(location *)(c + 1) = astnode_source_location(n);
     c->analysis_origin_id = n->analysis_origin_id;
+    if (c->flags & AST_SOURCE_MODEL_FLAG)
+        astnode_set_source_model_ids(c, astnode_source_model_id(n), astnode_source_model_root(n));
     /* Clone children (TODO: OPTIMIZE THIS) */
     for (n_c=n->first_child; n_c != NULL; n_c=n_c->next_sibling) {
         astnode_add_child(c, astnode_clone(n_c, loc));
