@@ -1,6 +1,22 @@
 The XORcyst is a set of tools for 6502 software development: the `xasm`
-assembler and `xlnk` linker. This source tree targets version 2.0.0.
+assembler and `xlnk` linker. This source tree targets version 2.1.0.
 Run `xasm --version` or `xlnk --version` to identify an installed build.
+
+Version 2.1.0
+-------------
+
+`xasm --source-model=FILE` adds a lossless, assembler-owned source model for
+structured inspection and editing. The version 1 `asm-edit-v1` profile exports
+the original source bytes, parsed syntax, native bindings and expression values,
+segment identities, and instruction/data operand ranges. It requires
+`--pure-binary`; unsupported or ambiguous constructs refuse certification.
+`--source-model-diagnostics=FILE` provides a separate repair capture.
+
+This is an additive release. Ordinary source acceptance, binary and XOROBJ2
+output, and existing analysis schemas retain their 2.0.0 contracts. See the
+[source-model guide](doc/source-model.md) for supported constructs, status and
+comparison requirements, and the [specification](XASM_SOURCE_MODEL_SPEC.md)
+for the complete contract.
 
 Version 2.0.0
 -------------
@@ -20,10 +36,6 @@ The approved semantics and resource decisions are recorded in
 [XORCYST_V2_CONTRACTS.md](XORCYST_V2_CONTRACTS.md), with the
 [performance protocol](doc/performance.md) and
 [object wire layout](doc/object-format.md).
-
-The draft [lossless source model specification](XASM_SOURCE_MODEL_SPEC.md)
-describes proposed structured-editing support. It is a source-only design document,
-not implemented command-line options or a release commitment.
 
 Build and test
 --------------
