@@ -1,4 +1,4 @@
-Unreleased:
+Version 2.1.0:
 
 - Add opt-in --source-model=FILE and the asm-edit-v1 profile: lossless input
   bytes, parsed syntax, native bindings and evaluated expressions, segment-aware
@@ -6,7 +6,11 @@ Unreleased:
   Unsupported or ambiguous source refuses model certification without changing
   ordinary assembly. A separate --source-model-diagnostics=FILE supports repair.
 - Existing source acceptance, binary/object formats and analysis schemas remain
-  unchanged. No v3 compatibility break is intended. See doc/source-model.md.
+  unchanged from 2.0.0. See doc/source-model.md.
+- Add reproducible generated-program differential checks against pinned 2.0.0
+  tools, including replay, failure reduction and independent output checks.
+  These optional maintainer checks do not fetch or build a reference as part of
+  ordinary make check. See tests/differential/README.md.
 
 Version 2.0.0:
 

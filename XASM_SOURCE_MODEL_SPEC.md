@@ -1,7 +1,7 @@
 # xasm lossless source model
 
 Status: approved contract (2878072); implementation approved at `9a6cc48`.
-Release remains a separate decision. Baseline: XORcyst 2.0.0
+Merged in #106 and released in XORcyst 2.1.0. Baseline: XORcyst 2.0.0
 and repository commit `51dd295b89073b7858e4c6cf9a19776af7e9bbc7`.
 
 ## 1. Purpose and boundary

@@ -4,8 +4,8 @@
 exports the assembler's lossless source and typed facts in a separate JSON
 document. This is an opt-in interface; it does not replace listing, xref,
 instruction records or XOROBJ2. Existing assembly acceptance and existing
-analysis schemas are unchanged. This change does not require a major-version
-bump. No release is authorized by the implementation branch.
+analysis schemas are unchanged. This interface is introduced in XORcyst 2.1.0;
+its schema version is independent of the tool release version.
 
 The [approved specification](../XASM_SOURCE_MODEL_SPEC.md) defines semantics;
 [the JSON Schema](source-model.schema.json) defines the wire shape. The schema
